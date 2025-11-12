@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-export default function LoginPage(): JSX.Element {
+export default function LoginPage() {
   const navigate = useNavigate();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -10,24 +10,67 @@ export default function LoginPage(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    
     try {
-      const resp = await axios.post("/api/auth/login/", { identifier, password });
+      const API_URL = "http://localhost:8000/api/auth/login/";
+      
+      // IMPORTANT : Utilisez 'username' au lieu de 'email'
+      const credentials = {
+        username: identifier,  // ← CHANGEMENT ICI
+        password: password
+      };
+
+      const resp = await axios.post(API_URL, credentials, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      });
+
+      // Gestion de la réponse
       if (resp.data?.token) {
-        localStorage.setItem("token", resp.data.token);
-        navigate("/");
+        localStorage.setItem("authToken", resp.data.token);
+        
+        // Stockage des infos utilisateur si disponibles
+        if (resp.data.user) {
+          localStorage.setItem("user", JSON.stringify(resp.data.user));
+        }
+        
+        navigate("/dashboard");
       } else {
         setError("Connexion réussie mais aucun token reçu.");
       }
     } catch (err) {
-      const msg =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        "Identifiants incorrects ou erreur serveur.";
-      setError(msg);
+      // Gestion d'erreur améliorée
+      let errorMessage = "Identifiants incorrects ou erreur serveur.";
+      
+      if (err.response) {
+        const data = err.response.data;
+        
+        if (data.detail) {
+          errorMessage = data.detail;
+        } else if (data.non_field_errors) {
+          errorMessage = data.non_field_errors[0];
+        } else if (data.username) {
+          errorMessage = `Nom d'utilisateur: ${data.username[0]}`;
+        } else if (data.password) {
+          errorMessage = `Mot de passe: ${data.password[0]}`;
+        } else if (typeof data === 'object') {
+          const firstError = Object.values(data)[0];
+          errorMessage = Array.isArray(firstError) ? firstError[0] : String(firstError);
+        }
+      } else if (err.request) {
+        errorMessage = "Impossible de contacter le serveur. Vérifiez que Django est démarré sur le port 8000.";
+      } else if (err.code === 'ECONNREFUSED') {
+        errorMessage = "Serveur Django non accessible. Vérifiez qu'il est démarré sur le port 8000.";
+      }
+      
+      setError(errorMessage);
+      console.error('Erreur de connexion:', err);
     } finally {
       setLoading(false);
     }
@@ -38,7 +81,6 @@ export default function LoginPage(): JSX.Element {
       <div className="w-full max-w-6xl bg-white shadow-xl rounded-3xl overflow-hidden flex flex-col md:flex-row">
         {/* --- LEFT PANEL --- */}
         <div className="relative md:w-1/2 w-full flex items-center justify-center bg-gradient-to-b from-[#5338ff] via-[#3e0df5] to-[#180073] text-white p-12">
-          {/* Background decorative SVGs */}
           <svg
             className="absolute top-[-20%] right-[-20%] w-[600px] h-[600px] opacity-20"
             viewBox="0 0 600 600"
@@ -65,7 +107,6 @@ export default function LoginPage(): JSX.Element {
             </button>
           </div>
 
-          {/* Subtle curved shape at bottom-left */}
           <svg
             className="absolute bottom-[-80px] left-[-80px] w-[400px] h-[400px] opacity-10"
             viewBox="0 0 200 200"
@@ -87,12 +128,14 @@ export default function LoginPage(): JSX.Element {
               <label className="block">
                 <div className="relative">
                   <input
-                    type="text"
+                    type="text" // Changé en 'text' pour accepter username ou email
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="Addresse e-mail"
+                    placeholder="Nom d'utilisateur" // ← CHANGEMENT ICI
                     className="w-full border border-gray-200 rounded-full px-4 py-3 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                    aria-label="Email or username"
+                    aria-label="Nom d'utilisateur"
+                    required
+                    disabled={loading}
                   />
                   <svg
                     className="w-4 h-4 absolute left-3 top-3 text-gray-300"
@@ -101,14 +144,7 @@ export default function LoginPage(): JSX.Element {
                     xmlns="http://www.w3.org/2000/svg"
                   >
                     <path
-                      d="M3 8a4 4 0 014-4h10a4 4 0 014 4v8a4 4 0 01-4 4H7a4 4 0 01-4-4V8z"
-                      stroke="currentColor"
-                      strokeWidth="1.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M8 13h8"
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                       stroke="currentColor"
                       strokeWidth="1.2"
                       strokeLinecap="round"
@@ -125,9 +161,11 @@ export default function LoginPage(): JSX.Element {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Mot de passe "
+                    placeholder="Mot de passe"
                     className="w-full border border-gray-200 rounded-full px-4 py-3 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                     aria-label="Password"
+                    required
+                    disabled={loading}
                   />
                   <svg
                     className="w-4 h-4 absolute left-3 top-3 text-gray-300"
@@ -154,8 +192,9 @@ export default function LoginPage(): JSX.Element {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-sm text-gray-500"
+                    className="absolute right-3 top-2.5 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
                     aria-label="Toggle password visibility"
+                    disabled={loading}
                   >
                     {showPassword ? "Cacher" : "Voir"}
                   </button>
@@ -164,8 +203,13 @@ export default function LoginPage(): JSX.Element {
 
               {/* Error */}
               {error && (
-                <div className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">
-                  {error}
+                <div className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2 border border-red-200">
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    {error}
+                  </div>
                 </div>
               )}
 
@@ -174,7 +218,7 @@ export default function LoginPage(): JSX.Element {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-full py-3 text-white bg-gradient-to-r from-[#5142ff] to-[#4a19ff] hover:opacity-95 flex items-center justify-center gap-2"
+                  className="w-full rounded-full py-3 text-white bg-gradient-to-r from-[#5142ff] to-[#4a19ff] hover:opacity-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                 >
                   {loading ? (
                     <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24">
@@ -195,7 +239,7 @@ export default function LoginPage(): JSX.Element {
                     </svg>
                   ) : null}
                   <span className="text-sm font-medium">
-                    {loading ? "Connecting..." : "Connexion"}
+                    {loading ? "Connexion..." : "Connexion"}
                   </span>
                 </button>
               </div>
@@ -204,7 +248,8 @@ export default function LoginPage(): JSX.Element {
                 <button
                   type="button"
                   onClick={() => alert("Flow mot de passe oublié à implémenter")}
-                  className="text-xs text-gray-400 hover:underline"
+                  className="text-xs text-gray-400 hover:underline disabled:opacity-50"
+                  disabled={loading}
                 >
                   Mot de passe oublié
                 </button>

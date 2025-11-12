@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "../pages/Login/LoginPage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
 import EntitiesPage from "../pages/Entities/EntitiesPage";
@@ -15,9 +15,13 @@ export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Route publique - Login comme page d'accueil par défaut */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
+        
+        {/* Routes protégées */}
         <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/entities" element={<EntitiesPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/roles" element={<RolesPage />} />
@@ -27,6 +31,9 @@ export default function AppRouter() {
           <Route path="/modules" element={<ModulesPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Route>
+
+        {/* Redirection pour toutes les routes inconnues vers le login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );

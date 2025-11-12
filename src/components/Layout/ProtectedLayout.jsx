@@ -1,20 +1,21 @@
-import { Outlet, Navigate } from "react-router-dom";
-import Sidebar from "./Sidebar";
-import Navbar from "./Navbar";
+// src/components/Layout/ProtectedLayout.jsx
+import React from 'react';
+import { Navigate, Outlet } from 'react-router-dom';
+import MainLayout from '../../layouts/MainLayout';
+import { authService } from '../../services/authService';
 
-export default function ProtectedLayout() {
-  const token = localStorage.getItem("token");
-  if (!token) return <Navigate to="/login" />;
+const ProtectedLayout = () => {
+  const isAuthenticated = authService.isAuthenticated();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <Sidebar />
-      <div className="flex flex-col flex-1">
-        <Navbar />
-        <main className="p-4">
-          <Outlet />
-        </main>
-      </div>
-    </div>
+    <MainLayout onLogout={authService.logout}>
+      <Outlet />
+    </MainLayout>
   );
-}
+};
+
+export default ProtectedLayout;
