@@ -1,19 +1,20 @@
-// src/components/Layout/ProtectedLayout.jsx
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
-import { authService } from '../../services/authService';
 
 const ProtectedLayout = () => {
-  const isAuthenticated = authService.isAuthenticated();
+  const isAuthenticated = () => {
+    const token = localStorage.getItem('authToken');
+    return !!token;
+  };
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
   }
 
   return (
-    <MainLayout onLogout={authService.logout}>
-      <Outlet />
+    <MainLayout>
+      <Outlet /> {/* Ceci affiche les pages enfants */}
     </MainLayout>
   );
 };

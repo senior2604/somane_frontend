@@ -1,33 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-export default function UsersPage() {
-  const [users, setUsers] = useState([]);
-  const [entities, setEntities] = useState([]);
+export default function GroupsPage() {
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingGroup, setEditingGroup] = useState(null);
   
-  // État pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  
-  // État pour la recherche
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatut, setFilterStatut] = useState('');
 
   const API_BASE = 'http://localhost:8000/api';
 
   useEffect(() => {
-    fetchUsers();
-    fetchEntities();
+    fetchGroups();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchGroups = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/users/`, {
+      const response = await axios.get(`${API_BASE}/groups/`, {
         headers: { 
           Authorization: `Token ${token}`,
           'Content-Type': 'application/json'
@@ -35,62 +29,31 @@ export default function UsersPage() {
       });
       
       if (Array.isArray(response.data)) {
-        setUsers(response.data);
+        setGroups(response.data);
       } else if (response.data && Array.isArray(response.data.results)) {
-        setUsers(response.data.results);
+        setGroups(response.data.results);
       } else {
         setError('Format de données inattendu');
       }
     } catch (err) {
-      setError('Erreur lors du chargement des utilisateurs');
+      setError('Erreur lors du chargement des groupes');
       console.error('Error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchEntities = async () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/entites/`, {
-        headers: { Authorization: `Token ${token}` }
-      });
-      
-      console.log('Entities response:', response.data); // Debug
-      
-      // Gérer différents formats de réponse
-      if (Array.isArray(response.data)) {
-        setEntities(response.data);
-      } else if (response.data && Array.isArray(response.data.results)) {
-        setEntities(response.data.results);
-      } else {
-        console.warn('Format de données entities inattendu:', response.data);
-        setEntities([]); // Assurer que c'est un tableau vide
-      }
-    } catch (err) {
-      console.error('Error fetching entities:', err);
-      setEntities([]); // En cas d'erreur, tableau vide
-    }
-  };
-
   // Filtrage et recherche
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.first_name && user.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.last_name && user.last_name.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesStatut = !filterStatut || user.statut === filterStatut;
-    
-    return matchesSearch && matchesStatut;
-  });
+  const filteredGroups = groups.filter(group => 
+    group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    group.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentUsers = Array.isArray(filteredUsers) ? filteredUsers.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredUsers) ? filteredUsers.length : 0) / itemsPerPage);
+  const currentGroups = filteredGroups.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredGroups.length / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -98,42 +61,42 @@ export default function UsersPage() {
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
   // Gestion des actions
-  const handleNewUser = () => {
-    setEditingUser(null);
+  const handleNewGroup = () => {
+    setEditingGroup(null);
     setShowForm(true);
   };
 
-  const handleEdit = (user) => {
-    setEditingUser(user);
+  const handleEdit = (group) => {
+    setEditingGroup(group);
     setShowForm(true);
   };
 
-  const handleDelete = async (user) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${user.username}" ?`)) {
+  const handleDelete = async (group) => {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le groupe "${group.name}" ?`)) {
       try {
         const token = localStorage.getItem('authToken');
-        await axios.delete(`${API_BASE}/users/${user.id}/`, {
+        await axios.delete(`${API_BASE}/groups/${group.id}/`, {
           headers: { Authorization: `Token ${token}` }
         });
-        fetchUsers(); // Recharger la liste
+        fetchGroups();
       } catch (err) {
         setError('Erreur lors de la suppression');
-        console.error('Error deleting user:', err);
+        console.error('Error deleting group:', err);
       }
     }
   };
 
   const handleFormSuccess = () => {
     setShowForm(false);
-    setEditingUser(null);
-    fetchUsers(); // Recharger la liste après création/modification
+    setEditingGroup(null);
+    fetchGroups();
   };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Chargement des utilisateurs...</span>
+        <span className="ml-2">Chargement des groupes...</span>
       </div>
     );
   }
@@ -153,32 +116,29 @@ export default function UsersPage() {
     );
   }
 
-  const usersArray = Array.isArray(users) ? users : [];
-
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Utilisateurs</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Groupes d'Utilisateurs</h1>
           <p className="text-gray-600 mt-1">
-            {filteredUsers.length} utilisateur(s) trouvé(s)
-            {filterStatut && ` • Filtre: ${filterStatut}`}
+            {filteredGroups.length} groupe(s) trouvé(s)
           </p>
         </div>
         <button 
-          onClick={handleNewUser}
+          onClick={handleNewGroup}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Nouvel Utilisateur
+          Nouveau Groupe
         </button>
       </div>
 
       {/* Filtres et Recherche */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
             <input
@@ -186,27 +146,13 @@ export default function UsersPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nom, email, prénom..."
+              placeholder="Nom, description..."
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-            <select
-              value={filterStatut}
-              onChange={(e) => setFilterStatut(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Tous les statuts</option>
-              <option value="actif">Actif</option>
-              <option value="inactif">Inactif</option>
-              <option value="suspendu">Suspendu</option>
-            </select>
           </div>
           <div className="flex items-end">
             <button
               onClick={() => {
                 setSearchTerm('');
-                setFilterStatut('');
                 setCurrentPage(1);
               }}
               className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
@@ -217,7 +163,7 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Tableau avec bordures complètes */}
+      {/* Tableau */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
@@ -227,22 +173,16 @@ export default function UsersPage() {
                   ID
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom d'utilisateur
+                  Nom du Groupe
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Email
+                  Description
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Prénom
+                  Modules Autorisés
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Téléphone
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Statut
+                  Utilisateurs
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                   Actions
@@ -250,53 +190,56 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {currentUsers.length === 0 ? (
+              {currentGroups.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {users.length === 0 ? 'Aucun utilisateur trouvé' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="6" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                    {groups.length === 0 ? 'Aucun groupe trouvé' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
               ) : (
-                currentUsers.map((user, index) => (
+                currentGroups.map((group, index) => (
                   <tr 
-                    key={user.id} 
+                    key={group.id} 
                     className={`${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     } hover:bg-gray-100 transition-colors border-b border-gray-300`}
                   >
                     <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {user.id}
+                      {group.id}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      {user.username}
+                      {group.name}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.email}
+                      {group.description || '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.first_name || '-'}
+                      <div className="flex flex-wrap gap-1">
+                        {group.modules_autorises && group.modules_autorises.length > 0 ? (
+                          group.modules_autorises.slice(0, 3).map((module, idx) => (
+                            <span key={idx} className="inline-flex px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
+                              {module}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-400">Aucun module</span>
+                        )}
+                        {group.modules_autorises && group.modules_autorises.length > 3 && (
+                          <span className="inline-flex px-2 py-1 rounded text-xs bg-gray-100 text-gray-600">
+                            +{group.modules_autorises.length - 3}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.last_name || '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.telephone || '-'}
-                    </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${
-                        user.statut === 'actif' 
-                          ? 'bg-green-100 text-green-800 border-green-300' 
-                          : user.statut === 'inactif' 
-                          ? 'bg-gray-100 text-gray-800 border-gray-300'
-                          : 'bg-red-100 text-red-800 border-red-300'
-                      }`}>
-                        {user.statut || 'Non défini'}
+                      <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        {group.user_count || 0} utilisateur(s)
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex space-x-3">
                         <button 
-                          onClick={() => handleEdit(user)}
+                          onClick={() => handleEdit(group)}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,7 +248,7 @@ export default function UsersPage() {
                           Éditer
                         </button>
                         <button 
-                          onClick={() => handleDelete(user)}
+                          onClick={() => handleDelete(group)}
                           className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -323,7 +266,7 @@ export default function UsersPage() {
         </div>
 
         {/* Pagination */}
-        {filteredUsers.length > 0 && (
+        {filteredGroups.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -344,7 +287,7 @@ export default function UsersPage() {
                   <option value={50}>50</option>
                 </select>
                 <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredUsers.length)} sur {filteredUsers.length}
+                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredGroups.length)} sur {filteredGroups.length}
                 </span>
               </div>
 
@@ -410,12 +353,11 @@ export default function UsersPage() {
 
       {/* Formulaire Modal */}
       {showForm && (
-        <UserFormModal
-          user={editingUser}
-          entities={entities}
+        <GroupFormModal
+          group={editingGroup}
           onClose={() => {
             setShowForm(false);
-            setEditingUser(null);
+            setEditingGroup(null);
           }}
           onSuccess={handleFormSuccess}
         />
@@ -424,25 +366,32 @@ export default function UsersPage() {
   );
 }
 
-// Composant Modal pour le formulaire - CORRIGÉ
-function UserFormModal({ user, entities, onClose, onSuccess }) {
+// Composant Modal pour le formulaire des groupes
+function GroupFormModal({ group, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
-    username: user?.username || '',
-    email: user?.email || '',
-    first_name: user?.first_name || '',
-    last_name: user?.last_name || '',
-    telephone: user?.telephone || '',
-    statut: user?.statut || 'actif',
-    entite: user?.entite?.id || '',
-    password: ''
+    name: group?.name || '',
+    description: group?.description || '',
+    modules_autorises: group?.modules_autorises || [],
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const API_BASE = 'http://localhost:8000/api';
 
-  // S'assurer que entities est toujours un tableau
-  const entitiesArray = Array.isArray(entities) ? entities : [];
+  // Liste des modules disponibles
+  const availableModules = [
+    'Core/Noyau',
+    'Achat',
+    'Vente', 
+    'Comptabilité',
+    'RH/Paie',
+    'Stock',
+    'Production',
+    'Projet',
+    'CRM',
+    'Maintenance'
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -451,18 +400,13 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
 
     try {
       const token = localStorage.getItem('authToken');
-      const url = user 
-        ? `${API_BASE}/users/${user.id}/`
-        : `${API_BASE}/users/`;
+      const url = group 
+        ? `${API_BASE}/groups/${group.id}/`
+        : `${API_BASE}/groups/`;
       
-      const method = user ? 'put' : 'post';
-      
-      const submitData = { ...formData };
-      if (!submitData.password) {
-        delete submitData.password;
-      }
+      const method = group ? 'put' : 'post';
 
-      await axios[method](url, submitData, {
+      await axios[method](url, formData, {
         headers: { 
           Authorization: `Token ${token}`,
           'Content-Type': 'application/json'
@@ -487,12 +431,21 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
     }));
   };
 
+  const toggleModule = (module) => {
+    const currentModules = formData.modules_autorises || [];
+    const newModules = currentModules.includes(module)
+      ? currentModules.filter(m => m !== module)
+      : [...currentModules, module];
+    
+    handleChange('modules_autorises', newModules);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
-            {user ? 'Modifier l\'utilisateur' : 'Créer un nouvel utilisateur'}
+            {group ? 'Modifier le groupe' : 'Créer un nouveau groupe'}
           </h2>
         </div>
         
@@ -508,115 +461,59 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
         )}
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom d'utilisateur *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.username}
-                onChange={(e) => handleChange('username', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Entrez le nom d'utilisateur"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email *
-              </label>
-              <input
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => handleChange('email', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="email@exemple.com"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Prénom</label>
-              <input
-                type="text"
-                value={formData.first_name}
-                onChange={(e) => handleChange('first_name', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Prénom"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
-              <input
-                type="text"
-                value={formData.last_name}
-                onChange={(e) => handleChange('last_name', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Nom"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone</label>
-              <input
-                type="tel"
-                value={formData.telephone}
-                onChange={(e) => handleChange('telephone', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="+228 XX XXX XXX"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-              <select
-                value={formData.statut}
-                onChange={(e) => handleChange('statut', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="actif">Actif</option>
-                <option value="inactif">Inactif</option>
-                <option value="suspendu">Suspendu</option>
-              </select>
-            </div>
-            
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Entité</label>
-              <select
-                value={formData.entite}
-                onChange={(e) => handleChange('entite', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Sélectionnez une entité</option>
-                {entitiesArray.map(entity => (
-                  <option key={entity.id} value={entity.id}>
-                    {entity.raison_sociale}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            {!user && (
-              <div className="md:col-span-2">
+          {/* Informations Générales */}
+          <div className="border-b border-gray-200 pb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Informations Générales</h3>
+            <div className="grid grid-cols-1 gap-6">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mot de passe *
+                  Nom du Groupe *
                 </label>
                 <input
-                  type="password"
+                  type="text"
                   required
-                  value={formData.password}
-                  onChange={(e) => handleChange('password', e.target.value)}
+                  value={formData.name}
+                  onChange={(e) => handleChange('name', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Mot de passe sécurisé"
+                  placeholder="Ex: Administrateurs, Managers, Opérateurs..."
                 />
               </div>
-            )}
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => handleChange('description', e.target.value)}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Description du groupe et de ses permissions..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Modules Autorisés */}
+          <div className="border-b border-gray-200 pb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Modules Autorisés</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Sélectionnez les modules auxquels ce groupe aura accès
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {availableModules.map(module => (
+                <label key={module} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.modules_autorises.includes(module)}
+                    onChange={() => toggleModule(module)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">{module}</span>
+                </label>
+              ))}
+            </div>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
@@ -636,7 +533,7 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
               )}
-              <span>{loading ? 'Sauvegarde...' : user ? 'Mettre à jour' : 'Créer l\'utilisateur'}</span>
+              <span>{loading ? 'Sauvegarde...' : group ? 'Mettre à jour' : 'Créer le groupe'}</span>
             </button>
           </div>
         </form>
