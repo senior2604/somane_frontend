@@ -71,7 +71,7 @@ export default function Sidebar() {
         { name: "Pays", path: "/countries", icon: <FiGlobe /> },
         { name: "États/Provinces", path: "/states", icon: <FiMap /> },
         { name: "Devises", path: "/currencies", icon: <FiDollarSign /> },
-        { name: "Taux de change", path: "/exchange-rates", icon: <FiTrendingUp /> },  // ← CORRIGÉ
+        { name: "Taux de change", path: "/ExchangeRates", icon: <FiTrendingUp /> },  // ← CORRIGÉ
         { name: "Langues", path: "/languages", icon: <FiFlag /> },
       ]
     },
@@ -81,7 +81,7 @@ export default function Sidebar() {
       icon: <FiCreditCard />,
       items: [
         { name: "Banques", path: "/banks", icon: <FiCreditCard /> },
-        { name: "Comptes Partenaires", path: "/partner-banks", icon: <FiList /> },
+        { name: "Comptes Partenaires", path: "/PartnerBanks", icon: <FiList /> },
       ]
     },
     {

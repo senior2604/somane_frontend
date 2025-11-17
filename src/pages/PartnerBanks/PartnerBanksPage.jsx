@@ -1,29 +1,77 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../services/apiClient';
 
-export default function BanksPage() {
+export default function PartnerBanksPage() {
+  const [partnerBanks, setPartnerBanks] = useState([]);
+  const [partenaires, setPartenaires] = useState([]);
   const [banques, setBanques] = useState([]);
-  const [pays, setPays] = useState([]);
+  const [entites, setEntites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingBanque, setEditingBanque] = useState(null);
+  const [editingPartnerBank, setEditingPartnerBank] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterPays, setFilterPays] = useState('');
+  const [filterPartenaire, setFilterPartenaire] = useState('');
+  const [filterBanque, setFilterBanque] = useState('');
 
   useEffect(() => {
+    fetchPartnerBanks();
+    fetchPartenaires();
     fetchBanques();
-    fetchPays();
+    fetchEntites();
   }, []);
 
-  const fetchBanques = async () => {
+  const fetchPartnerBanks = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      const response = await apiClient.get('/banques-partenaires/');
+      
+      let partnerBanksData = [];
+      if (Array.isArray(response)) {
+        partnerBanksData = response;
+      } else if (response && Array.isArray(response.results)) {
+        partnerBanksData = response.results;
+      } else {
+        setError('Format de données inattendu');
+        partnerBanksData = [];
+      }
+
+      setPartnerBanks(partnerBanksData);
+    } catch (err) {
+      console.error('❌ Erreur lors du chargement des banques partenaires:', err);
+      setError('Erreur lors du chargement des banques partenaires');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPartenaires = async () => {
+    try {
+      const response = await apiClient.get('/partenaires/');
+      
+      let partenairesData = [];
+      if (Array.isArray(response)) {
+        partenairesData = response;
+      } else if (response && Array.isArray(response.results)) {
+        partenairesData = response.results;
+      } else {
+        partenairesData = [];
+      }
+
+      setPartenaires(partenairesData);
+    } catch (err) {
+      console.error('Error fetching partenaires:', err);
+      setPartenaires([]);
+    }
+  };
+
+  const fetchBanques = async () => {
+    try {
       const response = await apiClient.get('/banques/');
       
       let banquesData = [];
@@ -32,57 +80,57 @@ export default function BanksPage() {
       } else if (response && Array.isArray(response.results)) {
         banquesData = response.results;
       } else {
-        setError('Format de données inattendu');
         banquesData = [];
       }
 
       setBanques(banquesData);
     } catch (err) {
-      console.error('❌ Erreur lors du chargement des banques:', err);
-      setError('Erreur lors du chargement des banques');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching banques:', err);
+      setBanques([]);
     }
   };
 
-  const fetchPays = async () => {
+  const fetchEntites = async () => {
     try {
-      const response = await apiClient.get('/pays/');
+      const response = await apiClient.get('/entites/');
       
-      let paysData = [];
+      let entitesData = [];
       if (Array.isArray(response)) {
-        paysData = response;
+        entitesData = response;
       } else if (response && Array.isArray(response.results)) {
-        paysData = response.results;
+        entitesData = response.results;
       } else {
-        paysData = [];
+        entitesData = [];
       }
 
-      setPays(paysData);
+      setEntites(entitesData);
     } catch (err) {
-      console.error('Error fetching pays:', err);
-      setPays([]);
+      console.error('Error fetching entites:', err);
+      setEntites([]);
     }
   };
 
   // Filtrage et recherche
-  const filteredBanques = banques.filter(banque => {
+  const filteredPartnerBanks = partnerBanks.filter(partnerBank => {
     const matchesSearch = 
-      banque.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      banque.code_bic?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      banque.adresse?.toLowerCase().includes(searchTerm.toLowerCase());
+      partnerBank.numero_compte?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      partnerBank.partenaire?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      partnerBank.banque?.nom?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesPays = filterPays === '' || 
-      (banque.pays && banque.pays.id.toString() === filterPays);
+    const matchesPartenaire = filterPartenaire === '' || 
+      (partnerBank.partenaire && partnerBank.partenaire.id.toString() === filterPartenaire);
     
-    return matchesSearch && matchesPays;
+    const matchesBanque = filterBanque === '' || 
+      (partnerBank.banque && partnerBank.banque.id.toString() === filterBanque);
+    
+    return matchesSearch && matchesPartenaire && matchesBanque;
   });
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentBanques = Array.isArray(filteredBanques) ? filteredBanques.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredBanques) ? filteredBanques.length : 0) / itemsPerPage);
+  const currentPartnerBanks = Array.isArray(filteredPartnerBanks) ? filteredPartnerBanks.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const totalPages = Math.ceil((Array.isArray(filteredPartnerBanks) ? filteredPartnerBanks.length : 0) / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -90,36 +138,36 @@ export default function BanksPage() {
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
   // Gestion des actions
-  const handleNewBanque = () => {
-    setEditingBanque(null);
+  const handleNewPartnerBank = () => {
+    setEditingPartnerBank(null);
     setShowForm(true);
   };
 
-  const handleEdit = (banque) => {
-    setEditingBanque(banque);
+  const handleEdit = (partnerBank) => {
+    setEditingPartnerBank(partnerBank);
     setShowForm(true);
   };
 
-  const handleDelete = async (banque) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la banque "${banque.nom}" ?`)) {
+  const handleDelete = async (partnerBank) => {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le compte "${partnerBank.numero_compte}" ?`)) {
       try {
-        await apiClient.delete(`/banques/${banque.id}/`);
-        fetchBanques();
+        await apiClient.delete(`/banques-partenaires/${partnerBank.id}/`);
+        fetchPartnerBanks();
       } catch (err) {
         setError('Erreur lors de la suppression');
-        console.error('Error deleting banque:', err);
+        console.error('Error deleting partner bank:', err);
       }
     }
   };
 
   const handleFormSuccess = () => {
     setShowForm(false);
-    setEditingBanque(null);
-    fetchBanques();
+    setEditingPartnerBank(null);
+    fetchPartnerBanks();
   };
 
   const handleRetry = () => {
-    fetchBanques();
+    fetchPartnerBanks();
   };
 
   if (loading) {
@@ -127,7 +175,7 @@ export default function BanksPage() {
       <div className="p-6">
         <div className="flex justify-center items-center p-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des banques...</span>
+          <span className="ml-2">Chargement des comptes bancaires partenaires...</span>
         </div>
       </div>
     );
@@ -137,10 +185,10 @@ export default function BanksPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Banques</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Comptes Bancaires Partenaires</h1>
           <p className="text-gray-600 mt-1">
-            {filteredBanques.length} banque(s) trouvée(s)
-            {(searchTerm || filterPays) && ' • Filtres actifs'}
+            {filteredPartnerBanks.length} compte(s) trouvé(s)
+            {(searchTerm || filterPartenaire || filterBanque) && ' • Filtres actifs'}
           </p>
         </div>
         <div className="flex gap-3">
@@ -154,13 +202,13 @@ export default function BanksPage() {
             Actualiser
           </button>
           <button 
-            onClick={handleNewBanque}
+            onClick={handleNewPartnerBank}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Nouvelle Banque
+            Nouveau Compte
           </button>
         </div>
       </div>
@@ -195,29 +243,45 @@ export default function BanksPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nom, BIC, adresse..."
+              placeholder="Numéro compte, partenaire, banque..."
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Pays</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Partenaire</label>
             <select
-              value={filterPays}
-              onChange={(e) => setFilterPays(e.target.value)}
+              value={filterPartenaire}
+              onChange={(e) => setFilterPartenaire(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Tous les pays</option>
-              {pays.map(paysItem => (
-                <option key={paysItem.id} value={paysItem.id}>
-                  {paysItem.nom}
+              <option value="">Tous les partenaires</option>
+              {partenaires.map(partenaire => (
+                <option key={partenaire.id} value={partenaire.id}>
+                  {partenaire.nom} ({partenaire.type_partenaire})
                 </option>
               ))}
             </select>
           </div>
-          <div className="md:col-span-2 flex items-end">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Banque</label>
+            <select
+              value={filterBanque}
+              onChange={(e) => setFilterBanque(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Toutes les banques</option>
+              {banques.map(banque => (
+                <option key={banque.id} value={banque.id}>
+                  {banque.nom}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end">
             <button
               onClick={() => {
                 setSearchTerm('');
-                setFilterPays('');
+                setFilterPartenaire('');
+                setFilterBanque('');
                 setCurrentPage(1);
               }}
               className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
@@ -229,22 +293,28 @@ export default function BanksPage() {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">{banques.length}</div>
-          <div className="text-sm text-gray-600">Total des banques</div>
+          <div className="text-2xl font-bold text-blue-600">{partnerBanks.length}</div>
+          <div className="text-sm text-gray-600">Total des comptes</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-green-600">
-            {banques.filter(b => b.code_bic).length}
+            {new Set(partnerBanks.map(pb => pb.partenaire?.id).filter(id => id)).size}
           </div>
-          <div className="text-sm text-gray-600">Avec code BIC</div>
+          <div className="text-sm text-gray-600">Partenaires uniques</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-purple-600">
-            {new Set(banques.map(b => b.pays?.id).filter(id => id)).size}
+            {new Set(partnerBanks.map(pb => pb.banque?.id).filter(id => id)).size}
           </div>
-          <div className="text-sm text-gray-600">Pays représentés</div>
+          <div className="text-sm text-gray-600">Banques uniques</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-orange-600">
+            {new Set(partnerBanks.map(pb => pb.entite?.id).filter(id => id)).size}
+          </div>
+          <div className="text-sm text-gray-600">Entités concernées</div>
         </div>
       </div>
 
@@ -258,16 +328,16 @@ export default function BanksPage() {
                   ID
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom
+                  Partenaire
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Code BIC
+                  Banque
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Pays
+                  Numéro de Compte
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Adresse
+                  Entité
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                   Actions
@@ -275,51 +345,54 @@ export default function BanksPage() {
               </tr>
             </thead>
             <tbody>
-              {currentBanques.length === 0 ? (
+              {currentPartnerBanks.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {banques.length === 0 ? 'Aucune banque trouvée' : 'Aucun résultat pour votre recherche'}
+                    {partnerBanks.length === 0 ? 'Aucun compte bancaire partenaire trouvé' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
               ) : (
-                currentBanques.map((banque, index) => (
+                currentPartnerBanks.map((partnerBank, index) => (
                   <tr 
-                    key={banque.id} 
+                    key={partnerBank.id} 
                     className={`${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     } hover:bg-gray-100 transition-colors border-b border-gray-300`}
                   >
                     <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {banque.id}
+                      {partnerBank.id}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      {banque.nom}
+                      <div>
+                        <div className="font-semibold">{partnerBank.partenaire?.nom}</div>
+                        <div className="text-xs text-gray-500 capitalize">
+                          {partnerBank.partenaire?.type_partenaire}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {banque.code_bic ? (
-                        <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                          {banque.code_bic}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {banque.pays ? (
-                        <div className="flex items-center space-x-2">
-                          <span className="font-mono bg-green-50 px-2 py-1 rounded border border-green-200">
-                            {banque.pays.code_iso}
-                          </span>
-                          <span>{banque.pays.nom}</span>
+                      {partnerBank.banque ? (
+                        <div>
+                          <div className="font-medium">{partnerBank.banque.nom}</div>
+                          {partnerBank.banque.code_bic && (
+                            <div className="text-xs text-gray-500 font-mono">
+                              {partnerBank.banque.code_bic}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {banque.adresse ? (
-                        <div className="max-w-xs truncate" title={banque.adresse}>
-                          {banque.adresse}
+                      <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                        {partnerBank.numero_compte}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                      {partnerBank.entite ? (
+                        <div className="max-w-xs truncate" title={partnerBank.entite.raison_sociale}>
+                          {partnerBank.entite.raison_sociale}
                         </div>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -328,7 +401,7 @@ export default function BanksPage() {
                     <td className="px-6 py-4">
                       <div className="flex space-x-3">
                         <button 
-                          onClick={() => handleEdit(banque)}
+                          onClick={() => handleEdit(partnerBank)}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -337,7 +410,7 @@ export default function BanksPage() {
                           Éditer
                         </button>
                         <button 
-                          onClick={() => handleDelete(banque)}
+                          onClick={() => handleDelete(partnerBank)}
                           className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -355,7 +428,7 @@ export default function BanksPage() {
         </div>
 
         {/* Pagination */}
-        {filteredBanques.length > 0 && (
+        {filteredPartnerBanks.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -376,7 +449,7 @@ export default function BanksPage() {
                   <option value={50}>50</option>
                 </select>
                 <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredBanques.length)} sur {filteredBanques.length}
+                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPartnerBanks.length)} sur {filteredPartnerBanks.length}
                 </span>
               </div>
 
@@ -442,12 +515,14 @@ export default function BanksPage() {
 
       {/* Formulaire Modal */}
       {showForm && (
-        <BanqueFormModal
-          banque={editingBanque}
-          pays={pays}
+        <PartnerBankFormModal
+          partnerBank={editingPartnerBank}
+          partenaires={partenaires}
+          banques={banques}
+          entites={entites}
           onClose={() => {
             setShowForm(false);
-            setEditingBanque(null);
+            setEditingPartnerBank(null);
           }}
           onSuccess={handleFormSuccess}
         />
@@ -456,13 +531,13 @@ export default function BanksPage() {
   );
 }
 
-// Composant Modal pour le formulaire des banques
-function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
+// Composant Modal pour le formulaire des banques partenaires
+function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
-    nom: banque?.nom || '',
-    code_bic: banque?.code_bic || '',
-    adresse: banque?.adresse || '',
-    pays: banque?.pays?.id || ''
+    partenaire: partnerBank?.partenaire?.id || '',
+    banque: partnerBank?.banque?.id || '',
+    numero_compte: partnerBank?.numero_compte || '',
+    entite: partnerBank?.entite?.id || ''
   });
 
   const [loading, setLoading] = useState(false);
@@ -474,18 +549,36 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
     setError(null);
 
     // Validation
-    if (!formData.nom) {
-      setError('Le nom de la banque est obligatoire');
+    if (!formData.partenaire) {
+      setError('Le partenaire est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.banque) {
+      setError('La banque est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.numero_compte) {
+      setError('Le numéro de compte est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.entite) {
+      setError('L\'entité est obligatoire');
       setLoading(false);
       return;
     }
 
     try {
-      const url = banque 
-        ? `/banques/${banque.id}/`
-        : `/banques/`;
+      const url = partnerBank 
+        ? `/banques-partenaires/${partnerBank.id}/`
+        : `/banques-partenaires/`;
       
-      const method = banque ? 'PUT' : 'POST';
+      const method = partnerBank ? 'PUT' : 'POST';
 
       await apiClient.request(url, {
         method: method,
@@ -516,7 +609,7 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
-            {banque ? 'Modifier la banque' : 'Créer une nouvelle banque'}
+            {partnerBank ? 'Modifier le compte bancaire' : 'Créer un nouveau compte bancaire'}
           </h2>
         </div>
         
@@ -533,79 +626,90 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Nom de la banque */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom de la banque *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.nom}
-                onChange={(e) => handleChange('nom', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Banque Centrale, Société Générale..."
-              />
-            </div>
-            
-            {/* Code BIC */}
+            {/* Partenaire */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code BIC/SWIFT
-              </label>
-              <input
-                type="text"
-                value={formData.code_bic}
-                onChange={(e) => handleChange('code_bic', e.target.value.toUpperCase())}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                placeholder="ABCDEFGHXXX"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                8 ou 11 caractères (ex: BFTGTGPT)
-              </p>
-            </div>
-            
-            {/* Pays */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Pays
+                Partenaire *
               </label>
               <select
-                value={formData.pays}
-                onChange={(e) => handleChange('pays', e.target.value)}
+                required
+                value={formData.partenaire}
+                onChange={(e) => handleChange('partenaire', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">Sélectionnez un pays</option>
-                {pays.map(paysItem => (
-                  <option key={paysItem.id} value={paysItem.id}>
-                    {paysItem.nom} ({paysItem.code_iso})
+                <option value="">Sélectionnez un partenaire</option>
+                {partenaires.map(partenaire => (
+                  <option key={partenaire.id} value={partenaire.id}>
+                    {partenaire.nom} ({partenaire.type_partenaire})
                   </option>
                 ))}
               </select>
             </div>
             
-            {/* Adresse */}
+            {/* Banque */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Banque *
+              </label>
+              <select
+                required
+                value={formData.banque}
+                onChange={(e) => handleChange('banque', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Sélectionnez une banque</option>
+                {banques.map(banque => (
+                  <option key={banque.id} value={banque.id}>
+                    {banque.nom} {banque.code_bic && `(${banque.code_bic})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Numéro de compte */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Adresse
+                Numéro de compte *
               </label>
-              <textarea
-                value={formData.adresse}
-                onChange={(e) => handleChange('adresse', e.target.value)}
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Adresse complète de la banque..."
+              <input
+                type="text"
+                required
+                value={formData.numero_compte}
+                onChange={(e) => handleChange('numero_compte', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                placeholder="IBAN, numéro de compte..."
               />
+            </div>
+            
+            {/* Entité */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Entité *
+              </label>
+              <select
+                required
+                value={formData.entite}
+                onChange={(e) => handleChange('entite', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Sélectionnez une entité</option>
+                {entites.map(entite => (
+                  <option key={entite.id} value={entite.id}>
+                    {entite.raison_sociale}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
           {/* Aperçu */}
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu de la banque</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu du compte bancaire</h3>
             <div className="space-y-2 text-sm">
-              <div><strong>Nom:</strong> {formData.nom || 'Non défini'}</div>
-              <div><strong>BIC:</strong> {formData.code_bic || 'Non défini'}</div>
-              <div><strong>Pays:</strong> {pays.find(p => p.id == formData.pays)?.nom || 'Non défini'}</div>
+              <div><strong>Partenaire:</strong> {partenaires.find(p => p.id == formData.partenaire)?.nom || 'Non défini'}</div>
+              <div><strong>Banque:</strong> {banques.find(b => b.id == formData.banque)?.nom || 'Non défini'}</div>
+              <div><strong>Numéro compte:</strong> {formData.numero_compte || 'Non défini'}</div>
+              <div><strong>Entité:</strong> {entites.find(e => e.id == formData.entite)?.raison_sociale || 'Non défini'}</div>
             </div>
           </div>
           
@@ -629,7 +733,7 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
               )}
-              <span>{loading ? 'Sauvegarde...' : banque ? 'Mettre à jour' : 'Créer la banque'}</span>
+              <span>{loading ? 'Sauvegarde...' : partnerBank ? 'Mettre à jour' : 'Créer le compte'}</span>
             </button>
           </div>
         </form>

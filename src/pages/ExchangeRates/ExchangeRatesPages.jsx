@@ -1,45 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../services/apiClient';
 
-export default function PaysPage() {
-  const [pays, setPays] = useState([]);
+export default function TauxChangePage() {
+  const [tauxChange, setTauxChange] = useState([]);
   const [devises, setDevises] = useState([]);
+  const [entites, setEntites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingPays, setEditingPays] = useState(null);
+  const [editingTaux, setEditingTaux] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterDevise, setFilterDevise] = useState('');
+  const [filterDate, setFilterDate] = useState('');
 
   useEffect(() => {
-    fetchPays();
+    fetchTauxChange();
     fetchDevises();
+    fetchEntites();
   }, []);
 
-  const fetchPays = async () => {
+  const fetchTauxChange = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/pays/');
+      const response = await apiClient.get('/taux-change/'); // ✅ Endpoint corrigé
       
-      let paysData = [];
+      console.log('📊 Données taux de change reçues:', response);
+      
+      let tauxData = [];
       if (Array.isArray(response)) {
-        paysData = response;
+        tauxData = response;
       } else if (response && Array.isArray(response.results)) {
-        paysData = response.results;
+        tauxData = response.results;
       } else {
         setError('Format de données inattendu');
-        paysData = [];
+        tauxData = [];
       }
 
-      setPays(paysData);
+      setTauxChange(tauxData);
     } catch (err) {
-      console.error('❌ Erreur lors du chargement des pays:', err);
-      setError('Erreur lors du chargement des pays');
-      setPays([]);
+      console.error('❌ Erreur lors du chargement des taux de change:', err);
+      setError('Erreur lors du chargement des taux de change');
+      setTauxChange([]);
     } finally {
       setLoading(false);
     }
@@ -65,29 +71,76 @@ export default function PaysPage() {
     }
   };
 
-  // Fonction pour obtenir les détails d'une devise par son ID
-  const getDeviseDetails = (deviseId) => {
-    if (!deviseId && deviseId !== 0) return null;
-    
-    const idRecherche = typeof deviseId === 'object' ? deviseId.id : deviseId;
-    return devises.find(d => d.id === idRecherche) || null;
+  const fetchEntites = async () => {
+    try {
+      const response = await apiClient.get('/entites/');
+      
+      let entitesData = [];
+      if (Array.isArray(response)) {
+        entitesData = response;
+      } else if (response && Array.isArray(response.results)) {
+        entitesData = response.results;
+      } else {
+        entitesData = [];
+      }
+
+      setEntites(entitesData);
+    } catch (err) {
+      console.error('Error fetching entites:', err);
+      setEntites([]);
+    }
+  };
+
+  // Fonction pour obtenir les détails d'une devise - utilise maintenant les champs du serializer
+  const getDeviseDetails = (tauxItem) => {
+    return {
+      code: tauxItem.devise_code,
+      nom: tauxItem.devise_nom,
+      symbole: tauxItem.devise_symbole
+    };
+  };
+
+  // Fonction pour obtenir les détails d'une entité
+  const getEntiteDetails = (tauxItem) => {
+    return {
+      raison_sociale: tauxItem.entite_nom
+    };
+  };
+
+  // Formater le taux pour l'affichage
+  const formatTaux = (taux) => {
+    if (!taux) return '0';
+    return new Intl.NumberFormat('fr-FR', {
+      minimumFractionDigits: 6,
+      maximumFractionDigits: 6
+    }).format(taux);
+  };
+
+  // Formater la date
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('fr-FR');
   };
 
   // Filtrage et recherche
-  const filteredPays = pays.filter(paysItem => {
+  const filteredTauxChange = tauxChange.filter(taux => {
+    const deviseDetails = getDeviseDetails(taux);
     const matchesSearch = 
-      paysItem.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      paysItem.code_iso?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      paysItem.code_tel?.includes(searchTerm);
+      deviseDetails?.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      deviseDetails?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      taux.date_taux?.includes(searchTerm);
     
-    return matchesSearch;
+    const matchesDevise = filterDevise === '' || taux.devise == filterDevise;
+    const matchesDate = filterDate === '' || taux.date_taux === filterDate;
+    
+    return matchesSearch && matchesDevise && matchesDate;
   });
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentPays = Array.isArray(filteredPays) ? filteredPays.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredPays) ? filteredPays.length : 0) / itemsPerPage);
+  const currentTauxChange = Array.isArray(filteredTauxChange) ? filteredTauxChange.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const totalPages = Math.ceil((Array.isArray(filteredTauxChange) ? filteredTauxChange.length : 0) / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -95,37 +148,41 @@ export default function PaysPage() {
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
   // Gestion des actions
-  const handleNewPays = () => {
-    setEditingPays(null);
+  const handleNewTaux = () => {
+    setEditingTaux(null);
     setShowForm(true);
   };
 
-  const handleEdit = (paysItem) => {
-    setEditingPays(paysItem);
+  const handleEdit = (taux) => {
+    setEditingTaux(taux);
     setShowForm(true);
   };
 
-  const handleDelete = async (paysItem) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le pays "${paysItem.nom}" ?`)) {
+  const handleDelete = async (taux) => {
+    const deviseDetails = getDeviseDetails(taux);
+    const deviseNom = deviseDetails ? `${deviseDetails.code} - ${deviseDetails.nom}` : 'cette devise';
+    
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le taux de change du ${formatDate(taux.date_taux)} pour ${deviseNom} ?`)) {
       try {
-        await apiClient.delete(`/pays/${paysItem.id}/`);
-        fetchPays();
+        await apiClient.delete(`/taux-change/${taux.id}/`); // ✅ Endpoint corrigé
+        fetchTauxChange();
       } catch (err) {
         setError('Erreur lors de la suppression');
-        console.error('Error deleting pays:', err);
+        console.error('Error deleting taux change:', err);
       }
     }
   };
 
   const handleFormSuccess = () => {
     setShowForm(false);
-    setEditingPays(null);
-    fetchPays();
+    setEditingTaux(null);
+    fetchTauxChange();
   };
 
   const handleRetry = () => {
-    fetchPays();
+    fetchTauxChange();
     fetchDevises();
+    fetchEntites();
   };
 
   if (loading) {
@@ -133,7 +190,7 @@ export default function PaysPage() {
       <div className="p-6">
         <div className="flex justify-center items-center p-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des pays...</span>
+          <span className="ml-2">Chargement des taux de change...</span>
         </div>
       </div>
     );
@@ -143,10 +200,10 @@ export default function PaysPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Pays</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Gestion des Taux de Change</h1>
           <p className="text-gray-600 mt-1">
-            {filteredPays.length} pays trouvé(s)
-            {searchTerm && ' • Recherche active'}
+            {filteredTauxChange.length} taux trouvé(s)
+            {(searchTerm || filterDevise || filterDate) && ' • Filtres actifs'}
           </p>
         </div>
         <div className="flex gap-3">
@@ -160,13 +217,13 @@ export default function PaysPage() {
             Actualiser
           </button>
           <button 
-            onClick={handleNewPays}
+            onClick={handleNewTaux}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Nouveau Pays
+            Nouveau Taux
           </button>
         </div>
       </div>
@@ -194,20 +251,46 @@ export default function PaysPage() {
       {/* Filtres et Recherche */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-3">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nom, code ISO, indicatif téléphonique..."
+              placeholder="Devise, date..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Devise</label>
+            <select
+              value={filterDevise}
+              onChange={(e) => setFilterDevise(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Toutes les devises</option>
+              {devises.map(devise => (
+                <option key={devise.id} value={devise.id}>
+                  {devise.code} - {devise.nom}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <div className="flex items-end">
             <button
               onClick={() => {
                 setSearchTerm('');
+                setFilterDevise('');
+                setFilterDate('');
                 setCurrentPage(1);
               }}
               className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
@@ -219,22 +302,28 @@ export default function PaysPage() {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">{pays.length}</div>
-          <div className="text-sm text-gray-600">Total des pays</div>
+          <div className="text-2xl font-bold text-blue-600">{tauxChange.length}</div>
+          <div className="text-sm text-gray-600">Total des taux</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-green-600">
-            {pays.filter(p => p.devise_par_defaut).length}
+            {new Set(tauxChange.map(t => t.devise)).size}
           </div>
-          <div className="text-sm text-gray-600">Avec devise définie</div>
+          <div className="text-sm text-gray-600">Devises différentes</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-gray-600">
-            {pays.filter(p => !p.devise_par_defaut).length}
+          <div className="text-2xl font-bold text-purple-600">
+            {new Set(tauxChange.map(t => t.date_taux)).size}
           </div>
-          <div className="text-sm text-gray-600">Sans devise définie</div>
+          <div className="text-sm text-gray-600">Dates différentes</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-orange-600">
+            {new Set(tauxChange.map(t => t.entite)).size}
+          </div>
+          <div className="text-sm text-gray-600">Entités différentes</div>
         </div>
       </div>
 
@@ -248,16 +337,16 @@ export default function PaysPage() {
                   ID
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Code ISO
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Indicatif
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   Devise
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Date
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Taux
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Entité
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                   Actions
@@ -265,57 +354,67 @@ export default function PaysPage() {
               </tr>
             </thead>
             <tbody>
-              {currentPays.length === 0 ? (
+              {currentTauxChange.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {pays.length === 0 ? 'Aucun pays trouvé' : 'Aucun résultat pour votre recherche'}
+                    {tauxChange.length === 0 ? 'Aucun taux de change trouvé' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
               ) : (
-                currentPays.map((paysItem, index) => {
-                  const deviseDetails = getDeviseDetails(paysItem.devise_par_defaut);
+                currentTauxChange.map((taux, index) => {
+                  const deviseDetails = getDeviseDetails(taux);
+                  const entiteDetails = getEntiteDetails(taux);
                   
                   return (
                     <tr 
-                      key={paysItem.id} 
+                      key={taux.id} 
                       className={`${
                         index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                       } hover:bg-gray-100 transition-colors border-b border-gray-300`}
                     >
                       <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                        {paysItem.id}
+                        {taux.id}
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                        {paysItem.nom}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                        <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                          {paysItem.code_iso}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                        <span className="font-mono bg-green-50 px-2 py-1 rounded border border-green-200">
-                          {paysItem.code_tel}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
                         {deviseDetails ? (
                           <div className="flex items-center space-x-2">
-                            <span className="font-mono bg-purple-50 px-2 py-1 rounded border border-purple-200">
+                            <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
                               {deviseDetails.code}
                             </span>
-                            <span className="text-gray-500">{deviseDetails.symbole}</span>
+                            <span className="text-gray-600">{deviseDetails.nom}</span>
+                            <span className="text-gray-400">{deviseDetails.symbole}</span>
                           </div>
                         ) : (
                           <div className="text-orange-500 text-xs">
-                            {paysItem.devise_par_defaut ? `ID: ${paysItem.devise_par_defaut}` : 'Non définie'}
+                            ID: {taux.devise}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                        <span className="font-mono bg-green-50 px-2 py-1 rounded border border-green-200">
+                          {formatDate(taux.date_taux)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                        <span className="font-mono bg-purple-50 px-2 py-1 rounded border border-purple-200">
+                          {formatTaux(taux.taux)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                        {entiteDetails ? (
+                          <span className="bg-gray-50 px-2 py-1 rounded border border-gray-200">
+                            {entiteDetails.raison_sociale}
+                          </span>
+                        ) : (
+                          <div className="text-orange-500 text-xs">
+                            ID: {taux.entite}
                           </div>
                         )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex space-x-3">
                           <button 
-                            onClick={() => handleEdit(paysItem)}
+                            onClick={() => handleEdit(taux)}
                             className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -324,7 +423,7 @@ export default function PaysPage() {
                             Éditer
                           </button>
                           <button 
-                            onClick={() => handleDelete(paysItem)}
+                            onClick={() => handleDelete(taux)}
                             className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -343,7 +442,7 @@ export default function PaysPage() {
         </div>
 
         {/* Pagination */}
-        {filteredPays.length > 0 && (
+        {filteredTauxChange.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -364,7 +463,7 @@ export default function PaysPage() {
                   <option value={50}>50</option>
                 </select>
                 <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPays.length)} sur {filteredPays.length}
+                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredTauxChange.length)} sur {filteredTauxChange.length}
                 </span>
               </div>
 
@@ -430,12 +529,13 @@ export default function PaysPage() {
 
       {/* Formulaire Modal */}
       {showForm && (
-        <PaysFormModal
-          pays={editingPays}
+        <TauxChangeFormModal
+          taux={editingTaux}
           devises={devises}
+          entites={entites}
           onClose={() => {
             setShowForm(false);
-            setEditingPays(null);
+            setEditingTaux(null);
           }}
           onSuccess={handleFormSuccess}
         />
@@ -444,14 +544,13 @@ export default function PaysPage() {
   );
 }
 
-// Composant Modal pour le formulaire des pays
-function PaysFormModal({ pays, devises, onClose, onSuccess }) {
+// Composant Modal pour le formulaire des taux de change
+function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
-    nom: pays?.nom || '',
-    code_iso: pays?.code_iso || '',
-    code_tel: pays?.code_tel || '',
-    devise_par_defaut: pays?.devise_par_defaut || '',
-    format_adresse: pays?.format_adresse || ''
+    devise: taux?.devise || '',
+    date_taux: taux?.date_taux || '',
+    taux: taux?.taux || '',
+    entite: taux?.entite || ''
   });
 
   const [loading, setLoading] = useState(false);
@@ -463,24 +562,36 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
     setError(null);
 
     // Validation
-    if (!formData.nom) {
-      setError('Le nom du pays est obligatoire');
+    if (!formData.devise) {
+      setError('La devise est obligatoire');
       setLoading(false);
       return;
     }
 
-    if (!formData.code_iso || formData.code_iso.length !== 2) {
-      setError('Le code ISO doit contenir exactement 2 caractères');
+    if (!formData.date_taux) {
+      setError('La date du taux est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.taux || parseFloat(formData.taux) <= 0) {
+      setError('Le taux doit être un nombre positif');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.entite) {
+      setError('L\'entité est obligatoire');
       setLoading(false);
       return;
     }
 
     try {
-      const url = pays 
-        ? `/pays/${pays.id}/`
-        : `/pays/`;
+      const url = taux 
+        ? `/taux-change/${taux.id}/` // ✅ Endpoint corrigé
+        : `/taux-change/`; // ✅ Endpoint corrigé
       
-      const method = pays ? 'PUT' : 'POST';
+      const method = taux ? 'PUT' : 'POST';
 
       await apiClient.request(url, {
         method: method,
@@ -506,12 +617,16 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
     }));
   };
 
+  // Obtenir les détails pour l'aperçu
+  const deviseDetails = devises.find(d => d.id == formData.devise);
+  const entiteDetails = entites.find(e => e.id == formData.entite);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
-            {pays ? 'Modifier le pays' : 'Créer un nouveau pays'}
+            {taux ? 'Modifier le taux de change' : 'Créer un nouveau taux de change'}
           </h2>
         </div>
         
@@ -528,65 +643,15 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Nom du pays */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom du pays *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.nom}
-                onChange={(e) => handleChange('nom', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="France, Togo, États-Unis..."
-              />
-            </div>
-            
-            {/* Code ISO */}
+            {/* Devise */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code ISO (2 lettres) *
-              </label>
-              <input
-                type="text"
-                required
-                maxLength={2}
-                value={formData.code_iso}
-                onChange={(e) => handleChange('code_iso', e.target.value.toUpperCase())}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono uppercase"
-                placeholder="FR"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                2 lettres majuscules (ex: FR, TG, US)
-              </p>
-            </div>
-            
-            {/* Indicatif téléphonique */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Indicatif téléphonique
-              </label>
-              <input
-                type="text"
-                value={formData.code_tel}
-                onChange={(e) => handleChange('code_tel', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="+33"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Ex: +228, +33, +1
-              </p>
-            </div>
-            
-            {/* Devise par défaut */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Devise par défaut
+                Devise *
               </label>
               <select
-                value={formData.devise_par_defaut}
-                onChange={(e) => handleChange('devise_par_defaut', e.target.value)}
+                required
+                value={formData.devise}
+                onChange={(e) => handleChange('devise', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Sélectionnez une devise</option>
@@ -598,33 +663,92 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
               </select>
             </div>
             
-            {/* Format d'adresse */}
-            <div className="md:col-span-2">
+            {/* Date du taux */}
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Format d'adresse
+                Date du taux *
               </label>
-              <textarea
-                value={formData.format_adresse}
-                onChange={(e) => handleChange('format_adresse', e.target.value)}
-                rows={3}
+              <input
+                type="date"
+                required
+                value={formData.date_taux}
+                onChange={(e) => handleChange('date_taux', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Rue, Code Postal Ville, Pays"
+              />
+            </div>
+            
+            {/* Taux */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Taux *
+              </label>
+              <input
+                type="number"
+                required
+                step="0.000001"
+                min="0.000001"
+                value={formData.taux}
+                onChange={(e) => handleChange('taux', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="1.000000"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Format recommandé pour les adresses de ce pays
+                Valeur du taux de change (ex: 655.957000)
               </p>
+            </div>
+            
+            {/* Entité */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Entité *
+              </label>
+              <select
+                required
+                value={formData.entite}
+                onChange={(e) => handleChange('entite', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Sélectionnez une entité</option>
+                {entites.map(entite => (
+                  <option key={entite.id} value={entite.id}>
+                    {entite.raison_sociale}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
           {/* Aperçu */}
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu du pays</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu du taux de change</h3>
             <div className="flex items-center space-x-4 text-lg">
-              <span className="font-semibold">{formData.nom || 'Nom du pays'}</span>
-              <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                {formData.code_iso || 'XX'}
+              {deviseDetails ? (
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                    {deviseDetails.code}
+                  </span>
+                  <span className="text-gray-600">{deviseDetails.nom}</span>
+                  <span className="text-gray-400">{deviseDetails.symbole}</span>
+                </div>
+              ) : (
+                <span className="text-gray-400">Sélectionnez une devise</span>
+              )}
+              <span className="text-gray-500">→</span>
+              <span className="font-mono bg-purple-50 px-2 py-1 rounded border border-purple-200">
+                {formData.taux || '0.000000'}
               </span>
-              <span className="text-gray-500">{formData.code_tel || '+XXX'}</span>
+              <span className="text-gray-500">le</span>
+              <span className="font-mono bg-green-50 px-2 py-1 rounded border border-green-200">
+                {formData.date_taux || 'JJ/MM/AAAA'}
+              </span>
+              {entiteDetails && (
+                <>
+                  <span className="text-gray-500">pour</span>
+                  <span className="bg-gray-50 px-2 py-1 rounded border border-gray-200">
+                    {entiteDetails.raison_sociale}
+                  </span>
+                </>
+              )}
             </div>
           </div>
           
@@ -648,7 +772,7 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
               )}
-              <span>{loading ? 'Sauvegarde...' : pays ? 'Mettre à jour' : 'Créer le pays'}</span>
+              <span>{loading ? 'Sauvegarde...' : taux ? 'Mettre à jour' : 'Créer le taux'}</span>
             </button>
           </div>
         </form>

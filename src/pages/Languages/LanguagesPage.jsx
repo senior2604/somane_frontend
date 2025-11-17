@@ -1,93 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../services/apiClient';
 
-export default function PaysPage() {
-  const [pays, setPays] = useState([]);
-  const [devises, setDevises] = useState([]);
+export default function LanguesPage() {
+  const [langues, setLangues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingPays, setEditingPays] = useState(null);
+  const [editingLangue, setEditingLangue] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterSens, setFilterSens] = useState('');
 
   useEffect(() => {
-    fetchPays();
-    fetchDevises();
+    fetchLangues();
   }, []);
 
-  const fetchPays = async () => {
+  const fetchLangues = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/pays/');
+      const response = await apiClient.get('/langues/');
       
-      let paysData = [];
+      let languesData = [];
       if (Array.isArray(response)) {
-        paysData = response;
+        languesData = response;
       } else if (response && Array.isArray(response.results)) {
-        paysData = response.results;
+        languesData = response.results;
       } else {
         setError('Format de données inattendu');
-        paysData = [];
+        languesData = [];
       }
 
-      setPays(paysData);
+      setLangues(languesData);
     } catch (err) {
-      console.error('❌ Erreur lors du chargement des pays:', err);
-      setError('Erreur lors du chargement des pays');
-      setPays([]);
+      console.error('❌ Erreur lors du chargement des langues:', err);
+      setError('Erreur lors du chargement des langues');
+      setLangues([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchDevises = async () => {
-    try {
-      const response = await apiClient.get('/devises/');
-      
-      let devisesData = [];
-      if (Array.isArray(response)) {
-        devisesData = response;
-      } else if (response && Array.isArray(response.results)) {
-        devisesData = response.results;
-      } else {
-        devisesData = [];
-      }
-
-      setDevises(devisesData);
-    } catch (err) {
-      console.error('Error fetching devises:', err);
-      setDevises([]);
-    }
-  };
-
-  // Fonction pour obtenir les détails d'une devise par son ID
-  const getDeviseDetails = (deviseId) => {
-    if (!deviseId && deviseId !== 0) return null;
-    
-    const idRecherche = typeof deviseId === 'object' ? deviseId.id : deviseId;
-    return devises.find(d => d.id === idRecherche) || null;
-  };
-
   // Filtrage et recherche
-  const filteredPays = pays.filter(paysItem => {
+  const filteredLangues = langues.filter(langue => {
     const matchesSearch = 
-      paysItem.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      paysItem.code_iso?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      paysItem.code_tel?.includes(searchTerm);
+      langue.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      langue.nom?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    return matchesSearch;
+    const matchesSens = filterSens === '' || langue.sens_ecriture === filterSens;
+    
+    return matchesSearch && matchesSens;
   });
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentPays = Array.isArray(filteredPays) ? filteredPays.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredPays) ? filteredPays.length : 0) / itemsPerPage);
+  const currentLangues = Array.isArray(filteredLangues) ? filteredLangues.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const totalPages = Math.ceil((Array.isArray(filteredLangues) ? filteredLangues.length : 0) / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -95,37 +67,53 @@ export default function PaysPage() {
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
   // Gestion des actions
-  const handleNewPays = () => {
-    setEditingPays(null);
+  const handleNewLangue = () => {
+    setEditingLangue(null);
     setShowForm(true);
   };
 
-  const handleEdit = (paysItem) => {
-    setEditingPays(paysItem);
+  const handleEdit = (langue) => {
+    setEditingLangue(langue);
     setShowForm(true);
   };
 
-  const handleDelete = async (paysItem) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le pays "${paysItem.nom}" ?`)) {
+  const handleDelete = async (langue) => {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la langue "${langue.nom} (${langue.code})" ?`)) {
       try {
-        await apiClient.delete(`/pays/${paysItem.id}/`);
-        fetchPays();
+        await apiClient.delete(`/langues/${langue.id}/`);
+        fetchLangues();
       } catch (err) {
         setError('Erreur lors de la suppression');
-        console.error('Error deleting pays:', err);
+        console.error('Error deleting langue:', err);
       }
     }
   };
 
   const handleFormSuccess = () => {
     setShowForm(false);
-    setEditingPays(null);
-    fetchPays();
+    setEditingLangue(null);
+    fetchLangues();
   };
 
   const handleRetry = () => {
-    fetchPays();
-    fetchDevises();
+    fetchLangues();
+  };
+
+  // Formater le sens d'écriture pour l'affichage
+  const getSensEcritureLabel = (sens) => {
+    const sensLabels = {
+      'LTR': 'Gauche → Droite',
+      'RTL': 'Droite → Gauche'
+    };
+    return sensLabels[sens] || sens;
+  };
+
+  const getSensEcritureBadge = (sens) => {
+    const badgeClasses = {
+      'LTR': 'bg-blue-100 text-blue-800 border-blue-300',
+      'RTL': 'bg-orange-100 text-orange-800 border-orange-300'
+    };
+    return badgeClasses[sens] || 'bg-gray-100 text-gray-800 border-gray-300';
   };
 
   if (loading) {
@@ -133,7 +121,7 @@ export default function PaysPage() {
       <div className="p-6">
         <div className="flex justify-center items-center p-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des pays...</span>
+          <span className="ml-2">Chargement des langues...</span>
         </div>
       </div>
     );
@@ -143,10 +131,10 @@ export default function PaysPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Pays</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Gestion des Langues</h1>
           <p className="text-gray-600 mt-1">
-            {filteredPays.length} pays trouvé(s)
-            {searchTerm && ' • Recherche active'}
+            {filteredLangues.length} langue(s) trouvée(s)
+            {(searchTerm || filterSens) && ' • Filtres actifs'}
           </p>
         </div>
         <div className="flex gap-3">
@@ -160,13 +148,13 @@ export default function PaysPage() {
             Actualiser
           </button>
           <button 
-            onClick={handleNewPays}
+            onClick={handleNewLangue}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Nouveau Pays
+            Nouvelle Langue
           </button>
         </div>
       </div>
@@ -194,20 +182,33 @@ export default function PaysPage() {
       {/* Filtres et Recherche */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-3">
+          <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nom, code ISO, indicatif téléphonique..."
+              placeholder="Code, nom de la langue..."
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Sens d'écriture</label>
+            <select
+              value={filterSens}
+              onChange={(e) => setFilterSens(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Tous les sens</option>
+              <option value="LTR">Gauche → Droite</option>
+              <option value="RTL">Droite → Gauche</option>
+            </select>
           </div>
           <div className="flex items-end">
             <button
               onClick={() => {
                 setSearchTerm('');
+                setFilterSens('');
                 setCurrentPage(1);
               }}
               className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
@@ -219,22 +220,28 @@ export default function PaysPage() {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">{pays.length}</div>
-          <div className="text-sm text-gray-600">Total des pays</div>
+          <div className="text-2xl font-bold text-blue-600">{langues.length}</div>
+          <div className="text-sm text-gray-600">Total des langues</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-green-600">
-            {pays.filter(p => p.devise_par_defaut).length}
+            {langues.filter(l => l.sens_ecriture === 'LTR').length}
           </div>
-          <div className="text-sm text-gray-600">Avec devise définie</div>
+          <div className="text-sm text-gray-600">Langues LTR</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-gray-600">
-            {pays.filter(p => !p.devise_par_defaut).length}
+          <div className="text-2xl font-bold text-orange-600">
+            {langues.filter(l => l.sens_ecriture === 'RTL').length}
           </div>
-          <div className="text-sm text-gray-600">Sans devise définie</div>
+          <div className="text-sm text-gray-600">Langues RTL</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-purple-600">
+            {new Set(langues.map(l => l.code.split('_')[0])).size}
+          </div>
+          <div className="text-sm text-gray-600">Langues différentes</div>
         </div>
       </div>
 
@@ -248,16 +255,13 @@ export default function PaysPage() {
                   ID
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Code
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   Nom
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Code ISO
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Indicatif
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Devise
+                  Sens d'écriture
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                   Actions
@@ -265,85 +269,67 @@ export default function PaysPage() {
               </tr>
             </thead>
             <tbody>
-              {currentPays.length === 0 ? (
+              {currentLangues.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {pays.length === 0 ? 'Aucun pays trouvé' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                    {langues.length === 0 ? 'Aucune langue trouvée' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
               ) : (
-                currentPays.map((paysItem, index) => {
-                  const deviseDetails = getDeviseDetails(paysItem.devise_par_defaut);
-                  
-                  return (
-                    <tr 
-                      key={paysItem.id} 
-                      className={`${
-                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                      } hover:bg-gray-100 transition-colors border-b border-gray-300`}
-                    >
-                      <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                        {paysItem.id}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                        {paysItem.nom}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                        <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                          {paysItem.code_iso}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                        <span className="font-mono bg-green-50 px-2 py-1 rounded border border-green-200">
-                          {paysItem.code_tel}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                        {deviseDetails ? (
-                          <div className="flex items-center space-x-2">
-                            <span className="font-mono bg-purple-50 px-2 py-1 rounded border border-purple-200">
-                              {deviseDetails.code}
-                            </span>
-                            <span className="text-gray-500">{deviseDetails.symbole}</span>
-                          </div>
-                        ) : (
-                          <div className="text-orange-500 text-xs">
-                            {paysItem.devise_par_defaut ? `ID: ${paysItem.devise_par_defaut}` : 'Non définie'}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex space-x-3">
-                          <button 
-                            onClick={() => handleEdit(paysItem)}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Éditer
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(paysItem)}
-                            className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Supprimer
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
+                currentLangues.map((langue, index) => (
+                  <tr 
+                    key={langue.id} 
+                    className={`${
+                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                    } hover:bg-gray-100 transition-colors border-b border-gray-300`}
+                  >
+                    <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
+                      {langue.id}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
+                      <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                        {langue.code}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                      {langue.nom}
+                    </td>
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${getSensEcritureBadge(langue.sens_ecriture)}`}>
+                        {getSensEcritureLabel(langue.sens_ecriture)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex space-x-3">
+                        <button 
+                          onClick={() => handleEdit(langue)}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          Éditer
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(langue)}
+                          className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Supprimer
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        {filteredPays.length > 0 && (
+        {filteredLangues.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -364,7 +350,7 @@ export default function PaysPage() {
                   <option value={50}>50</option>
                 </select>
                 <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPays.length)} sur {filteredPays.length}
+                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredLangues.length)} sur {filteredLangues.length}
                 </span>
               </div>
 
@@ -430,12 +416,11 @@ export default function PaysPage() {
 
       {/* Formulaire Modal */}
       {showForm && (
-        <PaysFormModal
-          pays={editingPays}
-          devises={devises}
+        <LangueFormModal
+          langue={editingLangue}
           onClose={() => {
             setShowForm(false);
-            setEditingPays(null);
+            setEditingLangue(null);
           }}
           onSuccess={handleFormSuccess}
         />
@@ -444,14 +429,12 @@ export default function PaysPage() {
   );
 }
 
-// Composant Modal pour le formulaire des pays
-function PaysFormModal({ pays, devises, onClose, onSuccess }) {
+// Composant Modal pour le formulaire des langues
+function LangueFormModal({ langue, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
-    nom: pays?.nom || '',
-    code_iso: pays?.code_iso || '',
-    code_tel: pays?.code_tel || '',
-    devise_par_defaut: pays?.devise_par_defaut || '',
-    format_adresse: pays?.format_adresse || ''
+    code: langue?.code || '',
+    nom: langue?.nom || '',
+    sens_ecriture: langue?.sens_ecriture || 'LTR'
   });
 
   const [loading, setLoading] = useState(false);
@@ -463,24 +446,24 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
     setError(null);
 
     // Validation
-    if (!formData.nom) {
-      setError('Le nom du pays est obligatoire');
+    if (!formData.code) {
+      setError('Le code de la langue est obligatoire');
       setLoading(false);
       return;
     }
 
-    if (!formData.code_iso || formData.code_iso.length !== 2) {
-      setError('Le code ISO doit contenir exactement 2 caractères');
+    if (!formData.nom) {
+      setError('Le nom de la langue est obligatoire');
       setLoading(false);
       return;
     }
 
     try {
-      const url = pays 
-        ? `/pays/${pays.id}/`
-        : `/pays/`;
+      const url = langue 
+        ? `/langues/${langue.id}/`
+        : `/langues/`;
       
-      const method = pays ? 'PUT' : 'POST';
+      const method = langue ? 'PUT' : 'POST';
 
       await apiClient.request(url, {
         method: method,
@@ -511,7 +494,7 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
-            {pays ? 'Modifier le pays' : 'Créer un nouveau pays'}
+            {langue ? 'Modifier la langue' : 'Créer une nouvelle langue'}
           </h2>
         </div>
         
@@ -528,10 +511,28 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Nom du pays */}
-            <div className="md:col-span-2">
+            {/* Code de la langue */}
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom du pays *
+                Code de la langue *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.code}
+                onChange={(e) => handleChange('code', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="fr_FR, en_US, ar_SA..."
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Format: langue_RÉGION (ex: fr_FR, en_US, ar_SA)
+              </p>
+            </div>
+            
+            {/* Nom de la langue */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nom de la langue *
               </label>
               <input
                 type="text"
@@ -539,92 +540,72 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
                 value={formData.nom}
                 onChange={(e) => handleChange('nom', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="France, Togo, États-Unis..."
+                placeholder="Français, English, العربية..."
               />
             </div>
             
-            {/* Code ISO */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code ISO (2 lettres) *
-              </label>
-              <input
-                type="text"
-                required
-                maxLength={2}
-                value={formData.code_iso}
-                onChange={(e) => handleChange('code_iso', e.target.value.toUpperCase())}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono uppercase"
-                placeholder="FR"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                2 lettres majuscules (ex: FR, TG, US)
-              </p>
-            </div>
-            
-            {/* Indicatif téléphonique */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Indicatif téléphonique
-              </label>
-              <input
-                type="text"
-                value={formData.code_tel}
-                onChange={(e) => handleChange('code_tel', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="+33"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Ex: +228, +33, +1
-              </p>
-            </div>
-            
-            {/* Devise par défaut */}
+            {/* Sens d'écriture */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Devise par défaut
+                Sens d'écriture
               </label>
-              <select
-                value={formData.devise_par_defaut}
-                onChange={(e) => handleChange('devise_par_defaut', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Sélectionnez une devise</option>
-                {devises.map(devise => (
-                  <option key={devise.id} value={devise.id}>
-                    {devise.code} - {devise.nom} ({devise.symbole})
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            {/* Format d'adresse */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Format d'adresse
-              </label>
-              <textarea
-                value={formData.format_adresse}
-                onChange={(e) => handleChange('format_adresse', e.target.value)}
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Rue, Code Postal Ville, Pays"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Format recommandé pour les adresses de ce pays
-              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${
+                  formData.sens_ecriture === 'LTR' 
+                    ? 'bg-blue-50 border-blue-300' 
+                    : 'bg-white border-gray-300 hover:bg-gray-50'
+                }`}>
+                  <input
+                    type="radio"
+                    name="sens_ecriture"
+                    value="LTR"
+                    checked={formData.sens_ecriture === 'LTR'}
+                    onChange={(e) => handleChange('sens_ecriture', e.target.value)}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="ml-3">
+                    <span className="block text-sm font-medium text-gray-900">Gauche → Droite</span>
+                    <span className="block text-sm text-gray-500">Langues européennes, etc.</span>
+                  </div>
+                </label>
+                
+                <label className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${
+                  formData.sens_ecriture === 'RTL' 
+                    ? 'bg-orange-50 border-orange-300' 
+                    : 'bg-white border-gray-300 hover:bg-gray-50'
+                }`}>
+                  <input
+                    type="radio"
+                    name="sens_ecriture"
+                    value="RTL"
+                    checked={formData.sens_ecriture === 'RTL'}
+                    onChange={(e) => handleChange('sens_ecriture', e.target.value)}
+                    className="text-orange-600 focus:ring-orange-500"
+                  />
+                  <div className="ml-3">
+                    <span className="block text-sm font-medium text-gray-900">Droite → Gauche</span>
+                    <span className="block text-sm text-gray-500">Arabe, Hébreu, etc.</span>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 
           {/* Aperçu */}
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu du pays</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu de la langue</h3>
             <div className="flex items-center space-x-4 text-lg">
-              <span className="font-semibold">{formData.nom || 'Nom du pays'}</span>
               <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                {formData.code_iso || 'XX'}
+                {formData.code || 'xx_XX'}
               </span>
-              <span className="text-gray-500">{formData.code_tel || '+XXX'}</span>
+              <span className="font-semibold">{formData.nom || 'Nom de la langue'}</span>
+              <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${
+                formData.sens_ecriture === 'LTR' 
+                  ? 'bg-blue-100 text-blue-800 border-blue-300' 
+                  : 'bg-orange-100 text-orange-800 border-orange-300'
+              }`}>
+                {formData.sens_ecriture === 'LTR' ? 'Gauche → Droite' : 'Droite → Gauche'}
+              </span>
             </div>
           </div>
           
@@ -648,7 +629,7 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
               )}
-              <span>{loading ? 'Sauvegarde...' : pays ? 'Mettre à jour' : 'Créer le pays'}</span>
+              <span>{loading ? 'Sauvegarde...' : langue ? 'Mettre à jour' : 'Créer la langue'}</span>
             </button>
           </div>
         </form>

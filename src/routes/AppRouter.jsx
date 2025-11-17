@@ -14,6 +14,9 @@ import CurrenciesPage from "../pages/Currencies/CurrenciesPage";
 import BanksPage from "../pages/Banks/BanksPage";
 import TasksPage from "../pages/Tasks/TasksPage";
 import SystemPage from "../pages/System/SystemPage";
+import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage";
+import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
+import LanguagesPage from "../pages/Languages/LanguagesPage";
 import ProtectedLayout from "../components/Layout/ProtectedLayout";
 
 export default function AppRouter() {
@@ -44,6 +47,9 @@ export default function AppRouter() {
           <Route path="/countries" element={<CountriesPage />} />
           <Route path="/currencies" element={<CurrenciesPage />} />
           <Route path="/banks" element={<BanksPage />} />
+          <Route path="/PartnerBanks" element={<PartnerBanksPage />} />
+          <Route path="/ExchangeRates" element={<ExchangeRatesPage/>}/>
+          <Route path="/Languages" element={<LanguagesPage/>}/>
           
           {/* Administration système */}
           <Route path="/tasks" element={<TasksPage />} />
