@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { apiClient } from '../../services/apiClient';
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState([]);
@@ -13,26 +13,18 @@ export default function PartnersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
 
-  const API_BASE = 'http://localhost:8000/api';
-
   useEffect(() => {
     fetchPartners();
   }, []);
 
   const fetchPartners = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/partenaires/`, {
-        headers: { 
-          Authorization: `Token ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await apiClient.get('/partenaires/');
       
-      if (Array.isArray(response.data)) {
-        setPartners(response.data);
-      } else if (response.data && Array.isArray(response.data.results)) {
-        setPartners(response.data.results);
+      if (Array.isArray(response)) {
+        setPartners(response);
+      } else if (response && Array.isArray(response.results)) {
+        setPartners(response.results);
       } else {
         setError('Format de données inattendu');
       }
@@ -78,10 +70,7 @@ export default function PartnersPage() {
   const handleDelete = async (partner) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer le partenaire "${partner.nom}" ?`)) {
       try {
-        const token = localStorage.getItem('authToken');
-        await axios.delete(`${API_BASE}/partenaires/${partner.id}/`, {
-          headers: { Authorization: `Token ${token}` }
-        });
+        await apiClient.delete(`/partenaires/${partner.id}/`);
         fetchPartners();
       } catch (err) {
         setError('Erreur lors de la suppression');
@@ -425,8 +414,6 @@ function PartnerFormModal({ partner, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE = 'http://localhost:8000/api';
-
   const partnerTypes = [
     { value: 'client', label: 'Client' },
     { value: 'fournisseur', label: 'Fournisseur' },
@@ -441,25 +428,23 @@ function PartnerFormModal({ partner, onClose, onSuccess }) {
     setError(null);
 
     try {
-      const token = localStorage.getItem('authToken');
       const url = partner 
-        ? `${API_BASE}/partenaires/${partner.id}/`
-        : `${API_BASE}/partenaires/`;
+        ? `/partenaires/${partner.id}/`
+        : `/partenaires/`;
       
-      const method = partner ? 'put' : 'post';
+      const method = partner ? 'PUT' : 'POST';
 
-      await axios[method](url, formData, {
-        headers: { 
-          Authorization: `Token ${token}`,
+      await apiClient.request(url, {
+        method: method,
+        body: JSON.stringify(formData),
+        headers: {
           'Content-Type': 'application/json'
         }
       });
       
       onSuccess();
     } catch (err) {
-      const errorMessage = err.response?.data 
-        ? Object.values(err.response.data).flat().join(', ')
-        : 'Erreur lors de la sauvegarde';
+      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
       setError(errorMessage);
     } finally {
       setLoading(false);

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { apiClient } from '../../services/apiClient';
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [entities, setEntities] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -16,28 +17,22 @@ export default function UsersPage() {
   // État pour la recherche
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
-
-  const API_BASE = 'http://localhost:8000/api';
+  const [filterEntite, setFilterEntite] = useState('');
 
   useEffect(() => {
     fetchUsers();
     fetchEntities();
+    fetchGroups();
   }, []);
 
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/users/`, {
-        headers: { 
-          Authorization: `Token ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await apiClient.get('/users/');
       
-      if (Array.isArray(response.data)) {
-        setUsers(response.data);
-      } else if (response.data && Array.isArray(response.data.results)) {
-        setUsers(response.data.results);
+      if (Array.isArray(response)) {
+        setUsers(response);
+      } else if (response && Array.isArray(response.results)) {
+        setUsers(response.results);
       } else {
         setError('Format de données inattendu');
       }
@@ -51,25 +46,33 @@ export default function UsersPage() {
 
   const fetchEntities = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/entites/`, {
-        headers: { Authorization: `Token ${token}` }
-      });
+      const response = await apiClient.get('/entites/');
       
-      console.log('Entities response:', response.data); // Debug
-      
-      // Gérer différents formats de réponse
-      if (Array.isArray(response.data)) {
-        setEntities(response.data);
-      } else if (response.data && Array.isArray(response.data.results)) {
-        setEntities(response.data.results);
+      if (Array.isArray(response)) {
+        setEntities(response);
+      } else if (response && Array.isArray(response.results)) {
+        setEntities(response.results);
       } else {
-        console.warn('Format de données entities inattendu:', response.data);
-        setEntities([]); // Assurer que c'est un tableau vide
+        setEntities([]);
       }
     } catch (err) {
       console.error('Error fetching entities:', err);
-      setEntities([]); // En cas d'erreur, tableau vide
+      setEntities([]);
+    }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      const response = await apiClient.get('/auth/groups/');
+      
+      if (Array.isArray(response)) {
+        setGroups(response);
+      } else {
+        setGroups([]);
+      }
+    } catch (err) {
+      console.error('Error fetching groups:', err);
+      setGroups([]);
     }
   };
 
@@ -83,7 +86,10 @@ export default function UsersPage() {
     
     const matchesStatut = !filterStatut || user.statut === filterStatut;
     
-    return matchesSearch && matchesStatut;
+    const matchesEntite = !filterEntite || 
+      (user.entite && user.entite.id.toString() === filterEntite);
+    
+    return matchesSearch && matchesStatut && matchesEntite;
   });
 
   // Calculs pour la pagination
@@ -111,11 +117,8 @@ export default function UsersPage() {
   const handleDelete = async (user) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${user.username}" ?`)) {
       try {
-        const token = localStorage.getItem('authToken');
-        await axios.delete(`${API_BASE}/users/${user.id}/`, {
-          headers: { Authorization: `Token ${token}` }
-        });
-        fetchUsers(); // Recharger la liste
+        await apiClient.delete(`/users/${user.id}/`);
+        fetchUsers();
       } catch (err) {
         setError('Erreur lors de la suppression');
         console.error('Error deleting user:', err);
@@ -126,7 +129,20 @@ export default function UsersPage() {
   const handleFormSuccess = () => {
     setShowForm(false);
     setEditingUser(null);
-    fetchUsers(); // Recharger la liste après création/modification
+    fetchUsers();
+  };
+
+  // Formater la date
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
   };
 
   if (loading) {
@@ -153,8 +169,6 @@ export default function UsersPage() {
     );
   }
 
-  const usersArray = Array.isArray(users) ? users : [];
-
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -162,7 +176,7 @@ export default function UsersPage() {
           <h1 className="text-2xl font-bold text-gray-800">Gestion des Utilisateurs</h1>
           <p className="text-gray-600 mt-1">
             {filteredUsers.length} utilisateur(s) trouvé(s)
-            {filterStatut && ` • Filtre: ${filterStatut}`}
+            {(filterStatut || filterEntite) && ' • Filtres actifs'}
           </p>
         </div>
         <button 
@@ -178,7 +192,7 @@ export default function UsersPage() {
 
       {/* Filtres et Recherche */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
             <input
@@ -202,11 +216,27 @@ export default function UsersPage() {
               <option value="suspendu">Suspendu</option>
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Entité</label>
+            <select
+              value={filterEntite}
+              onChange={(e) => setFilterEntite(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Toutes les entités</option>
+              {entities.map(entity => (
+                <option key={entity.id} value={entity.id}>
+                  {entity.raison_sociale}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-end">
             <button
               onClick={() => {
                 setSearchTerm('');
                 setFilterStatut('');
+                setFilterEntite('');
                 setCurrentPage(1);
               }}
               className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
@@ -217,7 +247,7 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Tableau avec bordures complètes */}
+      {/* Tableau COMPLET */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
@@ -227,19 +257,25 @@ export default function UsersPage() {
                   ID
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom d'utilisateur
+                  Photo
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Utilisateur
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   Email
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Prénom
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom
+                  Nom Complet
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   Téléphone
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Entité
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Dernière connexion
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   Statut
@@ -252,7 +288,7 @@ export default function UsersPage() {
             <tbody>
               {currentUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                  <td colSpan="10" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
                     {users.length === 0 ? 'Aucun utilisateur trouvé' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
@@ -267,6 +303,21 @@ export default function UsersPage() {
                     <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
                       {user.id}
                     </td>
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      {user.photo ? (
+                        <img 
+                          src={user.photo} 
+                          alt={user.username}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                          <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                          </svg>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
                       {user.username}
                     </td>
@@ -274,13 +325,19 @@ export default function UsersPage() {
                       {user.email}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.first_name || '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.last_name || '-'}
+                      {user.first_name || user.last_name 
+                        ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+                        : '-'
+                      }
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
                       {user.telephone || '-'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                      {user.entite ? user.entite.raison_sociale : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                      {user.last_login ? formatDate(user.last_login) : 'Jamais'}
                     </td>
                     <td className="px-6 py-4 border-r border-gray-300">
                       <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${
@@ -408,11 +465,12 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Formulaire Modal */}
+      {/* Formulaire Modal COMPLET */}
       {showForm && (
         <UserFormModal
           user={editingUser}
           entities={entities}
+          groups={groups}
           onClose={() => {
             setShowForm(false);
             setEditingUser(null);
@@ -424,8 +482,8 @@ export default function UsersPage() {
   );
 }
 
-// Composant Modal pour le formulaire - CORRIGÉ
-function UserFormModal({ user, entities, onClose, onSuccess }) {
+// Composant Modal COMPLET pour le formulaire
+function UserFormModal({ user, entities, groups, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     username: user?.username || '',
     email: user?.email || '',
@@ -434,15 +492,15 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
     telephone: user?.telephone || '',
     statut: user?.statut || 'actif',
     entite: user?.entite?.id || '',
-    password: ''
+    groups: user?.groups?.map(g => g.id) || [],
+    is_staff: user?.is_staff || false,
+    is_superuser: user?.is_superuser || false,
+    password: '',
+    photo: null
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  const API_BASE = 'http://localhost:8000/api';
-
-  // S'assurer que entities est toujours un tableau
-  const entitiesArray = Array.isArray(entities) ? entities : [];
+  const [photoPreview, setPhotoPreview] = useState(user?.photo || null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -450,30 +508,47 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
     setError(null);
 
     try {
-      const token = localStorage.getItem('authToken');
       const url = user 
-        ? `${API_BASE}/users/${user.id}/`
-        : `${API_BASE}/users/`;
+        ? `/users/${user.id}/`
+        : `/users/`;
       
-      const method = user ? 'put' : 'post';
+      const method = user ? 'PUT' : 'POST';
       
-      const submitData = { ...formData };
-      if (!submitData.password) {
-        delete submitData.password;
+      // Préparer les données pour l'envoi
+      const submitData = new FormData();
+      
+      // Ajouter les champs texte
+      Object.keys(formData).forEach(key => {
+        if (key === 'photo') {
+          if (formData.photo && typeof formData.photo !== 'string') {
+            submitData.append(key, formData.photo);
+          }
+        } else if (key === 'groups') {
+          // Pour les groupes, envoyer chaque ID séparément
+          formData.groups.forEach(groupId => {
+            submitData.append('groups', groupId);
+          });
+        } else if (formData[key] !== null && formData[key] !== '') {
+          submitData.append(key, formData[key]);
+        }
+      });
+
+      // Si pas de nouveau mot de passe pour l'édition, ne pas l'envoyer
+      if (user && !formData.password) {
+        submitData.delete('password');
       }
 
-      await axios[method](url, submitData, {
-        headers: { 
-          Authorization: `Token ${token}`,
-          'Content-Type': 'application/json'
+      await apiClient.request(url, {
+        method: method,
+        body: submitData,
+        headers: {
+          'Content-Type': 'multipart/form-data'
         }
       });
       
       onSuccess();
     } catch (err) {
-      const errorMessage = err.response?.data 
-        ? Object.values(err.response.data).flat().join(', ')
-        : 'Erreur lors de la sauvegarde';
+      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -487,9 +562,27 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
     }));
   };
 
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      handleChange('photo', file);
+      // Prévisualisation
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPhotoPreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removePhoto = () => {
+    handleChange('photo', null);
+    setPhotoPreview(null);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
             {user ? 'Modifier l\'utilisateur' : 'Créer un nouvel utilisateur'}
@@ -508,57 +601,101 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
         )}
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom d'utilisateur *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.username}
-                onChange={(e) => handleChange('username', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Entrez le nom d'utilisateur"
-              />
+          {/* Section Photo et Informations de base */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Photo */}
+            <div className="md:col-span-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Photo</label>
+              <div className="space-y-3">
+                {photoPreview ? (
+                  <div className="relative">
+                    <img 
+                      src={photoPreview} 
+                      alt="Preview" 
+                      className="w-32 h-32 rounded-full object-cover mx-auto border-2 border-gray-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={removePhoto}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center mx-auto border-2 border-dashed border-gray-300">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+              </div>
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email *
-              </label>
-              <input
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => handleChange('email', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="email@exemple.com"
-              />
+
+            {/* Informations de base */}
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nom d'utilisateur *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.username}
+                  onChange={(e) => handleChange('username', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Entrez le nom d'utilisateur"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="email@exemple.com"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Prénom</label>
+                <input
+                  type="text"
+                  value={formData.first_name}
+                  onChange={(e) => handleChange('first_name', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Prénom"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
+                <input
+                  type="text"
+                  value={formData.last_name}
+                  onChange={(e) => handleChange('last_name', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Nom"
+                />
+              </div>
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Prénom</label>
-              <input
-                type="text"
-                value={formData.first_name}
-                onChange={(e) => handleChange('first_name', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Prénom"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
-              <input
-                type="text"
-                value={formData.last_name}
-                onChange={(e) => handleChange('last_name', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Nom"
-              />
-            </div>
-            
+          </div>
+
+          {/* Section Contact et Statut */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone</label>
               <input
@@ -583,7 +720,7 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
               </select>
             </div>
             
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Entité</label>
               <select
                 value={formData.entite}
@@ -591,32 +728,82 @@ function UserFormModal({ user, entities, onClose, onSuccess }) {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Sélectionnez une entité</option>
-                {entitiesArray.map(entity => (
+                {entities.map(entity => (
                   <option key={entity.id} value={entity.id}>
                     {entity.raison_sociale}
                   </option>
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Section Permissions et Groupes */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Groupes</label>
+              <select
+                multiple
+                value={formData.groups}
+                onChange={(e) => handleChange('groups', Array.from(e.target.selectedOptions, option => option.value))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent h-32"
+              >
+                {groups.map(group => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Maintenez Ctrl (ou Cmd) pour sélectionner plusieurs groupes
+              </p>
+            </div>
             
-            {!user && (
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mot de passe *
+            <div className="space-y-4">
+              <label className="block text-sm font-medium text-gray-700">Permissions spéciales</label>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_staff}
+                    onChange={(e) => handleChange('is_staff', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Accès à l'administration</span>
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={(e) => handleChange('password', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Mot de passe sécurisé"
-                />
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_superuser}
+                    onChange={(e) => handleChange('is_superuser', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Superutilisateur (tous les droits)</span>
+                </label>
               </div>
+            </div>
+          </div>
+
+          {/* Mot de passe */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {user ? 'Nouveau mot de passe' : 'Mot de passe *'}
+            </label>
+            <input
+              type="password"
+              required={!user}
+              value={formData.password}
+              onChange={(e) => handleChange('password', e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder={user ? "Laisser vide pour ne pas modifier" : "Mot de passe sécurisé"}
+            />
+            {user && (
+              <p className="text-xs text-gray-500 mt-1">
+                Laisser vide pour conserver le mot de passe actuel
+              </p>
             )}
           </div>
           
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}

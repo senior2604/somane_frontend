@@ -15,7 +15,9 @@ export default function Header() {
       '/settings': 'Paramètres',
       '/modules': 'Modules',
       '/journal': 'Journal',
-      '/permissions': 'Permissions'
+      '/permissions': 'Permissions',
+      '/currencies': 'Devises',
+      '/countries': 'Pays'
     };
     return routes[location.pathname] || 'SOMANE ERP';
   };

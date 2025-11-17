@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { apiClient } from '../../services/apiClient';
 
 export default function EntitiesPage() {
   const [entities, setEntities] = useState([]);
   const [users, setUsers] = useState([]);
+  const [pays, setPays] = useState([]);
+  const [devises, setDevises] = useState([]);
+  const [langues, setLangues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -15,33 +18,22 @@ export default function EntitiesPage() {
   const [filterStatut, setFilterStatut] = useState('');
   const [filterPays, setFilterPays] = useState('');
 
-  const API_BASE = 'http://localhost:8000/api';
-
-  // Liste des pays pour le filtre
-  const paysListe = [
-    "Togo", "Bénin", "Burkina Faso", "Côte d'Ivoire", "Ghana", 
-    "Mali", "Niger", "Nigeria", "Sénégal", "France", "Autre"
-  ];
-
   useEffect(() => {
     fetchEntities();
     fetchUsers();
+    fetchPays();
+    fetchDevises();
+    fetchLangues();
   }, []);
 
   const fetchEntities = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/entites/`, {
-        headers: { 
-          Authorization: `Token ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await apiClient.get('/entites/');
       
-      if (Array.isArray(response.data)) {
-        setEntities(response.data);
-      } else if (response.data && Array.isArray(response.data.results)) {
-        setEntities(response.data.results);
+      if (Array.isArray(response)) {
+        setEntities(response);
+      } else if (response && Array.isArray(response.results)) {
+        setEntities(response.results);
       } else {
         setError('Format de données inattendu');
       }
@@ -55,15 +47,12 @@ export default function EntitiesPage() {
 
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/users/`, {
-        headers: { Authorization: `Token ${token}` }
-      });
+      const response = await apiClient.get('/users/');
       
-      if (Array.isArray(response.data)) {
-        setUsers(response.data);
-      } else if (response.data && Array.isArray(response.data.results)) {
-        setUsers(response.data.results);
+      if (Array.isArray(response)) {
+        setUsers(response);
+      } else if (response && Array.isArray(response.results)) {
+        setUsers(response.results);
       } else {
         setUsers([]);
       }
@@ -73,17 +62,63 @@ export default function EntitiesPage() {
     }
   };
 
-  // Filtrage et recherche
+  const fetchPays = async () => {
+    try {
+      const response = await apiClient.get('/pays/');
+      
+      if (Array.isArray(response)) {
+        setPays(response);
+      } else {
+        setPays([]);
+      }
+    } catch (err) {
+      console.error('Error fetching pays:', err);
+      setPays([]);
+    }
+  };
+
+  const fetchDevises = async () => {
+    try {
+      const response = await apiClient.get('/devises/');
+      
+      if (Array.isArray(response)) {
+        setDevises(response);
+      } else {
+        setDevises([]);
+      }
+    } catch (err) {
+      console.error('Error fetching devises:', err);
+      setDevises([]);
+    }
+  };
+
+  const fetchLangues = async () => {
+    try {
+      const response = await apiClient.get('/langues/');
+      
+      if (Array.isArray(response)) {
+        setLangues(response);
+      } else {
+        setLangues([]);
+      }
+    } catch (err) {
+      console.error('Error fetching langues:', err);
+      setLangues([]);
+    }
+  };
+
+  // Filtrage et recherche - CORRIGÉ pour utiliser les objets pays
   const filteredEntities = entities.filter(entity => {
     const matchesSearch = 
-      entity.raison_sociale.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entity.raison_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (entity.activite && entity.activite.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      entity.ville.toLowerCase().includes(searchTerm.toLowerCase());
+      entity.ville?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatut = !filterStatut || 
       (filterStatut === 'actif' ? entity.statut : !entity.statut);
     
-    const matchesPays = !filterPays || entity.pays === filterPays;
+    const matchesPays = !filterPays || 
+      (entity.pays && entity.pays.id.toString() === filterPays);
     
     return matchesSearch && matchesStatut && matchesPays;
   });
@@ -113,10 +148,7 @@ export default function EntitiesPage() {
   const handleDelete = async (entity) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer l'entité "${entity.raison_sociale}" ?`)) {
       try {
-        const token = localStorage.getItem('authToken');
-        await axios.delete(`${API_BASE}/entites/${entity.id}/`, {
-          headers: { Authorization: `Token ${token}` }
-        });
+        await apiClient.delete(`/entites/${entity.id}/`);
         fetchEntities();
       } catch (err) {
         setError('Erreur lors de la suppression');
@@ -176,7 +208,7 @@ export default function EntitiesPage() {
         </button>
       </div>
 
-      {/* Filtres et Recherche */}
+      {/* Filtres et Recherche - CORRIGÉ */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
@@ -209,8 +241,10 @@ export default function EntitiesPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Tous les pays</option>
-              {paysListe.map(pays => (
-                <option key={pays} value={pays}>{pays}</option>
+              {pays.map(paysItem => (
+                <option key={paysItem.id} value={paysItem.id}>
+                  {paysItem.nom}
+                </option>
               ))}
             </select>
           </div>
@@ -230,8 +264,7 @@ export default function EntitiesPage() {
         </div>
       </div>
 
-      {/* Le reste du code reste identique... */}
-      {/* Tableau avec bordures complètes */}
+      {/* Tableau - CORRIGÉ pour afficher le nom du pays */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
@@ -256,6 +289,9 @@ export default function EntitiesPage() {
                   Ville
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Pays
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   Téléphone
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
@@ -269,7 +305,7 @@ export default function EntitiesPage() {
             <tbody>
               {currentEntities.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                  <td colSpan="10" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
                     {entities.length === 0 ? 'Aucune entité trouvée' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
@@ -303,6 +339,9 @@ export default function EntitiesPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
                       {entity.ville}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                      {entity.pays ? entity.pays.nom : '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
                       {entity.telephone}
@@ -431,11 +470,14 @@ export default function EntitiesPage() {
         )}
       </div>
 
-      {/* Formulaire Modal */}
+      {/* Formulaire Modal - VERSION CORRIGÉE AVEC DONNÉES DYNAMIQUES */}
       {showForm && (
         <EntityFormModal
           entity={editingEntity}
           users={users}
+          pays={pays}
+          devises={devises}
+          langues={langues}
           onClose={() => {
             setShowForm(false);
             setEditingEntity(null);
@@ -446,35 +488,17 @@ export default function EntitiesPage() {
     </div>
   );
 }
-// Composant Modal pour le formulaire des entités - VERSION SIMPLIFIÉE
-function EntityFormModal({ entity, users, onClose, onSuccess }) {
+
+// Composant Modal CORRIGÉ avec données dynamiques
+function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuccess }) {
   // Données pour les listes déroulantes
   const secteursActivite = [
-    "Agriculture",
-    "Agroalimentaire",
-    "Artisanat",
-    "Assurance",
-    "Automobile",
-    "Bancaire",
-    "Bâtiment et Travaux Publics",
-    "Commerce",
-    "Communication",
-    "Construction",
-    "Consulting",
-    "Distribution",
-    "Éducation",
-    "Énergie",
-    "Finance",
-    "Immobilier",
-    "Industrie",
-    "Informatique et Technologie",
-    "Logistique",
-    "Médical et Santé",
-    "Restaurant et Hôtellerie",
-    "Services",
-    "Tourisme",
-    "Transport",
-    "Autre"
+    "Agriculture", "Agroalimentaire", "Artisanat", "Assurance", "Automobile",
+    "Bancaire", "Bâtiment et Travaux Publics", "Commerce", "Communication",
+    "Construction", "Consulting", "Distribution", "Éducation", "Énergie",
+    "Finance", "Immobilier", "Industrie", "Informatique et Technologie",
+    "Logistique", "Médical et Santé", "Restaurant et Hôtellerie", "Services",
+    "Tourisme", "Transport", "Autre"
   ];
 
   const formesJuridiques = [
@@ -493,12 +517,6 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
     "Autre"
   ];
 
-  // Listes pour pays
-  const paysListe = [
-    "Togo", "Bénin", "Burkina Faso", "Côte d'Ivoire", "Ghana", 
-    "Mali", "Niger", "Nigeria", "Sénégal", "France", "Autre"
-  ];
-
   const regionsTogo = [
     "Région Maritime", "Région des Plateaux", "Région Centrale", 
     "Région de la Kara", "Région des Savanes"
@@ -509,7 +527,7 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
     "Tsévié", "Aného", "Bassar", "Mango", "Kpalimé"
   ];
 
-  // États pour le formulaire
+  // États pour le formulaire - CORRIGÉ avec les ForeignKeys
   const [formData, setFormData] = useState({
     raison_sociale: entity?.raison_sociale || '',
     activite: entity?.activite || '',
@@ -524,13 +542,14 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
     adresse: entity?.adresse || '',
     complement_adresse: entity?.complement_adresse || '',
     code_postal: entity?.code_postal || '',
-    pays: entity?.pays || '',
-    pays_autre: '',
+    pays: entity?.pays?.id || '', // ✅ Maintenant l'ID du pays
     region: entity?.region || '',
     ville: entity?.ville || '',
     telephone: entity?.telephone || '',
     email: entity?.email || '',
     site_web: entity?.site_web || '',
+    devise: entity?.devise?.id || '', // ✅ NOUVEAU - Devise
+    langue: entity?.langue?.id || '', // ✅ NOUVEAU - Langue
     statut: entity?.statut !== undefined ? entity.statut : true,
     cree_par: entity?.cree_par?.id || ''
   });
@@ -539,24 +558,22 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
   const [error, setError] = useState(null);
   const [showAutreActivite, setShowAutreActivite] = useState(false);
   const [showAutreFormeJuridique, setShowAutreFormeJuridique] = useState(false);
-  const [showAutrePays, setShowAutrePays] = useState(false);
-  const [isTogo, setIsTogo] = useState(true);
 
-  const API_BASE = 'http://localhost:8000/api';
-
-  // S'assurer que users est toujours un tableau
+  // S'assurer que les tableaux sont toujours des tableaux
   const usersArray = Array.isArray(users) ? users : [];
+  const paysArray = Array.isArray(pays) ? pays : [];
+  const devisesArray = Array.isArray(devises) ? devises : [];
+  const languesArray = Array.isArray(langues) ? langues : [];
 
   // Gestion du choix "Autre" pour les listes déroulantes
   useEffect(() => {
     setShowAutreActivite(formData.activite === 'Autre');
     setShowAutreFormeJuridique(formData.forme_juridique === 'Autre');
-    setShowAutrePays(formData.pays === 'Autre');
-    
-    // Déterminer si le pays sélectionné est le Togo
-    const currentPays = formData.pays === 'Autre' ? formData.pays_autre : formData.pays;
-    setIsTogo(currentPays === 'Togo');
-  }, [formData.activite, formData.forme_juridique, formData.pays, formData.pays_autre]);
+  }, [formData.activite, formData.forme_juridique]);
+
+  // Déterminer si le pays sélectionné est le Togo
+  const selectedPays = paysArray.find(p => p.id === parseInt(formData.pays));
+  const isTogo = selectedPays?.nom === 'Togo';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -564,38 +581,35 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
     setError(null);
 
     try {
-      const token = localStorage.getItem('authToken');
       const url = entity 
-        ? `${API_BASE}/entites/${entity.id}/`
-        : `${API_BASE}/entites/`;
+        ? `/entites/${entity.id}/`
+        : `/entites/`;
       
-      const method = entity ? 'put' : 'post';
+      const method = entity ? 'PUT' : 'POST';
 
-      // Préparer les données finales
+      // Préparer les données finales - CORRIGÉ pour les ForeignKeys
       const submitData = {
         ...formData,
         activite: showAutreActivite ? formData.activite_autre : formData.activite,
         forme_juridique: showAutreFormeJuridique ? formData.forme_juridique_autre : formData.forme_juridique,
-        pays: showAutrePays ? formData.pays_autre : formData.pays
+        // Les champs pays, devise, langue contiennent déjà les IDs ✅
       };
 
       // Nettoyer les champs temporaires
       delete submitData.activite_autre;
       delete submitData.forme_juridique_autre;
-      delete submitData.pays_autre;
 
-      await axios[method](url, submitData, {
-        headers: { 
-          Authorization: `Token ${token}`,
+      await apiClient.request(url, {
+        method: method,
+        body: JSON.stringify(submitData),
+        headers: {
           'Content-Type': 'application/json'
         }
       });
       
       onSuccess();
     } catch (err) {
-      const errorMessage = err.response?.data 
-        ? Object.values(err.response.data).flat().join(', ')
-        : 'Erreur lors de la sauvegarde';
+      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -630,7 +644,7 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
         )}
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Informations Générales */}
+          {/* Informations Générales - CORRIGÉ */}
           <div className="border-b border-gray-200 pb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Informations Générales</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -738,6 +752,39 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
                   <option value={false}>Inactif</option>
                 </select>
               </div>
+
+              {/* NOUVEAUX CHAMPS - Devise et Langue */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Devise</label>
+                <select
+                  value={formData.devise}
+                  onChange={(e) => handleChange('devise', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Sélectionnez une devise</option>
+                  {devisesArray.map(devise => (
+                    <option key={devise.id} value={devise.id}>
+                      {devise.code} - {devise.nom} ({devise.symbole})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Langue</label>
+                <select
+                  value={formData.langue}
+                  onChange={(e) => handleChange('langue', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Sélectionnez une langue</option>
+                  {languesArray.map(langue => (
+                    <option key={langue.id} value={langue.id}>
+                      {langue.nom} ({langue.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -780,7 +827,7 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Adresse - VERSION SIMPLIFIÉE */}
+          {/* Adresse - CORRIGÉ avec pays dynamique */}
           <div className="border-b border-gray-200 pb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Localisation</h3>
 
@@ -819,7 +866,7 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
                 />
               </div>
 
-              {/* Pays avec option "Autre" */}
+              {/* Pays - CORRIGÉ avec données dynamiques */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Pays *</label>
                 <select
@@ -829,22 +876,12 @@ function EntityFormModal({ entity, users, onClose, onSuccess }) {
                   required
                 >
                   <option value="">Sélectionnez un pays</option>
-                  {paysListe.map(pays => (
-                    <option key={pays} value={pays}>
-                      {pays}
+                  {paysArray.map(paysItem => (
+                    <option key={paysItem.id} value={paysItem.id}>
+                      {paysItem.nom}
                     </option>
                   ))}
                 </select>
-                {showAutrePays && (
-                  <input
-                    type="text"
-                    value={formData.pays_autre}
-                    onChange={(e) => handleChange('pays_autre', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Précisez le pays"
-                    required
-                  />
-                )}
               </div>
 
               {/* Région - Liste déroulante pour Togo, saisie manuelle pour autres pays */}

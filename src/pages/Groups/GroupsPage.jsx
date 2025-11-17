@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { apiClient } from '../../services/apiClient';
 
 export default function GroupsPage() {
   const [groups, setGroups] = useState([]);
@@ -12,26 +12,18 @@ export default function GroupsPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const API_BASE = 'http://localhost:8000/api';
-
   useEffect(() => {
     fetchGroups();
   }, []);
 
   const fetchGroups = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/groups/`, {
-        headers: { 
-          Authorization: `Token ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await apiClient.get('/auth/groups/');
       
-      if (Array.isArray(response.data)) {
-        setGroups(response.data);
-      } else if (response.data && Array.isArray(response.data.results)) {
-        setGroups(response.data.results);
+      if (Array.isArray(response)) {
+        setGroups(response);
+      } else if (response && Array.isArray(response.results)) {
+        setGroups(response.results);
       } else {
         setError('Format de données inattendu');
       }
@@ -46,7 +38,7 @@ export default function GroupsPage() {
   // Filtrage et recherche
   const filteredGroups = groups.filter(group => 
     group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    group.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (group.description && group.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   // Calculs pour la pagination
@@ -74,10 +66,7 @@ export default function GroupsPage() {
   const handleDelete = async (group) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer le groupe "${group.name}" ?`)) {
       try {
-        const token = localStorage.getItem('authToken');
-        await axios.delete(`${API_BASE}/groups/${group.id}/`, {
-          headers: { Authorization: `Token ${token}` }
-        });
+        await apiClient.delete(`/auth/groups/${group.id}/`);
         fetchGroups();
       } catch (err) {
         setError('Erreur lors de la suppression');
@@ -377,8 +366,6 @@ function GroupFormModal({ group, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE = 'http://localhost:8000/api';
-
   // Liste des modules disponibles
   const availableModules = [
     'Core/Noyau',
@@ -399,25 +386,23 @@ function GroupFormModal({ group, onClose, onSuccess }) {
     setError(null);
 
     try {
-      const token = localStorage.getItem('authToken');
       const url = group 
-        ? `${API_BASE}/groups/${group.id}/`
-        : `${API_BASE}/groups/`;
+        ? `/auth/groups/${group.id}/`
+        : `/auth/groups/`;
       
-      const method = group ? 'put' : 'post';
+      const method = group ? 'PUT' : 'POST';
 
-      await axios[method](url, formData, {
-        headers: { 
-          Authorization: `Token ${token}`,
+      await apiClient.request(url, {
+        method: method,
+        body: JSON.stringify(formData),
+        headers: {
           'Content-Type': 'application/json'
         }
       });
       
       onSuccess();
     } catch (err) {
-      const errorMessage = err.response?.data 
-        ? Object.values(err.response.data).flat().join(', ')
-        : 'Erreur lors de la sauvegarde';
+      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
       setError(errorMessage);
     } finally {
       setLoading(false);

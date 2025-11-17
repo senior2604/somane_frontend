@@ -22,10 +22,16 @@ class AuthService {
 
       const data = await response.json();
       
-      // Stocker le token
-      if (data.token) {
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+      // ⚠️ CORRECTION : Stocker les tokens JWT comme dans LoginPage
+      if (data.access) { // ← CHANGEMENT: data.access au lieu de data.token
+        localStorage.setItem('accessToken', data.access); // ← CHANGEMENT: accessToken au lieu de authToken
+        if (data.refresh) {
+          localStorage.setItem('refreshToken', data.refresh);
+        }
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+          localStorage.setItem('entiteActive', data.user.entite_active || '');
+        }
       }
 
       return data;
@@ -42,7 +48,7 @@ class AuthService {
         await fetch(`${this.baseURL}${ENDPOINTS.AUTH.LOGOUT}`, {
           method: 'POST',
           headers: {
-            'Authorization': `Token ${token}`,
+            'Authorization': `Bearer ${token}`, // ← CHANGEMENT: Bearer au lieu de Token
             'Content-Type': 'application/json',
           },
         });
@@ -50,14 +56,16 @@ class AuthService {
     } catch (error) {
       console.error('Erreur de déconnexion:', error);
     } finally {
-      // Nettoyer le localStorage
-      localStorage.removeItem('authToken');
+      // ⚠️ CORRECTION : Nettoyer tous les items comme dans LoginPage
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('entiteActive');
     }
   }
 
   getToken() {
-    return localStorage.getItem('authToken');
+    return localStorage.getItem('accessToken'); // ← CHANGEMENT: accessToken au lieu de authToken
   }
 
   getUser() {

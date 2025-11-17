@@ -19,15 +19,14 @@ class ApiClient {
       ...options,
     };
 
-    // Ajouter le token d'authentification si disponible
+    // ⚠️ CORRECTION ICI : Utiliser 'Bearer' au lieu de 'Token' pour JWT
     if (token) {
-      config.headers['Authorization'] = `Token ${token}`;
+      config.headers['Authorization'] = `Bearer ${token}`; // ← CHANGEMENT
     }
 
     try {
       const response = await fetch(url, config);
       
-      // Gérer les réponses non autorisées
       if (response.status === 401) {
         authService.logout();
         window.location.href = '/login';
@@ -38,7 +37,6 @@ class ApiClient {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Pour les réponses sans contenu (204)
       if (response.status === 204) {
         return null;
       }

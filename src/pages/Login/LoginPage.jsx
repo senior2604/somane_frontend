@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [identifier, setIdentifier] = useState("");
+  const [email, setEmail] = useState(""); // ← CHANGEMENT ICI
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,11 +16,11 @@ export default function LoginPage() {
     setLoading(true);
     
     try {
-      const API_URL = "http://localhost:8000/api/auth/login/";
+      const API_URL = "http://localhost:8000/api/auth/token/";
       
-      // IMPORTANT : Utilisez 'username' au lieu de 'email'
+      // IMPORTANT : Maintenant avec email
       const credentials = {
-        username: identifier,  // ← CHANGEMENT ICI
+        email: email,  // ← CHANGEMENT ICI (au lieu de username)
         password: password
       };
 
@@ -31,21 +31,25 @@ export default function LoginPage() {
         timeout: 10000,
       });
 
-      // Gestion de la réponse
-      if (resp.data?.token) {
-        localStorage.setItem("authToken", resp.data.token);
+      // Gestion de la réponse JWT
+      if (resp.data?.access) {
+        // Stockage des tokens JWT
+        localStorage.setItem("accessToken", resp.data.access);
+        localStorage.setItem("refreshToken", resp.data.refresh);
         
-        // Stockage des infos utilisateur si disponibles
+        // Stockage des infos utilisateur
         if (resp.data.user) {
           localStorage.setItem("user", JSON.stringify(resp.data.user));
+          localStorage.setItem("entiteActive", resp.data.user.entite_active || '');
         }
         
+        console.log("✅ Connexion réussie avec JWT");
         navigate("/dashboard");
       } else {
-        setError("Connexion réussie mais aucun token reçu.");
+        setError("Connexion réussie mais aucun token JWT reçu.");
       }
     } catch (err) {
-      // Gestion d'erreur améliorée
+      // Gestion d'erreur améliorée pour JWT
       let errorMessage = "Identifiants incorrects ou erreur serveur.";
       
       if (err.response) {
@@ -55,8 +59,8 @@ export default function LoginPage() {
           errorMessage = data.detail;
         } else if (data.non_field_errors) {
           errorMessage = data.non_field_errors[0];
-        } else if (data.username) {
-          errorMessage = `Nom d'utilisateur: ${data.username[0]}`;
+        } else if (data.email) { // ← CHANGEMENT ICI
+          errorMessage = `Email: ${data.email[0]}`;
         } else if (data.password) {
           errorMessage = `Mot de passe: ${data.password[0]}`;
         } else if (typeof data === 'object') {
@@ -70,7 +74,7 @@ export default function LoginPage() {
       }
       
       setError(errorMessage);
-      console.error('Erreur de connexion:', err);
+      console.error('Erreur de connexion JWT:', err);
     } finally {
       setLoading(false);
     }
@@ -124,16 +128,16 @@ export default function LoginPage() {
             <p className="text-sm text-gray-500 mb-6">Accédez à votre espace en toute sécurité.</p>
 
             <form onSubmit={submit} className="space-y-4">
-              {/* Identifier */}
+              {/* Email */}
               <label className="block">
                 <div className="relative">
                   <input
-                    type="text" // Changé en 'text' pour accepter username ou email
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="Nom d'utilisateur" // ← CHANGEMENT ICI
+                    type="email" // ← CHANGEMENT ICI
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Adresse email" // ← CHANGEMENT ICI
                     className="w-full border border-gray-200 rounded-full px-4 py-3 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                    aria-label="Nom d'utilisateur"
+                    aria-label="Adresse email"
                     required
                     disabled={loading}
                   />
@@ -144,7 +148,14 @@ export default function LoginPage() {
                     xmlns="http://www.w3.org/2000/svg"
                   >
                     <path
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <polyline
+                      points="22,6 12,13 2,6"
                       stroke="currentColor"
                       strokeWidth="1.2"
                       strokeLinecap="round"
