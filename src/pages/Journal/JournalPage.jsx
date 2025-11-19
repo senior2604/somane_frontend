@@ -1,159 +1,219 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { apiClient } from '../../services/apiClient';
 
 export default function JournalPage() {
-  const [logs, setLogs] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [journal, setJournal] = useState([]);
+  const [utilisateurs, setUtilisateurs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterUtilisateur, setFilterUtilisateur] = useState('');
   const [filterAction, setFilterAction] = useState('');
-  const [filterUser, setFilterUser] = useState('');
-
-  const API_BASE = 'http://localhost:8000/api';
-
-  // Types d'actions possibles (doivent correspondre au backend)
-  const actionsListe = [
-    "CREATE", "UPDATE", "DELETE", "LOGIN", "LOGOUT", 
-    "EXPORT", "IMPORT", "BACKUP", "RESTORE", "OTHER"
-  ];
+  const [filterStatut, setFilterStatut] = useState('');
+  const [filterModele, setFilterModele] = useState('');
+  const [dateDebut, setDateDebut] = useState('');
+  const [dateFin, setDateFin] = useState('');
 
   useEffect(() => {
-    fetchLogs();
-    fetchUsers();
+    fetchJournal();
+    fetchUtilisateurs();
   }, []);
 
-  const fetchLogs = async () => {
+  const fetchJournal = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/journal/`, {
-        headers: { 
-          Authorization: `Token ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      setLoading(true);
+      setError(null);
+
+      // Construire les paramètres de filtre
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (filterUtilisateur) params.append('utilisateur', filterUtilisateur);
+      if (filterAction) params.append('action', filterAction);
+      if (filterStatut) params.append('statut', filterStatut);
+      if (filterModele) params.append('modele', filterModele);
+      if (dateDebut) params.append('date_debut', dateDebut);
+      if (dateFin) params.append('date_fin', dateFin);
+
+      const url = `/journal/?${params.toString()}`;
+      const response = await apiClient.get(url);
       
-      if (Array.isArray(response.data)) {
-        setLogs(response.data);
-      } else if (response.data && Array.isArray(response.data.results)) {
-        setLogs(response.data.results);
+      let journalData = [];
+      if (Array.isArray(response)) {
+        journalData = response;
+      } else if (response && Array.isArray(response.results)) {
+        journalData = response.results;
       } else {
         setError('Format de données inattendu');
+        journalData = [];
       }
+
+      setJournal(journalData);
     } catch (err) {
-      setError('Erreur lors du chargement du journal');
-      console.error('Error:', err);
+      console.error('❌ Erreur lors du chargement du journal:', err);
+      setError('Erreur lors du chargement du journal d\'activité');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchUsers = async () => {
+  const fetchUtilisateurs = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${API_BASE}/users/`, {
-        headers: { Authorization: `Token ${token}` }
-      });
+      const response = await apiClient.get('/utilisateurs/');
       
-      if (Array.isArray(response.data)) {
-        setUsers(response.data);
-      } else if (response.data && Array.isArray(response.data.results)) {
-        setUsers(response.data.results);
+      let utilisateursData = [];
+      if (Array.isArray(response)) {
+        utilisateursData = response;
+      } else if (response && Array.isArray(response.results)) {
+        utilisateursData = response.results;
       } else {
-        setUsers([]);
+        utilisateursData = [];
       }
+
+      setUtilisateurs(utilisateursData);
     } catch (err) {
-      console.error('Error fetching users:', err);
-      setUsers([]);
+      console.error('Error fetching utilisateurs:', err);
+      setUtilisateurs([]);
     }
   };
 
-  // Filtrage et recherche
-  const filteredLogs = logs.filter(log => {
+  // Liste des actions possibles
+  const actionsPossibles = [
+    'connexion', 'deconnexion', 'creation', 'modification', 'suppression',
+    'validation', 'import', 'export', 'telechargement', 'generation'
+  ];
+
+  // Liste des modèles possibles
+  const modelesPossibles = [
+    'Utilisateur', 'Entite', 'Partenaire', 'Banque', 'Pays', 'Devise',
+    'Groupe', 'Permission', 'ParametreGeneral', 'Module'
+  ];
+
+  // Filtrage côté client (fallback si l'API ne filtre pas)
+  const filteredJournal = journal.filter(journal => {
     const matchesSearch = 
-      log.action?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.details?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.ip_address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (log.utilisateur && log.utilisateur.username?.toLowerCase().includes(searchTerm.toLowerCase()));
+      journal.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      journal.modele?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      journal.objet?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      journal.ip_address?.includes(searchTerm);
     
-    const matchesAction = !filterAction || log.action === filterAction;
+    const matchesUtilisateur = filterUtilisateur === '' || 
+      (journal.utilisateur && journal.utilisateur.id.toString() === filterUtilisateur);
     
-    const matchesUser = !filterUser || 
-      (log.utilisateur && log.utilisateur.id.toString() === filterUser);
+    const matchesAction = filterAction === '' || 
+      journal.action === filterAction;
     
-    return matchesSearch && matchesAction && matchesUser;
+    const matchesStatut = filterStatut === '' || 
+      journal.statut === filterStatut;
+    
+    const matchesModele = filterModele === '' || 
+      journal.modele === filterModele;
+    
+    const matchesDate = () => {
+      if (!dateDebut && !dateFin) return true;
+      
+      const dateJournal = new Date(journal.date_action);
+      if (dateDebut && dateFin) {
+        const debut = new Date(dateDebut);
+        const fin = new Date(dateFin);
+        fin.setHours(23, 59, 59, 999); // Fin de journée
+        return dateJournal >= debut && dateJournal <= fin;
+      }
+      if (dateDebut) {
+        const debut = new Date(dateDebut);
+        return dateJournal >= debut;
+      }
+      if (dateFin) {
+        const fin = new Date(dateFin);
+        fin.setHours(23, 59, 59, 999);
+        return dateJournal <= fin;
+      }
+      return true;
+    };
+    
+    return matchesSearch && matchesUtilisateur && matchesAction && 
+           matchesStatut && matchesModele && matchesDate();
   });
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentLogs = Array.isArray(filteredLogs) ? filteredLogs.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredLogs) ? filteredLogs.length : 0) / itemsPerPage);
+  const currentJournal = Array.isArray(filteredJournal) ? filteredJournal.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const totalPages = Math.ceil((Array.isArray(filteredJournal) ? filteredJournal.length : 0) / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
   const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
-  // Formater la date
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    }).format(date);
+  const handleRetry = () => {
+    fetchJournal();
   };
 
-  // Export des logs
-  const exportLogs = () => {
-    const csvContent = [
-      ['ID', 'Date/Heure', 'Utilisateur', 'Action', 'Détails', 'Adresse IP'],
-      ...filteredLogs.map(log => [
-        log.id,
-        formatDate(log.date_creation),
-        log.utilisateur ? log.utilisateur.username : 'Système',
-        log.action,
-        log.details || '',
-        log.ip_address || ''
-      ])
-    ].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+  const handleExport = async () => {
+    try {
+      // Construire l'URL d'export avec les mêmes filtres
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (filterUtilisateur) params.append('utilisateur', filterUtilisateur);
+      if (filterAction) params.append('action', filterAction);
+      if (filterStatut) params.append('statut', filterStatut);
+      if (filterModele) params.append('modele', filterModele);
+      if (dateDebut) params.append('date_debut', dateDebut);
+      if (dateFin) params.append('date_fin', dateFin);
+      params.append('format', 'csv');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `journal-activites-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+      const url = `/journal/export/?${params.toString()}`;
+      const response = await apiClient.get(url, { responseType: 'blob' });
+      
+      // Télécharger le fichier
+      const blob = new Blob([response], { type: 'text/csv' });
+      const urlBlob = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = urlBlob;
+      link.download = `journal-activite-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(urlBlob);
+    } catch (err) {
+      console.error('Erreur lors de l\'export:', err);
+      setError('Erreur lors de l\'export du journal');
+    }
+  };
+
+  const formatDateHeure = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('fr-FR');
+  };
+
+  const getActionIcon = (action) => {
+    switch (action) {
+      case 'creation':
+        return '➕';
+      case 'modification':
+        return '✏️';
+      case 'suppression':
+        return '🗑️';
+      case 'connexion':
+        return '🔐';
+      case 'deconnexion':
+        return '🚪';
+      case 'validation':
+        return '✅';
+      default:
+        return '📄';
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Chargement du journal...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
       <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <span className="text-red-800">{error}</span>
-          </div>
+        <div className="flex justify-center items-center p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2">Chargement du journal d'activité...</span>
         </div>
       </div>
     );
@@ -163,14 +223,24 @@ export default function JournalPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Journal des Activités</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Journal d'Activité</h1>
           <p className="text-gray-600 mt-1">
-            Historique automatique des actions du système
+            {filteredJournal.length} événement(s) trouvé(s)
+            {(searchTerm || filterUtilisateur || filterAction || filterStatut || filterModele || dateDebut || dateFin) && ' • Filtres actifs'}
           </p>
         </div>
         <div className="flex gap-3">
           <button 
-            onClick={exportLogs}
+            onClick={handleRetry}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Actualiser
+          </button>
+          <button 
+            onClick={handleExport}
             className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,30 +248,56 @@ export default function JournalPage() {
             </svg>
             Exporter CSV
           </button>
-          <button 
-            onClick={fetchLogs}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Actualiser
-          </button>
         </div>
       </div>
 
-      {/* Filtres et Recherche */}
+      {/* Message d'erreur */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <span className="text-red-800 font-medium">{error}</span>
+            </div>
+            <button
+              onClick={handleRetry}
+              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Filtres avancés */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Recherche</label>
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Action, détails, IP, utilisateur..."
+              placeholder="Description, modèle, IP..."
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Utilisateur</label>
+            <select
+              value={filterUtilisateur}
+              onChange={(e) => setFilterUtilisateur(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Tous les utilisateurs</option>
+              {utilisateurs.map(utilisateur => (
+                <option key={utilisateur.id} value={utilisateur.id}>
+                  {utilisateur.email}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Action</label>
@@ -211,32 +307,77 @@ export default function JournalPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Toutes les actions</option>
-              {actionsListe.map(action => (
-                <option key={action} value={action}>{action}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Utilisateur</label>
-            <select
-              value={filterUser}
-              onChange={(e) => setFilterUser(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Tous les utilisateurs</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.username}
+              {actionsPossibles.map(action => (
+                <option key={action} value={action}>
+                  {action.charAt(0).toUpperCase() + action.slice(1)}
                 </option>
               ))}
             </select>
           </div>
-          <div className="flex items-end gap-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+            <select
+              value={filterStatut}
+              onChange={(e) => setFilterStatut(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Tous les statuts</option>
+              <option value="succes">Succès</option>
+              <option value="echec">Échec</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Modèle</label>
+            <select
+              value={filterModele}
+              onChange={(e) => setFilterModele(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Tous les modèles</option>
+              {modelesPossibles.map(modele => (
+                <option key={modele} value={modele}>
+                  {modele}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date début</label>
+            <input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date fin</label>
+            <input
+              type="date"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex items-end space-x-2">
+            <button
+              onClick={fetchJournal}
+              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Appliquer
+            </button>
             <button
               onClick={() => {
                 setSearchTerm('');
+                setFilterUtilisateur('');
                 setFilterAction('');
-                setFilterUser('');
+                setFilterStatut('');
+                setFilterModele('');
+                setDateDebut('');
+                setDateFin('');
                 setCurrentPage(1);
               }}
               className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
@@ -250,38 +391,35 @@ export default function JournalPage() {
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">{logs.length}</div>
-          <div className="text-sm text-gray-600">Total des logs</div>
+          <div className="text-2xl font-bold text-blue-600">{journal.length}</div>
+          <div className="text-sm text-gray-600">Total événements</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-green-600">
-            {logs.filter(log => log.action === 'CREATE').length}
+            {journal.filter(j => j.statut === 'succes').length}
           </div>
-          <div className="text-sm text-gray-600">Créations</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">
-            {logs.filter(log => log.action === 'UPDATE').length}
-          </div>
-          <div className="text-sm text-gray-600">Modifications</div>
+          <div className="text-sm text-gray-600">Succès</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-red-600">
-            {logs.filter(log => log.action === 'DELETE').length}
+            {fetchJournal.filter(j => j.statut === 'echec').length}
           </div>
-          <div className="text-sm text-gray-600">Suppressions</div>
+          <div className="text-sm text-gray-600">Échecs</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-purple-600">
+            {new Set(journal.map(j => j.utilisateur?.id).filter(id => id)).size}
+          </div>
+          <div className="text-sm text-gray-600">Utilisateurs actifs</div>
         </div>
       </div>
 
-      {/* Tableau - LECTURE SEULE */}
+      {/* Tableau */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-300">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  ID
-                </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   Date/Heure
                 </th>
@@ -292,55 +430,107 @@ export default function JournalPage() {
                   Action
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Détails
+                  Modèle & Objet
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Description
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Statut
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                  Adresse IP
+                  IP
                 </th>
               </tr>
             </thead>
             <tbody>
-              {currentLogs.length === 0 ? (
+              {currentJournal.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {logs.length === 0 ? 'Aucun log trouvé' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="7" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                    {journal.length === 0 ? 'Aucun événement dans le journal' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
               ) : (
-                currentLogs.map((log, index) => (
+                currentJournal.map((journal, index) => (
                   <tr 
-                    key={log.id} 
+                    key={journal.id} 
                     className={`${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     } hover:bg-gray-100 transition-colors border-b border-gray-300`}
                   >
-                    <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {log.id}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {formatDate(log.date_creation)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {log.utilisateur ? log.utilisateur.username : 'Système'}
-                    </td>
                     <td className="px-6 py-4 border-r border-gray-300">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${
-                        log.action === 'CREATE' ? 'bg-green-100 text-green-800 border-green-300' :
-                        log.action === 'UPDATE' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                        log.action === 'DELETE' ? 'bg-red-100 text-red-800 border-red-300' :
-                        log.action === 'LOGIN' ? 'bg-purple-100 text-purple-800 border-purple-300' :
-                        'bg-gray-100 text-gray-800 border-gray-300'
-                      }`}>
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      <div className="max-w-xs">
-                        {log.details || '-'}
+                      <div className="text-sm text-gray-900">
+                        {formatDateHeure(journal.date_action)}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 font-mono">
-                      {log.ip_address || '-'}
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      {journal.utilisateur ? (
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-gray-900">
+                            {journal.utilisateur.email}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {journal.utilisateur.username}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">Système</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">{getActionIcon(journal.action)}</span>
+                        <span className={`text-sm font-medium capitalize ${
+                          journal.action === 'suppression' ? 'text-red-600' :
+                          journal.action === 'creation' ? 'text-green-600' :
+                          journal.action === 'modification' ? 'text-blue-600' :
+                          'text-gray-600'
+                        }`}>
+                          {journal.action}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-900">
+                          {journal.modele}
+                        </span>
+                        {journal.objet && (
+                          <span className="text-xs text-gray-500">
+                            {journal.objet}
+                          </span>
+                        )}
+                        {journal.objet_id && (
+                          <span className="text-xs text-gray-400 font-mono">
+                            ID: {journal.objet_id}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      <div className="max-w-xs">
+                        <span className="text-sm text-gray-600">
+                          {journal.description}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        journal.statut === 'succes' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {journal.statut === 'succes' ? 'Succès' : 'Échec'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {journal.ip_address ? (
+                        <span className="text-sm font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded border">
+                          {journal.ip_address}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -350,7 +540,7 @@ export default function JournalPage() {
         </div>
 
         {/* Pagination */}
-        {filteredLogs.length > 0 && (
+        {filteredJournal.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -366,12 +556,12 @@ export default function JournalPage() {
                   className="border border-gray-300 rounded px-3 py-1 text-sm"
                 >
                   <option value={10}>10</option>
-                  <option value={25}>25</option>
+                  <option value={20}>20</option>
                   <option value={50}>50</option>
                   <option value={100}>100</option>
                 </select>
                 <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredLogs.length)} sur {filteredLogs.length}
+                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredJournal.length)} sur {filteredJournal.length}
                 </span>
               </div>
 

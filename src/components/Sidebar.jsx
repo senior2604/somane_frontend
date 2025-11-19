@@ -51,7 +51,7 @@ export default function Sidebar() {
         { name: "Entités", path: "/entities", icon: <FiBriefcase /> },
         { name: "Partenaires", path: "/partners", icon: <FiUserPlus /> },
         { name: "Utilisateurs", path: "/users", icon: <FiUsers /> },
-        { name: "Utilisateurs × Entités", path: "/user-entities", icon: <FiLink /> },
+        { name: "Utilisateurs × Entités", path: "/userentities", icon: <FiLink /> },
       ]
     },
     {

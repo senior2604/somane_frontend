@@ -1,93 +1,87 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../services/apiClient';
 
-export default function UsersPage() {
-  const [users, setUsers] = useState([]);
-  const [entities, setEntities] = useState([]);
-  const [groups, setGroups] = useState([]);
+export default function UtilisateurPage() {
+  const [utilisateurs, setUtilisateurs] = useState([]);
+  const [entites, setEntites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingUtilisateur, setEditingUtilisateur] = useState(null);
   
-  // État pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  
-  // État pour la recherche
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
   const [filterEntite, setFilterEntite] = useState('');
 
   useEffect(() => {
-    fetchUsers();
-    fetchEntities();
-    fetchGroups();
+    fetchUtilisateurs();
+    fetchEntites();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchUtilisateurs = async () => {
     try {
+      setLoading(true);
+      setError(null);
+
       const response = await apiClient.get('/users/');
       
+      let utilisateursData = [];
       if (Array.isArray(response)) {
-        setUsers(response);
+        utilisateursData = response;
       } else if (response && Array.isArray(response.results)) {
-        setUsers(response.results);
+        utilisateursData = response.results;
       } else {
         setError('Format de données inattendu');
+        utilisateursData = [];
       }
+
+      setUtilisateurs(utilisateursData);
     } catch (err) {
+      console.error('❌ Erreur lors du chargement des utilisateurs:', err);
       setError('Erreur lors du chargement des utilisateurs');
-      console.error('Error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchEntities = async () => {
+  const fetchEntites = async () => {
     try {
       const response = await apiClient.get('/entites/');
       
+      let entitesData = [];
       if (Array.isArray(response)) {
-        setEntities(response);
+        entitesData = response;
       } else if (response && Array.isArray(response.results)) {
-        setEntities(response.results);
+        entitesData = response.results;
       } else {
-        setEntities([]);
+        entitesData = [];
       }
-    } catch (err) {
-      console.error('Error fetching entities:', err);
-      setEntities([]);
-    }
-  };
 
-  const fetchGroups = async () => {
-    try {
-      const response = await apiClient.get('/auth/groups/');
-      
-      if (Array.isArray(response)) {
-        setGroups(response);
-      } else {
-        setGroups([]);
-      }
+      setEntites(entitesData);
     } catch (err) {
-      console.error('Error fetching groups:', err);
-      setGroups([]);
+      console.error('Error fetching entites:', err);
+      setEntites([]);
     }
   };
 
   // Filtrage et recherche
-  const filteredUsers = users.filter(user => {
+  const filteredUtilisateurs = utilisateurs.filter(utilisateur => {
     const matchesSearch = 
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.first_name && user.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.last_name && user.last_name.toLowerCase().includes(searchTerm.toLowerCase()));
+      utilisateur.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      utilisateur.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      utilisateur.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      utilisateur.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      utilisateur.telephone?.includes(searchTerm);
     
-    const matchesStatut = !filterStatut || user.statut === filterStatut;
+    const matchesStatut = filterStatut === '' || 
+      utilisateur.statut?.toString() === filterStatut;
     
-    const matchesEntite = !filterEntite || 
-      (user.entite && user.entite.id.toString() === filterEntite);
+    const matchesEntite = filterEntite === '' || 
+      (utilisateur.entites && utilisateur.entites.some(entite => 
+        entite.id.toString() === filterEntite
+      ));
     
     return matchesSearch && matchesStatut && matchesEntite;
   });
@@ -95,8 +89,8 @@ export default function UsersPage() {
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentUsers = Array.isArray(filteredUsers) ? filteredUsers.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredUsers) ? filteredUsers.length : 0) / itemsPerPage);
+  const currentUtilisateurs = Array.isArray(filteredUtilisateurs) ? filteredUtilisateurs.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const totalPages = Math.ceil((Array.isArray(filteredUtilisateurs) ? filteredUtilisateurs.length : 0) / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -104,66 +98,57 @@ export default function UsersPage() {
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
   // Gestion des actions
-  const handleNewUser = () => {
-    setEditingUser(null);
+  const handleNewUtilisateur = () => {
+    setEditingUtilisateur(null);
     setShowForm(true);
   };
 
-  const handleEdit = (user) => {
-    setEditingUser(user);
+  const handleEdit = (utilisateur) => {
+    setEditingUtilisateur(utilisateur);
     setShowForm(true);
   };
 
-  const handleDelete = async (user) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${user.username}" ?`)) {
+  const handleDelete = async (utilisateur) => {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${utilisateur.email}" ? Cette action est irréversible.`)) {
       try {
-        await apiClient.delete(`/users/${user.id}/`);
-        fetchUsers();
+        await apiClient.delete(`/users/${utilisateur.id}/`);
+        fetchUtilisateurs();
       } catch (err) {
         setError('Erreur lors de la suppression');
-        console.error('Error deleting user:', err);
+        console.error('Error deleting utilisateur:', err);
       }
+    }
+  };
+
+  const handleToggleStatut = async (utilisateur) => {
+    try {
+      const nouveauStatut = utilisateur.statut === 'actif' ? 'inactif' : 'actif';
+      await apiClient.patch(`/users/${utilisateur.id}/`, {
+        statut: nouveauStatut
+      });
+      fetchUtilisateurs();
+    } catch (err) {
+      setError('Erreur lors de la modification du statut');
+      console.error('Error toggling statut:', err);
     }
   };
 
   const handleFormSuccess = () => {
     setShowForm(false);
-    setEditingUser(null);
-    fetchUsers();
+    setEditingUtilisateur(null);
+    fetchUtilisateurs();
   };
 
-  // Formater la date
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+  const handleRetry = () => {
+    fetchUtilisateurs();
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Chargement des utilisateurs...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
       <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <span className="text-red-800">{error}</span>
-          </div>
+        <div className="flex justify-center items-center p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2">Chargement des utilisateurs...</span>
         </div>
       </div>
     );
@@ -175,20 +160,51 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Gestion des Utilisateurs</h1>
           <p className="text-gray-600 mt-1">
-            {filteredUsers.length} utilisateur(s) trouvé(s)
-            {(filterStatut || filterEntite) && ' • Filtres actifs'}
+            {filteredUtilisateurs.length} utilisateur(s) trouvé(s)
+            {(searchTerm || filterStatut || filterEntite) && ' • Filtres actifs'}
           </p>
         </div>
-        <button 
-          onClick={handleNewUser}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nouvel Utilisateur
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={handleRetry}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Actualiser
+          </button>
+          <button 
+            onClick={handleNewUtilisateur}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nouvel Utilisateur
+          </button>
+        </div>
       </div>
+
+      {/* Message d'erreur */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <span className="text-red-800 font-medium">{error}</span>
+            </div>
+            <button
+              onClick={handleRetry}
+              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filtres et Recherche */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
@@ -200,7 +216,7 @@ export default function UsersPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nom, email, prénom..."
+              placeholder="Email, nom, téléphone..."
             />
           </div>
           <div>
@@ -213,7 +229,6 @@ export default function UsersPage() {
               <option value="">Tous les statuts</option>
               <option value="actif">Actif</option>
               <option value="inactif">Inactif</option>
-              <option value="suspendu">Suspendu</option>
             </select>
           </div>
           <div>
@@ -224,9 +239,9 @@ export default function UsersPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Toutes les entités</option>
-              {entities.map(entity => (
-                <option key={entity.id} value={entity.id}>
-                  {entity.raison_sociale}
+              {entites.map(entite => (
+                <option key={entite.id} value={entite.id}>
+                  {entite.raison_sociale}
                 </option>
               ))}
             </select>
@@ -247,7 +262,33 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Tableau COMPLET */}
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-blue-600">{utilisateurs.length}</div>
+          <div className="text-sm text-gray-600">Total des utilisateurs</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-green-600">
+            {utilisateurs.filter(u => u.statut === 'actif').length}
+          </div>
+          <div className="text-sm text-gray-600">Utilisateurs actifs</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-purple-600">
+            {new Set(utilisateurs.flatMap(u => u.entites?.map(e => e.id) || [])).size}
+          </div>
+          <div className="text-sm text-gray-600">Entités couvertes</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-orange-600">
+            {utilisateurs.filter(u => u.derniere_connexion).length}
+          </div>
+          <div className="text-sm text-gray-600">Connectés récemment</div>
+        </div>
+      </div>
+
+      {/* Tableau */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
@@ -257,28 +298,19 @@ export default function UsersPage() {
                   ID
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Photo
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   Utilisateur
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Email
+                  Contact
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom Complet
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Téléphone
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Entité
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Dernière connexion
+                  Entités
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   Statut
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                  Dernière connexion
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                   Actions
@@ -286,74 +318,105 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {currentUsers.length === 0 ? (
+              {currentUtilisateurs.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {users.length === 0 ? 'Aucun utilisateur trouvé' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="7" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                    {utilisateurs.length === 0 ? 'Aucun utilisateur trouvé' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
               ) : (
-                currentUsers.map((user, index) => (
+                currentUtilisateurs.map((utilisateur, index) => (
                   <tr 
-                    key={user.id} 
+                    key={utilisateur.id} 
                     className={`${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     } hover:bg-gray-100 transition-colors border-b border-gray-300`}
                   >
                     <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {user.id}
+                      {utilisateur.id}
                     </td>
                     <td className="px-6 py-4 border-r border-gray-300">
-                      {user.photo ? (
-                        <img 
-                          src={user.photo} 
-                          alt={user.username}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                          </svg>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      {user.username}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.email}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.first_name || user.last_name 
-                        ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
-                        : '-'
-                      }
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.telephone || '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.entite ? user.entite.raison_sociale : '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {user.last_login ? formatDate(user.last_login) : 'Jamais'}
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-900">
+                          {utilisateur.email}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          @{utilisateur.username}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 border-r border-gray-300">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${
-                        user.statut === 'actif' 
-                          ? 'bg-green-100 text-green-800 border-green-300' 
-                          : user.statut === 'inactif' 
-                          ? 'bg-gray-100 text-gray-800 border-gray-300'
-                          : 'bg-red-100 text-red-800 border-red-300'
+                      <div className="flex flex-col">
+                        <span className="text-sm text-gray-900">
+                          {utilisateur.first_name} {utilisateur.last_name}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {utilisateur.telephone || 'Aucun téléphone'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {utilisateur.entites?.slice(0, 3).map(entite => (
+                          <span
+                            key={entite.id}
+                            className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                          >
+                            {entite.nom}
+                          </span>
+                        ))}
+                        {utilisateur.entites?.length > 3 && (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                            +{utilisateur.entites.length - 3}
+                          </span>
+                        )}
+                        {(!utilisateur.entites || utilisateur.entites.length === 0) && (
+                          <span className="text-xs text-gray-400">Aucune entité</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        utilisateur.statut === 'actif'
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
                       }`}>
-                        {user.statut || 'Non défini'}
+                        {utilisateur.statut === 'actif' ? 'Actif' : 'Inactif'}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                      {utilisateur.derniere_connexion ? (
+                        <div className="flex flex-col">
+                          <span>{new Date(utilisateur.derniere_connexion).toLocaleDateString('fr-FR')}</span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(utilisateur.derniere_connexion).toLocaleTimeString('fr-FR')}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">Jamais</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4">
-                      <div className="flex space-x-3">
+                      <div className="flex space-x-2">
                         <button 
-                          onClick={() => handleEdit(user)}
+                          onClick={() => handleToggleStatut(utilisateur)}
+                          className={`text-sm font-medium transition-colors flex items-center gap-1 ${
+                            utilisateur.statut === 'actif'
+                              ? 'text-orange-600 hover:text-orange-800' 
+                              : 'text-green-600 hover:text-green-800'
+                          }`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {utilisateur.statut === 'actif' ? (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            ) : (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            )}
+                          </svg>
+                          {utilisateur.statut === 'actif' ? 'Désactiver' : 'Activer'}
+                        </button>
+                        <button 
+                          onClick={() => handleEdit(utilisateur)}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -362,7 +425,7 @@ export default function UsersPage() {
                           Éditer
                         </button>
                         <button 
-                          onClick={() => handleDelete(user)}
+                          onClick={() => handleDelete(utilisateur)}
                           className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,7 +443,7 @@ export default function UsersPage() {
         </div>
 
         {/* Pagination */}
-        {filteredUsers.length > 0 && (
+        {filteredUtilisateurs.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -401,7 +464,7 @@ export default function UsersPage() {
                   <option value={50}>50</option>
                 </select>
                 <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredUsers.length)} sur {filteredUsers.length}
+                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredUtilisateurs.length)} sur {filteredUtilisateurs.length}
                 </span>
               </div>
 
@@ -465,15 +528,14 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Formulaire Modal COMPLET */}
+      {/* Formulaire Modal */}
       {showForm && (
-        <UserFormModal
-          user={editingUser}
-          entities={entities}
-          groups={groups}
+        <UtilisateurFormModal
+          utilisateur={editingUtilisateur}
+          entites={entites}
           onClose={() => {
             setShowForm(false);
-            setEditingUser(null);
+            setEditingUtilisateur(null);
           }}
           onSuccess={handleFormSuccess}
         />
@@ -482,69 +544,61 @@ export default function UsersPage() {
   );
 }
 
-// Composant Modal COMPLET pour le formulaire
-function UserFormModal({ user, entities, groups, onClose, onSuccess }) {
+// Composant Modal pour le formulaire des utilisateurs (SANS CHAMPS PASSWORD)
+function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
-    username: user?.username || '',
-    email: user?.email || '',
-    first_name: user?.first_name || '',
-    last_name: user?.last_name || '',
-    telephone: user?.telephone || '',
-    statut: user?.statut || 'actif',
-    entite: user?.entite?.id || '',
-    groups: user?.groups?.map(g => g.id) || [],
-    is_staff: user?.is_staff || false,
-    is_superuser: user?.is_superuser || false,
-    password: '',
-    photo: null
+    email: utilisateur?.email || '',
+    username: utilisateur?.username || '',
+    first_name: utilisateur?.first_name || '',
+    last_name: utilisateur?.last_name || '',
+    telephone: utilisateur?.telephone || '',
+    statut: utilisateur?.statut || 'actif'
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(user?.photo || null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    try {
-      const url = user 
-        ? `/users/${user.id}/`
-        : `/users/`;
-      
-      const method = user ? 'PUT' : 'POST';
-      
-      // Préparer les données pour l'envoi
-      const submitData = new FormData();
-      
-      // Ajouter les champs texte
-      Object.keys(formData).forEach(key => {
-        if (key === 'photo') {
-          if (formData.photo && typeof formData.photo !== 'string') {
-            submitData.append(key, formData.photo);
-          }
-        } else if (key === 'groups') {
-          // Pour les groupes, envoyer chaque ID séparément
-          formData.groups.forEach(groupId => {
-            submitData.append('groups', groupId);
-          });
-        } else if (formData[key] !== null && formData[key] !== '') {
-          submitData.append(key, formData[key]);
-        }
-      });
+    // Validation simplifiée (pas de password)
+    if (!formData.email || !formData.username) {
+      setError('L\'email et le nom d\'utilisateur sont obligatoires');
+      setLoading(false);
+      return;
+    }
 
-      // Si pas de nouveau mot de passe pour l'édition, ne pas l'envoyer
-      if (user && !formData.password) {
-        submitData.delete('password');
-      }
+    try {
+      const url = utilisateur 
+        ? `/users/${utilisateur.id}/`
+        : '/users/';
+      
+      const method = utilisateur ? 'PUT' : 'POST';
+
+      // Données sans mot de passe
+      const submitData = {
+        email: formData.email,
+        username: formData.username,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        telephone: formData.telephone,
+        statut: formData.statut
+      };
 
       await apiClient.request(url, {
         method: method,
-        body: submitData,
+        body: JSON.stringify(submitData),
         headers: {
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'application/json'
         }
       });
+      
+      // Message de succès spécifique pour la création
+      if (!utilisateur) {
+        alert('✅ Utilisateur créé avec succès !\n\nUn email d\'activation a été envoyé pour définir le mot de passe.');
+      }
       
       onSuccess();
     } catch (err) {
@@ -562,30 +616,12 @@ function UserFormModal({ user, entities, groups, onClose, onSuccess }) {
     }));
   };
 
-  const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      handleChange('photo', file);
-      // Prévisualisation
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPhotoPreview(e.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const removePhoto = () => {
-    handleChange('photo', null);
-    setPhotoPreview(null);
-  };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
-            {user ? 'Modifier l\'utilisateur' : 'Créer un nouvel utilisateur'}
+            {utilisateur ? 'Modifier l\'utilisateur' : 'Créer un nouvel utilisateur'}
           </h2>
         </div>
         
@@ -601,114 +637,84 @@ function UserFormModal({ user, entities, groups, onClose, onSuccess }) {
         )}
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Section Photo et Informations de base */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Photo */}
-            <div className="md:col-span-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Photo</label>
-              <div className="space-y-3">
-                {photoPreview ? (
-                  <div className="relative">
-                    <img 
-                      src={photoPreview} 
-                      alt="Preview" 
-                      className="w-32 h-32 rounded-full object-cover mx-auto border-2 border-gray-300"
-                    />
-                    <button
-                      type="button"
-                      onClick={removePhoto}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center mx-auto border-2 border-dashed border-gray-300">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                  </div>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoChange}
-                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-              </div>
-            </div>
-
-            {/* Informations de base */}
-            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nom d'utilisateur *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.username}
-                  onChange={(e) => handleChange('username', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Entrez le nom d'utilisateur"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="email@exemple.com"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Prénom</label>
-                <input
-                  type="text"
-                  value={formData.first_name}
-                  onChange={(e) => handleChange('first_name', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Prénom"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
-                <input
-                  type="text"
-                  value={formData.last_name}
-                  onChange={(e) => handleChange('last_name', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Nom"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section Contact et Statut */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email *
+              </label>
+              <input
+                type="email"
+                required
+                value={formData.email}
+                onChange={(e) => handleChange('email', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="utilisateur@example.com"
+              />
+            </div>
+            
+            {/* Username */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nom d'utilisateur *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.username}
+                onChange={(e) => handleChange('username', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="nom.utilisateur"
+              />
+            </div>
+            
+            {/* Prénom */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prénom
+              </label>
+              <input
+                type="text"
+                value={formData.first_name}
+                onChange={(e) => handleChange('first_name', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Jean"
+              />
+            </div>
+            
+            {/* Nom */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nom
+              </label>
+              <input
+                type="text"
+                value={formData.last_name}
+                onChange={(e) => handleChange('last_name', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Dupont"
+              />
+            </div>
+            
+            {/* Téléphone */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Téléphone
+              </label>
               <input
                 type="tel"
                 value={formData.telephone}
                 onChange={(e) => handleChange('telephone', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="+228 XX XXX XXX"
+                placeholder="+228 XX XX XX XX"
               />
             </div>
             
+            {/* Statut */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Statut
+              </label>
               <select
                 value={formData.statut}
                 onChange={(e) => handleChange('statut', e.target.value)}
@@ -716,91 +722,46 @@ function UserFormModal({ user, entities, groups, onClose, onSuccess }) {
               >
                 <option value="actif">Actif</option>
                 <option value="inactif">Inactif</option>
-                <option value="suspendu">Suspendu</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Entité</label>
-              <select
-                value={formData.entite}
-                onChange={(e) => handleChange('entite', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Sélectionnez une entité</option>
-                {entities.map(entity => (
-                  <option key={entity.id} value={entity.id}>
-                    {entity.raison_sociale}
-                  </option>
-                ))}
               </select>
             </div>
           </div>
 
-          {/* Section Permissions et Groupes */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Groupes</label>
-              <select
-                multiple
-                value={formData.groups}
-                onChange={(e) => handleChange('groups', Array.from(e.target.selectedOptions, option => option.value))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent h-32"
-              >
-                {groups.map(group => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Maintenez Ctrl (ou Cmd) pour sélectionner plusieurs groupes
-              </p>
-            </div>
-            
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-gray-700">Permissions spéciales</label>
-              <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_staff}
-                    onChange={(e) => handleChange('is_staff', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Accès à l'administration</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_superuser}
-                    onChange={(e) => handleChange('is_superuser', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Superutilisateur (tous les droits)</span>
-                </label>
+          {/* Information sur l'activation */}
+          {!utilisateur && (
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <div className="flex items-start">
+                <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <h4 className="text-sm font-medium text-blue-800">Activation du compte</h4>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Un email d'activation sera envoyé à l'utilisateur pour qu'il définisse son propre mot de passe.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Mot de passe */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {user ? 'Nouveau mot de passe' : 'Mot de passe *'}
-            </label>
-            <input
-              type="password"
-              required={!user}
-              value={formData.password}
-              onChange={(e) => handleChange('password', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder={user ? "Laisser vide pour ne pas modifier" : "Mot de passe sécurisé"}
-            />
-            {user && (
-              <p className="text-xs text-gray-500 mt-1">
-                Laisser vide pour conserver le mot de passe actuel
-              </p>
-            )}
+          {/* Aperçu */}
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu de l'utilisateur</h3>
+            <div className="space-y-2 text-sm">
+              <div><strong>Email:</strong> {formData.email || 'Non défini'}</div>
+              <div><strong>Nom d'utilisateur:</strong> {formData.username || 'Non défini'}</div>
+              <div><strong>Nom complet:</strong> {formData.first_name} {formData.last_name}</div>
+              <div><strong>Téléphone:</strong> {formData.telephone || 'Non défini'}</div>
+              <div>
+                <strong>Statut:</strong> 
+                <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                  formData.statut === 'actif'
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {formData.statut === 'actif' ? 'Actif' : 'Inactif'}
+                </span>
+              </div>
+            </div>
           </div>
           
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -823,7 +784,7 @@ function UserFormModal({ user, entities, groups, onClose, onSuccess }) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
               )}
-              <span>{loading ? 'Sauvegarde...' : user ? 'Mettre à jour' : 'Créer l\'utilisateur'}</span>
+              <span>{loading ? 'Sauvegarde...' : utilisateur ? 'Mettre à jour' : 'Créer l\'utilisateur'}</span>
             </button>
           </div>
         </form>

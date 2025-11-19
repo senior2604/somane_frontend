@@ -17,6 +17,7 @@ import SystemPage from "../pages/System/SystemPage";
 import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage";
 import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
 import LanguagesPage from "../pages/Languages/LanguagesPage";
+import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
 import ProtectedLayout from "../components/Layout/ProtectedLayout";
 
 export default function AppRouter() {
@@ -33,6 +34,7 @@ export default function AppRouter() {
           <Route path="/entities" element={<EntitiesPage />} />
           <Route path="/partners" element={<PartnersPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/userentities" element={<UserEntitiesPage/>}/> {/* ✅ CORRIGÉ */}
           
           {/* Gestion des accès */}
           <Route path="/groups" element={<GroupsPage />} />

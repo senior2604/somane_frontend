@@ -1,48 +1,70 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../services/apiClient';
 
-export default function ParametresPage() {
-  const [parametres, setParametres] = useState([]);
+export default function UtilisateurEntitePage() {
+  const [affiliations, setAffiliations] = useState([]);
+  const [utilisateurs, setUtilisateurs] = useState([]);
   const [entites, setEntites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingParametre, setEditingParametre] = useState(null);
+  const [editingAffiliation, setEditingAffiliation] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEntite, setFilterEntite] = useState('');
-  const [filterModifiable, setFilterModifiable] = useState('');
+  const [filterActif, setFilterActif] = useState('');
 
   useEffect(() => {
-    fetchParametres();
+    fetchAffiliations();
+    fetchUtilisateurs();
     fetchEntites();
   }, []);
 
-  const fetchParametres = async () => {
+  const fetchAffiliations = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/parametres/');
+      const response = await apiClient.get('/utilisateur-entites/');
       
-      let parametresData = [];
+      let affiliationsData = [];
       if (Array.isArray(response)) {
-        parametresData = response;
+        affiliationsData = response;
       } else if (response && Array.isArray(response.results)) {
-        parametresData = response.results;
+        affiliationsData = response.results;
       } else {
         setError('Format de données inattendu');
-        parametresData = [];
+        affiliationsData = [];
       }
 
-      setParametres(parametresData);
+      setAffiliations(affiliationsData);
     } catch (err) {
-      console.error('❌ Erreur lors du chargement des paramètres:', err);
-      setError('Erreur lors du chargement des paramètres');
+      console.error('❌ Erreur lors du chargement des affiliations:', err);
+      setError('Erreur lors du chargement des affiliations utilisateur-entité');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUtilisateurs = async () => {
+    try {
+      const response = await apiClient.get('/utilisateurs/');
+      
+      let utilisateursData = [];
+      if (Array.isArray(response)) {
+        utilisateursData = response;
+      } else if (response && Array.isArray(response.results)) {
+        utilisateursData = response.results;
+      } else {
+        utilisateursData = [];
+      }
+
+      setUtilisateurs(utilisateursData);
+    } catch (err) {
+      console.error('Error fetching utilisateurs:', err);
+      setUtilisateurs([]);
     }
   };
 
@@ -67,27 +89,26 @@ export default function ParametresPage() {
   };
 
   // Filtrage et recherche
-  const filteredParametres = parametres.filter(parametre => {
+  const filteredAffiliations = affiliations.filter(affiliation => {
     const matchesSearch = 
-      parametre.cle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      parametre.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      parametre.valeur?.toString().toLowerCase().includes(searchTerm.toLowerCase());
+      affiliation.utilisateur?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      affiliation.utilisateur?.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      affiliation.entite?.raison_sociale?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesEntite = filterEntite === '' || 
-      (parametre.entite && parametre.entite.id.toString() === filterEntite) ||
-      (filterEntite === 'global' && !parametre.entite);
+      (affiliation.entite && affiliation.entite.id.toString() === filterEntite);
     
-    const matchesModifiable = filterModifiable === '' || 
-      parametre.modifiable.toString() === filterModifiable;
+    const matchesActif = filterActif === '' || 
+      affiliation.actif.toString() === filterActif;
     
-    return matchesSearch && matchesEntite && matchesModifiable;
+    return matchesSearch && matchesEntite && matchesActif;
   });
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentParametres = Array.isArray(filteredParametres) ? filteredParametres.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredParametres) ? filteredParametres.length : 0) / itemsPerPage);
+  const currentAffiliations = Array.isArray(filteredAffiliations) ? filteredAffiliations.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const totalPages = Math.ceil((Array.isArray(filteredAffiliations) ? filteredAffiliations.length : 0) / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -95,56 +116,76 @@ export default function ParametresPage() {
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
   // Gestion des actions
-  const handleNewParametre = () => {
-    setEditingParametre(null);
+  const handleNewAffiliation = () => {
+    setEditingAffiliation(null);
     setShowForm(true);
   };
 
-  const handleEdit = (parametre) => {
-    setEditingParametre(parametre);
+  const handleEdit = (affiliation) => {
+    setEditingAffiliation(affiliation);
     setShowForm(true);
   };
 
-  const handleDelete = async (parametre) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le paramètre "${parametre.cle}" ?`)) {
+  const handleDelete = async (affiliation) => {
+    const utilisateurNom = affiliation.utilisateur?.email || affiliation.utilisateur?.username;
+    const entiteNom = affiliation.entite?.raison_sociale;
+    
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer l'affiliation "${utilisateurNom} @ ${entiteNom}" ?`)) {
       try {
-        await apiClient.delete(`/parametres/${parametre.id}/`);
-        fetchParametres();
+        await apiClient.delete(`/utilisateur-entites/${affiliation.id}/`);
+        fetchAffiliations();
       } catch (err) {
         setError('Erreur lors de la suppression');
-        console.error('Error deleting parametre:', err);
+        console.error('Error deleting affiliation:', err);
       }
     }
   };
 
-  const handleToggleModifiable = async (parametre) => {
+  const handleToggleActif = async (affiliation) => {
     try {
-      await apiClient.patch(`/parametres/${parametre.id}/`, {
-        modifiable: !parametre.modifiable
+      await apiClient.patch(`/utilisateur-entites/${affiliation.id}/`, {
+        actif: !affiliation.actif
       });
-      fetchParametres();
+      fetchAffiliations();
     } catch (err) {
       setError('Erreur lors de la modification');
-      console.error('Error toggling modifiable:', err);
+      console.error('Error toggling actif:', err);
+    }
+  };
+
+  const handleSetDefault = async (affiliation) => {
+    try {
+      // Désactiver toutes les entités par défaut pour cet utilisateur
+      const autresAffiliations = affiliations.filter(
+        aff => aff.utilisateur.id === affiliation.utilisateur.id && aff.id !== affiliation.id
+      );
+      
+      for (const aff of autresAffiliations) {
+        await apiClient.patch(`/utilisateur-entites/${aff.id}/`, {
+          est_defaut: false
+        });
+      }
+      
+      // Définir celle-ci comme défaut
+      await apiClient.patch(`/utilisateur-entites/${affiliation.id}/`, {
+        est_defaut: true
+      });
+      
+      fetchAffiliations();
+    } catch (err) {
+      setError('Erreur lors de la modification');
+      console.error('Error setting default:', err);
     }
   };
 
   const handleFormSuccess = () => {
     setShowForm(false);
-    setEditingParametre(null);
-    fetchParametres();
+    setEditingAffiliation(null);
+    fetchAffiliations();
   };
 
   const handleRetry = () => {
-    fetchParametres();
-  };
-
-  // Fonction pour formater l'affichage de la valeur
-  const formatValeur = (valeur) => {
-    if (typeof valeur === 'object') {
-      return JSON.stringify(valeur);
-    }
-    return String(valeur);
+    fetchAffiliations();
   };
 
   if (loading) {
@@ -152,7 +193,7 @@ export default function ParametresPage() {
       <div className="p-6">
         <div className="flex justify-center items-center p-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des paramètres...</span>
+          <span className="ml-2">Chargement des affiliations...</span>
         </div>
       </div>
     );
@@ -162,10 +203,10 @@ export default function ParametresPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Paramètres</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Gestion des Affiliations Utilisateur-Entité</h1>
           <p className="text-gray-600 mt-1">
-            {filteredParametres.length} paramètre(s) trouvé(s)
-            {(searchTerm || filterEntite || filterModifiable) && ' • Filtres actifs'}
+            {filteredAffiliations.length} affiliation(s) trouvée(s)
+            {(searchTerm || filterEntite || filterActif) && ' • Filtres actifs'}
           </p>
         </div>
         <div className="flex gap-3">
@@ -179,13 +220,13 @@ export default function ParametresPage() {
             Actualiser
           </button>
           <button 
-            onClick={handleNewParametre}
+            onClick={handleNewAffiliation}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Nouveau Paramètre
+            Nouvelle Affiliation
           </button>
         </div>
       </div>
@@ -220,18 +261,17 @@ export default function ParametresPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Clé, description, valeur..."
+              placeholder="Email, username, raison sociale..."
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Portée</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Entité</label>
             <select
               value={filterEntite}
               onChange={(e) => setFilterEntite(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Toutes les portées</option>
-              <option value="global">Paramètres globaux</option>
+              <option value="">Toutes les entités</option>
               {entites.map(entite => (
                 <option key={entite.id} value={entite.id}>
                   {entite.raison_sociale}
@@ -240,15 +280,15 @@ export default function ParametresPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Modifiable</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
             <select
-              value={filterModifiable}
-              onChange={(e) => setFilterModifiable(e.target.value)}
+              value={filterActif}
+              onChange={(e) => setFilterActif(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Tous les statuts</option>
-              <option value="true">Modifiable</option>
-              <option value="false">Non modifiable</option>
+              <option value="true">Actif</option>
+              <option value="false">Inactif</option>
             </select>
           </div>
           <div className="flex items-end">
@@ -256,7 +296,7 @@ export default function ParametresPage() {
               onClick={() => {
                 setSearchTerm('');
                 setFilterEntite('');
-                setFilterModifiable('');
+                setFilterActif('');
                 setCurrentPage(1);
               }}
               className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
@@ -270,26 +310,26 @@ export default function ParametresPage() {
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">{parametres.length}</div>
-          <div className="text-sm text-gray-600">Total des paramètres</div>
+          <div className="text-2xl font-bold text-blue-600">{affiliations.length}</div>
+          <div className="text-sm text-gray-600">Total des affiliations</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-green-600">
-            {parametres.filter(p => p.modifiable).length}
+            {affiliations.filter(a => a.actif).length}
           </div>
-          <div className="text-sm text-gray-600">Paramètres modifiables</div>
+          <div className="text-sm text-gray-600">Affiliations actives</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-purple-600">
-            {parametres.filter(p => !p.entite).length}
+            {affiliations.filter(a => a.est_defaut).length}
           </div>
-          <div className="text-sm text-gray-600">Paramètres globaux</div>
+          <div className="text-sm text-gray-600">Entités par défaut</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-orange-600">
-            {new Set(parametres.map(p => p.entite?.id).filter(id => id)).size}
+            {new Set(affiliations.map(a => a.utilisateur?.id).filter(id => id)).size}
           </div>
-          <div className="text-sm text-gray-600">Entités configurées</div>
+          <div className="text-sm text-gray-600">Utilisateurs affiliés</div>
         </div>
       </div>
 
@@ -303,22 +343,19 @@ export default function ParametresPage() {
                   ID
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Clé
+                  Utilisateur
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Valeur
+                  Entité
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Description
+                  Statut
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Portée
+                  Par défaut
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Modifiable
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Dernière modif
+                  Date création
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                   Actions
@@ -326,90 +363,89 @@ export default function ParametresPage() {
               </tr>
             </thead>
             <tbody>
-              {currentParametres.length === 0 ? (
+              {currentAffiliations.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {parametres.length === 0 ? 'Aucun paramètre trouvé' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="7" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                    {affiliations.length === 0 ? 'Aucune affiliation trouvée' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
               ) : (
-                currentParametres.map((parametre, index) => (
+                currentAffiliations.map((affiliation, index) => (
                   <tr 
-                    key={parametre.id} 
+                    key={affiliation.id} 
                     className={`${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     } hover:bg-gray-100 transition-colors border-b border-gray-300`}
                   >
                     <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {parametre.id}
+                      {affiliation.id}
                     </td>
                     <td className="px-6 py-4 border-r border-gray-300">
                       <div className="flex flex-col">
-                        <span className="text-sm font-medium text-gray-900 font-mono">
-                          {parametre.cle}
+                        <span className="text-sm font-medium text-gray-900">
+                          {affiliation.utilisateur?.email}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {affiliation.utilisateur?.username}
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <div className="max-w-xs">
-                        <span className="text-sm text-gray-600 bg-gray-50 px-2 py-1 rounded border border-gray-200 break-all">
-                          {formatValeur(parametre.valeur)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      <div className="max-w-xs truncate" title={parametre.description}>
-                        {parametre.description}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      {parametre.entite ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {parametre.entite.raison_sociale}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Global
-                        </span>
-                      )}
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
+                      {affiliation.entite?.raison_sociale}
                     </td>
                     <td className="px-6 py-4 border-r border-gray-300">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        parametre.modifiable 
+                        affiliation.actif 
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {parametre.modifiable ? 'Oui' : 'Non'}
+                        {affiliation.actif ? 'Actif' : 'Inactif'}
                       </span>
                     </td>
+                    <td className="px-6 py-4 border-r border-gray-300">
+                      {affiliation.est_defaut ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Défaut
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {new Date(parametre.date_maj).toLocaleDateString('fr-FR')}
-                      <br />
-                      <span className="text-xs text-gray-400">
-                        {new Date(parametre.date_maj).toLocaleTimeString('fr-FR')}
-                      </span>
+                      {new Date(affiliation.date_creation).toLocaleDateString('fr-FR')}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex space-x-2">
                         <button 
-                          onClick={() => handleToggleModifiable(parametre)}
+                          onClick={() => handleToggleActif(affiliation)}
                           className={`text-sm font-medium transition-colors flex items-center gap-1 ${
-                            parametre.modifiable 
+                            affiliation.actif 
                               ? 'text-orange-600 hover:text-orange-800' 
                               : 'text-green-600 hover:text-green-800'
                           }`}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            {parametre.modifiable ? (
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            {affiliation.actif ? (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             ) : (
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             )}
                           </svg>
-                          {parametre.modifiable ? 'Verrouiller' : 'Déverrouiller'}
+                          {affiliation.actif ? 'Désactiver' : 'Activer'}
                         </button>
+                        {!affiliation.est_defaut && (
+                          <button 
+                            onClick={() => handleSetDefault(affiliation)}
+                            className="text-purple-600 hover:text-purple-800 text-sm font-medium transition-colors flex items-center gap-1"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Défaut
+                          </button>
+                        )}
                         <button 
-                          onClick={() => handleEdit(parametre)}
+                          onClick={() => handleEdit(affiliation)}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -418,7 +454,7 @@ export default function ParametresPage() {
                           Éditer
                         </button>
                         <button 
-                          onClick={() => handleDelete(parametre)}
+                          onClick={() => handleDelete(affiliation)}
                           className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -436,7 +472,7 @@ export default function ParametresPage() {
         </div>
 
         {/* Pagination */}
-        {filteredParametres.length > 0 && (
+        {filteredAffiliations.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -457,7 +493,7 @@ export default function ParametresPage() {
                   <option value={50}>50</option>
                 </select>
                 <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredParametres.length)} sur {filteredParametres.length}
+                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredAffiliations.length)} sur {filteredAffiliations.length}
                 </span>
               </div>
 
@@ -523,12 +559,13 @@ export default function ParametresPage() {
 
       {/* Formulaire Modal */}
       {showForm && (
-        <ParametreFormModal
-          parametre={editingParametre}
+        <UtilisateurEntiteFormModal
+          affiliation={editingAffiliation}
+          utilisateurs={utilisateurs}
           entites={entites}
           onClose={() => {
             setShowForm(false);
-            setEditingParametre(null);
+            setEditingAffiliation(null);
           }}
           onSuccess={handleFormSuccess}
         />
@@ -537,38 +574,17 @@ export default function ParametresPage() {
   );
 }
 
-// Composant Modal pour le formulaire des paramètres
-function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
+// Composant Modal pour le formulaire des affiliations
+function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
-    cle: parametre?.cle || '',
-    valeur: parametre?.valeur || '',
-    description: parametre?.description || '',
-    entite: parametre?.entite?.id || '',
-    modifiable: parametre?.modifiable ?? true
+    utilisateur: affiliation?.utilisateur?.id || '',
+    entite: affiliation?.entite?.id || '',
+    est_defaut: affiliation?.est_defaut || false,
+    actif: affiliation?.actif ?? true
   });
 
-  const [valeurType, setValeurType] = useState('texte');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  useEffect(() => {
-    // Déterminer le type de valeur
-    if (parametre) {
-      const val = parametre.valeur;
-      if (typeof val === 'boolean') {
-        setValeurType('boolean');
-        setFormData(prev => ({ ...prev, valeur: val }));
-      } else if (typeof val === 'number') {
-        setValeurType('nombre');
-        setFormData(prev => ({ ...prev, valeur: val }));
-      } else if (typeof val === 'object') {
-        setValeurType('json');
-        setFormData(prev => ({ ...prev, valeur: JSON.stringify(val, null, 2) }));
-      } else {
-        setValeurType('texte');
-      }
-    }
-  }, [parametre]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -576,56 +592,22 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
     setError(null);
 
     // Validation
-    if (!formData.cle) {
-      setError('La clé est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.valeur) {
-      setError('La valeur est obligatoire');
+    if (!formData.utilisateur || !formData.entite) {
+      setError('L\'utilisateur et l\'entité sont obligatoires');
       setLoading(false);
       return;
     }
 
     try {
-      // Préparer la valeur selon le type
-      let valeurFinale = formData.valeur;
+      const url = affiliation 
+        ? `/utilisateur-entites/${affiliation.id}/`
+        : `/utilisateur-entites/`;
       
-      if (valeurType === 'nombre') {
-        valeurFinale = parseFloat(formData.valeur);
-        if (isNaN(valeurFinale)) {
-          setError('La valeur doit être un nombre valide');
-          setLoading(false);
-          return;
-        }
-      } else if (valeurType === 'boolean') {
-        valeurFinale = formData.valeur === 'true';
-      } else if (valeurType === 'json') {
-        try {
-          valeurFinale = JSON.parse(formData.valeur);
-        } catch (err) {
-          setError('JSON invalide');
-          setLoading(false);
-          return;
-        }
-      }
-
-      const payload = {
-        ...formData,
-        valeur: valeurFinale,
-        entite: formData.entite || null
-      };
-
-      const url = parametre 
-        ? `/parametres/${parametre.id}/`
-        : `/parametres/`;
-      
-      const method = parametre ? 'PUT' : 'POST';
+      const method = affiliation ? 'PUT' : 'POST';
 
       await apiClient.request(url, {
         method: method,
-        body: JSON.stringify(payload),
+        body: JSON.stringify(formData),
         headers: {
           'Content-Type': 'application/json'
         }
@@ -647,62 +629,12 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
     }));
   };
 
-  const renderValeurInput = () => {
-    switch (valeurType) {
-      case 'boolean':
-        return (
-          <select
-            value={formData.valeur}
-            onChange={(e) => handleChange('valeur', e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="true">True</option>
-            <option value="false">False</option>
-          </select>
-        );
-      
-      case 'nombre':
-        return (
-          <input
-            type="number"
-            step="any"
-            value={formData.valeur}
-            onChange={(e) => handleChange('valeur', e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="0.00"
-          />
-        );
-      
-      case 'json':
-        return (
-          <textarea
-            value={formData.valeur}
-            onChange={(e) => handleChange('valeur', e.target.value)}
-            rows={6}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-            placeholder='{"key": "value"}'
-          />
-        );
-      
-      default:
-        return (
-          <textarea
-            value={formData.valeur}
-            onChange={(e) => handleChange('valeur', e.target.value)}
-            rows={3}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Valeur du paramètre..."
-          />
-        );
-    }
-  };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
-            {parametre ? 'Modifier le paramètre' : 'Créer un nouveau paramètre'}
+            {affiliation ? 'Modifier l\'affiliation' : 'Créer une nouvelle affiliation'}
           </h2>
         </div>
         
@@ -719,124 +651,115 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Clé */}
+            {/* Utilisateur */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Clé *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.cle}
-                onChange={(e) => handleChange('cle', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                placeholder="NOM_DU_PARAMETRE"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Identifiant unique en majuscules
-              </p>
-            </div>
-            
-            {/* Type de valeur */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Type de valeur
+                Utilisateur *
               </label>
               <select
-                value={valeurType}
-                onChange={(e) => setValeurType(e.target.value)}
+                required
+                value={formData.utilisateur}
+                onChange={(e) => handleChange('utilisateur', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="texte">Texte</option>
-                <option value="nombre">Nombre</option>
-                <option value="boolean">Booléen</option>
-                <option value="json">JSON</option>
+                <option value="">Sélectionnez un utilisateur</option>
+                {utilisateurs.map(utilisateur => (
+                  <option key={utilisateur.id} value={utilisateur.id}>
+                    {utilisateur.email} ({utilisateur.username})
+                  </option>
+                ))}
               </select>
             </div>
             
-            {/* Portée */}
+            {/* Entité */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Portée
+                Entité *
               </label>
               <select
+                required
                 value={formData.entite}
                 onChange={(e) => handleChange('entite', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">Paramètre global</option>
+                <option value="">Sélectionnez une entité</option>
                 {entites.map(entite => (
                   <option key={entite.id} value={entite.id}>
                     {entite.raison_sociale}
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Vide = paramètre global
-              </p>
             </div>
             
-            {/* Modifiable */}
-            <div className="flex items-end">
+            {/* Statut actif */}
+            <div>
               <label className="flex items-center space-x-3">
                 <input
                   type="checkbox"
-                  checked={formData.modifiable}
-                  onChange={(e) => handleChange('modifiable', e.target.checked)}
+                  checked={formData.actif}
+                  onChange={(e) => handleChange('actif', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm font-medium text-gray-700">
-                  Paramètre modifiable
+                  Affiliation active
                 </span>
               </label>
+              <p className="text-xs text-gray-500 mt-1">
+                L'utilisateur pourra accéder à cette entité
+              </p>
             </div>
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description *
-            </label>
-            <textarea
-              required
-              value={formData.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              rows={2}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Description détaillée du paramètre..."
-            />
-          </div>
-
-          {/* Valeur */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Valeur *
-            </label>
-            {renderValeurInput()}
+            
+            {/* Entité par défaut */}
+            <div>
+              <label className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={formData.est_defaut}
+                  onChange={(e) => handleChange('est_defaut', e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Entité par défaut
+                </span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Cette entité sera sélectionnée par défaut pour l'utilisateur
+              </p>
+            </div>
           </div>
 
           {/* Aperçu */}
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu du paramètre</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu de l'affiliation</h3>
             <div className="space-y-2 text-sm">
-              <div><strong>Clé:</strong> {formData.cle || 'Non défini'}</div>
-              <div><strong>Valeur:</strong> 
-                <span className="ml-2 bg-gray-100 px-2 py-1 rounded text-xs font-mono">
-                  {formData.valeur || 'Non défini'}
-                </span>
+              <div>
+                <strong>Utilisateur:</strong> {
+                  utilisateurs.find(u => u.id === formData.utilisateur)?.email || 'Non défini'
+                }
               </div>
-              <div><strong>Portée:</strong> {
-                formData.entite 
-                  ? entites.find(e => e.id == formData.entite)?.raison_sociale 
-                  : 'Global'
-              }</div>
-              <div><strong>Modifiable:</strong> 
+              <div>
+                <strong>Entité:</strong> {
+                  entites.find(e => e.id === formData.entite)?.raison_sociale || 'Non défini'
+                }
+              </div>
+              <div>
+                <strong>Statut:</strong> 
                 <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                  formData.modifiable 
+                  formData.actif 
                     ? 'bg-green-100 text-green-800' 
                     : 'bg-red-100 text-red-800'
                 }`}>
-                  {formData.modifiable ? 'Oui' : 'Non'}
+                  {formData.actif ? 'Actif' : 'Inactif'}
+                </span>
+              </div>
+              <div>
+                <strong>Par défaut:</strong> 
+                <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                  formData.est_defaut 
+                    ? 'bg-blue-100 text-blue-800' 
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {formData.est_defaut ? 'Oui' : 'Non'}
                 </span>
               </div>
             </div>
@@ -862,7 +785,7 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
               )}
-              <span>{loading ? 'Sauvegarde...' : parametre ? 'Mettre à jour' : 'Créer le paramètre'}</span>
+              <span>{loading ? 'Sauvegarde...' : affiliation ? 'Mettre à jour' : 'Créer l\'affiliation'}</span>
             </button>
           </div>
         </form>
