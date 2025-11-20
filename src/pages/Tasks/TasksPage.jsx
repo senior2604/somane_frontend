@@ -114,7 +114,7 @@ export default function TasksPage() {
   const handleDelete = async (tache) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer la tâche "${tache.nom}" ?`)) {
       try {
-        await apiClient.delete(`/taches-automatiques/${tache.id}/`);
+        await apiClient.delete(`/taches/${tache.id}/`);
         fetchTaches();
       } catch (err) {
         setError('Erreur lors de la suppression');
@@ -125,7 +125,7 @@ export default function TasksPage() {
 
   const handleToggleActive = async (tache) => {
     try {
-      await apiClient.patch(`/taches-automatiques/${tache.id}/`, {
+      await apiClient.patch(`/taches/${tache.id}/`, {
         active: !tache.active
       });
       fetchTaches();
@@ -138,7 +138,7 @@ export default function TasksPage() {
   const handleExecuteNow = async (tache) => {
     try {
       setError(null);
-      await apiClient.post(`/taches-automatiques/${tache.id}/executer-now/`);
+      await apiClient.post(`/taches/${tache.id}/executer-now/`);
       // Recharger pour avoir la date de dernière exécution
       setTimeout(() => fetchTaches(), 1000);
     } catch (err) {
@@ -675,7 +675,7 @@ export default function TasksPage() {
   );
 }
 
-// Composant Modal pour le formulaire des tâches
+// Composant Modal pour le formulaire des tâches - VERSION CORRIGÉE
 function TacheFormModal({ tache, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     nom: tache?.nom || '',
@@ -684,11 +684,59 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
     frequence: tache?.frequence || 'daily',
     heure_execution: tache?.heure_execution || '00:00',
     entite: tache?.entite?.id || '',
-    active: tache?.active ?? true
+    active: tache?.active ?? true,
+    description: tache?.description || ''
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Fonction pour calculer la prochaine exécution
+  const calculerProchaineExecution = (frequence, heureExecution) => {
+    const maintenant = new Date();
+    let prochaine = new Date();
+    
+    switch (frequence) {
+      case 'hourly':
+        prochaine.setHours(prochaine.getHours() + 1);
+        prochaine.setMinutes(0);
+        prochaine.setSeconds(0);
+        prochaine.setMilliseconds(0);
+        break;
+      case 'daily':
+        prochaine.setDate(prochaine.getDate() + 1);
+        if (heureExecution) {
+          const [heures, minutes] = heureExecution.split(':');
+          prochaine.setHours(parseInt(heures), parseInt(minutes), 0, 0);
+        } else {
+          prochaine.setHours(0, 0, 0, 0);
+        }
+        break;
+      case 'weekly':
+        prochaine.setDate(prochaine.getDate() + 7);
+        if (heureExecution) {
+          const [heures, minutes] = heureExecution.split(':');
+          prochaine.setHours(parseInt(heures), parseInt(minutes), 0, 0);
+        } else {
+          prochaine.setHours(0, 0, 0, 0);
+        }
+        break;
+      case 'monthly':
+        prochaine.setMonth(prochaine.getMonth() + 1);
+        if (heureExecution) {
+          const [heures, minutes] = heureExecution.split(':');
+          prochaine.setHours(parseInt(heures), parseInt(minutes), 0, 0);
+        } else {
+          prochaine.setHours(0, 0, 0, 0);
+        }
+        break;
+      default:
+        prochaine.setDate(prochaine.getDate() + 1);
+        prochaine.setHours(0, 0, 0, 0);
+    }
+    
+    return prochaine.toISOString();
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -703,18 +751,33 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
     }
 
     try {
+      // Calculer la prochaine exécution
+      const prochaineExecution = calculerProchaineExecution(
+        formData.frequence, 
+        formData.heure_execution
+      );
+
       const payload = {
-        ...formData,
-        entite: formData.entite || null
+        nom: formData.nom,
+        modele_cible: formData.modele_cible,
+        fonction: formData.fonction,
+        frequence: formData.frequence,
+        heure_execution: formData.heure_execution || null,
+        entite: formData.entite || null,
+        active: formData.active,
+        prochaine_execution: prochaineExecution, // CHAMP OBLIGATOIRE AJOUTÉ
+        derniere_execution: null
       };
 
+      console.log('📤 Payload envoyé:', payload);
+
       const url = tache 
-        ? `/taches-automatiques/${tache.id}/`
-        : `/taches-automatiques/`;
+        ? `/taches/${tache.id}/`
+        : `/taches/`;
       
       const method = tache ? 'PUT' : 'POST';
 
-      await apiClient.request(url, {
+      const response = await apiClient.request(url, {
         method: method,
         body: JSON.stringify(payload),
         headers: {
@@ -722,9 +785,19 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
         }
       });
       
+      console.log('✅ Tâche sauvegardée:', response);
       onSuccess();
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
+      console.error('❌ Erreur sauvegarde:', err);
+      
+      // Affiche plus de détails sur l'erreur
+      let errorMessage = 'Erreur lors de la sauvegarde';
+      if (err.response?.data) {
+        errorMessage = `Erreur ${err.response.status}: ${JSON.stringify(err.response.data)}`;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -907,6 +980,9 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
                   {formData.active ? 'Active' : 'Inactive'}
                 </span>
               </div>
+              <div><strong>Prochaine exécution:</strong> {
+                new Date(calculerProchaineExecution(formData.frequence, formData.heure_execution)).toLocaleString('fr-FR')
+              }</div>
             </div>
           </div>
           
@@ -952,7 +1028,7 @@ function LogsModal({ tache, onClose }) {
     try {
       setLoading(true);
       // Récupérer les logs de la tâche
-      const response = await apiClient.get(`/taches-automatiques/${tache.id}/logs/`);
+      const response = await apiClient.get(`/taches/${tache.id}/logs/`);
       setLogs(Array.isArray(response) ? response : []);
     } catch (err) {
       console.error('Error fetching logs:', err);
