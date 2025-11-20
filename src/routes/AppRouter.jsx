@@ -4,7 +4,7 @@ import DashboardPage from "../pages/Dashboard/DashboardPage";
 import UsersPage from "../pages/Users/UsersPage";
 import EntitiesPage from "../pages/Entities/EntitiesPage";
 import PartnersPage from "../pages/Partners/PartnersPage";
-import GroupsPage from "../pages/Groups/GroupsPage";
+import GroupesPage from "../pages/Groupes/GroupesPage";
 import PermissionsPage from "../pages/Permissions/PermissionsPage";
 import SettingsPage from "../pages/Settings/SettingsPage";
 import JournalPage from "../pages/Journal/JournalPage";
@@ -34,10 +34,10 @@ export default function AppRouter() {
           <Route path="/entities" element={<EntitiesPage />} />
           <Route path="/partners" element={<PartnersPage />} />
           <Route path="/users" element={<UsersPage />} />
-          <Route path="/userentities" element={<UserEntitiesPage/>}/> {/* ✅ CORRIGÉ */}
+          <Route path="/userentities" element={<UserEntitiesPage />} /> {/* SEULE CORRECTION */}
           
           {/* Gestion des accès */}
-          <Route path="/groups" element={<GroupsPage />} />
+          <Route path="/groupes" element={<GroupesPage />} />
           <Route path="/permissions" element={<PermissionsPage />} />
           
           {/* Configuration */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../services/apiClient';
 
 export default function GroupsPage() {
-  const [groups, setGroups] = useState([]);
+  const [groupes, setGroupes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -13,30 +13,39 @@ export default function GroupsPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchGroups();
+    fetchGroupes();
   }, []);
 
-  const fetchGroups = async () => {
+  const fetchGroupes = async () => {
     try {
-      const response = await apiClient.get('/auth/groups/');
+      setLoading(true);
+      setError(null);
+
+      const response = await apiClient.get('/groupes/'); // ✅ CORRIGÉ
       
+      let groupesData = [];
       if (Array.isArray(response)) {
-        setGroups(response);
+        groupesData = response;
       } else if (response && Array.isArray(response.results)) {
-        setGroups(response.results);
+        groupesData = response.results;
+      } else if (response && Array.isArray(response.data)) {
+        groupesData = response.data;
       } else {
         setError('Format de données inattendu');
+        groupesData = [];
       }
+
+      setGroupes(groupesData);
     } catch (err) {
+      console.error('❌ Erreur lors du chargement des groupes:', err);
       setError('Erreur lors du chargement des groupes');
-      console.error('Error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   // Filtrage et recherche
-  const filteredGroups = groups.filter(group => 
+  const filteredGroupes = groupes.filter(group => 
     group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (group.description && group.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -44,8 +53,8 @@ export default function GroupsPage() {
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentGroups = filteredGroups.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredGroups.length / itemsPerPage);
+  const currentGroupes = filteredGroupes.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredGroupes.length / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -66,8 +75,8 @@ export default function GroupsPage() {
   const handleDelete = async (group) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer le groupe "${group.name}" ?`)) {
       try {
-        await apiClient.delete(`/auth/groups/${group.id}/`);
-        fetchGroups();
+        await apiClient.delete(`/groupes/${group.id}/`); // ✅ CORRIGÉ
+        fetchGroupes();
       } catch (err) {
         setError('Erreur lors de la suppression');
         console.error('Error deleting group:', err);
@@ -78,28 +87,19 @@ export default function GroupsPage() {
   const handleFormSuccess = () => {
     setShowForm(false);
     setEditingGroup(null);
-    fetchGroups();
+    fetchGroupes();
+  };
+
+  const handleRetry = () => {
+    fetchGroupes();
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Chargement des groupes...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
       <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <span className="text-red-800">{error}</span>
-          </div>
+        <div className="flex justify-center items-center p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2">Chargement des groupes...</span>
         </div>
       </div>
     );
@@ -111,19 +111,51 @@ export default function GroupsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Groupes d'Utilisateurs</h1>
           <p className="text-gray-600 mt-1">
-            {filteredGroups.length} groupe(s) trouvé(s)
+            {filteredGroupes.length} groupe(s) trouvé(s)
+            {searchTerm && ' • Recherche active'}
           </p>
         </div>
-        <button 
-          onClick={handleNewGroup}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nouveau Groupe
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={handleRetry}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Actualiser
+          </button>
+          <button 
+            onClick={handleNewGroup}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nouveau Groupe
+          </button>
+        </div>
       </div>
+
+      {/* Message d'erreur */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <span className="text-red-800 font-medium">{error}</span>
+            </div>
+            <button
+              onClick={handleRetry}
+              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filtres et Recherche */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
@@ -149,6 +181,26 @@ export default function GroupsPage() {
               Réinitialiser
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-blue-600">{groupes.length}</div>
+          <div className="text-sm text-gray-600">Total des groupes</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-green-600">
+            {groupes.filter(g => g.modules_autorises && g.modules_autorises.length > 0).length}
+          </div>
+          <div className="text-sm text-gray-600">Groupes avec permissions</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-purple-600">
+            {groupes.reduce((total, group) => total + (group.user_count || 0), 0)}
+          </div>
+          <div className="text-sm text-gray-600">Utilisateurs totaux</div>
         </div>
       </div>
 
@@ -179,14 +231,14 @@ export default function GroupsPage() {
               </tr>
             </thead>
             <tbody>
-              {currentGroups.length === 0 ? (
+              {currentGroupes.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {groups.length === 0 ? 'Aucun groupe trouvé' : 'Aucun résultat pour votre recherche'}
+                    {groupes.length === 0 ? 'Aucun groupe trouvé' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
               ) : (
-                currentGroups.map((group, index) => (
+                currentGroupes.map((group, index) => (
                   <tr 
                     key={group.id} 
                     className={`${
@@ -255,7 +307,7 @@ export default function GroupsPage() {
         </div>
 
         {/* Pagination */}
-        {filteredGroups.length > 0 && (
+        {filteredGroupes.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -276,7 +328,7 @@ export default function GroupsPage() {
                   <option value={50}>50</option>
                 </select>
                 <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredGroups.length)} sur {filteredGroups.length}
+                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredGroupes.length)} sur {filteredGroupes.length}
                 </span>
               </div>
 
@@ -387,8 +439,8 @@ function GroupFormModal({ group, onClose, onSuccess }) {
 
     try {
       const url = group 
-        ? `/auth/groups/${group.id}/`
-        : `/auth/groups/`;
+        ? `/groupes/${group.id}/` // ✅ CORRIGÉ
+        : `/groupes/`; // ✅ CORRIGÉ
       
       const method = group ? 'PUT' : 'POST';
 

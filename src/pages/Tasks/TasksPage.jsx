@@ -28,7 +28,7 @@ export default function TasksPage() {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/taches-automatiques/');
+      const response = await apiClient.get('/taches/');
       
       let tachesData = [];
       if (Array.isArray(response)) {

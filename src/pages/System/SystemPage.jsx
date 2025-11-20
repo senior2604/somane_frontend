@@ -4,6 +4,7 @@ import { apiClient } from '../../services/apiClient';
 export default function SystemPage() {
   const [infoSysteme, setInfoSysteme] = useState(null);
   const [statistiques, setStatistiques] = useState(null);
+  const [statistiquesError, setStatistiquesError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
@@ -19,7 +20,7 @@ export default function SystemPage() {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/informations-systeme/');
+      const response = await apiClient.get('/informations/');
       setInfoSysteme(response);
     } catch (err) {
       console.error('❌ Erreur lors du chargement des informations système:', err);
@@ -31,18 +32,38 @@ export default function SystemPage() {
 
   const fetchStatistiques = async () => {
     try {
-      const response = await apiClient.get('/statistiques-systeme/');
-      setStatistiques(response);
+      setStatistiquesError(null);
+      
+      // Essayer de récupérer les données de différentes sources
+      let statsData = null;
+      
+      try {
+        // Essayer d'abord les tâches
+        const tasksResponse = await apiClient.get('/taches/');
+        if (tasksResponse && Array.isArray(tasksResponse)) {
+          statsData = {
+            taches_actives: tasksResponse.filter(t => t.actif).length,
+            total_taches: tasksResponse.length
+          };
+        }
+      } catch (tasksErr) {
+        console.log('Aucune donnée de tâches disponible');
+      }
+      
+      // Si pas de données, on laisse statistiques à null
+      setStatistiques(statsData);
+      
     } catch (err) {
-      console.error('Error fetching statistiques:', err);
-      setStatistiques(null);
+      console.error('Erreur lors du chargement des statistiques:', err);
+      setStatistiquesError('Les statistiques système ne sont pas disponibles');
+      setStatistiques(null); // Explicitement null en cas d'erreur
     }
   };
 
   const handleChangerEtat = async (nouvelEtat) => {
     try {
       setError(null);
-      await apiClient.patch('/informations-systeme/', {
+      await apiClient.patch('/informations/', {
         etat_systeme: nouvelEtat,
         message_maintenance: maintenanceMessage
       });
@@ -110,6 +131,11 @@ export default function SystemPage() {
     }
   };
 
+  // Fonction pour afficher les valeurs de statistiques avec fallback
+  const getStatValue = (key, fallback = 'N/A') => {
+    return statistiques && statistiques[key] !== undefined ? statistiques[key] : fallback;
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -143,7 +169,7 @@ export default function SystemPage() {
         </div>
       </div>
 
-      {/* Message d'erreur */}
+      {/* Message d'erreur principal */}
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
@@ -163,6 +189,18 @@ export default function SystemPage() {
         </div>
       )}
 
+      {/* Message d'avertissement pour les statistiques */}
+      {statistiquesError && (
+        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <span className="text-yellow-800">{statistiquesError}</span>
+          </div>
+        </div>
+      )}
+
       {/* Carte d'état du système */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* État du système */}
@@ -178,7 +216,7 @@ export default function SystemPage() {
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Version</span>
               <span className="text-sm font-mono font-medium text-gray-800">
-                v{infoSysteme?.version}
+                v{infoSysteme?.version || 'N/A'}
               </span>
             </div>
             
@@ -241,206 +279,137 @@ export default function SystemPage() {
           </div>
         </div>
 
-        {/* Performances */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Performances</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm text-gray-600">Utilisation CPU</span>
-                <span className="text-sm font-medium text-gray-800">
-                  {statistiques?.cpu_usage || 0}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${Math.min(statistiques?.cpu_usage || 0, 100)}%` }}
-                ></div>
+        {/* Performances - AFFICHÉ UNIQUEMENT SI DES STATISTIQUES SONT DISPONIBLES */}
+        {statistiques && (
+          <>
+            {/* Performances */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-6">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Performances</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600">Utilisation CPU</span>
+                    <span className="text-sm font-medium text-gray-800">
+                      {getStatValue('cpu_usage', 0)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(getStatValue('cpu_usage', 0), 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600">Utilisation Mémoire</span>
+                    <span className="text-sm font-medium text-gray-800">
+                      {getStatValue('memory_usage', 0)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(getStatValue('memory_usage', 0), 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600">Espace disque</span>
+                    <span className="text-sm font-medium text-gray-800">
+                      {getStatValue('disk_usage', 0)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(getStatValue('disk_usage', 0), 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+                
+                <div className="pt-2 border-t border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Temps de réponse</span>
+                    <span className="text-sm font-medium text-gray-800">
+                      {getStatValue('response_time', 0)}ms
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-            
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm text-gray-600">Utilisation Mémoire</span>
-                <span className="text-sm font-medium text-gray-800">
-                  {statistiques?.memory_usage || 0}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${Math.min(statistiques?.memory_usage || 0, 100)}%` }}
-                ></div>
-              </div>
-            </div>
-            
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm text-gray-600">Espace disque</span>
-                <span className="text-sm font-medium text-gray-800">
-                  {statistiques?.disk_usage || 0}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${Math.min(statistiques?.disk_usage || 0, 100)}%` }}
-                ></div>
-              </div>
-            </div>
-            
-            <div className="pt-2 border-t border-gray-200">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Temps de réponse</span>
-                <span className="text-sm font-medium text-gray-800">
-                  {statistiques?.response_time || 0}ms
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Statistiques d'usage */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Statistiques d'Usage</h2>
-          
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Utilisateurs actifs</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.utilisateurs_actifs || 0}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Entités</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.nombre_entites || 0}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Partenaires</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.nombre_partenaires || 0}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Banques</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.nombre_banques || 0}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Tâches actives</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.taches_actives || 0}
-              </span>
-            </div>
-            
-            <div className="pt-2 border-t border-gray-200">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Requêtes aujourd'hui</span>
-                <span className="text-sm font-medium text-gray-800">
-                  {statistiques?.requetes_aujourdhui || 0}
-                </span>
+            {/* Statistiques d'usage */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-6">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Statistiques d'Usage</h2>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Utilisateurs actifs</span>
+                  <span className="text-sm font-medium text-gray-800">
+                    {getStatValue('utilisateurs_actifs', 0)}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Tâches actives</span>
+                  <span className="text-sm font-medium text-gray-800">
+                    {getStatValue('taches_actives', 0)}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total tâches</span>
+                  <span className="text-sm font-medium text-gray-800">
+                    {getStatValue('total_taches', 0)}
+                  </span>
+                </div>
+                
+                <div className="pt-2 border-t border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Requêtes aujourd'hui</span>
+                    <span className="text-sm font-medium text-gray-800">
+                      {getStatValue('requetes_aujourdhui', 0)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
+          </>
+        )}
+
+        {/* Message si pas de statistiques */}
+        {!statistiques && !statistiquesError && (
+          <div className="lg:col-span-2 bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
+            <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Statistiques non disponibles</h3>
+            <p className="text-gray-600 mb-4">
+              Les données de performance et d'usage ne sont pas accessibles pour le moment.
+            </p>
+            <button
+              onClick={fetchStatistiques}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Réessayer
+            </button>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Cartes supplémentaires */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Base de données */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Base de Données</h2>
-          
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Type</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.db_type || 'PostgreSQL'}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Version</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.db_version || 'N/A'}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Taille</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.db_size || '0'} MB
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Connexions actives</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.db_connections || 0}
-              </span>
-            </div>
+      {/* Logs système récents - AFFICHÉ UNIQUEMENT SI DES LOGS SONT DISPONIBLES */}
+      {statistiques?.logs_recents && statistiques.logs_recents.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-800">Activité Récente</h2>
           </div>
-        </div>
-
-        {/* Sécurité */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Sécurité</h2>
           
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Dernière sauvegarde</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.derniere_sauvegarde ? 
-                  new Date(statistiques.derniere_sauvegarde).toLocaleString('fr-FR') : 'N/A'
-                }
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Tentatives échouées (24h)</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.tentatives_connexion_echouees || 0}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Certificat SSL</span>
-              <span className={`text-sm font-medium ${
-                statistiques?.ssl_valide ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {statistiques?.ssl_valide ? 'Valide' : 'Expiré'}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Dernier scan sécurité</span>
-              <span className="text-sm font-medium text-gray-800">
-                {statistiques?.dernier_scan_securite ? 
-                  new Date(statistiques.dernier_scan_securite).toLocaleDateString('fr-FR') : 'N/A'
-                }
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Logs système récents */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-800">Activité Récente</h2>
-        </div>
-        
-        <div className="p-6">
-          {statistiques?.logs_recents && statistiques.logs_recents.length > 0 ? (
+          <div className="p-6">
             <div className="space-y-3">
               {statistiques.logs_recents.slice(0, 5).map((log, index) => (
                 <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -458,13 +427,9 @@ export default function SystemPage() {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="text-center text-gray-500 py-4">
-              Aucune activité récente
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Modal de maintenance */}
       {showMaintenanceModal && (

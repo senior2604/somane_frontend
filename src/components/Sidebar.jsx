@@ -59,7 +59,7 @@ export default function Sidebar() {
       name: "Sécurité",
       icon: <FiShield />,
       items: [
-        { name: "Groupes", path: "/groups", icon: <FiShield /> },
+        { name: "Groupes", path: "/groupes", icon: <FiShield /> },
         { name: "Permissions", path: "/permissions", icon: <FiList /> },
       ]
     },

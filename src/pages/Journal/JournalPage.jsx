@@ -37,7 +37,7 @@ export default function JournalPage() {
       if (dateDebut) params.append('date_debut', dateDebut);
       if (dateFin) params.append('date_fin', dateFin);
 
-      const url = `/journal/?${params.toString()}`;
+      const url = `/journals/?${params.toString()}`; // ✅ CORRIGÉ : /journals/ au lieu de /journal/
       const response = await apiClient.get(url);
       
       let journalData = [];
@@ -61,7 +61,7 @@ export default function JournalPage() {
 
   const fetchUtilisateurs = async () => {
     try {
-      const response = await apiClient.get('/utilisateurs/');
+      const response = await apiClient.get('/users/'); // ✅ CORRIGÉ : /users/ au lieu de /utilisateurs/
       
       let utilisateursData = [];
       if (Array.isArray(response)) {
@@ -165,7 +165,7 @@ export default function JournalPage() {
       if (dateFin) params.append('date_fin', dateFin);
       params.append('format', 'csv');
 
-      const url = `/journal/export/?${params.toString()}`;
+      const url = `/journals/export/?${params.toString()}`; // ✅ CORRIGÉ : /journals/export/ au lieu de /journal/export/
       const response = await apiClient.get(url, { responseType: 'blob' });
       
       // Télécharger le fichier
@@ -402,7 +402,7 @@ export default function JournalPage() {
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
           <div className="text-2xl font-bold text-red-600">
-            {fetchJournal.filter(j => j.statut === 'echec').length}
+            {journal.filter(j => j.statut === 'echec').length}  {/* ✅ CORRIGÉ : journal au lieu de fetchJournal */}
           </div>
           <div className="text-sm text-gray-600">Échecs</div>
         </div>

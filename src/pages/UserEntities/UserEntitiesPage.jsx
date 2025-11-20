@@ -27,7 +27,7 @@ export default function UtilisateurEntitePage() {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/utilisateur-entites/');
+      const response = await apiClient.get('/utilisateurentites/');
       
       let affiliationsData = [];
       if (Array.isArray(response)) {

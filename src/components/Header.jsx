@@ -11,7 +11,7 @@ export default function Header() {
       '/users': 'Utilisateurs',
       '/entities': 'Entités',
       '/partners': 'Partenaires',
-      '/groups': 'Groupes',
+      '/groupes': 'Groupes',
       '/settings': 'Paramètres',
       '/modules': 'Modules',
       '/journal': 'Journal',
