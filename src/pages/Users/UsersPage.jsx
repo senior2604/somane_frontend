@@ -544,7 +544,7 @@ export default function UtilisateurPage() {
   );
 }
 
-// Composant Modal pour le formulaire des utilisateurs (SANS CHAMPS PASSWORD)
+// Composant Modal pour le formulaire des utilisateurs - VERSION CORRIGÉE
 function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     email: utilisateur?.email || '',
@@ -552,7 +552,8 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
     first_name: utilisateur?.first_name || '',
     last_name: utilisateur?.last_name || '',
     telephone: utilisateur?.telephone || '',
-    statut: utilisateur?.statut || 'actif'
+    statut: utilisateur?.statut || 'actif',
+    password: '' // AJOUTÉ pour la création
   });
 
   const [loading, setLoading] = useState(false);
@@ -563,46 +564,76 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
     setLoading(true);
     setError(null);
 
-    // Validation simplifiée (pas de password)
-    if (!formData.email || !formData.username) {
-      setError('L\'email et le nom d\'utilisateur sont obligatoires');
-      setLoading(false);
-      return;
-    }
-
     try {
-      const url = utilisateur 
-        ? `/users/${utilisateur.id}/`
-        : '/users/';
-      
-      const method = utilisateur ? 'PUT' : 'POST';
+      if (utilisateur) {
+        // MODIFICATION - Utiliser le serializer standard
+        const submitData = {
+          email: formData.email,
+          username: formData.username,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          telephone: formData.telephone,
+          statut: formData.statut
+        };
 
-      // Données sans mot de passe
-      const submitData = {
-        email: formData.email,
-        username: formData.username,
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        telephone: formData.telephone,
-        statut: formData.statut
-      };
+        const response = await apiClient.put(`/users/${utilisateur.id}/`, submitData);
+        console.log('✅ Utilisateur modifié:', response);
+        
+      } else {
+        // CRÉATION - Utiliser le endpoint Djoser avec password
+        const submitData = {
+          email: formData.email,
+          username: formData.username,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          telephone: formData.telephone,
+          password: formData.password, // OBLIGATOIRE pour la création
+          statut: formData.statut
+        };
 
-      await apiClient.request(url, {
-        method: method,
-        body: JSON.stringify(submitData),
-        headers: {
-          'Content-Type': 'application/json'
+        console.log('📤 Création utilisateur:', submitData);
+
+        // ESSAI 1: Utiliser le endpoint standard
+        try {
+          const response = await apiClient.post('/users/', submitData);
+          console.log('✅ Utilisateur créé (standard):', response);
+          
+        } catch (err) {
+          console.error('❌ Erreur endpoint standard:', err);
+          
+          // ESSAI 2: Utiliser le endpoint Djoser si le premier échoue
+          try {
+            console.log('🔄 Essai avec endpoint auth...');
+            const response = await apiClient.post('/auth/users/', submitData);
+            console.log('✅ Utilisateur créé (Djoser):', response);
+            
+          } catch (err2) {
+            console.error('❌ Erreur endpoint Djoser:', err2);
+            throw err2; // Relancer l'erreur
+          }
         }
-      });
-      
-      // Message de succès spécifique pour la création
-      if (!utilisateur) {
-        alert('✅ Utilisateur créé avec succès !\n\nUn email d\'activation a été envoyé pour définir le mot de passe.');
       }
       
       onSuccess();
+      
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
+      console.error('❌ Erreur sauvegarde utilisateur:', err);
+      
+      let errorMessage = 'Erreur lors de la sauvegarde';
+      if (err.response?.data) {
+        // Afficher les détails de validation Django
+        const errorData = err.response.data;
+        if (typeof errorData === 'object') {
+          errorMessage = Object.entries(errorData)
+            .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+            .join('\n');
+        } else {
+          errorMessage = JSON.stringify(errorData);
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -631,7 +662,7 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
               <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
-              <span className="text-red-800 text-sm">{error}</span>
+              <span className="text-red-800 text-sm whitespace-pre-line">{error}</span>
             </div>
           </div>
         )}
@@ -667,6 +698,27 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
                 placeholder="nom.utilisateur"
               />
             </div>
+
+            {/* Mot de passe (seulement pour la création) */}
+            {!utilisateur && (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Mot de passe *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={formData.password}
+                  onChange={(e) => handleChange('password', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Mot de passe sécurisé"
+                  minLength={8}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Minimum 8 caractères
+                </p>
+              </div>
+            )}
             
             {/* Prénom */}
             <div>
@@ -726,29 +778,13 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Information sur l'activation */}
-          {!utilisateur && (
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <div className="flex items-start">
-                <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                <div>
-                  <h4 className="text-sm font-medium text-blue-800">Activation du compte</h4>
-                  <p className="text-sm text-blue-700 mt-1">
-                    Un email d'activation sera envoyé à l'utilisateur pour qu'il définisse son propre mot de passe.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Aperçu */}
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
             <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu de l'utilisateur</h3>
             <div className="space-y-2 text-sm">
               <div><strong>Email:</strong> {formData.email || 'Non défini'}</div>
               <div><strong>Nom d'utilisateur:</strong> {formData.username || 'Non défini'}</div>
+              {!utilisateur && <div><strong>Mot de passe:</strong> {formData.password ? '••••••••' : 'Non défini'}</div>}
               <div><strong>Nom complet:</strong> {formData.first_name} {formData.last_name}</div>
               <div><strong>Téléphone:</strong> {formData.telephone || 'Non défini'}</div>
               <div>

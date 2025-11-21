@@ -3,6 +3,7 @@ import { apiClient } from '../../services/apiClient';
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState([]);
+  const [pays, setPays] = useState([]); // ← AJOUTÉ
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -15,6 +16,7 @@ export default function PartnersPage() {
 
   useEffect(() => {
     fetchPartners();
+    fetchPays(); // ← AJOUTÉ
   }, []);
 
   const fetchPartners = async () => {
@@ -36,10 +38,24 @@ export default function PartnersPage() {
     }
   };
 
+  // AJOUTÉ : Récupérer la liste des pays
+  const fetchPays = async () => {
+    try {
+      const response = await apiClient.get('/pays/');
+      if (Array.isArray(response)) {
+        setPays(response);
+      } else if (response && Array.isArray(response.results)) {
+        setPays(response.results);
+      }
+    } catch (err) {
+      console.error('Erreur chargement pays:', err);
+    }
+  };
+
   // Filtrage et recherche
   const filteredPartners = partners.filter(partner => {
     const matchesSearch = partner.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         partner.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (partner.email && partner.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
                          partner.ville.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = !filterType || partner.type_partenaire === filterType;
     return matchesSearch && matchesType;
@@ -380,6 +396,7 @@ export default function PartnersPage() {
       {showForm && (
         <PartnerFormModal
           partner={editingPartner}
+          pays={pays} // ← AJOUTÉ
           onClose={() => {
             setShowForm(false);
             setEditingPartner(null);
@@ -391,8 +408,8 @@ export default function PartnersPage() {
   );
 }
 
-// Composant Modal pour le formulaire des partenaires
-function PartnerFormModal({ partner, onClose, onSuccess }) {
+// Composant Modal pour le formulaire des partenaires - VERSION CORRIGÉE
+function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     nom: partner?.nom || '',
     type_partenaire: partner?.type_partenaire || 'client',
@@ -404,7 +421,7 @@ function PartnerFormModal({ partner, onClose, onSuccess }) {
     code_postal: partner?.code_postal || '',
     ville: partner?.ville || '',
     region: partner?.region || '',
-    pays: partner?.pays || 'Togo',
+    pays: partner?.pays?.id || (pays.length > 0 ? pays[0].id : ''), // ← CORRIGÉ (ID au lieu du nom)
     telephone: partner?.telephone || '',
     email: partner?.email || '',
     site_web: partner?.site_web || '',
@@ -427,24 +444,62 @@ function PartnerFormModal({ partner, onClose, onSuccess }) {
     setLoading(true);
     setError(null);
 
+    // Validation des champs obligatoires
+    if (!formData.nom || !formData.adresse || !formData.ville || !formData.telephone || !formData.pays) {
+      setError('Veuillez remplir tous les champs obligatoires (*)');
+      setLoading(false);
+      return;
+    }
+
     try {
+      // Préparer le payload avec les champs requis
+      const payload = {
+        nom: formData.nom,
+        type_partenaire: formData.type_partenaire,
+        adresse: formData.adresse,
+        ville: formData.ville,
+        telephone: formData.telephone,
+        pays: formData.pays, // ← ID du pays (OBLIGATOIRE)
+        statut: formData.statut,
+        // Champs optionnels
+        registre_commerce: formData.registre_commerce || '',
+        numero_fiscal: formData.numero_fiscal || '',
+        securite_sociale: formData.securite_sociale || '',
+        complement_adresse: formData.complement_adresse || '',
+        code_postal: formData.code_postal || '',
+        region: formData.region || '',
+        email: formData.email || '',
+        site_web: formData.site_web || '',
+      };
+
+      console.log('📤 Payload partenaire:', payload);
+
       const url = partner 
         ? `/partenaires/${partner.id}/`
         : `/partenaires/`;
       
       const method = partner ? 'PUT' : 'POST';
 
-      await apiClient.request(url, {
+      const response = await apiClient.request(url, {
         method: method,
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
         headers: {
           'Content-Type': 'application/json'
         }
       });
       
+      console.log('✅ Partenaire sauvegardé:', response);
       onSuccess();
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
+      console.error('❌ Erreur sauvegarde partenaire:', err);
+      
+      let errorMessage = 'Erreur lors de la sauvegarde';
+      if (err.response?.data) {
+        errorMessage = `Erreur ${err.response.status}: ${JSON.stringify(err.response.data)}`;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -514,7 +569,7 @@ function PartnerFormModal({ partner, onClose, onSuccess }) {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Statut *</label>
                 <select
                   value={formData.statut}
                   onChange={(e) => handleChange('statut', e.target.value === 'true')}
@@ -628,14 +683,20 @@ function PartnerFormModal({ partner, onClose, onSuccess }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Pays</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-medium text-gray-700 mb-2">Pays *</label>
+                <select
+                  required
                   value={formData.pays}
-                  onChange={(e) => handleChange('pays', e.target.value)}
+                  onChange={(e) => handleChange('pays', parseInt(e.target.value))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Pays"
-                />
+                >
+                  <option value="">Sélectionnez un pays</option>
+                  {pays.map(paysItem => (
+                    <option key={paysItem.id} value={paysItem.id}>
+                      {paysItem.nom} ({paysItem.code_iso})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

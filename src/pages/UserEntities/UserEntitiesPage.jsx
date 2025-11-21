@@ -50,7 +50,7 @@ export default function UtilisateurEntitePage() {
 
   const fetchUtilisateurs = async () => {
     try {
-      const response = await apiClient.get('/utilisateurs/');
+      const response = await apiClient.get('/users/'); // ✅ CORRIGÉ
       
       let utilisateursData = [];
       if (Array.isArray(response)) {
@@ -132,7 +132,7 @@ export default function UtilisateurEntitePage() {
     
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer l'affiliation "${utilisateurNom} @ ${entiteNom}" ?`)) {
       try {
-        await apiClient.delete(`/utilisateur-entites/${affiliation.id}/`);
+        await apiClient.delete(`/utilisateurentites/${affiliation.id}/`); // ✅ CORRIGÉ
         fetchAffiliations();
       } catch (err) {
         setError('Erreur lors de la suppression');
@@ -143,7 +143,7 @@ export default function UtilisateurEntitePage() {
 
   const handleToggleActif = async (affiliation) => {
     try {
-      await apiClient.patch(`/utilisateur-entites/${affiliation.id}/`, {
+      await apiClient.patch(`/utilisateurentites/${affiliation.id}/`, { // ✅ CORRIGÉ
         actif: !affiliation.actif
       });
       fetchAffiliations();
@@ -161,13 +161,13 @@ export default function UtilisateurEntitePage() {
       );
       
       for (const aff of autresAffiliations) {
-        await apiClient.patch(`/utilisateur-entites/${aff.id}/`, {
+        await apiClient.patch(`/utilisateurentites/${aff.id}/`, { // ✅ CORRIGÉ
           est_defaut: false
         });
       }
       
       // Définir celle-ci comme défaut
-      await apiClient.patch(`/utilisateur-entites/${affiliation.id}/`, {
+      await apiClient.patch(`/utilisateurentites/${affiliation.id}/`, { // ✅ CORRIGÉ
         est_defaut: true
       });
       
@@ -574,7 +574,7 @@ export default function UtilisateurEntitePage() {
   );
 }
 
-// Composant Modal pour le formulaire des affiliations
+// Composant Modal pour le formulaire des affiliations - VERSION CORRIGÉE
 function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     utilisateur: affiliation?.utilisateur?.id || '',
@@ -600,12 +600,14 @@ function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClos
 
     try {
       const url = affiliation 
-        ? `/utilisateur-entites/${affiliation.id}/`
-        : `/utilisateur-entites/`;
+        ? `/utilisateurentites/${affiliation.id}/` // ✅ CORRIGÉ
+        : `/utilisateurentites/`; // ✅ CORRIGÉ
       
       const method = affiliation ? 'PUT' : 'POST';
 
-      await apiClient.request(url, {
+      console.log('📤 Création affiliation:', { url, method, formData });
+
+      const response = await apiClient.request(url, {
         method: method,
         body: JSON.stringify(formData),
         headers: {
@@ -613,9 +615,18 @@ function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClos
         }
       });
       
+      console.log('✅ Affiliation sauvegardée:', response);
       onSuccess();
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
+      console.error('❌ Erreur sauvegarde affiliation:', err);
+      
+      let errorMessage = 'Erreur lors de la sauvegarde';
+      if (err.response?.data) {
+        errorMessage = `Erreur ${err.response.status}: ${JSON.stringify(err.response.data)}`;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
     } finally {
       setLoading(false);
