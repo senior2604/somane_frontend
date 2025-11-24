@@ -544,7 +544,7 @@ export default function UtilisateurPage() {
   );
 }
 
-// Composant Modal pour le formulaire des utilisateurs - VERSION CORRIGÉE
+// Composant Modal pour le formulaire des utilisateurs - VERSION SANS MOT DE PASSE
 function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     email: utilisateur?.email || '',
@@ -552,8 +552,7 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
     first_name: utilisateur?.first_name || '',
     last_name: utilisateur?.last_name || '',
     telephone: utilisateur?.telephone || '',
-    statut: utilisateur?.statut || 'actif',
-    password: '' // AJOUTÉ pour la création
+    statut: utilisateur?.statut || 'actif'
   });
 
   const [loading, setLoading] = useState(false);
@@ -566,7 +565,7 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
 
     try {
       if (utilisateur) {
-        // MODIFICATION - Utiliser le serializer standard
+        // MODIFICATION
         const submitData = {
           email: formData.email,
           username: formData.username,
@@ -580,38 +579,21 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
         console.log('✅ Utilisateur modifié:', response);
         
       } else {
-        // CRÉATION - Utiliser le endpoint Djoser avec password
+        // CRÉATION - Utiliser le endpoint Djoser
         const submitData = {
           email: formData.email,
           username: formData.username,
           first_name: formData.first_name,
           last_name: formData.last_name,
           telephone: formData.telephone,
-          password: formData.password, // OBLIGATOIRE pour la création
           statut: formData.statut
         };
 
         console.log('📤 Création utilisateur:', submitData);
 
-        // ESSAI 1: Utiliser le endpoint standard
-        try {
-          const response = await apiClient.post('/users/', submitData);
-          console.log('✅ Utilisateur créé (standard):', response);
-          
-        } catch (err) {
-          console.error('❌ Erreur endpoint standard:', err);
-          
-          // ESSAI 2: Utiliser le endpoint Djoser si le premier échoue
-          try {
-            console.log('🔄 Essai avec endpoint auth...');
-            const response = await apiClient.post('/auth/users/', submitData);
-            console.log('✅ Utilisateur créé (Djoser):', response);
-            
-          } catch (err2) {
-            console.error('❌ Erreur endpoint Djoser:', err2);
-            throw err2; // Relancer l'erreur
-          }
-        }
+        // Utiliser le endpoint Djoser pour bénéficier de l'envoi d'email
+        const response = await apiClient.post('/auth/users/', submitData);
+        console.log('✅ Utilisateur créé (Djoser):', response);
       }
       
       onSuccess();
@@ -621,7 +603,6 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
       
       let errorMessage = 'Erreur lors de la sauvegarde';
       if (err.response?.data) {
-        // Afficher les détails de validation Django
         const errorData = err.response.data;
         if (typeof errorData === 'object') {
           errorMessage = Object.entries(errorData)
@@ -698,27 +679,6 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
                 placeholder="nom.utilisateur"
               />
             </div>
-
-            {/* Mot de passe (seulement pour la création) */}
-            {!utilisateur && (
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mot de passe *
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={(e) => handleChange('password', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Mot de passe sécurisé"
-                  minLength={8}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Minimum 8 caractères
-                </p>
-              </div>
-            )}
             
             {/* Prénom */}
             <div>
@@ -784,7 +744,6 @@ function UtilisateurFormModal({ utilisateur, entites, onClose, onSuccess }) {
             <div className="space-y-2 text-sm">
               <div><strong>Email:</strong> {formData.email || 'Non défini'}</div>
               <div><strong>Nom d'utilisateur:</strong> {formData.username || 'Non défini'}</div>
-              {!utilisateur && <div><strong>Mot de passe:</strong> {formData.password ? '••••••••' : 'Non défini'}</div>}
               <div><strong>Nom complet:</strong> {formData.first_name} {formData.last_name}</div>
               <div><strong>Téléphone:</strong> {formData.telephone || 'Non défini'}</div>
               <div>

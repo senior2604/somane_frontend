@@ -18,14 +18,23 @@ import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage";
 import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
 import LanguagesPage from "../pages/Languages/LanguagesPage";
 import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
+
+// 🆕 IMPORT DES NOUVELLES PAGES D'AUTH
+import ActivationPage from "../pages/Auth/ActivationPage";
+import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
+import ConfirmResetPage from "../pages/Auth/ConfirmResetPage";
+
 import ProtectedLayout from "../components/Layout/ProtectedLayout";
 
 export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Route publique */}
+        {/* 🆕 ROUTES PUBLIQUES D'AUTHENTIFICATION */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/activate/:uid/:token" element={<ActivationPage />} />
+        <Route path="/auth/password/reset/:uid/:token" element={<ResetPasswordPage />} />
+        <Route path="/auth/reset-confirm/success" element={<ConfirmResetPage />} />
         
         {/* Routes protégées */}
         <Route element={<ProtectedLayout />}>
@@ -34,7 +43,7 @@ export default function AppRouter() {
           <Route path="/entities" element={<EntitiesPage />} />
           <Route path="/partners" element={<PartnersPage />} />
           <Route path="/users" element={<UsersPage />} />
-          <Route path="/userentities" element={<UserEntitiesPage />} /> {/* SEULE CORRECTION */}
+          <Route path="/userentities" element={<UserEntitiesPage />} />
           
           {/* Gestion des accès */}
           <Route path="/groupes" element={<GroupesPage />} />

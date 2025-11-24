@@ -1,5 +1,68 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiClient } from '../../services/apiClient';
+
+// Types d'accès comme spécifié dans l'Excel
+const TYPES_ACCES = [
+  { value: 'aucun', label: '❌ Aucun accès', color: 'red', bgColor: 'bg-red-100', textColor: 'text-red-800', borderColor: 'border-red-300' },
+  { value: 'lecture', label: '👁️ Lecture seule', color: 'blue', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-300' },
+  { value: 'ecriture', label: '✏️ Lecture/Écriture', color: 'green', bgColor: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-300' },
+  { value: 'validation', label: '✅ Validation', color: 'purple', bgColor: 'bg-purple-100', textColor: 'text-purple-800', borderColor: 'border-purple-300' },
+  { value: 'suppression', label: '🗑️ Suppression', color: 'orange', bgColor: 'bg-orange-100', textColor: 'text-orange-800', borderColor: 'border-orange-300' },
+  { value: 'personnalise', label: '🔧 Personnalisé', color: 'gray', bgColor: 'bg-gray-100', textColor: 'text-gray-800', borderColor: 'border-gray-300' }
+];
+
+// Composant Loading
+const LoadingSpinner = () => (
+  <div className="p-6">
+    <div className="flex justify-center items-center p-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <span className="ml-2">Chargement des permissions...</span>
+    </div>
+  </div>
+);
+
+// Composant Error Display
+const ErrorDisplay = ({ error, onRetry }) => (
+  <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center">
+        <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+        </svg>
+        <span className="text-red-800 font-medium">{error}</span>
+      </div>
+      <button
+        onClick={onRetry}
+        className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+      >
+        Réessayer
+      </button>
+    </div>
+  </div>
+);
+
+// Composant Empty State
+const EmptyState = ({ message, showWarning = false }) => (
+  <div className={`mb-6 ${showWarning ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'} border rounded-lg p-4`}>
+    <div className="flex items-center">
+      <svg className={`w-5 h-5 ${showWarning ? 'text-yellow-600' : 'text-gray-600'} mr-2`} fill="currentColor" viewBox="0 0 20 20">
+        {showWarning ? (
+          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+        ) : (
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 9a1 1 0 000 2h2a1 1 0 100-2H9z" clipRule="evenodd" />
+        )}
+      </svg>
+      <div>
+        <span className={`${showWarning ? 'text-yellow-800' : 'text-gray-800'} font-medium`}>
+          {showWarning ? 'Aucune donnée disponible' : 'Aucun résultat'}
+        </span>
+        <p className={`${showWarning ? 'text-yellow-700' : 'text-gray-700'} text-sm mt-1`}>
+          {message}
+        </p>
+      </div>
+    </div>
+  </div>
+);
 
 export default function PermissionsPage() {
   const [permissions, setPermissions] = useState([]);
@@ -19,119 +82,106 @@ export default function PermissionsPage() {
   const [filterEntite, setFilterEntite] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
 
-  // Types d'accès comme spécifié dans l'Excel
-  const typesAcces = [
-    { value: 'aucun', label: '❌ Aucun accès', color: 'red', bgColor: 'bg-red-100', textColor: 'text-red-800', borderColor: 'border-red-300' },
-    { value: 'lecture', label: '👁️ Lecture seule', color: 'blue', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-300' },
-    { value: 'ecriture', label: '✏️ Lecture/Écriture', color: 'green', bgColor: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-300' },
-    { value: 'validation', label: '✅ Validation', color: 'purple', bgColor: 'bg-purple-100', textColor: 'text-purple-800', borderColor: 'border-purple-300' },
-    { value: 'suppression', label: '🗑️ Suppression', color: 'orange', bgColor: 'bg-orange-100', textColor: 'text-orange-800', borderColor: 'border-orange-300' },
-    { value: 'personnalise', label: '🔧 Personnalisé', color: 'gray', bgColor: 'bg-gray-100', textColor: 'text-gray-800', borderColor: 'border-gray-300' }
-  ];
-
-  // Debug initial
-  useEffect(() => {
-    console.log('🔧 Composant Permissions monté');
-    fetchAllData();
+  // Fonction pour extraire les données de la réponse API
+  const extractData = useCallback((response) => {
+    if (!response) return [];
+    if (Array.isArray(response)) return response;
+    if (response.data && Array.isArray(response.data)) return response.data;
+    if (response.results && Array.isArray(response.results)) return response.results;
+    return [];
   }, []);
 
- const fetchAllData = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-    console.log('🔄 Début du chargement des données...');
+  const fetchAllData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('🔄 Début du chargement des données permissions...');
 
-    // Chargement parallèle de toutes les données avec apiClient
-    const [permissionsRes, groupesRes, modulesRes, entitesRes] = await Promise.all([
-      apiClient.get('/permissions/'),
-      apiClient.get('/groupes/'), // ← CHANGEMENT ICI : /groupes/ (avec 's' à la fin)
-      apiClient.get('/modules/'),
-      apiClient.get('/entites/')
-    ]);
+      // Chargement parallèle de toutes les données
+      const [permissionsRes, groupesRes, modulesRes, entitesRes] = await Promise.all([
+        apiClient.get('/permissions/'),
+        apiClient.get('/groupes/'),
+        apiClient.get('/modules/'),
+        apiClient.get('/entites/')
+      ]);
 
-    console.log('✅ Toutes les données chargées avec succès');
+      console.log('✅ Réponses API reçues');
 
-    // Traitement des permissions
-    let permissionsData = [];
-    if (Array.isArray(permissionsRes)) {
-      permissionsData = permissionsRes;
-    } else if (permissionsRes && Array.isArray(permissionsRes.results)) {
-      permissionsData = permissionsRes.results;
-    } else {
-      permissionsData = [];
-    }
+      // Extraction des données
+      const permissionsData = extractData(permissionsRes);
+      const groupesData = extractData(groupesRes);
+      const modulesData = extractData(modulesRes);
+      const entitesData = extractData(entitesRes);
 
-    setPermissions(permissionsData);
-    setGroupes(Array.isArray(groupesRes) ? groupesRes : []);
-    setModules(Array.isArray(modulesRes) ? modulesRes : []);
-    setEntites(Array.isArray(entitesRes) ? entitesRes : []);
+      setPermissions(permissionsData);
+      setGroupes(groupesData);
+      setModules(modulesData);
+      setEntites(entitesData);
 
-    console.log(`📊 ${permissionsData.length} permissions chargées`);
-    console.log(`👥 ${groupesRes?.length || 0} groupes chargés`);
-    console.log(`📦 ${modulesRes?.length || 0} modules chargés`);
-    console.log(`🏢 ${entitesRes?.length || 0} entités chargées`);
+      console.log(`📊 ${permissionsData.length} permissions chargées`);
+      console.log(`👥 ${groupesData.length} groupes chargés`);
+      console.log(`📦 ${modulesData.length} modules chargés`);
+      console.log(`🏢 ${entitesData.length} entités chargées`);
 
     } catch (err) {
       console.error('❌ Erreur détaillée:', err);
-      
       let errorMessage = 'Erreur lors du chargement des données';
       
-      if (err.code === 'NETWORK_ERROR' || err.message === 'Network Error') {
-        errorMessage = 'Erreur de réseau - Vérifiez votre connexion';
-      } else if (err.response) {
+      if (err.response) {
         const status = err.response.status;
-        if (status === 401) {
-          errorMessage = 'Non authentifié - Veuillez vous reconnecter';
-        } else if (status === 403) {
-          errorMessage = 'Accès refusé - Permissions insuffisantes';
-        } else if (status === 404) {
-          errorMessage = 'API non trouvée - Contactez l\'administrateur';
-        } else if (status >= 500) {
-          errorMessage = 'Erreur serveur - Réessayez plus tard';
-        } else {
-          errorMessage = `Erreur ${status}: ${err.response.data?.detail || 'Erreur inconnue'}`;
-        }
+        if (status === 401) errorMessage = 'Non authentifié';
+        else if (status === 403) errorMessage = 'Accès refusé';
+        else if (status === 404) errorMessage = 'API non trouvée';
+        else if (status >= 500) errorMessage = 'Erreur serveur';
+        else errorMessage = `Erreur ${status}`;
       } else if (err.request) {
-        errorMessage = 'Serveur inaccessible - Vérifiez que le backend est démarré';
+        errorMessage = 'Serveur inaccessible';
       } else {
         errorMessage = err.message || 'Erreur inconnue';
       }
 
       setError(errorMessage);
-      
-      // Les tableaux restent vides en cas d'erreur
       setPermissions([]);
       setGroupes([]);
       setModules([]);
       setEntites([]);
-      
     } finally {
       setLoading(false);
     }
-  };
+  }, [extractData]);
 
-  // Filtrage et recherche
-  const filteredPermissions = permissions.filter(permission => {
-    const matchesSearch = 
-      permission.groupe?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      permission.module?.nom_affiche?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      permission.entite?.raison_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      permission.acces?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesGroupe = !filterGroupe || permission.groupe?.id === parseInt(filterGroupe);
-    const matchesModule = !filterModule || permission.module?.id === parseInt(filterModule);
-    const matchesEntite = !filterEntite || permission.entite?.id === parseInt(filterEntite);
-    const matchesStatut = filterStatut === '' || 
-      (filterStatut === 'actif' ? permission.statut : !permission.statut);
-    
-    return matchesSearch && matchesGroupe && matchesModule && matchesEntite && matchesStatut;
-  });
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
+  // Filtrage et recherche avec useMemo
+  const filteredPermissions = useMemo(() => {
+    return permissions.filter(permission => {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = 
+        permission.groupe?.name?.toLowerCase().includes(searchLower) ||
+        permission.module?.nom_affiche?.toLowerCase().includes(searchLower) ||
+        permission.entite?.raison_sociale?.toLowerCase().includes(searchLower) ||
+        permission.acces?.toLowerCase().includes(searchLower);
+      
+      const matchesGroupe = !filterGroupe || permission.groupe?.id?.toString() === filterGroupe;
+      const matchesModule = !filterModule || permission.module?.id?.toString() === filterModule;
+      const matchesEntite = !filterEntite || permission.entite?.id?.toString() === filterEntite;
+      const matchesStatut = filterStatut === '' || 
+        (filterStatut === 'actif' ? permission.statut : !permission.statut);
+      
+      return matchesSearch && matchesGroupe && matchesModule && matchesEntite && matchesStatut;
+    });
+  }, [permissions, searchTerm, filterGroupe, filterModule, filterEntite, filterStatut]);
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentPermissions = Array.isArray(filteredPermissions) ? filteredPermissions.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredPermissions) ? filteredPermissions.length : 0) / itemsPerPage);
+  const currentPermissions = useMemo(() => 
+    filteredPermissions.slice(indexOfFirstItem, indexOfLastItem),
+    [filteredPermissions, indexOfFirstItem, indexOfLastItem]
+  );
+  const totalPages = Math.ceil(filteredPermissions.length / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -150,7 +200,7 @@ export default function PermissionsPage() {
   };
 
   const handleDelete = async (permission) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer cette permission ?`)) {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la permission du groupe "${permission.groupe?.name}" sur le module "${permission.module?.nom_affiche}" ?`)) {
       try {
         await apiClient.delete(`/permissions/${permission.id}/`);
         fetchAllData();
@@ -163,14 +213,8 @@ export default function PermissionsPage() {
 
   const handleToggleStatut = async (permission) => {
     try {
-      await apiClient.request(`/permissions/${permission.id}/`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          statut: !permission.statut
-        }),
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      await apiClient.patch(`/permissions/${permission.id}/`, {
+        statut: !permission.statut
       });
       fetchAllData();
     } catch (err) {
@@ -189,30 +233,37 @@ export default function PermissionsPage() {
     fetchAllData();
   };
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setFilterGroupe('');
+    setFilterModule('');
+    setFilterEntite('');
+    setFilterStatut('');
+    setCurrentPage(1);
+  };
+
   // Obtenir le libellé du type d'accès
   const getAccesLabel = (accesValue) => {
-    const type = typesAcces.find(t => t.value === accesValue);
+    const type = TYPES_ACCES.find(t => t.value === accesValue);
     return type ? type.label : 'Inconnu';
   };
 
   // Obtenir les classes CSS pour le badge d'accès
   const getAccesBadgeClasses = (accesValue) => {
-    const type = typesAcces.find(t => t.value === accesValue);
+    const type = TYPES_ACCES.find(t => t.value === accesValue);
     return type ? `${type.bgColor} ${type.textColor} ${type.borderColor}` : 'bg-gray-100 text-gray-800 border-gray-300';
   };
 
+  // Statistiques
+  const stats = useMemo(() => ({
+    total: permissions.length,
+    actives: permissions.filter(p => p.statut).length,
+    inactives: permissions.filter(p => !p.statut).length,
+    groupesUniques: new Set(permissions.map(p => p.groupe?.id)).size
+  }), [permissions]);
+
   if (loading) {
-    return (
-      <div className="p-6">
-        <div className="flex justify-center items-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des permissions...</span>
-        </div>
-        <div className="text-center text-sm text-gray-500">
-          Connexion aux APIs en cours...
-        </div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return (
@@ -247,49 +298,18 @@ export default function PermissionsPage() {
         </div>
       </div>
 
-      {/* Message d'erreur amélioré */}
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <div>
-                <span className="text-red-800 font-medium">{error}</span>
-                <p className="text-red-700 text-sm mt-1">
-                  Vérifiez la console (F12) pour plus de détails.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleRetry}
-              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
-            >
-              Réessayer
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Message d'erreur */}
+      {error && <ErrorDisplay error={error} onRetry={handleRetry} />}
 
-      {/* Si pas d'erreur mais données vides */}
+      {/* États vides */}
       {!error && permissions.length === 0 && (
-        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-            <div>
-              <span className="text-yellow-800 font-medium">Aucune donnée disponible</span>
-              <p className="text-yellow-700 text-sm mt-1">
-                Aucune permission n'a été trouvée. Créez une nouvelle permission ou vérifiez la configuration de l'API.
-              </p>
-            </div>
-          </div>
-        </div>
+        <EmptyState 
+          message="Aucune permission n'a été trouvée. Créez une nouvelle permission ou vérifiez la configuration de l'API."
+          showWarning={true}
+        />
       )}
 
-      {/* Filtres et Recherche - Masqués si pas de données */}
+      {/* Filtres et Recherche */}
       {(permissions.length > 0 || searchTerm || filterGroupe || filterModule || filterEntite || filterStatut) && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
@@ -363,14 +383,7 @@ export default function PermissionsPage() {
           </div>
           <div className="mt-4 flex justify-end">
             <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilterGroupe('');
-                setFilterModule('');
-                setFilterEntite('');
-                setFilterStatut('');
-                setCurrentPage(1);
-              }}
+              onClick={resetFilters}
               className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
             >
               Réinitialiser tous les filtres
@@ -379,29 +392,23 @@ export default function PermissionsPage() {
         </div>
       )}
 
-      {/* Statistiques - Masquées si pas de données */}
+      {/* Statistiques */}
       {permissions.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-            <div className="text-2xl font-bold text-blue-600">{permissions.length}</div>
+            <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
             <div className="text-sm text-gray-600">Total des permissions</div>
           </div>
           <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-            <div className="text-2xl font-bold text-green-600">
-              {permissions.filter(p => p.statut).length}
-            </div>
+            <div className="text-2xl font-bold text-green-600">{stats.actives}</div>
             <div className="text-sm text-gray-600">Permissions actives</div>
           </div>
           <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-            <div className="text-2xl font-bold text-gray-600">
-              {permissions.filter(p => !p.statut).length}
-            </div>
+            <div className="text-2xl font-bold text-gray-600">{stats.inactives}</div>
             <div className="text-sm text-gray-600">Permissions inactives</div>
           </div>
           <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-            <div className="text-2xl font-bold text-purple-600">
-              {new Set(permissions.map(p => p.groupe?.id)).size}
-            </div>
+            <div className="text-2xl font-bold text-purple-600">{stats.groupesUniques}</div>
             <div className="text-sm text-gray-600">Groupes concernés</div>
           </div>
         </div>
@@ -511,7 +518,7 @@ export default function PermissionsPage() {
           </table>
         </div>
 
-        {/* Pagination - Masquée si pas de données */}
+        {/* Pagination */}
         {filteredPermissions.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
             <div className="flex items-center justify-between">
@@ -604,7 +611,6 @@ export default function PermissionsPage() {
           groupes={groupes}
           modules={modules}
           entites={entites}
-          typesAcces={typesAcces}
           onClose={() => {
             setShowForm(false);
             setEditingPermission(null);
@@ -617,7 +623,7 @@ export default function PermissionsPage() {
 }
 
 // Composant Modal pour le formulaire des permissions
-function PermissionFormModal({ permission, groupes, modules, entites, typesAcces, onClose, onSuccess }) {
+function PermissionFormModal({ permission, groupes, modules, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     groupe: permission?.groupe?.id || '',
     module: permission?.module?.id || '',
@@ -656,12 +662,14 @@ function PermissionFormModal({ permission, groupes, modules, entites, typesAcces
 
       // Préparer les données pour l'API
       const apiData = {
-        groupe: formData.groupe,
-        module: formData.module,
-        entite: formData.entite || null, // Peut être null pour toutes les entités
+        groupe: parseInt(formData.groupe),
+        module: parseInt(formData.module),
+        entite: formData.entite ? parseInt(formData.entite) : null,
         acces: formData.acces,
         statut: formData.statut
       };
+
+      console.log('📤 Envoi des données:', apiData);
 
       await apiClient.request(url, {
         method: method,
@@ -673,7 +681,8 @@ function PermissionFormModal({ permission, groupes, modules, entites, typesAcces
       
       onSuccess();
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
+      console.error('❌ Erreur formulaire:', err);
+      const errorMessage = err.response?.data?.detail || err.message || 'Erreur lors de la sauvegarde';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -685,6 +694,17 @@ function PermissionFormModal({ permission, groupes, modules, entites, typesAcces
       ...prev,
       [field]: value
     }));
+  };
+
+  // Calcul des données pour l'aperçu
+  const previewData = {
+    groupe: groupes.find(g => g.id === parseInt(formData.groupe))?.name || 'Non sélectionné',
+    module: modules.find(m => m.id === parseInt(formData.module))?.nom_affiche || 'Non sélectionné',
+    entite: formData.entite 
+      ? entites.find(e => e.id === parseInt(formData.entite))?.raison_sociale 
+      : 'Toutes les entités',
+    acces: TYPES_ACCES.find(t => t.value === formData.acces),
+    statut: formData.statut ? 'Active' : 'Inactive'
   };
 
   return (
@@ -782,7 +802,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, typesAcces
                 onChange={(e) => handleChange('acces', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {typesAcces.map(type => (
+                {TYPES_ACCES.map(type => (
                   <option key={type.value} value={type.value}>
                     {type.label}
                   </option>
@@ -813,31 +833,29 @@ function PermissionFormModal({ permission, groupes, modules, entites, typesAcces
               <div className="flex items-center space-x-2">
                 <span className="font-medium">Groupe:</span>
                 <span className="bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                  {groupes.find(g => g.id === parseInt(formData.groupe))?.name || 'Non sélectionné'}
+                  {previewData.groupe}
                 </span>
               </div>
               <div className="flex items-center space-x-2">
                 <span className="font-medium">Module:</span>
                 <span className="text-gray-600">
-                  {modules.find(m => m.id === parseInt(formData.module))?.nom_affiche || 'Non sélectionné'}
+                  {previewData.module}
                 </span>
               </div>
               <div className="flex items-center space-x-2">
                 <span className="font-medium">Entité:</span>
                 <span className="text-gray-600">
-                  {formData.entite 
-                    ? entites.find(e => e.id === formData.entite)?.raison_sociale 
-                    : 'Toutes les entités'}
+                  {previewData.entite}
                 </span>
               </div>
               <div className="flex items-center space-x-2">
                 <span className="font-medium">Accès:</span>
                 <span className={`inline-flex px-2 py-1 rounded text-xs font-medium border ${
-                  typesAcces.find(t => t.value === formData.acces)?.bgColor || 'bg-gray-100'
-                } ${typesAcces.find(t => t.value === formData.acces)?.textColor || 'text-gray-800'} ${
-                  typesAcces.find(t => t.value === formData.acces)?.borderColor || 'border-gray-300'
+                  previewData.acces?.bgColor || 'bg-gray-100'
+                } ${previewData.acces?.textColor || 'text-gray-800'} ${
+                  previewData.acces?.borderColor || 'border-gray-300'
                 }`}>
-                  {typesAcces.find(t => t.value === formData.acces)?.label || 'Inconnu'}
+                  {previewData.acces?.label || 'Inconnu'}
                 </span>
               </div>
               <div className="flex items-center space-x-2">
@@ -847,7 +865,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, typesAcces
                     ? 'bg-green-100 text-green-800' 
                     : 'bg-gray-100 text-gray-800'
                 }`}>
-                  {formData.statut ? 'Active' : 'Inactive'}
+                  {previewData.statut}
                 </span>
               </div>
             </div>

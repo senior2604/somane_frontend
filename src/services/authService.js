@@ -22,9 +22,9 @@ class AuthService {
 
       const data = await response.json();
       
-      // ⚠️ CORRECTION : Stocker les tokens JWT comme dans LoginPage
-      if (data.access) { // ← CHANGEMENT: data.access au lieu de data.token
-        localStorage.setItem('accessToken', data.access); // ← CHANGEMENT: accessToken au lieu de authToken
+      // Stocker les tokens JWT
+      if (data.access) {
+        localStorage.setItem('accessToken', data.access);
         if (data.refresh) {
           localStorage.setItem('refreshToken', data.refresh);
         }
@@ -41,6 +41,97 @@ class AuthService {
     }
   }
 
+  // 🆕 FONCTION D'ACTIVATION DU COMPTE
+  async activateAccount(uid, token) {
+    try {
+      const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.ACTIVATION}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uid, token }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Échec de l\'activation du compte');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur d\'activation:', error);
+      throw error;
+    }
+  }
+
+  // 🆕 RÉINITIALISATION DU MOT DE PASSE
+  async resetPasswordConfirm(uid, token, new_password) {
+    try {
+      const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.PASSWORD_RESET_CONFIRM}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uid, token, new_password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Échec de la réinitialisation');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur de réinitialisation:', error);
+      throw error;
+    }
+  }
+
+  // 🆕 DEMANDE DE RÉINITIALISATION (mot de passe oublié)
+  async requestPasswordReset(email) {
+    try {
+      const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.PASSWORD_RESET}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de la demande de réinitialisation');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur de demande de réinitialisation:', error);
+      throw error;
+    }
+  }
+
+  // 🆕 INSCRIPTION UTILISATEUR
+  async register(userData) {
+    try {
+      const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.REGISTER}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Échec de l\'inscription');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur d\'inscription:', error);
+      throw error;
+    }
+  }
+
   async logout() {
     try {
       const token = this.getToken();
@@ -48,7 +139,7 @@ class AuthService {
         await fetch(`${this.baseURL}${ENDPOINTS.AUTH.LOGOUT}`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`, // ← CHANGEMENT: Bearer au lieu de Token
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         });
@@ -56,7 +147,7 @@ class AuthService {
     } catch (error) {
       console.error('Erreur de déconnexion:', error);
     } finally {
-      // ⚠️ CORRECTION : Nettoyer tous les items comme dans LoginPage
+      // Nettoyer le localStorage
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
@@ -65,7 +156,7 @@ class AuthService {
   }
 
   getToken() {
-    return localStorage.getItem('accessToken'); // ← CHANGEMENT: accessToken au lieu de authToken
+    return localStorage.getItem('accessToken');
   }
 
   getUser() {
@@ -75,6 +166,37 @@ class AuthService {
 
   isAuthenticated() {
     return !!this.getToken();
+  }
+
+  // 🆕 RAFRAÎCHIR LE TOKEN
+  async refreshToken() {
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!refreshToken) {
+        throw new Error('Aucun token de rafraîchissement');
+      }
+
+      const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.REFRESH}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Échec du rafraîchissement du token');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('accessToken', data.access);
+      
+      return data;
+    } catch (error) {
+      console.error('Erreur de rafraîchissement:', error);
+      this.logout();
+      throw error;
+    }
   }
 }
 
