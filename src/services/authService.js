@@ -1,9 +1,26 @@
-// src/services/authService.js
+// 📁 src/services/authService.js
 import { API_CONFIG, ENDPOINTS } from '../config/api';
 
 class AuthService {
   constructor() {
     this.baseURL = API_CONFIG.BASE_URL;
+  }
+
+  async handleResponse(response) {
+    const contentType = response.headers.get('content-type');
+    
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      throw new Error(`Reponse non-JSON du serveur: ${text.substring(0, 100)}`);
+    }
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.detail || data.message || 'Erreur serveur');
+    }
+
+    return data;
   }
 
   async login(credentials) {
@@ -16,11 +33,7 @@ class AuthService {
         body: JSON.stringify(credentials),
       });
 
-      if (!response.ok) {
-        throw new Error('Échec de la connexion');
-      }
-
-      const data = await response.json();
+      const data = await this.handleResponse(response);
       
       // Stocker les tokens JWT
       if (data.access) {
@@ -41,30 +54,23 @@ class AuthService {
     }
   }
 
-  // 🆕 FONCTION D'ACTIVATION DU COMPTE
-  async activateAccount(uid, token) {
+  async activateAccount(uid, token, password) {
     try {
-      const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.ACTIVATION}`, {
+      const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.ACTIVATION}${uid}/${token}/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ uid, token }),
+        body: JSON.stringify({ password }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Échec de l\'activation du compte');
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
-      console.error('Erreur d\'activation:', error);
+      console.error('Erreur d activation:', error);
       throw error;
     }
   }
 
-  // 🆕 RÉINITIALISATION DU MOT DE PASSE
   async resetPasswordConfirm(uid, token, new_password) {
     try {
       const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.PASSWORD_RESET_CONFIRM}`, {
@@ -75,19 +81,13 @@ class AuthService {
         body: JSON.stringify({ uid, token, new_password }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Échec de la réinitialisation');
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
-      console.error('Erreur de réinitialisation:', error);
+      console.error('Erreur de reinitialisation:', error);
       throw error;
     }
   }
 
-  // 🆕 DEMANDE DE RÉINITIALISATION (mot de passe oublié)
   async requestPasswordReset(email) {
     try {
       const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.PASSWORD_RESET}`, {
@@ -98,18 +98,13 @@ class AuthService {
         body: JSON.stringify({ email }),
       });
 
-      if (!response.ok) {
-        throw new Error('Erreur lors de la demande de réinitialisation');
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
-      console.error('Erreur de demande de réinitialisation:', error);
+      console.error('Erreur de demande de reinitialisation:', error);
       throw error;
     }
   }
 
-  // 🆕 INSCRIPTION UTILISATEUR
   async register(userData) {
     try {
       const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.REGISTER}`, {
@@ -120,14 +115,9 @@ class AuthService {
         body: JSON.stringify(userData),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Échec de l\'inscription');
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
-      console.error('Erreur d\'inscription:', error);
+      console.error('Erreur d inscription:', error);
       throw error;
     }
   }
@@ -145,9 +135,8 @@ class AuthService {
         });
       }
     } catch (error) {
-      console.error('Erreur de déconnexion:', error);
+      console.error('Erreur de deconnexion:', error);
     } finally {
-      // Nettoyer le localStorage
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
@@ -168,12 +157,11 @@ class AuthService {
     return !!this.getToken();
   }
 
-  // 🆕 RAFRAÎCHIR LE TOKEN
   async refreshToken() {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
       if (!refreshToken) {
-        throw new Error('Aucun token de rafraîchissement');
+        throw new Error('Aucun token de rafraichissement');
       }
 
       const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.REFRESH}`, {
@@ -184,16 +172,12 @@ class AuthService {
         body: JSON.stringify({ refresh: refreshToken }),
       });
 
-      if (!response.ok) {
-        throw new Error('Échec du rafraîchissement du token');
-      }
-
-      const data = await response.json();
+      const data = await this.handleResponse(response);
       localStorage.setItem('accessToken', data.access);
       
       return data;
     } catch (error) {
-      console.error('Erreur de rafraîchissement:', error);
+      console.error('Erreur de rafraichissement:', error);
       this.logout();
       throw error;
     }
