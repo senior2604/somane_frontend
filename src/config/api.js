@@ -6,17 +6,16 @@ export const API_CONFIG = {
 
 export const ENDPOINTS = {
   AUTH: {
-    LOGIN: '/auth/login/',
-    LOGOUT: '/auth/logout/',
-    REGISTER: '/auth/register/',
-    PROFILE: '/auth/profile/',
-    ACTIVATION: '/auth/activate/', // AJOUTÉ - endpoint d'activation
-    REFRESH: '/auth/token/refresh/', // AJOUTÉ
-    PASSWORD_RESET: '/auth/password/reset/', // AJOUTÉ
-    PASSWORD_RESET_CONFIRM: '/auth/password/reset/confirm/', // AJOUTÉ
+    LOGIN: '/auth/token/',
+    LOGOUT: '/auth/token/logout/',
+    REGISTER: '/auth/users/',
+    ACTIVATION: '/auth/users/activation/',  // ✅ URL DJOSER STANDARD
+    PROFILE: '/auth/users/me/',
+    REFRESH: '/auth/token/refresh/',
+    PASSWORD_RESET: '/auth/users/reset_password/',
+    PASSWORD_RESET_CONFIRM: '/auth/users/reset_password_confirm/',
   },
   USERS: '/users/',
-  ENTITIES: '/entites/', // CORRIGÉ (était /entities/)
+  ENTITIES: '/entites/',
   ROLES: '/roles/',
-  // Ajoutez d'autres endpoints selon vos besoins
 };

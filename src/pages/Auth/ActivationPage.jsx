@@ -1,4 +1,4 @@
-// src/pages/Auth/ActivationPage.jsx
+// 📁 src/pages/Auth/ActivationPage.jsx
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
@@ -17,35 +17,21 @@ const ActivationPage = () => {
   const validatePassword = (password) => {
     const errors = [];
     
-    if (password.length < 8) {
-      errors.push('Au moins 8 caracteres');
-    }
-    
-    if (!/(?=.*[a-z])/.test(password)) {
-      errors.push('Au moins une lettre minuscule');
-    }
-    
-    if (!/(?=.*[A-Z])/.test(password)) {
-      errors.push('Au moins une lettre majuscule');
-    }
-    
-    if (!/(?=.*\d)/.test(password)) {
-      errors.push('Au moins un chiffre');
-    }
-    
-    if (!/(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?])/.test(password)) {
-      errors.push('Au moins un caractere special');
-    }
+    if (password.length < 8) errors.push('Au moins 8 caracteres');
+    if (!/(?=.*[a-z])/.test(password)) errors.push('Au moins une lettre minuscule');
+    if (!/(?=.*[A-Z])/.test(password)) errors.push('Au moins une lettre majuscule');
+    if (!/(?=.*\d)/.test(password)) errors.push('Au moins un chiffre');
+    if (!/(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?])/.test(password)) errors.push('Au moins un caractere special');
     
     return errors;
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       [name]: value
-    });
+    }));
 
     if (name === 'password') {
       const errors = validatePassword(value);
@@ -72,8 +58,15 @@ const ActivationPage = () => {
 
     try {
       await authService.activateAccount(uid, token, formData.password);
+      
+      // ✅ REDIRECTION APRÈS SUCCÈS
       setMessage('Compte active avec succes ! Redirection vers la page de connexion...');
-      setTimeout(() => navigate('/login'), 2000);
+      
+      // Redirection après 2 secondes
+      setTimeout(() => {
+        navigate('/login'); // Redirection vers votre page de login
+      }, 2000);
+      
     } catch (error) {
       setMessage(`Erreur: ${error.message}`);
     } finally {
@@ -81,7 +74,7 @@ const ActivationPage = () => {
     }
   };
 
-  const isPasswordValid = passwordErrors.length === 0 && formData.password.length > 0;
+  const isPasswordValid = validatePassword(formData.password).length === 0;
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">

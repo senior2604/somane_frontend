@@ -7,6 +7,14 @@ class AuthService {
   }
 
   async handleResponse(response) {
+    // ✅ GÉRER SPÉCIALEMENT LE CAS 204 NO CONTENT (Djoser activation)
+    if (response.status === 204) {
+      return { 
+        success: true,
+        detail: "Activation réussie" 
+      };
+    }
+
     const contentType = response.headers.get('content-type');
     
     if (!contentType || !contentType.includes('application/json')) {
@@ -56,14 +64,19 @@ class AuthService {
 
   async activateAccount(uid, token, password) {
     try {
-      const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.ACTIVATION}${uid}/${token}/`, {
+      const response = await fetch(`${this.baseURL}${ENDPOINTS.AUTH.ACTIVATION}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ 
+          uid: uid, 
+          token: token,
+          new_password: password 
+        }),
       });
 
+      // ✅ APPEL DIRECT À handleResponse QUI GÈRE LE 204
       return await this.handleResponse(response);
     } catch (error) {
       console.error('Erreur d activation:', error);
