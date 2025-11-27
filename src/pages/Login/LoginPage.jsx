@@ -16,7 +16,7 @@ export default function LoginPage() {
     setLoading(true);
     
     try {
-      const API_URL = "http://localhost:8000/api/auth/token/";
+const API_URL = "http://localhost:8000/api/auth/jwt/create/";
       
       // IMPORTANT : Maintenant avec email
       const credentials = {
