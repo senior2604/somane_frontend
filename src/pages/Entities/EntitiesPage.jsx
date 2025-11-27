@@ -28,6 +28,9 @@ export default function EntitiesPage() {
 
   const fetchEntities = async () => {
     try {
+      setLoading(true);
+      setError(null);
+      
       const response = await apiClient.get('/entites/');
       
       if (Array.isArray(response)) {
@@ -36,10 +39,12 @@ export default function EntitiesPage() {
         setEntities(response.results);
       } else {
         setError('Format de données inattendu');
+        setEntities([]);
       }
     } catch (err) {
+      console.error('Erreur lors du chargement des entités:', err);
       setError('Erreur lors du chargement des entités');
-      console.error('Error:', err);
+      setEntities([]);
     } finally {
       setLoading(false);
     }
@@ -107,11 +112,12 @@ export default function EntitiesPage() {
     }
   };
 
-  // Filtrage et recherche - CORRIGÉ pour utiliser les objets pays
+  // Filtrage et recherche
   const filteredEntities = entities.filter(entity => {
     const matchesSearch = 
       entity.raison_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (entity.activite && entity.activite.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      entity.ville?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       entity.ville?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatut = !filterStatut || 
@@ -163,25 +169,16 @@ export default function EntitiesPage() {
     fetchEntities();
   };
 
+  const handleRetry = () => {
+    fetchEntities();
+  };
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Chargement des entités...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
       <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <span className="text-red-800">{error}</span>
-          </div>
+        <div className="flex justify-center items-center p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2">Chargement des entités...</span>
         </div>
       </div>
     );
@@ -194,24 +191,55 @@ export default function EntitiesPage() {
           <h1 className="text-2xl font-bold text-gray-800">Gestion des Entités</h1>
           <p className="text-gray-600 mt-1">
             {filteredEntities.length} entité(s) trouvé(s)
-            {(filterStatut || filterPays) && ' • Filtres actifs'}
+            {(searchTerm || filterPays || filterStatut) && ' • Filtres actifs'}
           </p>
         </div>
-        <button 
-          onClick={handleNewEntity}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nouvelle Entité
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={handleRetry}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Actualiser
+          </button>
+          <button 
+            onClick={handleNewEntity}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nouvelle Entité
+          </button>
+        </div>
       </div>
 
-      {/* Filtres et Recherche - CORRIGÉ */}
+      {/* Message d'erreur */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <span className="text-red-800 font-medium">{error}</span>
+            </div>
+            <button
+              onClick={handleRetry}
+              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Filtres et Recherche */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
+          <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
             <input
               type="text"
@@ -243,28 +271,54 @@ export default function EntitiesPage() {
               <option value="">Tous les pays</option>
               {pays.map(paysItem => (
                 <option key={paysItem.id} value={paysItem.id}>
-                  {paysItem.nom}
+                  {paysItem.emoji} {paysItem.nom_fr || paysItem.nom}
                 </option>
               ))}
             </select>
           </div>
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilterStatut('');
-                setFilterPays('');
-                setCurrentPage(1);
-              }}
-              className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
-            >
-              Réinitialiser
-            </button>
-          </div>
+        </div>
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setFilterStatut('');
+              setFilterPays('');
+              setCurrentPage(1);
+            }}
+            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+          >
+            Réinitialiser les filtres
+          </button>
         </div>
       </div>
 
-      {/* Tableau - CORRIGÉ pour afficher le nom du pays */}
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-blue-600">{entities.length}</div>
+          <div className="text-sm text-gray-600">Total des entités</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-green-600">
+            {new Set(entities.map(e => e.pays?.id)).size}
+          </div>
+          <div className="text-sm text-gray-600">Pays représentés</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-purple-600">
+            {entities.filter(e => e.statut).length}
+          </div>
+          <div className="text-sm text-gray-600">Entités actives</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
+          <div className="text-2xl font-bold text-orange-600">
+            {entities.filter(e => !e.statut).length}
+          </div>
+          <div className="text-sm text-gray-600">Entités inactives</div>
+        </div>
+      </div>
+
+      {/* Tableau */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
@@ -338,10 +392,13 @@ export default function EntitiesPage() {
                       ) : '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {entity.ville}
+                      {entity.ville?.nom || entity.ville || '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {entity.pays ? entity.pays.nom : '-'}
+                      <div className="flex items-center gap-2">
+                        <span>{entity.pays?.emoji}</span>
+                        <span>{entity.pays?.nom_fr || entity.pays?.nom}</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
                       {entity.telephone}
@@ -470,7 +527,7 @@ export default function EntitiesPage() {
         )}
       </div>
 
-      {/* Formulaire Modal - VERSION CORRIGÉE AVEC DONNÉES DYNAMIQUES */}
+      {/* Formulaire Modal */}
       {showForm && (
         <EntityFormModal
           entity={editingEntity}
@@ -489,7 +546,7 @@ export default function EntitiesPage() {
   );
 }
 
-// Composant Modal CORRIGÉ avec données dynamiques
+// COMPOSANT MODAL PROFESSIONNEL AVEC RECHERCHE
 function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuccess }) {
   // Données pour les listes déroulantes
   const secteursActivite = [
@@ -517,17 +574,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
     "Autre"
   ];
 
-  const regionsTogo = [
-    "Région Maritime", "Région des Plateaux", "Région Centrale", 
-    "Région de la Kara", "Région des Savanes"
-  ];
-
-  const villesTogo = [
-    "Lomé", "Sokodé", "Kara", "Atakpamé", "Dapaong", 
-    "Tsévié", "Aného", "Bassar", "Mango", "Kpalimé"
-  ];
-
-  // États pour le formulaire - CORRIGÉ avec les ForeignKeys
+  // États pour le formulaire
   const [formData, setFormData] = useState({
     raison_sociale: entity?.raison_sociale || '',
     activite: entity?.activite || '',
@@ -542,14 +589,14 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
     adresse: entity?.adresse || '',
     complement_adresse: entity?.complement_adresse || '',
     code_postal: entity?.code_postal || '',
-    pays: entity?.pays?.id || '', // ✅ Maintenant l'ID du pays
-    region: entity?.region || '',
-    ville: entity?.ville || '',
+    pays: entity?.pays?.id || '',
+    subdivision: entity?.subdivision?.id || '',
+    ville: entity?.ville?.id || '',
     telephone: entity?.telephone || '',
     email: entity?.email || '',
     site_web: entity?.site_web || '',
-    devise: entity?.devise?.id || '', // ✅ NOUVEAU - Devise
-    langue: entity?.langue?.id || '', // ✅ NOUVEAU - Langue
+    devise: entity?.devise?.id || '',
+    langue: entity?.langue?.id || '',
     statut: entity?.statut !== undefined ? entity.statut : true,
     cree_par: entity?.cree_par?.id || ''
   });
@@ -558,6 +605,32 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
   const [error, setError] = useState(null);
   const [showAutreActivite, setShowAutreActivite] = useState(false);
   const [showAutreFormeJuridique, setShowAutreFormeJuridique] = useState(false);
+  
+  // ÉTATS POUR LISTES DYNAMIQUES
+  const [subdivisions, setSubdivisions] = useState([]);
+  const [villes, setVilles] = useState([]);
+  const [loadingSubdivisions, setLoadingSubdivisions] = useState(false);
+  const [loadingVilles, setLoadingVilles] = useState(false);
+
+  // ÉTATS POUR MODAUX DE RECHERCHE
+  const [showSearchActivite, setShowSearchActivite] = useState(false);
+  const [showSearchFormeJuridique, setShowSearchFormeJuridique] = useState(false);
+  const [showSearchPays, setShowSearchPays] = useState(false);
+  const [showSearchDevise, setShowSearchDevise] = useState(false);
+  const [showSearchLangue, setShowSearchLangue] = useState(false);
+  const [showSearchUser, setShowSearchUser] = useState(false);
+  const [showSearchSubdivision, setShowSearchSubdivision] = useState(false);
+  const [showSearchVille, setShowSearchVille] = useState(false);
+
+  // ÉTATS POUR RECHERCHE
+  const [searchActivite, setSearchActivite] = useState('');
+  const [searchFormeJuridique, setSearchFormeJuridique] = useState('');
+  const [searchPays, setSearchPays] = useState('');
+  const [searchDevise, setSearchDevise] = useState('');
+  const [searchLangue, setSearchLangue] = useState('');
+  const [searchUser, setSearchUser] = useState('');
+  const [searchSubdivision, setSearchSubdivision] = useState('');
+  const [searchVille, setSearchVille] = useState('');
 
   // S'assurer que les tableaux sont toujours des tableaux
   const usersArray = Array.isArray(users) ? users : [];
@@ -565,20 +638,174 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
   const devisesArray = Array.isArray(devises) ? devises : [];
   const languesArray = Array.isArray(langues) ? langues : [];
 
+  // Filtrer les listes avec la recherche
+  const filteredSecteursActivite = secteursActivite.filter(secteur =>
+    secteur.toLowerCase().includes(searchActivite.toLowerCase())
+  );
+
+  const filteredFormesJuridiques = formesJuridiques.filter(forme =>
+    forme.toLowerCase().includes(searchFormeJuridique.toLowerCase())
+  );
+
+  const filteredPays = paysArray.filter(paysItem =>
+    (paysItem.nom_fr || paysItem.nom).toLowerCase().includes(searchPays.toLowerCase()) ||
+    paysItem.code_iso.toLowerCase().includes(searchPays.toLowerCase())
+  );
+
+  const filteredDevises = devisesArray.filter(devise =>
+    devise.nom.toLowerCase().includes(searchDevise.toLowerCase()) ||
+    devise.code.toLowerCase().includes(searchDevise.toLowerCase())
+  );
+
+  const filteredLangues = languesArray.filter(langue =>
+    langue.nom.toLowerCase().includes(searchLangue.toLowerCase()) ||
+    langue.code.toLowerCase().includes(searchLangue.toLowerCase())
+  );
+
+  const filteredUsers = usersArray.filter(user =>
+    user.username.toLowerCase().includes(searchUser.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchUser.toLowerCase())
+  );
+
+  const filteredSubdivisions = subdivisions.filter(subdivision =>
+    subdivision.nom.toLowerCase().includes(searchSubdivision.toLowerCase()) ||
+    subdivision.code.toLowerCase().includes(searchSubdivision.toLowerCase())
+  );
+
+  const filteredVilles = villes.filter(ville =>
+    ville.nom.toLowerCase().includes(searchVille.toLowerCase()) ||
+    (ville.code_postal && ville.code_postal.includes(searchVille))
+  );
+
+  // CHARGEMENT DYNAMIQUE DES SUBDIVISIONS
+  useEffect(() => {
+    const fetchSubdivisions = async () => {
+      if (formData.pays) {
+        setLoadingSubdivisions(true);
+        try {
+          const response = await apiClient.get(`/subdivisions/?pays=${formData.pays}`);
+          
+          let subdivisionsData = [];
+          if (Array.isArray(response)) {
+            subdivisionsData = response;
+          } else if (response && Array.isArray(response.results)) {
+            subdivisionsData = response.results;
+          }
+          
+          setSubdivisions(subdivisionsData);
+          
+          // Réinitialiser la subdivision si elle ne fait pas partie du nouveau pays
+          if (formData.subdivision) {
+            const currentSubdivisionExists = subdivisionsData.some(
+              sub => sub.id.toString() === formData.subdivision.toString()
+            );
+            if (!currentSubdivisionExists) {
+              setFormData(prev => ({ ...prev, subdivision: '', ville: '' }));
+            }
+          }
+        } catch (err) {
+          console.error('Erreur chargement subdivisions:', err);
+          setSubdivisions([]);
+        } finally {
+          setLoadingSubdivisions(false);
+        }
+      } else {
+        setSubdivisions([]);
+        setFormData(prev => ({ ...prev, subdivision: '', ville: '' }));
+      }
+    };
+
+    fetchSubdivisions();
+  }, [formData.pays, formData.subdivision]);
+
+  // CHARGEMENT DYNAMIQUE DES VILLES
+  useEffect(() => {
+    const fetchVilles = async () => {
+      if (formData.subdivision) {
+        setLoadingVilles(true);
+        try {
+          const response = await apiClient.get(`/villes/?subdivision=${formData.subdivision}`);
+          
+          let villesData = [];
+          if (Array.isArray(response)) {
+            villesData = response;
+          } else if (response && Array.isArray(response.results)) {
+            villesData = response.results;
+          }
+          
+          setVilles(villesData);
+          
+          // Réinitialiser la ville si elle ne fait pas partie de la nouvelle subdivision
+          if (formData.ville) {
+            const currentVilleExists = villesData.some(
+              ville => ville.id.toString() === formData.ville.toString()
+            );
+            if (!currentVilleExists) {
+              setFormData(prev => ({ ...prev, ville: '' }));
+            }
+          }
+        } catch (err) {
+          console.error('Erreur chargement villes:', err);
+          setVilles([]);
+        } finally {
+          setLoadingVilles(false);
+        }
+      } else {
+        setVilles([]);
+        setFormData(prev => ({ ...prev, ville: '' }));
+      }
+    };
+
+    fetchVilles();
+  }, [formData.subdivision, formData.ville]);
+
   // Gestion du choix "Autre" pour les listes déroulantes
   useEffect(() => {
     setShowAutreActivite(formData.activite === 'Autre');
     setShowAutreFormeJuridique(formData.forme_juridique === 'Autre');
   }, [formData.activite, formData.forme_juridique]);
 
-  // Déterminer si le pays sélectionné est le Togo
-  const selectedPays = paysArray.find(p => p.id === parseInt(formData.pays));
-  const isTogo = selectedPays?.nom === 'Togo';
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // Validation
+    if (!formData.raison_sociale) {
+      setError('La raison sociale est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.pays) {
+      setError('Le pays est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.subdivision) {
+      setError('La subdivision (état/province/région) est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.ville) {
+      setError('La ville est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.telephone) {
+      setError('Le téléphone est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.email) {
+      setError('L\'email est obligatoire');
+      setLoading(false);
+      return;
+    }
 
     try {
       const url = entity 
@@ -587,12 +814,11 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
       
       const method = entity ? 'PUT' : 'POST';
 
-      // Préparer les données finales - CORRIGÉ pour les ForeignKeys
+      // Préparer les données finales
       const submitData = {
         ...formData,
         activite: showAutreActivite ? formData.activite_autre : formData.activite,
         forme_juridique: showAutreFormeJuridique ? formData.forme_juridique_autre : formData.forme_juridique,
-        // Les champs pays, devise, langue contiennent déjà les IDs ✅
       };
 
       // Nettoyer les champs temporaires
@@ -623,6 +849,159 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
     }));
   };
 
+  // Composant réutilisable pour les champs avec recherche
+  const SearchableField = ({ 
+    label, 
+    value, 
+    onChange, 
+    options, 
+    showSearch, 
+    onShowSearch, 
+    onCloseSearch,
+    searchValue,
+    onSearchChange,
+    placeholder,
+    required = false,
+    disabled = false,
+    getOptionLabel = (option) => option,
+    getOptionValue = (option) => option,
+    renderOption = (option) => getOptionLabel(option)
+  }) => {
+    const selectedOption = options.find(opt => getOptionValue(opt) === value);
+    
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {label} {required && '*'}
+        </label>
+        
+        <div className="flex gap-2">
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            required={required}
+            disabled={disabled}
+          >
+            <option value="">Sélectionnez {label.toLowerCase()}</option>
+            {options.map((option, index) => (
+              <option key={index} value={getOptionValue(option)}>
+                {renderOption(option)}
+              </option>
+            ))}
+          </select>
+          
+          <button
+            type="button"
+            onClick={onShowSearch}
+            disabled={disabled}
+            className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+          >
+            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Affichage de la valeur sélectionnée */}
+        {selectedOption && (
+          <p className="text-sm text-green-600 mt-1">
+            Sélectionné: {getOptionLabel(selectedOption)}
+          </p>
+        )}
+
+        {/* Modal de recherche */}
+        {showSearch && (
+          <SearchModal
+            title={`Rechercher ${label.toLowerCase()}`}
+            options={options}
+            searchValue={searchValue}
+            onSearchChange={onSearchChange}
+            onSelect={(option) => {
+              onChange(getOptionValue(option));
+              onCloseSearch();
+            }}
+            onClose={onCloseSearch}
+            getOptionLabel={getOptionLabel}
+            renderOption={renderOption}
+          />
+        )}
+      </div>
+    );
+  };
+
+  // Composant Modal de recherche
+  const SearchModal = ({ 
+    title, 
+    options, 
+    searchValue, 
+    onSearchChange, 
+    onSelect, 
+    onClose,
+    getOptionLabel,
+    renderOption
+  }) => {
+    const filteredOptions = options.filter(option =>
+      getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
+    );
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] overflow-hidden">
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+          </div>
+          
+          <div className="p-4 border-b border-gray-200">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchValue}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder={`Rechercher dans ${title.toLowerCase()}...`}
+                autoFocus
+              />
+              <svg className="w-5 h-5 absolute right-3 top-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <p className="text-sm text-gray-500 mt-2">
+              {filteredOptions.length} résultat(s) trouvé(s)
+            </p>
+          </div>
+          
+          <div className="max-h-96 overflow-y-auto">
+            {filteredOptions.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                Aucun résultat trouvé pour "{searchValue}"
+              </div>
+            ) : (
+              filteredOptions.map((option, index) => (
+                <div
+                  key={index}
+                  className="p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => onSelect(option)}
+                >
+                  {renderOption(option)}
+                </div>
+              ))
+            )}
+          </div>
+          
+          <div className="p-4 border-t border-gray-200 flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -644,7 +1023,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
         )}
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Informations Générales - CORRIGÉ */}
+          {/* Informations Générales */}
           <div className="border-b border-gray-200 pb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Informations Générales</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -662,20 +1041,22 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                 />
               </div>
               
+              {/* Secteur d'Activité avec recherche */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Secteur d'Activité</label>
-                <select
+                <SearchableField
+                  label="Secteur d'Activité"
                   value={formData.activite}
-                  onChange={(e) => handleChange('activite', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Sélectionnez un secteur</option>
-                  {secteursActivite.map(secteur => (
-                    <option key={secteur} value={secteur}>
-                      {secteur}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleChange('activite', value)}
+                  options={secteursActivite}
+                  showSearch={showSearchActivite}
+                  onShowSearch={() => setShowSearchActivite(true)}
+                  onCloseSearch={() => setShowSearchActivite(false)}
+                  searchValue={searchActivite}
+                  onSearchChange={setSearchActivite}
+                  placeholder="Rechercher un secteur d'activité..."
+                  getOptionLabel={(option) => option}
+                  getOptionValue={(option) => option}
+                />
                 {showAutreActivite && (
                   <input
                     type="text"
@@ -688,20 +1069,22 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                 )}
               </div>
               
+              {/* Forme Juridique avec recherche */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Forme Juridique</label>
-                <select
+                <SearchableField
+                  label="Forme Juridique"
                   value={formData.forme_juridique}
-                  onChange={(e) => handleChange('forme_juridique', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Sélectionnez une forme</option>
-                  {formesJuridiques.map(forme => (
-                    <option key={forme} value={forme}>
-                      {forme}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleChange('forme_juridique', value)}
+                  options={formesJuridiques}
+                  showSearch={showSearchFormeJuridique}
+                  onShowSearch={() => setShowSearchFormeJuridique(true)}
+                  onCloseSearch={() => setShowSearchFormeJuridique(false)}
+                  searchValue={searchFormeJuridique}
+                  onSearchChange={setSearchFormeJuridique}
+                  placeholder="Rechercher une forme juridique..."
+                  getOptionLabel={(option) => option}
+                  getOptionValue={(option) => option}
+                />
                 {showAutreFormeJuridique && (
                   <input
                     type="text"
@@ -753,37 +1136,40 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                 </select>
               </div>
 
-              {/* NOUVEAUX CHAMPS - Devise et Langue */}
+              {/* Devise avec recherche */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Devise</label>
-                <select
+                <SearchableField
+                  label="Devise"
                   value={formData.devise}
-                  onChange={(e) => handleChange('devise', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Sélectionnez une devise</option>
-                  {devisesArray.map(devise => (
-                    <option key={devise.id} value={devise.id}>
-                      {devise.code} - {devise.nom} ({devise.symbole})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleChange('devise', value)}
+                  options={devisesArray}
+                  showSearch={showSearchDevise}
+                  onShowSearch={() => setShowSearchDevise(true)}
+                  onCloseSearch={() => setShowSearchDevise(false)}
+                  searchValue={searchDevise}
+                  onSearchChange={setSearchDevise}
+                  placeholder="Rechercher une devise..."
+                  getOptionLabel={(devise) => `${devise.code} - ${devise.nom} (${devise.symbole})`}
+                  getOptionValue={(devise) => devise.id}
+                />
               </div>
 
+              {/* Langue avec recherche */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Langue</label>
-                <select
+                <SearchableField
+                  label="Langue"
                   value={formData.langue}
-                  onChange={(e) => handleChange('langue', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Sélectionnez une langue</option>
-                  {languesArray.map(langue => (
-                    <option key={langue.id} value={langue.id}>
-                      {langue.nom} ({langue.code})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleChange('langue', value)}
+                  options={languesArray}
+                  showSearch={showSearchLangue}
+                  onShowSearch={() => setShowSearchLangue(true)}
+                  onCloseSearch={() => setShowSearchLangue(false)}
+                  searchValue={searchLangue}
+                  onSearchChange={setSearchLangue}
+                  placeholder="Rechercher une langue..."
+                  getOptionLabel={(langue) => `${langue.nom} (${langue.code})`}
+                  getOptionValue={(langue) => langue.id}
+                />
               </div>
             </div>
           </div>
@@ -827,7 +1213,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
             </div>
           </div>
 
-          {/* Adresse - CORRIGÉ avec pays dynamique */}
+          {/* Localisation */}
           <div className="border-b border-gray-200 pb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Localisation</h3>
 
@@ -866,79 +1252,74 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                 />
               </div>
 
-              {/* Pays - CORRIGÉ avec données dynamiques */}
+              {/* Pays avec recherche */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Pays *</label>
-                <select
+                <SearchableField
+                  label="Pays"
                   value={formData.pays}
-                  onChange={(e) => handleChange('pays', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                >
-                  <option value="">Sélectionnez un pays</option>
-                  {paysArray.map(paysItem => (
-                    <option key={paysItem.id} value={paysItem.id}>
-                      {paysItem.nom}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleChange('pays', value)}
+                  options={paysArray}
+                  showSearch={showSearchPays}
+                  onShowSearch={() => setShowSearchPays(true)}
+                  onCloseSearch={() => setShowSearchPays(false)}
+                  searchValue={searchPays}
+                  onSearchChange={setSearchPays}
+                  placeholder="Rechercher un pays..."
+                  required={true}
+                  getOptionLabel={(paysItem) => `${paysItem.emoji} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
+                  getOptionValue={(paysItem) => paysItem.id}
+                />
               </div>
 
-              {/* Région - Liste déroulante pour Togo, saisie manuelle pour autres pays */}
+              {/* Subdivision avec recherche */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Région *</label>
-                {isTogo ? (
-                  <select
-                    value={formData.region}
-                    onChange={(e) => handleChange('region', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Sélectionnez une région</option>
-                    {regionsTogo.map(region => (
-                      <option key={region} value={region}>
-                        {region}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={formData.region}
-                    onChange={(e) => handleChange('region', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Nom de la région"
-                    required
-                  />
+                <SearchableField
+                  label="État/Province/Région"
+                  value={formData.subdivision}
+                  onChange={(value) => handleChange('subdivision', value)}
+                  options={subdivisions}
+                  showSearch={showSearchSubdivision}
+                  onShowSearch={() => setShowSearchSubdivision(true)}
+                  onCloseSearch={() => setShowSearchSubdivision(false)}
+                  searchValue={searchSubdivision}
+                  onSearchChange={setSearchSubdivision}
+                  placeholder="Rechercher une subdivision..."
+                  required={true}
+                  disabled={!formData.pays || loadingSubdivisions}
+                  getOptionLabel={(subdivision) => `${subdivision.nom} (${subdivision.type_subdivision})`}
+                  getOptionValue={(subdivision) => subdivision.id}
+                />
+                {!formData.pays && (
+                  <p className="text-xs text-gray-500 mt-1">Veuillez d'abord sélectionner un pays</p>
+                )}
+                {loadingSubdivisions && (
+                  <p className="text-xs text-blue-500 mt-1">Chargement des subdivisions...</p>
                 )}
               </div>
 
-              {/* Ville - Liste déroulante pour Togo, saisie manuelle pour autres pays */}
+              {/* Ville avec recherche */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Ville *</label>
-                {isTogo ? (
-                  <select
-                    value={formData.ville}
-                    onChange={(e) => handleChange('ville', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Sélectionnez une ville</option>
-                    {villesTogo.map(ville => (
-                      <option key={ville} value={ville}>
-                        {ville}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={formData.ville}
-                    onChange={(e) => handleChange('ville', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Nom de la ville"
-                    required
-                  />
+                <SearchableField
+                  label="Ville"
+                  value={formData.ville}
+                  onChange={(value) => handleChange('ville', value)}
+                  options={villes}
+                  showSearch={showSearchVille}
+                  onShowSearch={() => setShowSearchVille(true)}
+                  onCloseSearch={() => setShowSearchVille(false)}
+                  searchValue={searchVille}
+                  onSearchChange={setSearchVille}
+                  placeholder="Rechercher une ville..."
+                  required={true}
+                  disabled={!formData.subdivision || loadingVilles}
+                  getOptionLabel={(ville) => `${ville.nom} ${ville.code_postal ? `(${ville.code_postal})` : ''}`}
+                  getOptionValue={(ville) => ville.id}
+                />
+                {!formData.subdivision && (
+                  <p className="text-xs text-gray-500 mt-1">Veuillez d'abord sélectionner une subdivision</p>
+                )}
+                {loadingVilles && (
+                  <p className="text-xs text-blue-500 mt-1">Chargement des villes...</p>
                 )}
               </div>
             </div>
@@ -989,20 +1370,22 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-4">Administration</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Utilisateur créateur avec recherche */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Créé par</label>
-                <select
+                <SearchableField
+                  label="Créé par"
                   value={formData.cree_par}
-                  onChange={(e) => handleChange('cree_par', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Sélectionnez un utilisateur</option>
-                  {usersArray.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.username} ({user.email})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleChange('cree_par', value)}
+                  options={usersArray}
+                  showSearch={showSearchUser}
+                  onShowSearch={() => setShowSearchUser(true)}
+                  onCloseSearch={() => setShowSearchUser(false)}
+                  searchValue={searchUser}
+                  onSearchChange={setSearchUser}
+                  placeholder="Rechercher un utilisateur..."
+                  getOptionLabel={(user) => `${user.username} (${user.email})`}
+                  getOptionValue={(user) => user.id}
+                />
               </div>
             </div>
           </div>
