@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
 
 export default function EntitiesPage() {
@@ -546,7 +546,7 @@ export default function EntitiesPage() {
   );
 }
 
-// COMPOSANT MODAL PROFESSIONNEL AVEC RECHERCHE
+// COMPOSANT MODAL AVEC DROPDOWNS AVEC RECHERCHE INTÉGRÉE
 function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuccess }) {
   // Données pour les listes déroulantes
   const secteursActivite = [
@@ -612,17 +612,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
   const [loadingSubdivisions, setLoadingSubdivisions] = useState(false);
   const [loadingVilles, setLoadingVilles] = useState(false);
 
-  // ÉTATS POUR MODAUX DE RECHERCHE
-  const [showSearchActivite, setShowSearchActivite] = useState(false);
-  const [showSearchFormeJuridique, setShowSearchFormeJuridique] = useState(false);
-  const [showSearchPays, setShowSearchPays] = useState(false);
-  const [showSearchDevise, setShowSearchDevise] = useState(false);
-  const [showSearchLangue, setShowSearchLangue] = useState(false);
-  const [showSearchUser, setShowSearchUser] = useState(false);
-  const [showSearchSubdivision, setShowSearchSubdivision] = useState(false);
-  const [showSearchVille, setShowSearchVille] = useState(false);
-
-  // ÉTATS POUR RECHERCHE
+  // ÉTATS POUR RECHERCHE DANS LES DROPDOWNS
   const [searchActivite, setSearchActivite] = useState('');
   const [searchFormeJuridique, setSearchFormeJuridique] = useState('');
   const [searchPays, setSearchPays] = useState('');
@@ -849,15 +839,12 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
     }));
   };
 
-  // Composant réutilisable pour les champs avec recherche
-  const SearchableField = ({ 
+  // Composant réutilisable pour les dropdowns avec recherche - SOLUTION ULTIME
+  const SearchableDropdown = ({ 
     label, 
     value, 
     onChange, 
     options, 
-    showSearch, 
-    onShowSearch, 
-    onCloseSearch,
     searchValue,
     onSearchChange,
     placeholder,
@@ -867,137 +854,156 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
     getOptionValue = (option) => option,
     renderOption = (option) => getOptionLabel(option)
   }) => {
-    const selectedOption = options.find(opt => getOptionValue(opt) === value);
-    
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {label} {required && '*'}
-        </label>
-        
-        <div className="flex gap-2">
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            required={required}
-            disabled={disabled}
-          >
-            <option value="">Sélectionnez {label.toLowerCase()}</option>
-            {options.map((option, index) => (
-              <option key={index} value={getOptionValue(option)}>
-                {renderOption(option)}
-              </option>
-            ))}
-          </select>
-          
-          <button
-            type="button"
-            onClick={onShowSearch}
-            disabled={disabled}
-            className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
-          >
-            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </button>
-        </div>
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+    const inputRef = useRef(null);
 
-        {/* Affichage de la valeur sélectionnée */}
-        {selectedOption && (
-          <p className="text-sm text-green-600 mt-1">
-            Sélectionné: {getOptionLabel(selectedOption)}
-          </p>
-        )}
-
-        {/* Modal de recherche */}
-        {showSearch && (
-          <SearchModal
-            title={`Rechercher ${label.toLowerCase()}`}
-            options={options}
-            searchValue={searchValue}
-            onSearchChange={onSearchChange}
-            onSelect={(option) => {
-              onChange(getOptionValue(option));
-              onCloseSearch();
-            }}
-            onClose={onCloseSearch}
-            getOptionLabel={getOptionLabel}
-            renderOption={renderOption}
-          />
-        )}
-      </div>
-    );
-  };
-
-  // Composant Modal de recherche
-  const SearchModal = ({ 
-    title, 
-    options, 
-    searchValue, 
-    onSearchChange, 
-    onSelect, 
-    onClose,
-    getOptionLabel,
-    renderOption
-  }) => {
     const filteredOptions = options.filter(option =>
       getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
     );
 
+    const selectedOption = options.find(opt => getOptionValue(opt) === value);
+
+    // SOLUTION ULTIME : Utiliser mousedown au lieu de click et gérer les événements manuellement
+    useEffect(() => {
+      const handleMouseDown = (event) => {
+        if (!dropdownRef.current?.contains(event.target)) {
+          setIsOpen(false);
+          onSearchChange('');
+        }
+      };
+
+      // Utiliser capture phase pour intercepter l'événement plus tôt
+      document.addEventListener('mousedown', handleMouseDown, true);
+      
+      return () => {
+        document.removeEventListener('mousedown', handleMouseDown, true);
+      };
+    }, [onSearchChange]);
+
+    const handleToggle = () => {
+      if (!disabled) {
+        setIsOpen(!isOpen);
+        if (!isOpen) {
+          // Focus sur l'input quand on ouvre
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 0);
+        } else {
+          onSearchChange('');
+        }
+      }
+    };
+
+    const handleInputMouseDown = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputFocus = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputClick = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleOptionClick = (optionValue) => {
+      onChange(optionValue);
+      setIsOpen(false);
+      onSearchChange('');
+    };
+
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] overflow-hidden">
-          <div className="p-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-          </div>
-          
-          <div className="p-4 border-b border-gray-200">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchValue}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={`Rechercher dans ${title.toLowerCase()}...`}
-                autoFocus
-              />
-              <svg className="w-5 h-5 absolute right-3 top-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">
-              {filteredOptions.length} résultat(s) trouvé(s)
-            </p>
-          </div>
-          
-          <div className="max-h-96 overflow-y-auto">
-            {filteredOptions.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                Aucun résultat trouvé pour "{searchValue}"
+      <div className="relative" ref={dropdownRef}>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {label} {required && '*'}
+        </label>
+        
+        {/* Bouton d'ouverture du dropdown */}
+        <button
+          type="button"
+          onClick={handleToggle}
+          onMouseDown={(e) => e.preventDefault()} // Empêcher le focus immédiat
+          disabled={disabled}
+          className={`w-full text-left border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+            disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:border-gray-400'
+          }`}
+        >
+          {selectedOption ? (
+            <span className="block truncate">{getOptionLabel(selectedOption)}</span>
+          ) : (
+            <span className="text-gray-500">{placeholder || `Sélectionnez ${label.toLowerCase()}`}</span>
+          )}
+          <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
+        </button>
+
+        {/* Dropdown avec recherche */}
+        {isOpen && (
+          <div 
+            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden"
+            onMouseDown={handleInputMouseDown} // Empêcher la fermeture immédiate
+          >
+            {/* Barre de recherche */}
+            <div className="p-2 border-b border-gray-200">
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchValue}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onMouseDown={handleInputMouseDown}
+                  onClick={handleInputClick}
+                  onFocus={handleInputFocus}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  placeholder={`Rechercher...`}
+                  autoFocus
+                />
+                <svg className="w-4 h-4 absolute right-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
               </div>
-            ) : (
-              filteredOptions.map((option, index) => (
-                <div
-                  key={index}
-                  className="p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => onSelect(option)}
-                >
-                  {renderOption(option)}
+              <p className="text-xs text-gray-500 mt-1">
+                {filteredOptions.length} résultat(s) trouvé(s)
+              </p>
+            </div>
+            
+            {/* Liste des options */}
+            <div className="max-h-48 overflow-y-auto">
+              {filteredOptions.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  Aucun résultat trouvé pour "{searchValue}"
                 </div>
-              ))
-            )}
+              ) : (
+                filteredOptions.map((option, index) => (
+                  <div
+                    key={index}
+                    className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
+                      value === getOptionValue(option) ? 'bg-blue-100 text-blue-800' : 'text-gray-700'
+                    }`}
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // Empêcher le focus
+                      e.stopPropagation();
+                    }}
+                    onClick={() => handleOptionClick(getOptionValue(option))}
+                  >
+                    {renderOption(option)}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-          
-          <div className="p-4 border-t border-gray-200 flex justify-end">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              Fermer
-            </button>
-          </div>
-        </div>
+        )}
+
+        {/* Affichage de la valeur sélectionnée */}
+        {selectedOption && !isOpen && (
+          <p className="text-sm text-green-600 mt-1">
+            Sélectionné: {getOptionLabel(selectedOption)}
+          </p>
+        )}
       </div>
     );
   };
@@ -1043,17 +1049,14 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
               
               {/* Secteur d'Activité avec recherche */}
               <div className="md:col-span-2">
-                <SearchableField
+                <SearchableDropdown
                   label="Secteur d'Activité"
                   value={formData.activite}
                   onChange={(value) => handleChange('activite', value)}
                   options={secteursActivite}
-                  showSearch={showSearchActivite}
-                  onShowSearch={() => setShowSearchActivite(true)}
-                  onCloseSearch={() => setShowSearchActivite(false)}
                   searchValue={searchActivite}
                   onSearchChange={setSearchActivite}
-                  placeholder="Rechercher un secteur d'activité..."
+                  placeholder="Sélectionnez un secteur d'activité"
                   getOptionLabel={(option) => option}
                   getOptionValue={(option) => option}
                 />
@@ -1071,17 +1074,14 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
               
               {/* Forme Juridique avec recherche */}
               <div>
-                <SearchableField
+                <SearchableDropdown
                   label="Forme Juridique"
                   value={formData.forme_juridique}
                   onChange={(value) => handleChange('forme_juridique', value)}
                   options={formesJuridiques}
-                  showSearch={showSearchFormeJuridique}
-                  onShowSearch={() => setShowSearchFormeJuridique(true)}
-                  onCloseSearch={() => setShowSearchFormeJuridique(false)}
                   searchValue={searchFormeJuridique}
                   onSearchChange={setSearchFormeJuridique}
-                  placeholder="Rechercher une forme juridique..."
+                  placeholder="Sélectionnez une forme juridique"
                   getOptionLabel={(option) => option}
                   getOptionValue={(option) => option}
                 />
@@ -1138,17 +1138,14 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
 
               {/* Devise avec recherche */}
               <div>
-                <SearchableField
+                <SearchableDropdown
                   label="Devise"
                   value={formData.devise}
                   onChange={(value) => handleChange('devise', value)}
                   options={devisesArray}
-                  showSearch={showSearchDevise}
-                  onShowSearch={() => setShowSearchDevise(true)}
-                  onCloseSearch={() => setShowSearchDevise(false)}
                   searchValue={searchDevise}
                   onSearchChange={setSearchDevise}
-                  placeholder="Rechercher une devise..."
+                  placeholder="Sélectionnez une devise"
                   getOptionLabel={(devise) => `${devise.code} - ${devise.nom} (${devise.symbole})`}
                   getOptionValue={(devise) => devise.id}
                 />
@@ -1156,17 +1153,14 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
 
               {/* Langue avec recherche */}
               <div>
-                <SearchableField
+                <SearchableDropdown
                   label="Langue"
                   value={formData.langue}
                   onChange={(value) => handleChange('langue', value)}
                   options={languesArray}
-                  showSearch={showSearchLangue}
-                  onShowSearch={() => setShowSearchLangue(true)}
-                  onCloseSearch={() => setShowSearchLangue(false)}
                   searchValue={searchLangue}
                   onSearchChange={setSearchLangue}
-                  placeholder="Rechercher une langue..."
+                  placeholder="Sélectionnez une langue"
                   getOptionLabel={(langue) => `${langue.nom} (${langue.code})`}
                   getOptionValue={(langue) => langue.id}
                 />
@@ -1254,17 +1248,14 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
 
               {/* Pays avec recherche */}
               <div>
-                <SearchableField
+                <SearchableDropdown
                   label="Pays"
                   value={formData.pays}
                   onChange={(value) => handleChange('pays', value)}
                   options={paysArray}
-                  showSearch={showSearchPays}
-                  onShowSearch={() => setShowSearchPays(true)}
-                  onCloseSearch={() => setShowSearchPays(false)}
                   searchValue={searchPays}
                   onSearchChange={setSearchPays}
-                  placeholder="Rechercher un pays..."
+                  placeholder="Sélectionnez un pays"
                   required={true}
                   getOptionLabel={(paysItem) => `${paysItem.emoji} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
                   getOptionValue={(paysItem) => paysItem.id}
@@ -1273,17 +1264,14 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
 
               {/* Subdivision avec recherche */}
               <div>
-                <SearchableField
+                <SearchableDropdown
                   label="État/Province/Région"
                   value={formData.subdivision}
                   onChange={(value) => handleChange('subdivision', value)}
                   options={subdivisions}
-                  showSearch={showSearchSubdivision}
-                  onShowSearch={() => setShowSearchSubdivision(true)}
-                  onCloseSearch={() => setShowSearchSubdivision(false)}
                   searchValue={searchSubdivision}
                   onSearchChange={setSearchSubdivision}
-                  placeholder="Rechercher une subdivision..."
+                  placeholder="Sélectionnez une subdivision"
                   required={true}
                   disabled={!formData.pays || loadingSubdivisions}
                   getOptionLabel={(subdivision) => `${subdivision.nom} (${subdivision.type_subdivision})`}
@@ -1299,17 +1287,14 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
 
               {/* Ville avec recherche */}
               <div>
-                <SearchableField
+                <SearchableDropdown
                   label="Ville"
                   value={formData.ville}
                   onChange={(value) => handleChange('ville', value)}
                   options={villes}
-                  showSearch={showSearchVille}
-                  onShowSearch={() => setShowSearchVille(true)}
-                  onCloseSearch={() => setShowSearchVille(false)}
                   searchValue={searchVille}
                   onSearchChange={setSearchVille}
-                  placeholder="Rechercher une ville..."
+                  placeholder="Sélectionnez une ville"
                   required={true}
                   disabled={!formData.subdivision || loadingVilles}
                   getOptionLabel={(ville) => `${ville.nom} ${ville.code_postal ? `(${ville.code_postal})` : ''}`}
@@ -1372,17 +1357,14 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Utilisateur créateur avec recherche */}
               <div>
-                <SearchableField
+                <SearchableDropdown
                   label="Créé par"
                   value={formData.cree_par}
                   onChange={(value) => handleChange('cree_par', value)}
                   options={usersArray}
-                  showSearch={showSearchUser}
-                  onShowSearch={() => setShowSearchUser(true)}
-                  onCloseSearch={() => setShowSearchUser(false)}
                   searchValue={searchUser}
                   onSearchChange={setSearchUser}
-                  placeholder="Rechercher un utilisateur..."
+                  placeholder="Sélectionnez un utilisateur"
                   getOptionLabel={(user) => `${user.username} (${user.email})`}
                   getOptionValue={(user) => user.id}
                 />
