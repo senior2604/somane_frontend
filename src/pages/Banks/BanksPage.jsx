@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
 
 export default function BanksPage() {
@@ -456,7 +456,7 @@ export default function BanksPage() {
   );
 }
 
-// Composant Modal pour le formulaire des banques
+// Composant Modal pour le formulaire des banques - AVEC DROPDOWNS AVEC RECHERCHE
 function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     nom: banque?.nom || '',
@@ -467,6 +467,176 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // État pour la recherche dans le dropdown
+  const [searchPays, setSearchPays] = useState('');
+
+  // Composant réutilisable pour les dropdowns avec recherche
+  const SearchableDropdown = ({ 
+    label, 
+    value, 
+    onChange, 
+    options, 
+    searchValue,
+    onSearchChange,
+    placeholder,
+    required = false,
+    disabled = false,
+    getOptionLabel = (option) => option,
+    getOptionValue = (option) => option,
+    renderOption = (option) => getOptionLabel(option)
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+    const inputRef = useRef(null);
+
+    const filteredOptions = options.filter(option =>
+      getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
+    );
+
+    const selectedOption = options.find(opt => getOptionValue(opt) === value);
+
+    // Gestion robuste du clic externe
+    useEffect(() => {
+      const handleMouseDown = (event) => {
+        if (!dropdownRef.current?.contains(event.target)) {
+          setIsOpen(false);
+          onSearchChange('');
+        }
+      };
+
+      document.addEventListener('mousedown', handleMouseDown, true);
+      
+      return () => {
+        document.removeEventListener('mousedown', handleMouseDown, true);
+      };
+    }, [onSearchChange]);
+
+    const handleToggle = () => {
+      if (!disabled) {
+        setIsOpen(!isOpen);
+        if (!isOpen) {
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 0);
+        } else {
+          onSearchChange('');
+        }
+      }
+    };
+
+    const handleInputMouseDown = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputFocus = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputClick = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleOptionClick = (optionValue) => {
+      onChange(optionValue);
+      setIsOpen(false);
+      onSearchChange('');
+    };
+
+    return (
+      <div className="relative" ref={dropdownRef}>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {label} {required && '*'}
+        </label>
+        
+        {/* Bouton d'ouverture du dropdown */}
+        <button
+          type="button"
+          onClick={handleToggle}
+          onMouseDown={(e) => e.preventDefault()}
+          disabled={disabled}
+          className={`w-full text-left border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+            disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:border-gray-400'
+          }`}
+        >
+          {selectedOption ? (
+            <span className="block truncate">{getOptionLabel(selectedOption)}</span>
+          ) : (
+            <span className="text-gray-500">{placeholder || `Sélectionnez ${label.toLowerCase()}`}</span>
+          )}
+          <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
+        </button>
+
+        {/* Dropdown avec recherche */}
+        {isOpen && (
+          <div 
+            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden"
+            onMouseDown={handleInputMouseDown}
+          >
+            {/* Barre de recherche */}
+            <div className="p-2 border-b border-gray-200">
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchValue}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onMouseDown={handleInputMouseDown}
+                  onClick={handleInputClick}
+                  onFocus={handleInputFocus}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  placeholder={`Rechercher...`}
+                  autoFocus
+                />
+                <svg className="w-4 h-4 absolute right-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {filteredOptions.length} résultat(s) trouvé(s)
+              </p>
+            </div>
+            
+            {/* Liste des options */}
+            <div className="max-h-48 overflow-y-auto">
+              {filteredOptions.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  Aucun résultat trouvé pour "{searchValue}"
+                </div>
+              ) : (
+                filteredOptions.map((option, index) => (
+                  <div
+                    key={index}
+                    className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
+                      value === getOptionValue(option) ? 'bg-blue-100 text-blue-800' : 'text-gray-700'
+                    }`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onClick={() => handleOptionClick(getOptionValue(option))}
+                  >
+                    {renderOption(option)}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Affichage de la valeur sélectionnée */}
+        {selectedOption && !isOpen && (
+          <p className="text-sm text-green-600 mt-1">
+            Sélectionné: {getOptionLabel(selectedOption)}
+          </p>
+        )}
+      </div>
+    );
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -565,23 +735,22 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
               </p>
             </div>
             
-            {/* Pays */}
+            {/* Pays avec recherche */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Pays
               </label>
-              <select
+              <SearchableDropdown
+                label="Pays"
                 value={formData.pays}
-                onChange={(e) => handleChange('pays', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Sélectionnez un pays</option>
-                {pays.map(paysItem => (
-                  <option key={paysItem.id} value={paysItem.id}>
-                    {paysItem.nom} ({paysItem.code_iso})
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => handleChange('pays', parseInt(value))}
+                options={pays}
+                searchValue={searchPays}
+                onSearchChange={setSearchPays}
+                placeholder="Sélectionnez un pays"
+                getOptionLabel={(paysItem) => `${paysItem.emoji} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
+                getOptionValue={(paysItem) => paysItem.id}
+              />
             </div>
             
             {/* Adresse */}

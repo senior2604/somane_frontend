@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState([]);
-  const [pays, setPays] = useState([]); // ← AJOUTÉ
+  const [pays, setPays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -16,7 +16,7 @@ export default function PartnersPage() {
 
   useEffect(() => {
     fetchPartners();
-    fetchPays(); // ← AJOUTÉ
+    fetchPays();
   }, []);
 
   const fetchPartners = async () => {
@@ -38,7 +38,6 @@ export default function PartnersPage() {
     }
   };
 
-  // AJOUTÉ : Récupérer la liste des pays
   const fetchPays = async () => {
     try {
       const response = await apiClient.get('/pays/');
@@ -396,7 +395,7 @@ export default function PartnersPage() {
       {showForm && (
         <PartnerFormModal
           partner={editingPartner}
-          pays={pays} // ← AJOUTÉ
+          pays={pays}
           onClose={() => {
             setShowForm(false);
             setEditingPartner(null);
@@ -408,7 +407,7 @@ export default function PartnersPage() {
   );
 }
 
-// Composant Modal pour le formulaire des partenaires - VERSION CORRIGÉE
+// Composant Modal pour le formulaire des partenaires - AVEC SYSTÈME PAYS > RÉGION > VILLE
 function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     nom: partner?.nom || '',
@@ -419,9 +418,9 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     adresse: partner?.adresse || '',
     complement_adresse: partner?.complement_adresse || '',
     code_postal: partner?.code_postal || '',
-    ville: partner?.ville || '',
-    region: partner?.region || '',
-    pays: partner?.pays?.id || (pays.length > 0 ? pays[0].id : ''), // ← CORRIGÉ (ID au lieu du nom)
+    ville: partner?.ville?.id || '', // ← CHANGÉ : maintenant c'est l'ID de la ville
+    region: partner?.region?.id || '', // ← CHANGÉ : maintenant c'est l'ID de la subdivision
+    pays: partner?.pays?.id || (pays.length > 0 ? pays[0].id : ''),
     telephone: partner?.telephone || '',
     email: partner?.email || '',
     site_web: partner?.site_web || '',
@@ -431,6 +430,17 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // États pour les listes dynamiques
+  const [subdivisions, setSubdivisions] = useState([]);
+  const [villes, setVilles] = useState([]);
+  const [loadingSubdivisions, setLoadingSubdivisions] = useState(false);
+  const [loadingVilles, setLoadingVilles] = useState(false);
+
+  // États pour la recherche dans les dropdowns
+  const [searchPays, setSearchPays] = useState('');
+  const [searchSubdivision, setSearchSubdivision] = useState('');
+  const [searchVille, setSearchVille] = useState('');
+
   const partnerTypes = [
     { value: 'client', label: 'Client' },
     { value: 'fournisseur', label: 'Fournisseur' },
@@ -438,6 +448,255 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     { value: 'debiteur', label: 'Débiteur divers' },
     { value: 'crediteur', label: 'Créditeur divers' },
   ];
+
+  // Composant réutilisable pour les dropdowns avec recherche
+  const SearchableDropdown = ({ 
+    label, 
+    value, 
+    onChange, 
+    options, 
+    searchValue,
+    onSearchChange,
+    placeholder,
+    required = false,
+    disabled = false,
+    getOptionLabel = (option) => option,
+    getOptionValue = (option) => option,
+    renderOption = (option) => getOptionLabel(option)
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+    const inputRef = useRef(null);
+
+    const filteredOptions = options.filter(option =>
+      getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
+    );
+
+    const selectedOption = options.find(opt => getOptionValue(opt) === value);
+
+    // Gestion robuste du clic externe
+    useEffect(() => {
+      const handleMouseDown = (event) => {
+        if (!dropdownRef.current?.contains(event.target)) {
+          setIsOpen(false);
+          onSearchChange('');
+        }
+      };
+
+      document.addEventListener('mousedown', handleMouseDown, true);
+      
+      return () => {
+        document.removeEventListener('mousedown', handleMouseDown, true);
+      };
+    }, [onSearchChange]);
+
+    const handleToggle = () => {
+      if (!disabled) {
+        setIsOpen(!isOpen);
+        if (!isOpen) {
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 0);
+        } else {
+          onSearchChange('');
+        }
+      }
+    };
+
+    const handleInputMouseDown = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputFocus = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputClick = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleOptionClick = (optionValue) => {
+      onChange(optionValue);
+      setIsOpen(false);
+      onSearchChange('');
+    };
+
+    return (
+      <div className="relative" ref={dropdownRef}>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {label} {required && '*'}
+        </label>
+        
+        {/* Bouton d'ouverture du dropdown */}
+        <button
+          type="button"
+          onClick={handleToggle}
+          onMouseDown={(e) => e.preventDefault()}
+          disabled={disabled}
+          className={`w-full text-left border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+            disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:border-gray-400'
+          }`}
+        >
+          {selectedOption ? (
+            <span className="block truncate">{getOptionLabel(selectedOption)}</span>
+          ) : (
+            <span className="text-gray-500">{placeholder || `Sélectionnez ${label.toLowerCase()}`}</span>
+          )}
+          <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
+        </button>
+
+        {/* Dropdown avec recherche */}
+        {isOpen && (
+          <div 
+            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden"
+            onMouseDown={handleInputMouseDown}
+          >
+            {/* Barre de recherche */}
+            <div className="p-2 border-b border-gray-200">
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchValue}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onMouseDown={handleInputMouseDown}
+                  onClick={handleInputClick}
+                  onFocus={handleInputFocus}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  placeholder={`Rechercher...`}
+                  autoFocus
+                />
+                <svg className="w-4 h-4 absolute right-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {filteredOptions.length} résultat(s) trouvé(s)
+              </p>
+            </div>
+            
+            {/* Liste des options */}
+            <div className="max-h-48 overflow-y-auto">
+              {filteredOptions.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  Aucun résultat trouvé pour "{searchValue}"
+                </div>
+              ) : (
+                filteredOptions.map((option, index) => (
+                  <div
+                    key={index}
+                    className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
+                      value === getOptionValue(option) ? 'bg-blue-100 text-blue-800' : 'text-gray-700'
+                    }`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onClick={() => handleOptionClick(getOptionValue(option))}
+                  >
+                    {renderOption(option)}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Affichage de la valeur sélectionnée */}
+        {selectedOption && !isOpen && (
+          <p className="text-sm text-green-600 mt-1">
+            Sélectionné: {getOptionLabel(selectedOption)}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  // CHARGEMENT DYNAMIQUE DES SUBDIVISIONS (RÉGIONS)
+  useEffect(() => {
+    const fetchSubdivisions = async () => {
+      if (formData.pays) {
+        setLoadingSubdivisions(true);
+        try {
+          const response = await apiClient.get(`/subdivisions/?pays=${formData.pays}`);
+          
+          let subdivisionsData = [];
+          if (Array.isArray(response)) {
+            subdivisionsData = response;
+          } else if (response && Array.isArray(response.results)) {
+            subdivisionsData = response.results;
+          }
+          
+          setSubdivisions(subdivisionsData);
+          
+          // Réinitialiser la subdivision si elle ne fait pas partie du nouveau pays
+          if (formData.region) {
+            const currentSubdivisionExists = subdivisionsData.some(
+              sub => sub.id.toString() === formData.region.toString()
+            );
+            if (!currentSubdivisionExists) {
+              setFormData(prev => ({ ...prev, region: '', ville: '' }));
+            }
+          }
+        } catch (err) {
+          console.error('Erreur chargement subdivisions:', err);
+          setSubdivisions([]);
+        } finally {
+          setLoadingSubdivisions(false);
+        }
+      } else {
+        setSubdivisions([]);
+        setFormData(prev => ({ ...prev, region: '', ville: '' }));
+      }
+    };
+
+    fetchSubdivisions();
+  }, [formData.pays, formData.region]);
+
+  // CHARGEMENT DYNAMIQUE DES VILLES
+  useEffect(() => {
+    const fetchVilles = async () => {
+      if (formData.region) {
+        setLoadingVilles(true);
+        try {
+          const response = await apiClient.get(`/villes/?subdivision=${formData.region}`);
+          
+          let villesData = [];
+          if (Array.isArray(response)) {
+            villesData = response;
+          } else if (response && Array.isArray(response.results)) {
+            villesData = response.results;
+          }
+          
+          setVilles(villesData);
+          
+          // Réinitialiser la ville si elle ne fait pas partie de la nouvelle subdivision
+          if (formData.ville) {
+            const currentVilleExists = villesData.some(
+              ville => ville.id.toString() === formData.ville.toString()
+            );
+            if (!currentVilleExists) {
+              setFormData(prev => ({ ...prev, ville: '' }));
+            }
+          }
+        } catch (err) {
+          console.error('Erreur chargement villes:', err);
+          setVilles([]);
+        } finally {
+          setLoadingVilles(false);
+        }
+      } else {
+        setVilles([]);
+        setFormData(prev => ({ ...prev, ville: '' }));
+      }
+    };
+
+    fetchVilles();
+  }, [formData.region, formData.ville]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -457,9 +716,9 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
         nom: formData.nom,
         type_partenaire: formData.type_partenaire,
         adresse: formData.adresse,
-        ville: formData.ville,
+        ville: formData.ville, // ← ID de la ville
         telephone: formData.telephone,
-        pays: formData.pays, // ← ID du pays (OBLIGATOIRE)
+        pays: formData.pays,
         statut: formData.statut,
         // Champs optionnels
         registre_commerce: formData.registre_commerce || '',
@@ -467,7 +726,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
         securite_sociale: formData.securite_sociale || '',
         complement_adresse: formData.complement_adresse || '',
         code_postal: formData.code_postal || '',
-        region: formData.region || '',
+        region: formData.region || '', // ← ID de la subdivision
         email: formData.email || '',
         site_web: formData.site_web || '',
       };
@@ -659,44 +918,66 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                 />
               </div>
 
+              {/* Pays avec recherche */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Ville *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.ville}
-                  onChange={(e) => handleChange('ville', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ville"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Région</label>
-                <input
-                  type="text"
-                  value={formData.region}
-                  onChange={(e) => handleChange('region', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Région"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Pays *</label>
-                <select
-                  required
+                <SearchableDropdown
+                  label="Pays"
                   value={formData.pays}
-                  onChange={(e) => handleChange('pays', parseInt(e.target.value))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Sélectionnez un pays</option>
-                  {pays.map(paysItem => (
-                    <option key={paysItem.id} value={paysItem.id}>
-                      {paysItem.nom} ({paysItem.code_iso})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleChange('pays', parseInt(value))}
+                  options={pays}
+                  searchValue={searchPays}
+                  onSearchChange={setSearchPays}
+                  placeholder="Sélectionnez un pays"
+                  required={true}
+                  getOptionLabel={(paysItem) => `${paysItem.emoji} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
+                  getOptionValue={(paysItem) => paysItem.id}
+                />
+              </div>
+
+              {/* Subdivision (Région) avec recherche */}
+              <div>
+                <SearchableDropdown
+                  label="Région/État/Province"
+                  value={formData.region}
+                  onChange={(value) => handleChange('region', parseInt(value))}
+                  options={subdivisions}
+                  searchValue={searchSubdivision}
+                  onSearchChange={setSearchSubdivision}
+                  placeholder="Sélectionnez une région"
+                  required={true}
+                  disabled={!formData.pays || loadingSubdivisions}
+                  getOptionLabel={(subdivision) => `${subdivision.nom} (${subdivision.type_subdivision})`}
+                  getOptionValue={(subdivision) => subdivision.id}
+                />
+                {!formData.pays && (
+                  <p className="text-xs text-gray-500 mt-1">Veuillez d'abord sélectionner un pays</p>
+                )}
+                {loadingSubdivisions && (
+                  <p className="text-xs text-blue-500 mt-1">Chargement des régions...</p>
+                )}
+              </div>
+
+              {/* Ville avec recherche */}
+              <div>
+                <SearchableDropdown
+                  label="Ville"
+                  value={formData.ville}
+                  onChange={(value) => handleChange('ville', parseInt(value))}
+                  options={villes}
+                  searchValue={searchVille}
+                  onSearchChange={setSearchVille}
+                  placeholder="Sélectionnez une ville"
+                  required={true}
+                  disabled={!formData.region || loadingVilles}
+                  getOptionLabel={(ville) => `${ville.nom} ${ville.code_postal ? `(${ville.code_postal})` : ''}`}
+                  getOptionValue={(ville) => ville.id}
+                />
+                {!formData.region && (
+                  <p className="text-xs text-gray-500 mt-1">Veuillez d'abord sélectionner une région</p>
+                )}
+                {loadingVilles && (
+                  <p className="text-xs text-blue-500 mt-1">Chargement des villes...</p>
+                )}
               </div>
             </div>
           </div>
