@@ -90,10 +90,10 @@ export default function UtilisateurEntitePage() {
 
   // Filtrage et recherche
   const filteredAffiliations = affiliations.filter(affiliation => {
-    const matchesSearch = 
-      affiliation.utilisateur?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      affiliation.utilisateur?.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      affiliation.entite?.raison_sociale?.toLowerCase().includes(searchTerm.toLowerCase());
+const matchesSearch = 
+  affiliation.utilisateur_details?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  affiliation.utilisateur_details?.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  affiliation.entite_details?.raison_sociale?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesEntite = filterEntite === '' || 
       (affiliation.entite && affiliation.entite.id.toString() === filterEntite);
@@ -383,15 +383,15 @@ export default function UtilisateurEntitePage() {
                     <td className="px-6 py-4 border-r border-gray-300">
                       <div className="flex flex-col">
                         <span className="text-sm font-medium text-gray-900">
-                          {affiliation.utilisateur?.email}
+                          {affiliation.utilisateur_details?.email || '-'}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {affiliation.utilisateur?.username}
+                          {affiliation.utilisateur_details?.username}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      {affiliation.entite?.raison_sociale}
+                      {affiliation.entite_details?.raison_sociale || '-'}
                     </td>
                     <td className="px-6 py-4 border-r border-gray-300">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
