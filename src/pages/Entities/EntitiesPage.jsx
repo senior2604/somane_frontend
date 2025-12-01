@@ -392,12 +392,17 @@ export default function EntitiesPage() {
                       ) : '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {entity.ville?.nom || entity.ville || '-'}
+                      {entity.ville_details?.nom || '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
                       <div className="flex items-center gap-2">
                         <span>{entity.pays?.emoji}</span>
-                        <span>{entity.pays?.nom_fr || entity.pays?.nom}</span>
+                        <span>{entity.pays_details ? (
+                    <div className="flex items-center gap-2">
+                      <span>{entity.pays_details.emoji}</span>
+                      <span>{entity.pays_details.nom}</span>
+                    </div>
+                  ) : '-'}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">

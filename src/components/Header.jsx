@@ -1,4 +1,4 @@
-import { FiBell, FiLogOut } from "react-icons/fi";
+import { FiBell, FiLogOut, FiUser } from "react-icons/fi";
 import { useNavigate, useLocation } from "react-router-dom";
 
 export default function Header() {
@@ -17,7 +17,15 @@ export default function Header() {
       '/journal': 'Journal',
       '/permissions': 'Permissions',
       '/currencies': 'Devises',
-      '/countries': 'Pays'
+      '/countries': 'Pays',
+      '/states': 'États/Provinces',
+      '/languages': 'Langues',
+      '/banks': 'Banques',
+      '/PartnerBanks': 'Comptes Partenaires',
+      '/ExchangeRates': 'Taux de change',
+      '/userentities': 'Utilisateurs × Entités',
+      '/tasks': 'Tâches Automatiques',
+      '/system': 'Informations Système'
     };
     return routes[location.pathname] || 'SOMANE ERP';
   };
@@ -28,39 +36,42 @@ export default function Header() {
     navigate("/login");
   };
 
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const userInitial = user.first_name?.charAt(0) || user.email?.charAt(0) || "U";
+
   return (
-    <header className="flex items-center justify-between px-6 py-4 bg-white shadow-sm">
-      {/* Titre de la page à GAUCHE */}
-      <h1 className="text-xl font-semibold text-gray-800">
-        {getPageTitle()}
-      </h1>
+    <header className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-gray-100 shadow-sm">
+      {/* Titre avec icône discrète */}
+      <div className="flex items-center gap-2">
+        <div className="p-1.5 bg-gradient-to-br from-sky-50 to-white border border-sky-100 rounded-lg">
+          <FiUser className="text-sky-500" size={16} />
+        </div>
+        <h1 className="text-base font-semibold text-gray-800">
+          {getPageTitle()}
+        </h1>
+      </div>
       
-      {/* Icônes et profil à DROITE */}
-      <div className="flex items-center gap-5">
-        <button 
-          className="relative text-gray-600 hover:text-indigo-600 transition-colors"
-          title="Notifications"
-        >
-          <FiBell size={20} />
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+      {/* Actions droite */}
+      <div className="flex items-center gap-3">
+        {/* Notifications */}
+        <button className="relative p-1.5 hover:bg-gray-50 rounded-lg transition-colors">
+          <FiBell size={18} className="text-gray-500" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
         </button>
         
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 cursor-pointer group">
-            <div className="w-8 h-8 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold">
-              A
-            </div>
-            <span className="text-sm font-medium text-gray-700">Admin</span>
-          </div>
-          
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            title="Déconnexion"
-          >
-            <FiLogOut size={16} />
-          </button>
+        {/* Avatar */}
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-400 to-sky-500 flex items-center justify-center text-white font-medium shadow-sm">
+          {userInitial}
         </div>
+        
+        {/* Déconnexion */}
+        <button
+          onClick={handleLogout}
+          className="p-1.5 hover:bg-gray-50 rounded-lg transition-colors"
+          title="Déconnexion"
+        >
+          <FiLogOut size={16} className="text-gray-500" />
+        </button>
       </div>
     </header>
   );

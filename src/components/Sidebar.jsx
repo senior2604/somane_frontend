@@ -20,7 +20,7 @@ import {
   FiFlag,
   FiCreditCard,
   FiLink,
-  FiTrendingUp  // ← AJOUTÉ ICI
+  FiTrendingUp
 } from "react-icons/fi";
 import { useState } from "react";
 
@@ -71,7 +71,7 @@ export default function Sidebar() {
         { name: "Pays", path: "/countries", icon: <FiGlobe /> },
         { name: "États/Provinces", path: "/states", icon: <FiMap /> },
         { name: "Devises", path: "/currencies", icon: <FiDollarSign /> },
-        { name: "Taux de change", path: "/ExchangeRates", icon: <FiTrendingUp /> },  // ← CORRIGÉ
+        { name: "Taux de change", path: "/ExchangeRates", icon: <FiTrendingUp /> },
         { name: "Langues", path: "/languages", icon: <FiFlag /> },
       ]
     },
@@ -108,24 +108,24 @@ export default function Sidebar() {
   const isItemActive = (path) => location.pathname === path;
 
   return (
-    <aside className="w-64 bg-gradient-to-b from-indigo-700 to-indigo-900 text-white flex flex-col">
+    <aside className="w-64 bg-gradient-to-b from-sky-100 to-sky-50 text-sky-900 flex flex-col border-r border-sky-200">
       {/* Header */}
-      <div className="px-6 py-4 text-center font-bold text-xl tracking-tight border-b border-indigo-600 shadow-sm">
+      <div className="px-6 py-4 text-center font-bold text-xl tracking-tight border-b border-sky-200 shadow-sm bg-gradient-to-r from-sky-500 to-sky-400 text-white">
         SOMANE ERP
       </div>
       
       {/* Tableau de Bord toujours visible */}
-      <div className="px-4 py-3 border-b border-indigo-600">
+      <div className="px-4 py-3 border-b border-sky-200 bg-sky-50/50">
         <Link
           to="/dashboard"
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition ${
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 ${
             location.pathname === "/dashboard"
-              ? "bg-indigo-600 shadow border-l-4 border-white"
-              : "hover:bg-indigo-700/60 border-l-4 border-transparent"
+              ? "bg-sky-500 text-white shadow-md border-l-4 border-sky-300 transform scale-[1.02]"
+              : "hover:bg-sky-100 hover:text-sky-700 border-l-4 border-transparent hover:border-sky-300 hover:shadow-sm"
           }`}
         >
           <span className="text-lg"><FiHome /></span>
-          <span>Tableau de Bord</span>
+          <span className="font-medium">Tableau de Bord</span>
         </Link>
       </div>
       
@@ -136,31 +136,33 @@ export default function Sidebar() {
             {/* En-tête de catégorie */}
             <button
               onClick={() => toggleCategory(category.id)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700/40 transition"
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-sky-100 hover:text-sky-700 transition-all duration-200 group"
             >
               <div className="flex items-center gap-3">
-                <span className="text-lg">{category.icon}</span>
-                <span>{category.name}</span>
+                <span className="text-lg text-sky-600 group-hover:text-sky-700">{category.icon}</span>
+                <span className="font-semibold">{category.name}</span>
               </div>
-              <span className="text-xs">
+              <span className="text-sky-500 group-hover:text-sky-600">
                 {openCategories[category.id] ? <FiChevronDown /> : <FiChevronRight />}
               </span>
             </button>
             
             {/* Items de la catégorie */}
             {openCategories[category.id] && (
-              <div className="ml-4 mt-1 space-y-1">
+              <div className="ml-8 mt-1 space-y-0.5">
                 {category.items.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-3 px-3 py-2 rounded text-sm transition ${
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${
                       isItemActive(item.path)
-                        ? "bg-indigo-600 text-white shadow"
-                        : "text-indigo-100 hover:bg-indigo-700/40 hover:text-white"
+                        ? "bg-sky-500 text-white shadow-sm transform scale-[1.02] font-medium"
+                        : "text-sky-600 hover:bg-sky-100 hover:text-sky-700 hover:shadow-sm"
                     }`}
                   >
-                    <span className="text-sm">{item.icon}</span>
+                    <span className={`text-sm ${isItemActive(item.path) ? 'text-white' : 'text-sky-500'}`}>
+                      {item.icon}
+                    </span>
                     <span>{item.name}</span>
                   </Link>
                 ))}
@@ -171,12 +173,12 @@ export default function Sidebar() {
       </nav>
       
       {/* Déconnexion */}
-      <div className="p-3 border-t border-indigo-600">
+      <div className="p-4 border-t border-sky-200 bg-sky-50/50">
         <button 
           onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-800 rounded-lg hover:bg-indigo-700 transition text-xs font-medium"
+          className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-sky-500 to-sky-400 text-white rounded-lg hover:from-sky-600 hover:to-sky-500 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
         >
-          <FiLogOut size={14} /> Déconnexion
+          <FiLogOut size={16} /> Déconnexion
         </button>
       </div>
     </aside>

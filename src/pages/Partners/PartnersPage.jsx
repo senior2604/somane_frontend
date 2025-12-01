@@ -263,9 +263,18 @@ export default function PartnersPage() {
                       <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
                         {partner.email || '-'}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                        {partner.ville}
-                      </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                              {partner.ville_details ? (
+                                <>
+                                  {partner.ville_details.nom}
+                                  {partner.ville_details.code_postal && (
+                                    <span className="text-gray-400 text-xs ml-1">
+                                      ({partner.ville_details.code_postal})
+                                    </span>
+                                  )}
+                                </>
+                              ) : '-'}
+                            </td>
                       <td className="px-6 py-4 border-r border-gray-300">
                         <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${
                           partner.statut
