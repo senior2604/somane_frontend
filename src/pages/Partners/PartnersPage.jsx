@@ -1,5 +1,44 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { 
+  FiRefreshCw, 
+  FiPlus, 
+  FiEdit2, 
+  FiTrash2, 
+  FiSearch, 
+  FiFilter, 
+  FiX, 
+  FiCheck, 
+  FiGlobe, 
+  FiMapPin, 
+  FiPhone, 
+  FiMail, 
+  FiDollarSign, 
+  FiCalendar, 
+  FiUser, 
+  FiChevronLeft, 
+  FiChevronRight,
+  FiFileText,
+  FiBriefcase,
+  FiHome,
+  FiCreditCard,
+  FiActivity,
+  FiUsers,
+  FiDownload,
+  FiUpload,
+  FiEye,
+  FiMoreVertical,
+  FiChevronDown,
+  FiChevronUp,
+  FiCheckCircle,
+  FiXCircle,
+  FiUserCheck,
+  FiTruck,
+  FiPackage,
+  FiCreditCard as FiCreditCardIcon,
+  FiDollarSign as FiDollarSignIcon
+} from "react-icons/fi";
+import { TbBuildingSkyscraper } from "react-icons/tb";
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState([]);
@@ -13,6 +52,8 @@ export default function PartnersPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [expandedRow, setExpandedRow] = useState(null);
 
   useEffect(() => {
     fetchPartners();
@@ -21,6 +62,9 @@ export default function PartnersPage() {
 
   const fetchPartners = async () => {
     try {
+      setLoading(true);
+      setError(null);
+      
       const response = await apiClient.get('/partenaires/');
       
       if (Array.isArray(response)) {
@@ -29,10 +73,12 @@ export default function PartnersPage() {
         setPartners(response.results);
       } else {
         setError('Format de données inattendu');
+        setPartners([]);
       }
     } catch (err) {
+      console.error('Erreur lors du chargement des partenaires:', err);
       setError('Erreur lors du chargement des partenaires');
-      console.error('Error:', err);
+      setPartners([]);
     } finally {
       setLoading(false);
     }
@@ -41,35 +87,76 @@ export default function PartnersPage() {
   const fetchPays = async () => {
     try {
       const response = await apiClient.get('/pays/');
+      
       if (Array.isArray(response)) {
         setPays(response);
-      } else if (response && Array.isArray(response.results)) {
-        setPays(response.results);
+      } else {
+        setPays([]);
       }
     } catch (err) {
       console.error('Erreur chargement pays:', err);
+      setPays([]);
     }
+  };
+
+  // Fonction utilitaire pour extraire le nom de la ville
+  const getVilleName = (ville) => {
+    if (!ville) return '';
+    if (typeof ville === 'string') return ville;
+    if (typeof ville === 'object') {
+      return ville.nom || ville.name || ville.nom_fr || '';
+    }
+    return String(ville);
   };
 
   // Filtrage et recherche
   const filteredPartners = partners.filter(partner => {
-    const matchesSearch = partner.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (partner.email && partner.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         partner.ville.toLowerCase().includes(searchTerm.toLowerCase());
+    const villeNom = getVilleName(partner.ville).toLowerCase();
+    const nom = (partner.nom || '').toLowerCase();
+    const email = (partner.email || '').toLowerCase();
+    
+    const matchesSearch = 
+      nom.includes(searchTerm.toLowerCase()) ||
+      email.includes(searchTerm.toLowerCase()) ||
+      villeNom.includes(searchTerm.toLowerCase());
+    
     const matchesType = !filterType || partner.type_partenaire === filterType;
+    
     return matchesSearch && matchesType;
   });
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentPartners = filteredPartners.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredPartners.length / itemsPerPage);
+  const currentPartners = Array.isArray(filteredPartners) ? filteredPartners.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const totalPages = Math.ceil((Array.isArray(filteredPartners) ? filteredPartners.length : 0) / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
   const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
+
+  // Gestion des sélections
+  const toggleRowSelection = (id) => {
+    setSelectedRows(prev => 
+      prev.includes(id) 
+        ? prev.filter(rowId => rowId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const selectAllRows = () => {
+    if (selectedRows.length === currentPartners.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(currentPartners.map(partner => partner.id));
+    }
+  };
+
+  // Gestion des lignes expansibles
+  const toggleExpandRow = (id) => {
+    setExpandedRow(expandedRow === id ? null : id);
+  };
 
   // Gestion des actions
   const handleNewPartner = () => {
@@ -100,33 +187,43 @@ export default function PartnersPage() {
     fetchPartners();
   };
 
+  const handleRetry = () => {
+    fetchPartners();
+  };
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setFilterType('');
+    setCurrentPage(1);
+  };
+
   // Types de partenaires
   const partnerTypes = [
-    { value: 'client', label: 'Client', color: 'bg-blue-100 text-blue-800 border-blue-300' },
-    { value: 'fournisseur', label: 'Fournisseur', color: 'bg-green-100 text-green-800 border-green-300' },
-    { value: 'employe', label: 'Employé', color: 'bg-purple-100 text-purple-800 border-purple-300' },
-    { value: 'debiteur', label: 'Débiteur', color: 'bg-orange-100 text-orange-800 border-orange-300' },
-    { value: 'crediteur', label: 'Créditeur', color: 'bg-red-100 text-red-800 border-red-300' },
+    { value: 'client', label: 'Client', icon: FiUserCheck, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
+    { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
+    { value: 'employe', label: 'Employé', icon: FiUsers, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
+    { value: 'debiteur', label: 'Débiteur', icon: FiDollarSignIcon, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
+    { value: 'crediteur', label: 'Créditeur', icon: FiCreditCardIcon, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
   ];
+
+  // Statistiques - SIMPLIFIÉES (seulement 3 cartes)
+  const stats = {
+    total: partners.length,
+    actifs: partners.filter(p => p.statut).length,
+    inactifs: partners.filter(p => !p.statut).length,
+  };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Chargement des partenaires...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <span className="text-red-800">{error}</span>
+      <div className="p-6 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+        <div className="flex flex-col items-center justify-center h-96">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-gray-200 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div className="mt-6">
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-48 animate-pulse"></div>
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 mt-3 animate-pulse mx-auto"></div>
           </div>
         </div>
       </div>
@@ -134,179 +231,443 @@ export default function PartnersPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Partenaires</h1>
-          <p className="text-gray-600 mt-1">
-            {filteredPartners.length} partenaire(s) trouvé(s)
-            {filterType && ` • Filtre: ${partnerTypes.find(t => t.value === filterType)?.label}`}
-          </p>
-        </div>
-        <button 
-          onClick={handleNewPartner}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nouveau Partenaire
-        </button>
-      </div>
-
-      {/* Filtres et Recherche */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nom, email, ville..."
-            />
+    <div className="p-6 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+      {/* Header avec gradient - COULEUR VIOLETTE */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-gradient-to-br from-violet-600 to-violet-500 rounded-xl shadow-lg">
+              <FiUsers className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Gestion des Partenaires</h1>
+              <p className="text-gray-600 text-sm mt-1">
+                Gérez tous vos partenaires commerciaux
+              </p>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Type de partenaire</label>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleRetry}
+              className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow-md flex items-center gap-2 group"
             >
-              <option value="">Tous les types</option>
-              {partnerTypes.map(type => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilterType('');
-                setCurrentPage(1);
-              }}
-              className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+              <FiRefreshCw className="group-hover:rotate-180 transition-transform duration-500" />
+              <span className="font-medium">Actualiser</span>
+            </button>
+            <button 
+              onClick={handleNewPartner}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 hover:shadow-lg flex items-center gap-2 group shadow-md"
             >
-              Réinitialiser
+              <FiPlus className="group-hover:rotate-90 transition-transform duration-300" />
+              <span className="font-semibold">Nouveau Partenaire</span>
             </button>
           </div>
         </div>
+
+        {/* Statistiques en ligne - SIMPLIFIÉES (3 cartes seulement) - COULEUR VIOLETTE */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total des partenaires</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+              </div>
+              <div className="p-2 bg-violet-50 rounded-lg">
+                <FiUsers className="w-5 h-5 text-violet-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Part. actifs</p>
+                <p className="text-2xl font-bold text-green-600 mt-1">{stats.actifs}</p>
+              </div>
+              <div className="p-2 bg-green-50 rounded-lg">
+                <FiCheckCircle className="w-5 h-5 text-green-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Part. inactifs</p>
+                <p className="text-2xl font-bold text-red-600 mt-1">{stats.inactifs}</p>
+              </div>
+              <div className="p-2 bg-red-50 rounded-lg">
+                <FiXCircle className="w-5 h-5 text-red-600" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Tableau */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
+      {/* Message d'erreur */}
+      {error && (
+        <div className="mb-6">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 rounded-r-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <FiX className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-900">{error}</p>
+                  <p className="text-sm text-red-700 mt-1">Veuillez réessayer</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRetry}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium shadow-sm"
+              >
+                Réessayer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barre d'outils - Filtres et Recherche - COULEUR VIOLETTE */}
+      <div className="mb-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">Filtres et Recherche</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">
+                {filteredPartners.length} résultat(s)
+              </span>
+              {(searchTerm || filterType) && (
+                <button
+                  onClick={handleResetFilters}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-1"
+                >
+                  <FiX size={14} />
+                  Effacer
+                </button>
+              )}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Recherche</label>
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white relative z-10"
+                    placeholder="Rechercher un partenaire..."
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Type de Partenaire</label>
+              <div className="relative">
+                <FiFilter className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white appearance-none"
+                >
+                  <option value="">Tous les types</option>
+                  {partnerTypes.map(type => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleResetFilters}
+                className="w-full px-4 py-3 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 rounded-xl hover:from-gray-200 hover:to-gray-100 transition-all duration-300 border border-gray-300 font-medium flex items-center justify-center gap-2 group"
+              >
+                <FiX className="group-hover:rotate-90 transition-transform duration-300" />
+                Réinitialiser tout
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tableau Principal */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* En-tête du tableau avec actions - COULEUR VIOLETTE */}
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedRows.length === currentPartners.length && currentPartners.length > 0}
+                  onChange={selectAllRows}
+                  className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                />
+                <span className="text-sm text-gray-700">
+                  {selectedRows.length} sélectionné(s)
+                </span>
+              </div>
+              {selectedRows.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button className="px-3 py-1.5 bg-violet-50 text-violet-700 rounded-lg text-sm font-medium hover:bg-violet-100 transition-colors">
+                    <FiDownload size={14} />
+                  </button>
+                  <button className="px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors">
+                    <FiTrash2 size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600">
+                <FiDownload size={18} />
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600">
+                <FiUpload size={18} />
+              </button>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              >
+                <option value={5}>5 lignes</option>
+                <option value={10}>10 lignes</option>
+                <option value={20}>20 lignes</option>
+                <option value={50}>50 lignes</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Tableau */}
         <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
+          <table className="min-w-full divide-y divide-gray-200">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-300">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  ID
+              <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.length === currentPartners.length && currentPartners.length > 0}
+                      onChange={selectAllRows}
+                      className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                    />
+                    ID
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom/Raison Sociale
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  Nom / Raison Sociale
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Type
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Téléphone
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Email
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Ville
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  Pays
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Statut
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {currentPartners.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {partners.length === 0 ? 'Aucun partenaire trouvé' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="8" className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
+                        <FiUsers className="w-10 h-10 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        {partners.length === 0 ? 'Aucun partenaire trouvé' : 'Aucun résultat pour votre recherche'}
+                      </h3>
+                      <p className="text-gray-600 mb-6 max-w-md">
+                        {partners.length === 0 
+                          ? 'Commencez par créer votre premier partenaire' 
+                          : 'Essayez de modifier vos critères de recherche ou de filtres'}
+                      </p>
+                      {partners.length === 0 && (
+                        <button 
+                          onClick={handleNewPartner}
+                          className="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-xl hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-2"
+                        >
+                          <FiPlus />
+                          Créer mon premier partenaire
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
                 currentPartners.map((partner, index) => {
                   const typeInfo = partnerTypes.find(t => t.value === partner.type_partenaire) || partnerTypes[0];
+                  const IconComponent = typeInfo.icon || FiUser;
+                  
                   return (
-                    <tr 
-                      key={partner.id} 
-                      className={`${
-                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                      } hover:bg-gray-100 transition-colors border-b border-gray-300`}
-                    >
-                      <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                        {partner.id}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                        {partner.nom}
-                      </td>
-                      <td className="px-6 py-4 border-r border-gray-300">
-                        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${typeInfo.color}`}>
-                          {typeInfo.label}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                        {partner.telephone}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                        {partner.email || '-'}
-                      </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                              {partner.ville_details ? (
+                    <React.Fragment key={partner.id}>
+                      <tr 
+                        className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
+                          selectedRows.includes(partner.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
+                        } ${expandedRow === partner.id ? 'bg-gradient-to-r from-violet-50 to-violet-25' : ''}`}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedRows.includes(partner.id)}
+                              onChange={() => toggleRowSelection(partner.id)}
+                              className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                            />
+                            <button
+                              onClick={() => toggleExpandRow(partner.id)}
+                              className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            >
+                              {expandedRow === partner.id ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
+                            </button>
+                            <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
+                              #{partner.id}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div>
+                            <div className="text-sm font-semibold text-gray-900">{partner.nom}</div>
+                            <div className="text-xs text-gray-500">{partner.email || 'Aucun email'}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div className="flex items-center gap-2">
+                            <div className={`p-1.5 ${typeInfo.bgColor} rounded-lg`}>
+                              <IconComponent className={`w-3 h-3 ${typeInfo.textColor}`} />
+                            </div>
+                            <span className={`text-sm font-medium ${typeInfo.textColor}`}>
+                              {typeInfo.label}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div className="text-sm text-gray-700">
+                            {partner.telephone || '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div className="text-sm text-gray-700">
+                            {partner.email || '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{partner.pays_details?.emoji || '🌍'}</span>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {partner.pays_details?.nom || '-'}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {partner.pays_details?.code_iso || ''}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div className="flex items-center">
+                            <div className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
+                              partner.statut
+                                ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
+                                : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
+                            }`}>
+                              {partner.statut ? (
                                 <>
-                                  {partner.ville_details.nom}
-                                  {partner.ville_details.code_postal && (
-                                    <span className="text-gray-400 text-xs ml-1">
-                                      ({partner.ville_details.code_postal})
-                                    </span>
-                                  )}
+                                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                  <span className="text-sm font-medium">Actif</span>
                                 </>
-                              ) : '-'}
-                            </td>
-                      <td className="px-6 py-4 border-r border-gray-300">
-                        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${
-                          partner.statut
-                            ? 'bg-green-100 text-green-800 border-green-300' 
-                            : 'bg-red-100 text-red-800 border-red-300'
-                        }`}>
-                          {partner.statut ? 'Actif' : 'Inactif'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex space-x-3">
-                          <button 
-                            onClick={() => handleEdit(partner)}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Éditer
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(partner)}
-                            className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Supprimer
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                              ) : (
+                                <>
+                                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                  <span className="text-sm font-medium">Inactif</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEdit(partner)}
+                              className="p-2.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded-xl hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
+                              title="Modifier">
+                              <FiEdit2 size={17} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(partner)}
+                              className="p-2.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-xl hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+                              title="Supprimer">
+                              <FiTrash2 size={17} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedRow === partner.id && (
+                        <tr className="bg-gradient-to-r from-violet-50 to-violet-25">
+                          <td colSpan="8" className="px-6 py-4">
+                            <div className="bg-white rounded-xl border border-violet-200 p-5">
+                              <div className="grid grid-cols-3 gap-6">
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Adresse</div>
+                                  <div className="text-sm text-gray-900">{partner.adresse || '-'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Ville</div>
+                                  <div className="text-sm text-gray-900">{getVilleName(partner.ville) || '-'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Site Web</div>
+                                  <div className="text-sm text-violet-600">{partner.site_web || '-'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Région</div>
+                                  <div className="text-sm text-gray-900">
+                                    {partner.region_details?.nom || partner.region || '-'}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Code Postal</div>
+                                  <div className="text-sm text-gray-900">{partner.code_postal || '-'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Registre Commerce</div>
+                                  <div className="text-sm text-gray-900">{partner.registre_commerce || '-'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Numéro Fiscal</div>
+                                  <div className="text-sm text-gray-900">{partner.numero_fiscal || '-'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Sécurité Sociale</div>
+                                  <div className="text-sm text-gray-900">{partner.securite_sociale || '-'}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}
@@ -314,47 +675,38 @@ export default function PartnersPage() {
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* Pagination - COULEUR VIOLETTE */}
         {filteredPartners.length > 0 && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
-                  Lignes par page:
-                </span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="border border-gray-300 rounded px-3 py-1 text-sm"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPartners.length)} sur {filteredPartners.length}
-                </span>
+          <div className="px-6 py-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700">
+                    Page {currentPage} sur {totalPages}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-sm text-gray-700">
+                    {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPartners.length)} sur {filteredPartners.length} partenaires
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-2 rounded-lg border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page précédente"
                 >
-                  Précédent
+                  <FiChevronLeft />
                 </button>
 
                 {/* Numéros de page */}
-                <div className="flex space-x-1">
+                <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNumber;
                     if (totalPages <= 5) {
@@ -371,10 +723,10 @@ export default function PartnersPage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`w-8 h-8 rounded border text-sm ${
+                        className={`min-w-[40px] h-10 rounded-lg border text-sm font-medium transition-all duration-200 ${
                           currentPage === pageNumber
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow-md'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                         }`}
                       >
                         {pageNumber}
@@ -386,13 +738,14 @@ export default function PartnersPage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-2 rounded-lg border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page suivante"
                 >
-                  Suivant
+                  <FiChevronRight />
                 </button>
               </div>
             </div>
@@ -416,8 +769,9 @@ export default function PartnersPage() {
   );
 }
 
-// Composant Modal pour le formulaire des partenaires - AVEC SYSTÈME PAYS > RÉGION > VILLE
+// COMPOSANT MODAL POUR LES PARTENAIRES - COULEUR VIOLETTE
 function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
+  // États pour le formulaire
   const [formData, setFormData] = useState({
     nom: partner?.nom || '',
     type_partenaire: partner?.type_partenaire || 'client',
@@ -427,9 +781,9 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     adresse: partner?.adresse || '',
     complement_adresse: partner?.complement_adresse || '',
     code_postal: partner?.code_postal || '',
-    ville: partner?.ville?.id || '', // ← CHANGÉ : maintenant c'est l'ID de la ville
-    region: partner?.region?.id || '', // ← CHANGÉ : maintenant c'est l'ID de la subdivision
-    pays: partner?.pays?.id || (pays.length > 0 ? pays[0].id : ''),
+    ville: partner?.ville?.id || '',
+    region: partner?.region?.id || '',
+    pays: partner?.pays?.id || '',
     telephone: partner?.telephone || '',
     email: partner?.email || '',
     site_web: partner?.site_web || '',
@@ -438,194 +792,46 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // États pour les listes dynamiques
+  
+  // ÉTATS POUR LISTES DYNAMIQUES
   const [subdivisions, setSubdivisions] = useState([]);
   const [villes, setVilles] = useState([]);
   const [loadingSubdivisions, setLoadingSubdivisions] = useState(false);
   const [loadingVilles, setLoadingVilles] = useState(false);
 
-  // États pour la recherche dans les dropdowns
+  // ÉTATS POUR RECHERCHE DANS LES DROPDOWNS
   const [searchPays, setSearchPays] = useState('');
   const [searchSubdivision, setSearchSubdivision] = useState('');
   const [searchVille, setSearchVille] = useState('');
 
   const partnerTypes = [
-    { value: 'client', label: 'Client' },
-    { value: 'fournisseur', label: 'Fournisseur' },
-    { value: 'employe', label: 'Employé' },
-    { value: 'debiteur', label: 'Débiteur divers' },
-    { value: 'crediteur', label: 'Créditeur divers' },
+    { value: 'client', label: 'Client', icon: FiUserCheck },
+    { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck },
+    { value: 'employe', label: 'Employé', icon: FiUsers },
+    { value: 'debiteur', label: 'Débiteur', icon: FiDollarSignIcon },
+    { value: 'crediteur', label: 'Créditeur', icon: FiCreditCardIcon },
   ];
 
-  // Composant réutilisable pour les dropdowns avec recherche
-  const SearchableDropdown = ({ 
-    label, 
-    value, 
-    onChange, 
-    options, 
-    searchValue,
-    onSearchChange,
-    placeholder,
-    required = false,
-    disabled = false,
-    getOptionLabel = (option) => option,
-    getOptionValue = (option) => option,
-    renderOption = (option) => getOptionLabel(option)
-  }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef(null);
-    const inputRef = useRef(null);
+  // S'assurer que les tableaux sont toujours des tableaux
+  const paysArray = Array.isArray(pays) ? pays : [];
 
-    const filteredOptions = options.filter(option =>
-      getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
-    );
+  // Filtrer les listes avec la recherche
+  const filteredPays = paysArray.filter(paysItem =>
+    (paysItem.nom_fr || paysItem.nom).toLowerCase().includes(searchPays.toLowerCase()) ||
+    paysItem.code_iso.toLowerCase().includes(searchPays.toLowerCase())
+  );
 
-    const selectedOption = options.find(opt => getOptionValue(opt) === value);
+  const filteredSubdivisions = subdivisions.filter(subdivision =>
+    subdivision.nom.toLowerCase().includes(searchSubdivision.toLowerCase()) ||
+    subdivision.code.toLowerCase().includes(searchSubdivision.toLowerCase())
+  );
 
-    // Gestion robuste du clic externe
-    useEffect(() => {
-      const handleMouseDown = (event) => {
-        if (!dropdownRef.current?.contains(event.target)) {
-          setIsOpen(false);
-          onSearchChange('');
-        }
-      };
+  const filteredVilles = villes.filter(ville =>
+    ville.nom.toLowerCase().includes(searchVille.toLowerCase()) ||
+    (ville.code_postal && ville.code_postal.includes(searchVille))
+  );
 
-      document.addEventListener('mousedown', handleMouseDown, true);
-      
-      return () => {
-        document.removeEventListener('mousedown', handleMouseDown, true);
-      };
-    }, [onSearchChange]);
-
-    const handleToggle = () => {
-      if (!disabled) {
-        setIsOpen(!isOpen);
-        if (!isOpen) {
-          setTimeout(() => {
-            inputRef.current?.focus();
-          }, 0);
-        } else {
-          onSearchChange('');
-        }
-      }
-    };
-
-    const handleInputMouseDown = (e) => {
-      e.stopPropagation();
-    };
-
-    const handleInputFocus = (e) => {
-      e.stopPropagation();
-    };
-
-    const handleInputClick = (e) => {
-      e.stopPropagation();
-    };
-
-    const handleOptionClick = (optionValue) => {
-      onChange(optionValue);
-      setIsOpen(false);
-      onSearchChange('');
-    };
-
-    return (
-      <div className="relative" ref={dropdownRef}>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {label} {required && '*'}
-        </label>
-        
-        {/* Bouton d'ouverture du dropdown */}
-        <button
-          type="button"
-          onClick={handleToggle}
-          onMouseDown={(e) => e.preventDefault()}
-          disabled={disabled}
-          className={`w-full text-left border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-            disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:border-gray-400'
-          }`}
-        >
-          {selectedOption ? (
-            <span className="block truncate">{getOptionLabel(selectedOption)}</span>
-          ) : (
-            <span className="text-gray-500">{placeholder || `Sélectionnez ${label.toLowerCase()}`}</span>
-          )}
-          <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </span>
-        </button>
-
-        {/* Dropdown avec recherche */}
-        {isOpen && (
-          <div 
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden"
-            onMouseDown={handleInputMouseDown}
-          >
-            {/* Barre de recherche */}
-            <div className="p-2 border-b border-gray-200">
-              <div className="relative">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={searchValue}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  onMouseDown={handleInputMouseDown}
-                  onClick={handleInputClick}
-                  onFocus={handleInputFocus}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  placeholder={`Rechercher...`}
-                  autoFocus
-                />
-                <svg className="w-4 h-4 absolute right-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {filteredOptions.length} résultat(s) trouvé(s)
-              </p>
-            </div>
-            
-            {/* Liste des options */}
-            <div className="max-h-48 overflow-y-auto">
-              {filteredOptions.length === 0 ? (
-                <div className="p-4 text-center text-gray-500 text-sm">
-                  Aucun résultat trouvé pour "{searchValue}"
-                </div>
-              ) : (
-                filteredOptions.map((option, index) => (
-                  <div
-                    key={index}
-                    className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
-                      value === getOptionValue(option) ? 'bg-blue-100 text-blue-800' : 'text-gray-700'
-                    }`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onClick={() => handleOptionClick(getOptionValue(option))}
-                  >
-                    {renderOption(option)}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Affichage de la valeur sélectionnée */}
-        {selectedOption && !isOpen && (
-          <p className="text-sm text-green-600 mt-1">
-            Sélectionné: {getOptionLabel(selectedOption)}
-          </p>
-        )}
-      </div>
-    );
-  };
-
-  // CHARGEMENT DYNAMIQUE DES SUBDIVISIONS (RÉGIONS)
+  // CHARGEMENT DYNAMIQUE DES SUBDIVISIONS
   useEffect(() => {
     const fetchSubdivisions = async () => {
       if (formData.pays) {
@@ -712,62 +918,60 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     setLoading(true);
     setError(null);
 
-    // Validation des champs obligatoires
-    if (!formData.nom || !formData.adresse || !formData.ville || !formData.telephone || !formData.pays) {
-      setError('Veuillez remplir tous les champs obligatoires (*)');
+    // Validation
+    if (!formData.nom) {
+      setError('Le nom est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.pays) {
+      setError('Le pays est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.region) {
+      setError('La région (état/province) est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.ville) {
+      setError('La ville est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.telephone) {
+      setError('Le téléphone est obligatoire');
       setLoading(false);
       return;
     }
 
     try {
-      // Préparer le payload avec les champs requis
-      const payload = {
-        nom: formData.nom,
-        type_partenaire: formData.type_partenaire,
-        adresse: formData.adresse,
-        ville: formData.ville, // ← ID de la ville
-        telephone: formData.telephone,
-        pays: formData.pays,
-        statut: formData.statut,
-        // Champs optionnels
-        registre_commerce: formData.registre_commerce || '',
-        numero_fiscal: formData.numero_fiscal || '',
-        securite_sociale: formData.securite_sociale || '',
-        complement_adresse: formData.complement_adresse || '',
-        code_postal: formData.code_postal || '',
-        region: formData.region || '', // ← ID de la subdivision
-        email: formData.email || '',
-        site_web: formData.site_web || '',
-      };
-
-      console.log('📤 Payload partenaire:', payload);
-
       const url = partner 
         ? `/partenaires/${partner.id}/`
         : `/partenaires/`;
       
       const method = partner ? 'PUT' : 'POST';
 
-      const response = await apiClient.request(url, {
+      // Préparer les données finales
+      const submitData = {
+        ...formData,
+      };
+
+      await apiClient.request(url, {
         method: method,
-        body: JSON.stringify(payload),
+        body: JSON.stringify(submitData),
         headers: {
           'Content-Type': 'application/json'
         }
       });
       
-      console.log('✅ Partenaire sauvegardé:', response);
       onSuccess();
     } catch (err) {
-      console.error('❌ Erreur sauvegarde partenaire:', err);
-      
-      let errorMessage = 'Erreur lors de la sauvegarde';
-      if (err.response?.data) {
-        errorMessage = `Erreur ${err.response.status}: ${JSON.stringify(err.response.data)}`;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
+      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -781,52 +985,258 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     }));
   };
 
+  // Composant réutilisable pour les dropdowns avec recherche
+  const SearchableDropdown = ({ 
+    label, 
+    value, 
+    onChange, 
+    options, 
+    searchValue,
+    onSearchChange,
+    placeholder,
+    required = false,
+    disabled = false,
+    icon: Icon,
+    getOptionLabel = (option) => option,
+    getOptionValue = (option) => option,
+    renderOption = (option) => getOptionLabel(option)
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+    const inputRef = useRef(null);
+
+    const filteredOptions = options.filter(option =>
+      getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
+    );
+
+    const selectedOption = options.find(opt => getOptionValue(opt) === value);
+
+    useEffect(() => {
+      const handleMouseDown = (event) => {
+        if (!dropdownRef.current?.contains(event.target)) {
+          setIsOpen(false);
+          onSearchChange('');
+        }
+      };
+
+      document.addEventListener('mousedown', handleMouseDown, true);
+      
+      return () => {
+        document.removeEventListener('mousedown', handleMouseDown, true);
+      };
+    }, [onSearchChange]);
+
+    const handleToggle = () => {
+      if (!disabled) {
+        setIsOpen(!isOpen);
+        if (!isOpen) {
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 0);
+        } else {
+          onSearchChange('');
+        }
+      }
+    };
+
+    const handleInputMouseDown = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputFocus = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputClick = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleOptionClick = (optionValue) => {
+      onChange(optionValue);
+      setIsOpen(false);
+      onSearchChange('');
+    };
+
+    return (
+      <div className="relative" ref={dropdownRef}>
+        {label && (
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {label} {required && <span className="text-red-500">*</span>}
+          </label>
+        )}
+        
+        {/* Bouton d'ouverture du dropdown */}
+        <button
+          type="button"
+          onClick={handleToggle}
+          onMouseDown={(e) => e.preventDefault()}
+          disabled={disabled}
+          className={`w-full text-left border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all ${
+            disabled 
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+              : 'bg-white hover:border-gray-400'
+          } ${isOpen ? 'ring-2 ring-violet-500 border-violet-500' : ''}`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {Icon && <Icon className="text-gray-400" size={18} />}
+              {selectedOption ? (
+                <span className="text-gray-900 font-medium">{getOptionLabel(selectedOption)}</span>
+              ) : (
+                <span className="text-gray-500">{placeholder || `Sélectionnez...`}</span>
+              )}
+            </div>
+            <svg className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+
+        {/* Dropdown avec recherche */}
+        {isOpen && (
+          <div 
+            className="absolute z-50 w-full mt-2 bg-white border border-gray-300 rounded-xl shadow-xl max-h-60 overflow-hidden"
+            onMouseDown={handleInputMouseDown}
+          >
+            {/* Barre de recherche */}
+            <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+              <div className="relative">
+                <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchValue}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onMouseDown={handleInputMouseDown}
+                  onClick={handleInputClick}
+                  onFocus={handleInputFocus}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm bg-white"
+                  placeholder={`Rechercher...`}
+                  autoFocus
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2 px-1">
+                {filteredOptions.length} résultat(s) trouvé(s)
+              </p>
+            </div>
+            
+            {/* Liste des options */}
+            <div className="max-h-48 overflow-y-auto">
+              {filteredOptions.length === 0 ? (
+                <div className="p-6 text-center">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <FiSearch className="text-gray-400" />
+                  </div>
+                  <p className="text-gray-500 text-sm">Aucun résultat trouvé</p>
+                </div>
+              ) : (
+                filteredOptions.map((option, index) => (
+                  <div
+                    key={index}
+                    className={`px-4 py-3 cursor-pointer hover:bg-violet-50 text-sm border-b border-gray-100 last:border-b-0 transition-colors ${
+                      value === getOptionValue(option) ? 'bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium' : 'text-gray-700'
+                    }`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onClick={() => handleOptionClick(getOptionValue(option))}
+                  >
+                    {renderOption(option)}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Affichage de la valeur sélectionnée */}
+        {selectedOption && !isOpen && (
+          <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1.5">
+            <FiCheck size={14} />
+            Sélectionné: <span className="font-medium">{getOptionLabel(selectedOption)}</span>
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {partner ? 'Modifier le partenaire' : 'Créer un nouveau partenaire'}
-          </h2>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        {/* Header du modal avec gradient - TAILLE RÉDUITE - COULEUR VIOLETTE */}
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-2xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <FiUsers className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">
+                  {partner ? 'Modifier le partenaire' : 'Nouveau Partenaire'}
+                </h2>
+                {!partner && (
+                  <p className="text-violet-100 text-xs mt-0.5">
+                    Créez un nouveau partenaire dans le système
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
         </div>
         
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 text-sm">{error}</span>
+          <div className="mx-6 mt-4 bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 rounded-r-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <FiX className="text-red-600" />
+              </div>
+              <span className="text-red-800 text-sm font-medium">{error}</span>
             </div>
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Informations Générales */}
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Informations Générales</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
+        <form onSubmit={handleSubmit} className="p-6 space-y-8">
+          {/* Section 1: Informations Générales - COULEUR VIOLETTE */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-violet-600 to-violet-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Informations Générales</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nom / Raison Sociale *
+                  Nom / Raison Sociale <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.nom}
-                  onChange={(e) => handleChange('nom', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Nom complet ou raison sociale"
-                />
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-xl blur opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                  <input
+                    type="text"
+                    required
+                    value={formData.nom}
+                    onChange={(e) => handleChange('nom', e.target.value)}
+                    className="relative w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+                    placeholder="Nom complet ou raison sociale"
+                  />
+                </div>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Type de Partenaire *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Type de Partenaire <span className="text-red-500">*</span>
+                </label>
                 <select
                   required
                   value={formData.type_partenaire}
                   onChange={(e) => handleChange('type_partenaire', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 >
                   {partnerTypes.map(type => (
                     <option key={type.value} value={type.value}>
@@ -837,11 +1247,11 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Statut *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
                 <select
                   value={formData.statut}
                   onChange={(e) => handleChange('statut', e.target.value === 'true')}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 >
                   <option value={true}>Actif</option>
                   <option value={false}>Inactif</option>
@@ -850,17 +1260,20 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Informations Légales */}
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Informations Légales</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Section 2: Informations Légales - COULEUR VIOLETTE */}
+          <div className="bg-gradient-to-br from-violet-50 to-white rounded-2xl p-6 border border-violet-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-violet-600 to-violet-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Informations Légales</h3>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Registre de Commerce</label>
                 <input
                   type="text"
                   value={formData.registre_commerce}
                   onChange={(e) => handleChange('registre_commerce', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   placeholder="Numéro RC"
                 />
               </div>
@@ -871,36 +1284,42 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                   type="text"
                   value={formData.numero_fiscal}
                   onChange={(e) => handleChange('numero_fiscal', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   placeholder="Numéro d'identification fiscale"
                 />
               </div>
               
-              <div className="md:col-span-2">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sécurité Sociale</label>
                 <input
                   type="text"
                   value={formData.securite_sociale}
                   onChange={(e) => handleChange('securite_sociale', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   placeholder="Numéro de sécurité sociale"
                 />
               </div>
             </div>
           </div>
 
-          {/* Adresse */}
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Localisation</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Adresse complète *</label>
+          {/* Section 3: Localisation - COULEUR VIOLETTE */}
+          <div className="bg-gradient-to-br from-purple-50 to-white rounded-2xl p-6 border border-purple-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-purple-600 to-purple-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Localisation</h3>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Adresse complète <span className="text-red-500">*</span>
+                </label>
                 <textarea
                   required
                   value={formData.adresse}
                   onChange={(e) => handleChange('adresse', e.target.value)}
                   rows={3}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   placeholder="Adresse complète"
                 />
               </div>
@@ -911,7 +1330,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                   type="text"
                   value={formData.complement_adresse}
                   onChange={(e) => handleChange('complement_adresse', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   placeholder="Bâtiment, étage, etc."
                 />
               </div>
@@ -922,7 +1341,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                   type="text"
                   value={formData.code_postal}
                   onChange={(e) => handleChange('code_postal', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   placeholder="Code postal"
                 />
               </div>
@@ -932,37 +1351,45 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                 <SearchableDropdown
                   label="Pays"
                   value={formData.pays}
-                  onChange={(value) => handleChange('pays', parseInt(value))}
-                  options={pays}
+                  onChange={(value) => handleChange('pays', value)}
+                  options={paysArray}
                   searchValue={searchPays}
                   onSearchChange={setSearchPays}
                   placeholder="Sélectionnez un pays"
                   required={true}
+                  icon={FiGlobe}
                   getOptionLabel={(paysItem) => `${paysItem.emoji} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
                   getOptionValue={(paysItem) => paysItem.id}
                 />
               </div>
 
-              {/* Subdivision (Région) avec recherche */}
+              {/* Subdivision avec recherche */}
               <div>
                 <SearchableDropdown
-                  label="Région/État/Province"
+                  label="État/Province/Région"
                   value={formData.region}
-                  onChange={(value) => handleChange('region', parseInt(value))}
+                  onChange={(value) => handleChange('region', value)}
                   options={subdivisions}
                   searchValue={searchSubdivision}
                   onSearchChange={setSearchSubdivision}
-                  placeholder="Sélectionnez une région"
+                  placeholder="Sélectionnez une subdivision"
                   required={true}
                   disabled={!formData.pays || loadingSubdivisions}
+                  icon={FiMapPin}
                   getOptionLabel={(subdivision) => `${subdivision.nom} (${subdivision.type_subdivision})`}
                   getOptionValue={(subdivision) => subdivision.id}
                 />
                 {!formData.pays && (
-                  <p className="text-xs text-gray-500 mt-1">Veuillez d'abord sélectionner un pays</p>
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-1.5">
+                    <FiGlobe size={12} />
+                    Veuillez d'abord sélectionner un pays
+                  </p>
                 )}
                 {loadingSubdivisions && (
-                  <p className="text-xs text-blue-500 mt-1">Chargement des régions...</p>
+                  <p className="text-xs text-violet-500 mt-2 flex items-center gap-1.5">
+                    <FiRefreshCw className="animate-spin" size={12} />
+                    Chargement des subdivisions...
+                  </p>
                 )}
               </div>
 
@@ -971,71 +1398,90 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                 <SearchableDropdown
                   label="Ville"
                   value={formData.ville}
-                  onChange={(value) => handleChange('ville', parseInt(value))}
+                  onChange={(value) => handleChange('ville', value)}
                   options={villes}
                   searchValue={searchVille}
                   onSearchChange={setSearchVille}
                   placeholder="Sélectionnez une ville"
                   required={true}
                   disabled={!formData.region || loadingVilles}
+                  icon={FiMapPin}
                   getOptionLabel={(ville) => `${ville.nom} ${ville.code_postal ? `(${ville.code_postal})` : ''}`}
                   getOptionValue={(ville) => ville.id}
                 />
                 {!formData.region && (
-                  <p className="text-xs text-gray-500 mt-1">Veuillez d'abord sélectionner une région</p>
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-1.5">
+                    <FiMapPin size={12} />
+                    Veuillez d'abord sélectionner une subdivision
+                  </p>
                 )}
                 {loadingVilles && (
-                  <p className="text-xs text-blue-500 mt-1">Chargement des villes...</p>
+                  <p className="text-xs text-violet-500 mt-2 flex items-center gap-1.5">
+                    <FiRefreshCw className="animate-spin" size={12} />
+                    Chargement des villes...
+                  </p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Contact */}
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Contact</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Section 4: Contact - COULEUR VIOLETTE */}
+          <div className="bg-gradient-to-br from-cyan-50 to-white rounded-2xl p-6 border border-cyan-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-cyan-600 to-cyan-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Contact</h3>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone *</label>
-                <input
-                  type="tel"
-                  required
-                  value={formData.telephone}
-                  onChange={(e) => handleChange('telephone', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="+228 XX XXX XXX"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Téléphone <span className="text-red-500">*</span>
+                </label>
+                <div className="relative group">
+                  <FiPhone className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="tel"
+                    required
+                    value={formData.telephone}
+                    onChange={(e) => handleChange('telephone', e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    placeholder="+228 XX XXX XXX"
+                  />
+                </div>
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="contact@example.com"
-                />
+                <div className="relative group">
+                  <FiMail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleChange('email', e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    placeholder="contact@entreprise.tg"
+                  />
+                </div>
               </div>
               
-              <div className="md:col-span-2">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Site Web</label>
                 <input
                   type="url"
                   value={formData.site_web}
                   onChange={(e) => handleChange('site_web', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   placeholder="https://www.example.com"
                 />
               </div>
             </div>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+          {/* Boutons d'action - COULEUR VIOLETTE */}
+          <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+              className="px-6 py-3.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium hover:shadow-sm"
               disabled={loading}
             >
               Annuler
@@ -1043,15 +1489,19 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
+              className="px-6 py-3.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-xl hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-semibold flex items-center space-x-2 shadow-md hover:shadow-lg"
             >
-              {loading && (
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
+              {loading ? (
+                <>
+                  <FiRefreshCw className="animate-spin" />
+                  <span>Sauvegarde...</span>
+                </>
+              ) : (
+                <>
+                  <FiCheck />
+                  <span>{partner ? 'Mettre à jour' : 'Créer le partenaire'}</span>
+                </>
               )}
-              <span>{loading ? 'Sauvegarde...' : partner ? 'Mettre à jour' : 'Créer le partenaire'}</span>
             </button>
           </div>
         </form>

@@ -672,29 +672,21 @@ export default function EntitiesPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                          <button 
-                            onClick={() => handleEdit(entity)}
-                            className="p-2 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded-lg hover:from-blue-100 hover:to-blue-200 transition-all duration-200"
-                            title="Modifier"
-                          >
-                            <FiEdit2 size={16} />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(entity)}
-                            className="p-2 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-lg hover:from-red-100 hover:to-red-200 transition-all duration-200"
-                            title="Supprimer"
-                          >
-                            <FiTrash2 size={16} />
-                          </button>
-                          <button 
-                            className="p-2 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded-lg hover:from-gray-100 hover:to-gray-200 transition-all duration-200"
-                            title="Plus d'options"
-                          >
-                            <FiMoreVertical size={16} />
-                          </button>
-                        </div>
-                      </td>
+                      <div className="flex items-center gap-2">
+                      <button
+                      onClick={() => handleEdit(entity)}
+                    className="p-2.5 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded-xl hover:from-blue-100 hover:to-blue-200 transition-all duration-200 shadow-sm hover:shadow"
+                    title="Modifier">
+                    <FiEdit2 size={17} />
+          </button>
+          <button
+            onClick={() => handleDelete(entity)}
+            className="p-2.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-xl hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+            title="Supprimer">
+            <FiTrash2 size={17} />
+            </button>
+                  </div>
+                    </td>
                     </tr>
                     {expandedRow === entity.id && (
                       <tr className="bg-gradient-to-r from-violet-50 to-violet-25">

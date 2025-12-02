@@ -364,7 +364,7 @@ export default function PartnerBanksPage() {
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
                       <div>
-                        <div className="font-semibold">{partnerBank.partenaire?.nom}</div>
+                        <div className="font-semibold">{partnerBank.partenaire_details?.nom}</div>
                         <div className="text-xs text-gray-500 capitalize">
                           {partnerBank.partenaire?.type_partenaire}
                         </div>
@@ -373,7 +373,7 @@ export default function PartnerBanksPage() {
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
                       {partnerBank.banque ? (
                         <div>
-                          <div className="font-medium">{partnerBank.banque.nom}</div>
+                          <div className="font-medium">{partnerBank.banque_details?.nom}</div>
                           {partnerBank.banque.code_bic && (
                             <div className="text-xs text-gray-500 font-mono">
                               {partnerBank.banque.code_bic}
@@ -391,8 +391,8 @@ export default function PartnerBanksPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
                       {partnerBank.entite ? (
-                        <div className="max-w-xs truncate" title={partnerBank.entite.raison_sociale}>
-                          {partnerBank.entite.raison_sociale}
+                        <div className="max-w-xs truncate" title={partnerBank.entite_details?.raison_sociale}>
+                          {partnerBank.entite_details?.raison_sociale}
                         </div>
                       ) : (
                         <span className="text-gray-400">-</span>
