@@ -1,5 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { 
+  FiRefreshCw, 
+  FiPlus, 
+  FiEdit2, 
+  FiTrash2, 
+  FiSearch, 
+  FiFilter, 
+  FiX, 
+  FiCheck, 
+  FiGlobe, 
+  FiMapPin, 
+  FiPhone, 
+  FiMail, 
+  FiDollarSign, 
+  FiCalendar, 
+  FiUser, 
+  FiChevronLeft, 
+  FiChevronRight,
+  FiFileText,
+  FiBriefcase,
+  FiHome,
+  FiCreditCard,
+  FiActivity,
+  FiUsers,
+  FiDownload,
+  FiUpload,
+  FiEye,
+  FiMoreVertical,
+  FiChevronDown,
+  FiChevronUp
+} from "react-icons/fi";
+import { TbBuildingSkyscraper } from "react-icons/tb";
 
 export default function EntitiesPage() {
   const [entities, setEntities] = useState([]);
@@ -17,6 +49,8 @@ export default function EntitiesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
   const [filterPays, setFilterPays] = useState('');
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [expandedRow, setExpandedRow] = useState(null);
 
   useEffect(() => {
     fetchEntities();
@@ -112,13 +146,27 @@ export default function EntitiesPage() {
     }
   };
 
-  // Filtrage et recherche
+  // Fonction utilitaire pour extraire le nom de la ville
+  const getVilleName = (ville) => {
+    if (!ville) return '';
+    if (typeof ville === 'string') return ville;
+    if (typeof ville === 'object') {
+      return ville.nom || ville.name || ville.nom_fr || '';
+    }
+    return String(ville);
+  };
+
+  // Filtrage et recherche - VERSION CORRIGÉE
   const filteredEntities = entities.filter(entity => {
+    // Gérer les différents formats de ville pour la recherche
+    const villeNom = getVilleName(entity.ville).toLowerCase();
+    const raisonSociale = (entity.raison_sociale || '').toLowerCase();
+    const activite = (entity.activite || '').toLowerCase();
+    
     const matchesSearch = 
-      entity.raison_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (entity.activite && entity.activite.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      entity.ville?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entity.ville?.toLowerCase().includes(searchTerm.toLowerCase());
+      raisonSociale.includes(searchTerm.toLowerCase()) ||
+      activite.includes(searchTerm.toLowerCase()) ||
+      villeNom.includes(searchTerm.toLowerCase());
     
     const matchesStatut = !filterStatut || 
       (filterStatut === 'actif' ? entity.statut : !entity.statut);
@@ -139,6 +187,28 @@ export default function EntitiesPage() {
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
   const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
+
+  // Gestion des sélections
+  const toggleRowSelection = (id) => {
+    setSelectedRows(prev => 
+      prev.includes(id) 
+        ? prev.filter(rowId => rowId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const selectAllRows = () => {
+    if (selectedRows.length === currentEntities.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(currentEntities.map(entity => entity.id));
+    }
+  };
+
+  // Gestion des lignes expansibles
+  const toggleExpandRow = (id) => {
+    setExpandedRow(expandedRow === id ? null : id);
+  };
 
   // Gestion des actions
   const handleNewEntity = () => {
@@ -173,273 +243,488 @@ export default function EntitiesPage() {
     fetchEntities();
   };
 
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setFilterStatut('');
+    setFilterPays('');
+    setCurrentPage(1);
+  };
+
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="flex justify-center items-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des entités...</span>
+      <div className="p-6 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+        <div className="flex flex-col items-center justify-center h-96">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-gray-200 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div className="mt-6">
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-48 animate-pulse"></div>
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 mt-3 animate-pulse mx-auto"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Entités</h1>
-          <p className="text-gray-600 mt-1">
-            {filteredEntities.length} entité(s) trouvé(s)
-            {(searchTerm || filterPays || filterStatut) && ' • Filtres actifs'}
-          </p>
+    <div className="p-6 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+      {/* Header avec gradient */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-gradient-to-br from-violet-600 to-violet-500 rounded-xl shadow-lg">
+              <TbBuildingSkyscraper className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Gestion des Entités</h1>
+              <p className="text-gray-600 text-sm mt-1">
+                Gérez toutes les entités de votre organisation
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleRetry}
+              className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow-md flex items-center gap-2 group"
+            >
+              <FiRefreshCw className="group-hover:rotate-180 transition-transform duration-500" />
+              <span className="font-medium">Actualiser</span>
+            </button>
+            <button 
+              onClick={handleNewEntity}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 hover:shadow-lg flex items-center gap-2 group shadow-md"
+            >
+              <FiPlus className="group-hover:rotate-90 transition-transform duration-300" />
+              <span className="font-semibold">Nouvelle Entité</span>
+            </button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <button 
-            onClick={handleRetry}
-            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Actualiser
-          </button>
-          <button 
-            onClick={handleNewEntity}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Nouvelle Entité
-          </button>
+
+        {/* Statistiques en ligne - MODIFIÉ */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total des entités</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{entities.length}</p>
+              </div>
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <TbBuildingSkyscraper className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Entités actives</p>
+                <p className="text-2xl font-bold text-green-600 mt-1">{entities.filter(e => e.statut).length}</p>
+              </div>
+              <div className="p-2 bg-green-50 rounded-lg">
+                <FiActivity className="w-5 h-5 text-green-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Entités inactives</p>
+                <p className="text-2xl font-bold text-red-600 mt-1">{entities.filter(e => !e.statut).length}</p>
+              </div>
+              <div className="p-2 bg-red-50 rounded-lg">
+                <FiActivity className="w-5 h-5 text-red-600" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Message d'erreur */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 font-medium">{error}</span>
+        <div className="mb-6">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 rounded-r-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <FiX className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-900">{error}</p>
+                  <p className="text-sm text-red-700 mt-1">Veuillez réessayer</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRetry}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium shadow-sm"
+              >
+                Réessayer
+              </button>
             </div>
-            <button
-              onClick={handleRetry}
-              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
-            >
-              Réessayer
-            </button>
           </div>
         </div>
       )}
 
-      {/* Filtres et Recherche */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Raison sociale, activité, ville..."
-            />
+      {/* Barre d'outils - Filtres et Recherche */}
+      <div className="mb-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">Filtres et Recherche</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">
+                {filteredEntities.length} résultat(s)
+              </span>
+              {(searchTerm || filterPays || filterStatut) && (
+                <button
+                  onClick={handleResetFilters}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-1"
+                >
+                  <FiX size={14} />
+                  Effacer
+                </button>
+              )}
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-            <select
-              value={filterStatut}
-              onChange={(e) => setFilterStatut(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Tous les statuts</option>
-              <option value="actif">Actif</option>
-              <option value="inactif">Inactif</option>
-            </select>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Recherche</label>
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white relative z-10"
+                    placeholder="Rechercher une entité..."
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+              <div className="relative">
+                <FiFilter className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <select
+                  value={filterStatut}
+                  onChange={(e) => setFilterStatut(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white appearance-none"
+                >
+                  <option value="">Tous les statuts</option>
+                  <option value="actif">Actif</option>
+                  <option value="inactif">Inactif</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Pays</label>
+              <div className="relative">
+                <FiGlobe className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <select
+                  value={filterPays}
+                  onChange={(e) => setFilterPays(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white appearance-none"
+                >
+                  <option value="">Tous les pays</option>
+                  {pays.map(paysItem => (
+                    <option key={paysItem.id} value={paysItem.id}>
+                      {paysItem.emoji} {paysItem.nom_fr || paysItem.nom}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleResetFilters}
+                className="w-full px-4 py-3 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 rounded-xl hover:from-gray-200 hover:to-gray-100 transition-all duration-300 border border-gray-300 font-medium flex items-center justify-center gap-2 group"
+              >
+                <FiX className="group-hover:rotate-90 transition-transform duration-300" />
+                Réinitialiser tout
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Pays</label>
-            <select
-              value={filterPays}
-              onChange={(e) => setFilterPays(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Tous les pays</option>
-              {pays.map(paysItem => (
-                <option key={paysItem.id} value={paysItem.id}>
-                  {paysItem.emoji} {paysItem.nom_fr || paysItem.nom}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="flex justify-end mt-4">
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setFilterStatut('');
-              setFilterPays('');
-              setCurrentPage(1);
-            }}
-            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
-          >
-            Réinitialiser les filtres
-          </button>
         </div>
       </div>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">{entities.length}</div>
-          <div className="text-sm text-gray-600">Total des entités</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-green-600">
-            {new Set(entities.map(e => e.pays?.id)).size}
+      {/* Tableau Principal */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* En-tête du tableau avec actions */}
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedRows.length === currentEntities.length && currentEntities.length > 0}
+                  onChange={selectAllRows}
+                  className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                />
+                <span className="text-sm text-gray-700">
+                  {selectedRows.length} sélectionné(s)
+                </span>
+              </div>
+              {selectedRows.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors">
+                    <FiDownload size={14} />
+                  </button>
+                  <button className="px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors">
+                    <FiTrash2 size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600">
+                <FiDownload size={18} />
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600">
+                <FiUpload size={18} />
+              </button>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              >
+                <option value={5}>5 lignes</option>
+                <option value={10}>10 lignes</option>
+                <option value={20}>20 lignes</option>
+                <option value={50}>50 lignes</option>
+              </select>
+            </div>
           </div>
-          <div className="text-sm text-gray-600">Pays représentés</div>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-purple-600">
-            {entities.filter(e => e.statut).length}
-          </div>
-          <div className="text-sm text-gray-600">Entités actives</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-orange-600">
-            {entities.filter(e => !e.statut).length}
-          </div>
-          <div className="text-sm text-gray-600">Entités inactives</div>
-        </div>
-      </div>
 
-      {/* Tableau */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
+        {/* Tableau */}
         <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
+          <table className="min-w-full divide-y divide-gray-200">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-300">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  ID
+              <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.length === currentEntities.length && currentEntities.length > 0}
+                      onChange={selectAllRows}
+                      className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                    />
+                    ID
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Raison Sociale
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Activité
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Forme Juridique
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Capital
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Ville
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Pays
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  Ville
+                </th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Téléphone
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Statut
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {currentEntities.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {entities.length === 0 ? 'Aucune entité trouvée' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="10" className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
+                        <TbBuildingSkyscraper className="w-10 h-10 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        {entities.length === 0 ? 'Aucune entité trouvée' : 'Aucun résultat pour votre recherche'}
+                      </h3>
+                      <p className="text-gray-600 mb-6 max-w-md">
+                        {entities.length === 0 
+                          ? 'Commencez par créer votre première entité pour gérer votre organisation' 
+                          : 'Essayez de modifier vos critères de recherche ou de filtres'}
+                      </p>
+                      {entities.length === 0 && (
+                        <button 
+                          onClick={handleNewEntity}
+                          className="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-xl hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-2"
+                        >
+                          <FiPlus />
+                          Créer ma première entité
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
                 currentEntities.map((entity, index) => (
-                  <tr 
-                    key={entity.id} 
-                    className={`${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                    } hover:bg-gray-100 transition-colors border-b border-gray-300`}
-                  >
-                    <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {entity.id}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      {entity.raison_sociale}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {entity.activite || '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {entity.forme_juridique || '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300 font-mono">
-                      {entity.capital_social ? (
-                        new Intl.NumberFormat('fr-FR', { 
-                          style: 'currency', 
-                          currency: 'XOF' 
-                        }).format(entity.capital_social)
-                      ) : '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {entity.ville_details?.nom || '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      <div className="flex items-center gap-2">
-                        <span>{entity.pays?.emoji}</span>
-                        <span>{entity.pays_details ? (
-                    <div className="flex items-center gap-2">
-                      <span>{entity.pays_details.emoji}</span>
-                      <span>{entity.pays_details.nom}</span>
-                    </div>
-                  ) : '-'}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {entity.telephone}
-                    </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${
-                        entity.statut
-                          ? 'bg-green-100 text-green-800 border-green-300' 
-                          : 'bg-red-100 text-red-800 border-red-300'
-                      }`}>
-                        {entity.statut ? 'Actif' : 'Inactif'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex space-x-3">
-                        <button 
-                          onClick={() => handleEdit(entity)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          Éditer
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(entity)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Supprimer
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <React.Fragment key={entity.id}>
+                    <tr 
+                      className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
+                        selectedRows.includes(entity.id) ? 'bg-gradient-to-r from-blue-50 to-blue-25' : 'bg-white'
+                      } ${expandedRow === entity.id ? 'bg-gradient-to-r from-violet-50 to-violet-25' : ''}`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.includes(entity.id)}
+                            onChange={() => toggleRowSelection(entity.id)}
+                            className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                          />
+                          <button
+                            onClick={() => toggleExpandRow(entity.id)}
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                          >
+                            {expandedRow === entity.id ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
+                          </button>
+                          <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
+                            #{entity.id}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 border-r border-gray-200">
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{entity.raison_sociale}</div>
+                          <div className="text-xs text-gray-500">{entity.email || 'Aucun email'}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 border-r border-gray-200">
+                        <div className="text-sm text-gray-900 max-w-xs">
+                          {entity.activite || '-'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 border-r border-gray-200">
+                        <div className="text-sm text-gray-700">{entity.forme_juridique || '-'}</div>
+                      </td>
+                      <td className="px-6 py-4 border-r border-gray-200">
+                        {entity.capital_social ? (
+                          <span className="text-sm font-semibold text-emerald-700">
+                            {new Intl.NumberFormat('fr-FR', { 
+                              style: 'currency', 
+                              currency: 'XOF',
+                              minimumFractionDigits: 0
+                            }).format(entity.capital_social)}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 border-r border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{entity.pays_details?.emoji || '🌍'}</span>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {entity.pays_details?.nom || '-'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {entity.pays_details?.code_iso || ''}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 border-r border-gray-200">
+                        <div className="text-sm text-gray-700">
+                          {getVilleName(entity.ville) || '-'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 border-r border-gray-200">
+                        <div className="text-sm text-gray-700">
+                          {entity.telephone || '-'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 border-r border-gray-200">
+                        <div className="flex items-center">
+                          <div className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
+                            entity.statut
+                              ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
+                              : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
+                          }`}>
+                            {entity.statut ? (
+                              <>
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span className="text-sm font-medium">Actif</span>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                <span className="text-sm font-medium">Inactif</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => handleEdit(entity)}
+                            className="p-2 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded-lg hover:from-blue-100 hover:to-blue-200 transition-all duration-200"
+                            title="Modifier"
+                          >
+                            <FiEdit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(entity)}
+                            className="p-2 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-lg hover:from-red-100 hover:to-red-200 transition-all duration-200"
+                            title="Supprimer"
+                          >
+                            <FiTrash2 size={16} />
+                          </button>
+                          <button 
+                            className="p-2 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded-lg hover:from-gray-100 hover:to-gray-200 transition-all duration-200"
+                            title="Plus d'options"
+                          >
+                            <FiMoreVertical size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedRow === entity.id && (
+                      <tr className="bg-gradient-to-r from-violet-50 to-violet-25">
+                        <td colSpan="10" className="px-6 py-4">
+                          <div className="bg-white rounded-xl border border-violet-200 p-5">
+                            <div className="grid grid-cols-4 gap-6">
+                              <div>
+                                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Adresse</div>
+                                <div className="text-sm text-gray-900">{entity.adresse || '-'}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Site Web</div>
+                                <div className="text-sm text-blue-600">{entity.site_web || '-'}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Date Création</div>
+                                <div className="text-sm text-gray-900">
+                                  {entity.date_creation ? new Date(entity.date_creation).toLocaleDateString('fr-FR') : '-'}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Registre Commerce</div>
+                                <div className="text-sm text-gray-900">{entity.registre_commerce || '-'}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))
               )}
             </tbody>
@@ -448,45 +733,36 @@ export default function EntitiesPage() {
 
         {/* Pagination */}
         {filteredEntities.length > 0 && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
-                  Lignes par page:
-                </span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="border border-gray-300 rounded px-3 py-1 text-sm"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredEntities.length)} sur {filteredEntities.length}
-                </span>
+          <div className="px-6 py-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700">
+                    Page {currentPage} sur {totalPages}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-sm text-gray-700">
+                    {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredEntities.length)} sur {filteredEntities.length} entités
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-2 rounded-lg border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page précédente"
                 >
-                  Précédent
+                  <FiChevronLeft />
                 </button>
 
                 {/* Numéros de page */}
-                <div className="flex space-x-1">
+                <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNumber;
                     if (totalPages <= 5) {
@@ -503,10 +779,10 @@ export default function EntitiesPage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`w-8 h-8 rounded border text-sm ${
+                        className={`min-w-[40px] h-10 rounded-lg border text-sm font-medium transition-all duration-200 ${
                           currentPage === pageNumber
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow-md'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                         }`}
                       >
                         {pageNumber}
@@ -518,13 +794,14 @@ export default function EntitiesPage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-2 rounded-lg border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page suivante"
                 >
-                  Suivant
+                  <FiChevronRight />
                 </button>
               </div>
             </div>
@@ -844,7 +1121,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
     }));
   };
 
-  // Composant réutilisable pour les dropdowns avec recherche - SOLUTION ULTIME
+  // Composant réutilisable pour les dropdowns avec recherche
   const SearchableDropdown = ({ 
     label, 
     value, 
@@ -855,6 +1132,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
     placeholder,
     required = false,
     disabled = false,
+    icon: Icon,
     getOptionLabel = (option) => option,
     getOptionValue = (option) => option,
     renderOption = (option) => getOptionLabel(option)
@@ -869,7 +1147,6 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
 
     const selectedOption = options.find(opt => getOptionValue(opt) === value);
 
-    // SOLUTION ULTIME : Utiliser mousedown au lieu de click et gérer les événements manuellement
     useEffect(() => {
       const handleMouseDown = (event) => {
         if (!dropdownRef.current?.contains(event.target)) {
@@ -878,7 +1155,6 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
         }
       };
 
-      // Utiliser capture phase pour intercepter l'événement plus tôt
       document.addEventListener('mousedown', handleMouseDown, true);
       
       return () => {
@@ -890,7 +1166,6 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
       if (!disabled) {
         setIsOpen(!isOpen);
         if (!isOpen) {
-          // Focus sur l'input quand on ouvre
           setTimeout(() => {
             inputRef.current?.focus();
           }, 0);
@@ -920,41 +1195,49 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
 
     return (
       <div className="relative" ref={dropdownRef}>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {label} {required && '*'}
-        </label>
+        {label && (
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {label} {required && <span className="text-red-500">*</span>}
+          </label>
+        )}
         
         {/* Bouton d'ouverture du dropdown */}
         <button
           type="button"
           onClick={handleToggle}
-          onMouseDown={(e) => e.preventDefault()} // Empêcher le focus immédiat
+          onMouseDown={(e) => e.preventDefault()}
           disabled={disabled}
-          className={`w-full text-left border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-            disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:border-gray-400'
-          }`}
+          className={`w-full text-left border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all ${
+            disabled 
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+              : 'bg-white hover:border-gray-400'
+          } ${isOpen ? 'ring-2 ring-violet-500 border-violet-500' : ''}`}
         >
-          {selectedOption ? (
-            <span className="block truncate">{getOptionLabel(selectedOption)}</span>
-          ) : (
-            <span className="text-gray-500">{placeholder || `Sélectionnez ${label.toLowerCase()}`}</span>
-          )}
-          <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {Icon && <Icon className="text-gray-400" size={18} />}
+              {selectedOption ? (
+                <span className="text-gray-900 font-medium">{getOptionLabel(selectedOption)}</span>
+              ) : (
+                <span className="text-gray-500">{placeholder || `Sélectionnez...`}</span>
+              )}
+            </div>
+            <svg className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
-          </span>
+          </div>
         </button>
 
         {/* Dropdown avec recherche */}
         {isOpen && (
           <div 
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden"
-            onMouseDown={handleInputMouseDown} // Empêcher la fermeture immédiate
+            className="absolute z-50 w-full mt-2 bg-white border border-gray-300 rounded-xl shadow-xl max-h-60 overflow-hidden"
+            onMouseDown={handleInputMouseDown}
           >
             {/* Barre de recherche */}
-            <div className="p-2 border-b border-gray-200">
+            <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
               <div className="relative">
+                <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   ref={inputRef}
                   type="text"
@@ -963,15 +1246,12 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   onMouseDown={handleInputMouseDown}
                   onClick={handleInputClick}
                   onFocus={handleInputFocus}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm bg-white"
                   placeholder={`Rechercher...`}
                   autoFocus
                 />
-                <svg className="w-4 h-4 absolute right-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-2 px-1">
                 {filteredOptions.length} résultat(s) trouvé(s)
               </p>
             </div>
@@ -979,18 +1259,21 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
             {/* Liste des options */}
             <div className="max-h-48 overflow-y-auto">
               {filteredOptions.length === 0 ? (
-                <div className="p-4 text-center text-gray-500 text-sm">
-                  Aucun résultat trouvé pour "{searchValue}"
+                <div className="p-6 text-center">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <FiSearch className="text-gray-400" />
+                  </div>
+                  <p className="text-gray-500 text-sm">Aucun résultat trouvé</p>
                 </div>
               ) : (
                 filteredOptions.map((option, index) => (
                   <div
                     key={index}
-                    className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
-                      value === getOptionValue(option) ? 'bg-blue-100 text-blue-800' : 'text-gray-700'
+                    className={`px-4 py-3 cursor-pointer hover:bg-violet-50 text-sm border-b border-gray-100 last:border-b-0 transition-colors ${
+                      value === getOptionValue(option) ? 'bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium' : 'text-gray-700'
                     }`}
                     onMouseDown={(e) => {
-                      e.preventDefault(); // Empêcher le focus
+                      e.preventDefault();
                       e.stopPropagation();
                     }}
                     onClick={() => handleOptionClick(getOptionValue(option))}
@@ -1005,8 +1288,9 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
 
         {/* Affichage de la valeur sélectionnée */}
         {selectedOption && !isOpen && (
-          <p className="text-sm text-green-600 mt-1">
-            Sélectionné: {getOptionLabel(selectedOption)}
+          <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1.5">
+            <FiCheck size={14} />
+            Sélectionné: <span className="font-medium">{getOptionLabel(selectedOption)}</span>
           </p>
         )}
       </div>
@@ -1014,46 +1298,74 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {entity ? 'Modifier l\'entité' : 'Créer une nouvelle entité'}
-          </h2>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        {/* Header du modal avec gradient - TAILLE RÉDUITE */}
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-2xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <TbBuildingSkyscraper className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">
+                  {entity ? 'Modifier l\'entité' : 'Nouvelle Entité'}
+                </h2>
+                {!entity && (
+                  <p className="text-violet-100 text-xs mt-0.5">
+                    Créez une nouvelle entité dans le système
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
         </div>
         
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 text-sm">{error}</span>
+          <div className="mx-6 mt-4 bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 rounded-r-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <FiX className="text-red-600" />
+              </div>
+              <span className="text-red-800 text-sm font-medium">{error}</span>
             </div>
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Informations Générales */}
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Informations Générales</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
+        <form onSubmit={handleSubmit} className="p-6 space-y-8">
+          {/* Section 1: Informations Générales */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-violet-600 to-violet-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Informations Générales</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Raison Sociale *
+                  Raison Sociale <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.raison_sociale}
-                  onChange={(e) => handleChange('raison_sociale', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Nom de l'entreprise"
-                />
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-xl blur opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                  <input
+                    type="text"
+                    required
+                    value={formData.raison_sociale}
+                    onChange={(e) => handleChange('raison_sociale', e.target.value)}
+                    className="relative w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+                    placeholder="Nom de l'entreprise"
+                  />
+                </div>
               </div>
               
               {/* Secteur d'Activité avec recherche */}
-              <div className="md:col-span-2">
+              <div className="lg:col-span-2">
                 <SearchableDropdown
                   label="Secteur d'Activité"
                   value={formData.activite}
@@ -1062,18 +1374,21 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   searchValue={searchActivite}
                   onSearchChange={setSearchActivite}
                   placeholder="Sélectionnez un secteur d'activité"
-                  getOptionLabel={(option) => option}
-                  getOptionValue={(option) => option}
                 />
                 {showAutreActivite && (
-                  <input
-                    type="text"
-                    value={formData.activite_autre}
-                    onChange={(e) => handleChange('activite_autre', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Précisez le secteur d'activité"
-                    required
-                  />
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Précisez le secteur d'activité <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.activite_autre}
+                      onChange={(e) => handleChange('activite_autre', e.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                      placeholder="Secteur d'activité"
+                      required
+                    />
+                  </div>
                 )}
               </div>
               
@@ -1087,44 +1402,53 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   searchValue={searchFormeJuridique}
                   onSearchChange={setSearchFormeJuridique}
                   placeholder="Sélectionnez une forme juridique"
-                  getOptionLabel={(option) => option}
-                  getOptionValue={(option) => option}
                 />
                 {showAutreFormeJuridique && (
-                  <input
-                    type="text"
-                    value={formData.forme_juridique_autre}
-                    onChange={(e) => handleChange('forme_juridique_autre', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Précisez la forme juridique"
-                    required
-                  />
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Précisez la forme juridique <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.forme_juridique_autre}
+                      onChange={(e) => handleChange('forme_juridique_autre', e.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                      placeholder="Forme juridique"
+                      required
+                    />
+                  </div>
                 )}
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Capital Social</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.capital_social}
-                  onChange={(e) => handleChange('capital_social', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0.00"
-                />
+                <div className="relative group">
+                  <FiDollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.capital_social}
+                    onChange={(e) => handleChange('capital_social', e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Date de Création</label>
-                <input
-                  type="date"
-                  required
-                  value={formData.date_creation}
-                  onChange={(e) => handleChange('date_creation', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
-                  readOnly={!entity}
-                />
-                <p className="text-xs text-gray-500 mt-1">
+                <div className="relative group">
+                  <FiCalendar className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="date"
+                    required
+                    value={formData.date_creation}
+                    onChange={(e) => handleChange('date_creation', e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+                    readOnly={!entity}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
                   {!entity ? "Date du jour par défaut" : "Modifiable pour les entités existantes"}
                 </p>
               </div>
@@ -1134,56 +1458,29 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                 <select
                   value={formData.statut}
                   onChange={(e) => handleChange('statut', e.target.value === 'true')}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 >
                   <option value={true}>Actif</option>
                   <option value={false}>Inactif</option>
                 </select>
               </div>
-
-              {/* Devise avec recherche */}
-              <div>
-                <SearchableDropdown
-                  label="Devise"
-                  value={formData.devise}
-                  onChange={(value) => handleChange('devise', value)}
-                  options={devisesArray}
-                  searchValue={searchDevise}
-                  onSearchChange={setSearchDevise}
-                  placeholder="Sélectionnez une devise"
-                  getOptionLabel={(devise) => `${devise.code} - ${devise.nom} (${devise.symbole})`}
-                  getOptionValue={(devise) => devise.id}
-                />
-              </div>
-
-              {/* Langue avec recherche */}
-              <div>
-                <SearchableDropdown
-                  label="Langue"
-                  value={formData.langue}
-                  onChange={(value) => handleChange('langue', value)}
-                  options={languesArray}
-                  searchValue={searchLangue}
-                  onSearchChange={setSearchLangue}
-                  placeholder="Sélectionnez une langue"
-                  getOptionLabel={(langue) => `${langue.nom} (${langue.code})`}
-                  getOptionValue={(langue) => langue.id}
-                />
-              </div>
             </div>
           </div>
 
-          {/* Informations Légales */}
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Informations Légales</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Section 2: Informations Légales */}
+          <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl p-6 border border-blue-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-blue-600 to-blue-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Informations Légales</h3>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Registre de Commerce</label>
                 <input
                   type="text"
                   value={formData.registre_commerce}
                   onChange={(e) => handleChange('registre_commerce', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Numéro RC"
                 />
               </div>
@@ -1194,37 +1491,81 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   type="text"
                   value={formData.numero_fiscal}
                   onChange={(e) => handleChange('numero_fiscal', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Numéro d'identification fiscale"
                 />
               </div>
               
-              <div className="md:col-span-2">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sécurité Sociale</label>
                 <input
                   type="text"
                   value={formData.securite_sociale}
                   onChange={(e) => handleChange('securite_sociale', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Numéro de sécurité sociale"
                 />
               </div>
             </div>
           </div>
 
-          {/* Localisation */}
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Localisation</h3>
+          {/* Section 3: Devise et Langue */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-6 border border-emerald-100">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-1.5 h-8 bg-gradient-to-b from-emerald-600 to-emerald-400 rounded-full"></div>
+                <h3 className="text-lg font-semibold text-gray-900">Devise</h3>
+              </div>
+              <SearchableDropdown
+                value={formData.devise}
+                onChange={(value) => handleChange('devise', value)}
+                options={devisesArray}
+                searchValue={searchDevise}
+                onSearchChange={setSearchDevise}
+                placeholder="Sélectionnez une devise"
+                icon={FiDollarSign}
+                getOptionLabel={(devise) => `${devise.code} - ${devise.nom} (${devise.symbole})`}
+                getOptionValue={(devise) => devise.id}
+              />
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Adresse complète *</label>
+            <div className="bg-gradient-to-br from-amber-50 to-white rounded-2xl p-6 border border-amber-100">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-1.5 h-8 bg-gradient-to-b from-amber-600 to-amber-400 rounded-full"></div>
+                <h3 className="text-lg font-semibold text-gray-900">Langue</h3>
+              </div>
+              <SearchableDropdown
+                value={formData.langue}
+                onChange={(value) => handleChange('langue', value)}
+                options={languesArray}
+                searchValue={searchLangue}
+                onSearchChange={setSearchLangue}
+                placeholder="Sélectionnez une langue"
+                icon={FiGlobe}
+                getOptionLabel={(langue) => `${langue.nom} (${langue.code})`}
+                getOptionValue={(langue) => langue.id}
+              />
+            </div>
+          </div>
+
+          {/* Section 4: Localisation */}
+          <div className="bg-gradient-to-br from-purple-50 to-white rounded-2xl p-6 border border-purple-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-purple-600 to-purple-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Localisation</h3>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Adresse complète <span className="text-red-500">*</span>
+                </label>
                 <textarea
                   required
                   value={formData.adresse}
                   onChange={(e) => handleChange('adresse', e.target.value)}
                   rows={3}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   placeholder="Adresse complète"
                 />
               </div>
@@ -1235,7 +1576,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   type="text"
                   value={formData.complement_adresse}
                   onChange={(e) => handleChange('complement_adresse', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   placeholder="Bâtiment, étage, etc."
                 />
               </div>
@@ -1246,7 +1587,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   type="text"
                   value={formData.code_postal}
                   onChange={(e) => handleChange('code_postal', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   placeholder="Code postal"
                 />
               </div>
@@ -1262,6 +1603,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   onSearchChange={setSearchPays}
                   placeholder="Sélectionnez un pays"
                   required={true}
+                  icon={FiGlobe}
                   getOptionLabel={(paysItem) => `${paysItem.emoji} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
                   getOptionValue={(paysItem) => paysItem.id}
                 />
@@ -1279,14 +1621,21 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   placeholder="Sélectionnez une subdivision"
                   required={true}
                   disabled={!formData.pays || loadingSubdivisions}
+                  icon={FiMapPin}
                   getOptionLabel={(subdivision) => `${subdivision.nom} (${subdivision.type_subdivision})`}
                   getOptionValue={(subdivision) => subdivision.id}
                 />
                 {!formData.pays && (
-                  <p className="text-xs text-gray-500 mt-1">Veuillez d'abord sélectionner un pays</p>
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-1.5">
+                    <FiGlobe size={12} />
+                    Veuillez d'abord sélectionner un pays
+                  </p>
                 )}
                 {loadingSubdivisions && (
-                  <p className="text-xs text-blue-500 mt-1">Chargement des subdivisions...</p>
+                  <p className="text-xs text-blue-500 mt-2 flex items-center gap-1.5">
+                    <FiRefreshCw className="animate-spin" size={12} />
+                    Chargement des subdivisions...
+                  </p>
                 )}
               </div>
 
@@ -1302,64 +1651,87 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   placeholder="Sélectionnez une ville"
                   required={true}
                   disabled={!formData.subdivision || loadingVilles}
+                  icon={FiMapPin}
                   getOptionLabel={(ville) => `${ville.nom} ${ville.code_postal ? `(${ville.code_postal})` : ''}`}
                   getOptionValue={(ville) => ville.id}
                 />
                 {!formData.subdivision && (
-                  <p className="text-xs text-gray-500 mt-1">Veuillez d'abord sélectionner une subdivision</p>
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-1.5">
+                    <FiMapPin size={12} />
+                    Veuillez d'abord sélectionner une subdivision
+                  </p>
                 )}
                 {loadingVilles && (
-                  <p className="text-xs text-blue-500 mt-1">Chargement des villes...</p>
+                  <p className="text-xs text-blue-500 mt-2 flex items-center gap-1.5">
+                    <FiRefreshCw className="animate-spin" size={12} />
+                    Chargement des villes...
+                  </p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Contact */}
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Contact</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Section 5: Contact */}
+          <div className="bg-gradient-to-br from-cyan-50 to-white rounded-2xl p-6 border border-cyan-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-cyan-600 to-cyan-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Contact</h3>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone *</label>
-                <input
-                  type="tel"
-                  required
-                  value={formData.telephone}
-                  onChange={(e) => handleChange('telephone', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="+228 XX XXX XXX"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Téléphone <span className="text-red-500">*</span>
+                </label>
+                <div className="relative group">
+                  <FiPhone className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="tel"
+                    required
+                    value={formData.telephone}
+                    onChange={(e) => handleChange('telephone', e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    placeholder="+228 XX XXX XXX"
+                  />
+                </div>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
-                <input
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="contact@entreprise.tg"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <div className="relative group">
+                  <FiMail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => handleChange('email', e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    placeholder="contact@entreprise.tg"
+                  />
+                </div>
               </div>
               
-              <div className="md:col-span-2">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Site Web</label>
                 <input
                   type="url"
                   value={formData.site_web}
                   onChange={(e) => handleChange('site_web', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                   placeholder="https://www.example.com"
                 />
               </div>
             </div>
           </div>
 
-          {/* Administration */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Administration</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Section 6: Administration */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-gray-600 to-gray-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Administration</h3>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Utilisateur créateur avec recherche */}
               <div>
                 <SearchableDropdown
@@ -1370,6 +1742,7 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
                   searchValue={searchUser}
                   onSearchChange={setSearchUser}
                   placeholder="Sélectionnez un utilisateur"
+                  icon={FiUser}
                   getOptionLabel={(user) => `${user.username} (${user.email})`}
                   getOptionValue={(user) => user.id}
                 />
@@ -1377,11 +1750,12 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
             </div>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+          {/* Boutons d'action */}
+          <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+              className="px-6 py-3.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium hover:shadow-sm"
               disabled={loading}
             >
               Annuler
@@ -1389,15 +1763,19 @@ function EntityFormModal({ entity, users, pays, devises, langues, onClose, onSuc
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
+              className="px-6 py-3.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-xl hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-semibold flex items-center space-x-2 shadow-md hover:shadow-lg"
             >
-              {loading && (
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
+              {loading ? (
+                <>
+                  <FiRefreshCw className="animate-spin" />
+                  <span>Sauvegarde...</span>
+                </>
+              ) : (
+                <>
+                  <FiCheck />
+                  <span>{entity ? 'Mettre à jour' : 'Créer l\'entité'}</span>
+                </>
               )}
-              <span>{loading ? 'Sauvegarde...' : entity ? 'Mettre à jour' : 'Créer l\'entité'}</span>
             </button>
           </div>
         </form>

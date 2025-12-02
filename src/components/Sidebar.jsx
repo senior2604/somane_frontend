@@ -27,6 +27,7 @@ import { useState } from "react";
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  
   const [openCategories, setOpenCategories] = useState({
     organisation: true,
     securite: false,
@@ -43,6 +44,13 @@ export default function Sidebar() {
   };
 
   const menuCategories = [
+    {
+      id: "dashboard",
+      name: "Tableau de Bord",
+      icon: <FiHome />,
+      path: "/dashboard",
+      isSimpleLink: true  // Pour le différencier des catégories avec sous-menus
+    },
     {
       id: "organisation",
       name: "Organisation",
@@ -104,81 +112,90 @@ export default function Sidebar() {
     navigate("/login");
   };
 
-  // Vérifier si un item est actif
-  const isItemActive = (path) => location.pathname === path;
+  const isActive = (path) => location.pathname === path;
 
   return (
-    <aside className="w-64 bg-gradient-to-b from-sky-100 to-sky-50 text-sky-900 flex flex-col border-r border-sky-200">
-      {/* Header */}
-      <div className="px-6 py-4 text-center font-bold text-xl tracking-tight border-b border-sky-200 shadow-sm bg-gradient-to-r from-sky-500 to-sky-400 text-white">
-        SOMANE ERP
+    <aside className="w-64 bg-white text-gray-800 flex flex-col border-r border-gray-200 h-screen">
+      {/* Logo */}
+      <div className="px-6 py-6 text-center">
+        <h1 className="font-bold text-2xl tracking-tight text-violet-700">
+          SOMANE ERP
+        </h1>
       </div>
-      
-      {/* Tableau de Bord toujours visible */}
-      <div className="px-4 py-3 border-b border-sky-200 bg-sky-50/50">
-        <Link
-          to="/dashboard"
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 ${
-            location.pathname === "/dashboard"
-              ? "bg-sky-500 text-white shadow-md border-l-4 border-sky-300 transform scale-[1.02]"
-              : "hover:bg-sky-100 hover:text-sky-700 border-l-4 border-transparent hover:border-sky-300 hover:shadow-sm"
-          }`}
-        >
-          <span className="text-lg"><FiHome /></span>
-          <span className="font-medium">Tableau de Bord</span>
-        </Link>
-      </div>
-      
-      {/* Navigation avec catégories */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+
+      {/* Menu principal */}
+      <nav className="flex-1 px-3 py-2 overflow-y-auto">
         {menuCategories.map((category) => (
-          <div key={category.id} className="mb-2">
-            {/* En-tête de catégorie */}
-            <button
-              onClick={() => toggleCategory(category.id)}
-              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-sky-100 hover:text-sky-700 transition-all duration-200 group"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-lg text-sky-600 group-hover:text-sky-700">{category.icon}</span>
-                <span className="font-semibold">{category.name}</span>
-              </div>
-              <span className="text-sky-500 group-hover:text-sky-600">
-                {openCategories[category.id] ? <FiChevronDown /> : <FiChevronRight />}
-              </span>
-            </button>
-            
-            {/* Items de la catégorie */}
-            {openCategories[category.id] && (
-              <div className="ml-8 mt-1 space-y-0.5">
-                {category.items.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${
-                      isItemActive(item.path)
-                        ? "bg-sky-500 text-white shadow-sm transform scale-[1.02] font-medium"
-                        : "text-sky-600 hover:bg-sky-100 hover:text-sky-700 hover:shadow-sm"
-                    }`}
-                  >
-                    <span className={`text-sm ${isItemActive(item.path) ? 'text-white' : 'text-sky-500'}`}>
-                      {item.icon}
-                    </span>
-                    <span>{item.name}</span>
-                  </Link>
-                ))}
-              </div>
+          <div key={category.id} className="mb-1">
+            {category.isSimpleLink ? (
+              /* Lien simple : Tableau de Bord */
+              <Link
+                to={category.path}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  isActive(category.path)
+                    ? "bg-violet-50 text-violet-700"
+                    : "text-gray-700 hover:bg-gray-50 hover:text-violet-600"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-lg text-violet-600">{category.icon}</span>
+                  <span className="font-semibold">{category.name}</span>
+                </div>
+              </Link>
+            ) : (
+              /* Catégorie avec sous-menu */
+              <>
+                {/* En-tête de catégorie */}
+                <button
+                  onClick={() => toggleCategory(category.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    openCategories[category.id]
+                      ? "text-violet-700"
+                      : "text-gray-700 hover:text-violet-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg text-violet-600">{category.icon}</span>
+                    <span className="font-semibold">{category.name}</span>
+                  </div>
+                  <span className="text-violet-500 text-xs">
+                    {openCategories[category.id] ? <FiChevronDown /> : <FiChevronRight />}
+                  </span>
+                </button>
+
+                {/* Sous-items */}
+                {openCategories[category.id] && (
+                  <div className="ml-10 mt-1 space-y-0.5">
+                    {category.items.map((item) => (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                        isActive(item.path)
+                          ? "bg-violet-50 text-violet-700 font-medium"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-violet-600"
+                      }`}
+                    >
+                      <span className="text-violet-600">{item.icon}</span>
+                      <span>{item.name}</span>
+                    </Link>
+                  ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         ))}
       </nav>
-      
+
       {/* Déconnexion */}
-      <div className="p-4 border-t border-sky-200 bg-sky-50/50">
-        <button 
+      <div className="p-4 border-t border-gray-200">
+        <button
           onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-sky-500 to-sky-400 text-white rounded-lg hover:from-sky-600 hover:to-sky-500 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
+          className="w-full flex items-center justify-center gap-3 py-3 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-all duration-200 font-medium text-sm"
         >
-          <FiLogOut size={16} /> Déconnexion
+          <FiLogOut className="text-violet-600" />
+          Déconnexion
         </button>
       </div>
     </aside>

@@ -159,9 +159,9 @@ export default function PermissionsPage() {
     return permissions.filter(permission => {
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = 
-        permission.groupe?.name?.toLowerCase().includes(searchLower) ||
-        permission.module?.nom_affiche?.toLowerCase().includes(searchLower) ||
-        permission.entite?.raison_sociale?.toLowerCase().includes(searchLower) ||
+        permission.groupe_details?.name?.toLowerCase().includes(searchLower) ||
+        permission.module_details?.nom_affiche?.toLowerCase().includes(searchLower) ||
+        permission.entite_details?.raison_sociale?.toLowerCase().includes(searchLower)
         permission.acces?.toLowerCase().includes(searchLower);
       
       const matchesGroupe = !filterGroupe || permission.groupe?.id?.toString() === filterGroupe;
@@ -463,14 +463,14 @@ export default function PermissionsPage() {
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
                       <span className="bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                        {permission.groupe?.name || 'N/A'}
+                        {permission.groupe_details?.name || 'N/A'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {permission.module?.nom_affiche || 'N/A'}
+                      {permission.module_details?.nom_affiche || 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {permission.entite?.raison_sociale || 'Toutes'}
+                      {permission.entite_details?.raison_sociale || 'Toutes'}
                     </td>
                     <td className="px-6 py-4 border-r border-gray-300">
                       <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${getAccesBadgeClasses(permission.acces)}`}>
