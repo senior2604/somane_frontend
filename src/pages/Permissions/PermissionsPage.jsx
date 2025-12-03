@@ -1,68 +1,22 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { 
+  FiRefreshCw, FiPlus, FiEdit2, FiTrash2, FiSearch, FiFilter, FiX, 
+  FiCheck, FiUsers, FiChevronLeft, FiChevronRight, FiDownload, FiUpload,
+  FiChevronDown, FiChevronUp, FiCheckCircle, FiXCircle, FiShield, FiKey,
+  FiLock, FiUnlock, FiEye, FiMoreVertical, FiFolder, FiLayers,
+  FiDatabase, FiBriefcase, FiSettings, FiEyeOff
+} from "react-icons/fi";
 
-// Types d'accès comme spécifié dans l'Excel
+// Types d'accès comme spécifié dans l'Excel (sans les emojis et sans icônes)
 const TYPES_ACCES = [
-  { value: 'aucun', label: '❌ Aucun accès', color: 'red', bgColor: 'bg-red-100', textColor: 'text-red-800', borderColor: 'border-red-300' },
-  { value: 'lecture', label: '👁️ Lecture seule', color: 'blue', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-300' },
-  { value: 'ecriture', label: '✏️ Lecture/Écriture', color: 'green', bgColor: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-300' },
-  { value: 'validation', label: '✅ Validation', color: 'purple', bgColor: 'bg-purple-100', textColor: 'text-purple-800', borderColor: 'border-purple-300' },
-  { value: 'suppression', label: '🗑️ Suppression', color: 'orange', bgColor: 'bg-orange-100', textColor: 'text-orange-800', borderColor: 'border-orange-300' },
-  { value: 'personnalise', label: '🔧 Personnalisé', color: 'gray', bgColor: 'bg-gray-100', textColor: 'text-gray-800', borderColor: 'border-gray-300' }
+  { value: 'aucun', label: 'Aucun accès', color: 'red', bgColor: 'bg-red-100', textColor: 'text-red-800', borderColor: 'border-red-300' },
+  { value: 'lecture', label: 'Lecture seule', color: 'blue', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-300' },
+  { value: 'ecriture', label: 'Lecture/Écriture', color: 'green', bgColor: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-300' },
+  { value: 'validation', label: 'Validation', color: 'purple', bgColor: 'bg-purple-100', textColor: 'text-purple-800', borderColor: 'border-purple-300' },
+  { value: 'suppression', label: 'Suppression', color: 'orange', bgColor: 'bg-orange-100', textColor: 'text-orange-800', borderColor: 'border-orange-300' },
+  { value: 'personnalise', label: 'Personnalisé', color: 'gray', bgColor: 'bg-gray-100', textColor: 'text-gray-800', borderColor: 'border-gray-300' }
 ];
-
-// Composant Loading
-const LoadingSpinner = () => (
-  <div className="p-6">
-    <div className="flex justify-center items-center p-8">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      <span className="ml-2">Chargement des permissions...</span>
-    </div>
-  </div>
-);
-
-// Composant Error Display
-const ErrorDisplay = ({ error, onRetry }) => (
-  <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center">
-        <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-        </svg>
-        <span className="text-red-800 font-medium">{error}</span>
-      </div>
-      <button
-        onClick={onRetry}
-        className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
-      >
-        Réessayer
-      </button>
-    </div>
-  </div>
-);
-
-// Composant Empty State
-const EmptyState = ({ message, showWarning = false }) => (
-  <div className={`mb-6 ${showWarning ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'} border rounded-lg p-4`}>
-    <div className="flex items-center">
-      <svg className={`w-5 h-5 ${showWarning ? 'text-yellow-600' : 'text-gray-600'} mr-2`} fill="currentColor" viewBox="0 0 20 20">
-        {showWarning ? (
-          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-        ) : (
-          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 9a1 1 0 000 2h2a1 1 0 100-2H9z" clipRule="evenodd" />
-        )}
-      </svg>
-      <div>
-        <span className={`${showWarning ? 'text-yellow-800' : 'text-gray-800'} font-medium`}>
-          {showWarning ? 'Aucune donnée disponible' : 'Aucun résultat'}
-        </span>
-        <p className={`${showWarning ? 'text-yellow-700' : 'text-gray-700'} text-sm mt-1`}>
-          {message}
-        </p>
-      </div>
-    </div>
-  </div>
-);
 
 export default function PermissionsPage() {
   const [permissions, setPermissions] = useState([]);
@@ -79,8 +33,9 @@ export default function PermissionsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGroupe, setFilterGroupe] = useState('');
   const [filterModule, setFilterModule] = useState('');
-  const [filterEntite, setFilterEntite] = useState('');
-  const [filterStatut, setFilterStatut] = useState('');
+  const [filterStatut, setFilterStatut] = useState('actif'); // Garder seulement Groupe et Statut comme filtres principaux
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [expandedRow, setExpandedRow] = useState(null);
 
   // Fonction pour extraire les données de la réponse API
   const extractData = useCallback((response) => {
@@ -161,18 +116,17 @@ export default function PermissionsPage() {
       const matchesSearch = 
         permission.groupe_details?.name?.toLowerCase().includes(searchLower) ||
         permission.module_details?.nom_affiche?.toLowerCase().includes(searchLower) ||
-        permission.entite_details?.raison_sociale?.toLowerCase().includes(searchLower)
+        permission.entite_details?.raison_sociale?.toLowerCase().includes(searchLower) ||
         permission.acces?.toLowerCase().includes(searchLower);
       
       const matchesGroupe = !filterGroupe || permission.groupe?.id?.toString() === filterGroupe;
       const matchesModule = !filterModule || permission.module?.id?.toString() === filterModule;
-      const matchesEntite = !filterEntite || permission.entite?.id?.toString() === filterEntite;
-      const matchesStatut = filterStatut === '' || 
-        (filterStatut === 'actif' ? permission.statut : !permission.statut);
+      const matchesStatut = filterStatut === 'actif' ? permission.statut : 
+                           filterStatut === 'inactif' ? !permission.statut : true;
       
-      return matchesSearch && matchesGroupe && matchesModule && matchesEntite && matchesStatut;
+      return matchesSearch && matchesGroupe && matchesModule && matchesStatut;
     });
-  }, [permissions, searchTerm, filterGroupe, filterModule, filterEntite, filterStatut]);
+  }, [permissions, searchTerm, filterGroupe, filterModule, filterStatut]);
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -188,6 +142,28 @@ export default function PermissionsPage() {
   const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
+  // Gestion des sélections
+  const toggleRowSelection = (id) => {
+    setSelectedRows(prev => 
+      prev.includes(id) 
+        ? prev.filter(rowId => rowId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const selectAllRows = useCallback(() => {
+    if (selectedRows.length === currentPermissions.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(currentPermissions.map(permission => permission.id));
+    }
+  }, [currentPermissions, selectedRows.length]);
+
+  // Gestion des lignes expansibles
+  const toggleExpandRow = (id) => {
+    setExpandedRow(expandedRow === id ? null : id);
+  };
+
   // Gestion des actions
   const handleNewPermission = () => {
     setEditingPermission(null);
@@ -200,7 +176,7 @@ export default function PermissionsPage() {
   };
 
   const handleDelete = async (permission) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la permission du groupe "${permission.groupe?.name}" sur le module "${permission.module?.nom_affiche}" ?`)) {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la permission du groupe "${permission.groupe_details?.name}" sur le module "${permission.module_details?.nom_affiche}" ? Cette action est irréversible.`)) {
       try {
         await apiClient.delete(`/permissions/${permission.id}/`);
         fetchAllData();
@@ -237,8 +213,7 @@ export default function PermissionsPage() {
     setSearchTerm('');
     setFilterGroupe('');
     setFilterModule('');
-    setFilterEntite('');
-    setFilterStatut('');
+    setFilterStatut('actif');
     setCurrentPage(1);
   };
 
@@ -263,302 +238,553 @@ export default function PermissionsPage() {
   }), [permissions]);
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="p-6 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+        <div className="flex flex-col items-center justify-center h-96">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-gray-200 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div className="mt-6">
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-48 animate-pulse"></div>
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 mt-3 animate-pulse mx-auto"></div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Permissions</h1>
-          <p className="text-gray-600 mt-1">
-            {filteredPermissions.length} permission(s) trouvée(s)
-            {(filterGroupe || filterModule || filterEntite || filterStatut) && ' • Filtres actifs'}
-          </p>
+    <div className="p-6 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+      {/* Header avec gradient - COULEUR VIOLETTE */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-gradient-to-br from-violet-600 to-violet-500 rounded-xl shadow-lg">
+              <FiShield className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Gestion des Permissions</h1>
+              <p className="text-gray-600 text-sm mt-1">
+                Gérez les permissions d'accès aux modules par groupe
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleRetry}
+              className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow-md flex items-center gap-2 group"
+            >
+              <FiRefreshCw className={`${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+              <span className="font-medium">Actualiser</span>
+            </button>
+            <button 
+              onClick={handleNewPermission}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 hover:shadow-lg flex items-center gap-2 group shadow-md"
+            >
+              <FiPlus className="group-hover:rotate-90 transition-transform duration-300" />
+              <span className="font-semibold">Nouvelle Permission</span>
+            </button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <button 
-            onClick={handleRetry}
-            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Actualiser
-          </button>
-          <button 
-            onClick={handleNewPermission}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Nouvelle Permission
-          </button>
+
+        {/* Statistiques en ligne - 4 CARTES - COULEUR VIOLETTE */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total des permissions</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+              </div>
+              <div className="p-2 bg-violet-50 rounded-lg">
+                <FiShield className="w-5 h-5 text-violet-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Permissions actives</p>
+                <p className="text-2xl font-bold text-green-600 mt-1">{stats.actives}</p>
+              </div>
+              <div className="p-2 bg-green-50 rounded-lg">
+                <FiCheckCircle className="w-5 h-5 text-green-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Permissions inactives</p>
+                <p className="text-2xl font-bold text-red-600 mt-1">{stats.inactives}</p>
+              </div>
+              <div className="p-2 bg-red-50 rounded-lg">
+                <FiXCircle className="w-5 h-5 text-red-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Groupes concernés</p>
+                <p className="text-2xl font-bold text-purple-600 mt-1">{stats.groupesUniques}</p>
+              </div>
+              <div className="p-2 bg-purple-50 rounded-lg">
+                <FiUsers className="w-5 h-5 text-purple-600" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Message d'erreur */}
-      {error && <ErrorDisplay error={error} onRetry={handleRetry} />}
+      {error && (
+        <div className="mb-6">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 rounded-r-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <FiX className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-900">{error}</p>
+                  <p className="text-sm text-red-700 mt-1">Veuillez réessayer</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRetry}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium shadow-sm"
+              >
+                Réessayer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* États vides */}
       {!error && permissions.length === 0 && (
-        <EmptyState 
-          message="Aucune permission n'a été trouvée. Créez une nouvelle permission ou vérifiez la configuration de l'API."
-          showWarning={true}
-        />
-      )}
-
-      {/* Filtres et Recherche */}
-      {(permissions.length > 0 || searchTerm || filterGroupe || filterModule || filterEntite || filterStatut) && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Groupe, module, entité, accès..."
-              />
+        <div className="mb-6">
+          <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 border-l-4 border-yellow-500 rounded-r-xl p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <FiShield className="w-5 h-5 text-yellow-600" />
+              </div>
+              <div>
+                <p className="font-medium text-yellow-900">Aucune donnée disponible</p>
+                <p className="text-sm text-yellow-700 mt-1">
+                  Aucune permission n'a été trouvée. Créez une nouvelle permission ou vérifiez la configuration de l'API.
+                </p>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Groupe</label>
-              <select
-                value={filterGroupe}
-                onChange={(e) => setFilterGroupe(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Tous les groupes</option>
-                {groupes.map(groupe => (
-                  <option key={groupe.id} value={groupe.id}>
-                    {groupe.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Module</label>
-              <select
-                value={filterModule}
-                onChange={(e) => setFilterModule(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Tous les modules</option>
-                {modules.map(module => (
-                  <option key={module.id} value={module.id}>
-                    {module.nom_affiche}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Entité</label>
-              <select
-                value={filterEntite}
-                onChange={(e) => setFilterEntite(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Toutes les entités</option>
-                {entites.map(entite => (
-                  <option key={entite.id} value={entite.id}>
-                    {entite.raison_sociale}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-              <select
-                value={filterStatut}
-                onChange={(e) => setFilterStatut(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Tous les statuts</option>
-                <option value="actif">Actives</option>
-                <option value="inactif">Inactives</option>
-              </select>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button
-              onClick={resetFilters}
-              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
-            >
-              Réinitialiser tous les filtres
-            </button>
           </div>
         </div>
       )}
 
-      {/* Statistiques */}
-      {permissions.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-            <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
-            <div className="text-sm text-gray-600">Total des permissions</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-            <div className="text-2xl font-bold text-green-600">{stats.actives}</div>
-            <div className="text-sm text-gray-600">Permissions actives</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-            <div className="text-2xl font-bold text-gray-600">{stats.inactives}</div>
-            <div className="text-sm text-gray-600">Permissions inactives</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-            <div className="text-2xl font-bold text-purple-600">{stats.groupesUniques}</div>
-            <div className="text-sm text-gray-600">Groupes concernés</div>
+      {/* Barre d'outils - Filtres et Recherche - COULEUR VIOLETTE */}
+      {(permissions.length > 0 || searchTerm || filterGroupe || filterStatut !== 'actif') && (
+        <div className="mb-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900">Filtres et Recherche</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">
+                  {filteredPermissions.length} résultat(s)
+                </span>
+                {(searchTerm || filterGroupe || filterStatut !== 'actif') && (
+                  <button
+                    onClick={resetFilters}
+                    className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-1"
+                  >
+                    <FiX size={14} />
+                    Effacer
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            {/* RÉDUIT À 2 FILTRES AU LIEU DE 4 */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Recherche</label>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                  <div className="relative">
+                    <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white relative z-10"
+                      placeholder="Groupe, module, entité, accès..."
+                    />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Groupe</label>
+                <div className="relative">
+                  <FiUsers className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <select
+                    value={filterGroupe}
+                    onChange={(e) => setFilterGroupe(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white appearance-none"
+                  >
+                    <option value="">Tous les groupes</option>
+                    {groupes.map(groupe => (
+                      <option key={groupe.id} value={groupe.id}>
+                        {groupe.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+                <div className="relative">
+                  <FiFilter className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <select
+                    value={filterStatut}
+                    onChange={(e) => setFilterStatut(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white appearance-none"
+                  >
+                    <option value="actif">Actives</option>
+                    <option value="inactif">Inactives</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Tableau */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
+      {/* Tableau Principal */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* En-tête du tableau avec actions - COULEUR VIOLETTE */}
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedRows.length === currentPermissions.length && currentPermissions.length > 0}
+                  onChange={selectAllRows}
+                  className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                />
+                <span className="text-sm text-gray-700">
+                  {selectedRows.length} sélectionné(s)
+                </span>
+              </div>
+              {selectedRows.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button className="px-3 py-1.5 bg-violet-50 text-violet-700 rounded-lg text-sm font-medium hover:bg-violet-100 transition-colors">
+                    <FiDownload size={14} />
+                  </button>
+                  <button className="px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors">
+                    <FiTrash2 size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600">
+                <FiDownload size={18} />
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600">
+                <FiUpload size={18} />
+              </button>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              >
+                <option value={5}>5 lignes</option>
+                <option value={10}>10 lignes</option>
+                <option value={20}>20 lignes</option>
+                <option value={50}>50 lignes</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Tableau */}
         <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
+          <table className="min-w-full divide-y divide-gray-200">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-300">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  ID
+              <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.length === currentPermissions.length && currentPermissions.length > 0}
+                      onChange={selectAllRows}
+                      className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                    />
+                    ID
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Groupe
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Module
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Entité
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Type d'accès
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Statut
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {currentPermissions.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {permissions.length === 0 ? 'Aucune permission trouvée' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="7" className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
+                        <FiShield className="w-10 h-10 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        {permissions.length === 0 ? 'Aucune permission trouvée' : 'Aucun résultat pour votre recherche'}
+                      </h3>
+                      <p className="text-gray-600 mb-6 max-w-md">
+                        {permissions.length === 0 
+                          ? 'Commencez par créer votre première permission' 
+                          : 'Essayez de modifier vos critères de recherche ou de filtres'}
+                      </p>
+                      {permissions.length === 0 && (
+                        <button 
+                          onClick={handleNewPermission}
+                          className="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-xl hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-2"
+                        >
+                          <FiPlus />
+                          Créer ma première permission
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                currentPermissions.map((permission, index) => (
-                  <tr 
-                    key={permission.id} 
-                    className={`${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                    } hover:bg-gray-100 transition-colors border-b border-gray-300`}
-                  >
-                    <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {permission.id}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      <span className="bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                        {permission.groupe_details?.name || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {permission.module_details?.nom_affiche || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {permission.entite_details?.raison_sociale || 'Toutes'}
-                    </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${getAccesBadgeClasses(permission.acces)}`}>
-                        {getAccesLabel(permission.acces)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <button
-                        onClick={() => handleToggleStatut(permission)}
-                        className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                          permission.statut
-                            ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200' 
-                            : 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200'
-                        }`}
+                currentPermissions.map((permission) => {
+                  return (
+                    <React.Fragment key={permission.id}>
+                      <tr 
+                        className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
+                          selectedRows.includes(permission.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
+                        } ${expandedRow === permission.id ? 'bg-gradient-to-r from-violet-50 to-violet-25' : ''}`}
                       >
-                        {permission.statut ? 'Active' : 'Inactive'}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex space-x-3">
-                        <button 
-                          onClick={() => handleEdit(permission)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          Éditer
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(permission)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Supprimer
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedRows.includes(permission.id)}
+                              onChange={() => toggleRowSelection(permission.id)}
+                              className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                            />
+                            <button
+                              onClick={() => toggleExpandRow(permission.id)}
+                              className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            >
+                              {expandedRow === permission.id ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
+                            </button>
+                            <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
+                              #{permission.id}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div className="flex items-start gap-3">
+                            {/* ICÔNE RETIRÉE */}
+                            <div>
+                              <div className="text-sm font-semibold text-gray-900">{permission.groupe_details?.name || 'N/A'}</div>
+                              <div className="text-xs text-gray-500">
+                                Groupe ID: {permission.groupe?.id || 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div className="flex items-start gap-3">
+                            {/* ICÔNE RETIRÉE */}
+                            <div>
+                              <div className="text-sm font-semibold text-gray-900">{permission.module_details?.nom_affiche || 'N/A'}</div>
+                              <div className="text-xs text-gray-500">
+                                Module ID: {permission.module?.id || 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div className="flex items-start gap-3">
+                            {/* ICÔNE RETIRÉE */}
+                            <div>
+                              <div className="text-sm font-semibold text-gray-900">
+                                {permission.entite_details?.raison_sociale || 'Toutes'}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {permission.entite ? `Entité ID: ${permission.entite}` : 'Toutes les entités'}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <div className={`inline-flex items-center px-3 py-1.5 rounded-lg border ${getAccesBadgeClasses(permission.acces)}`}>
+                            {/* ICÔNE RETIRÉE */}
+                            <span className="text-sm font-medium">{getAccesLabel(permission.acces)}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 border-r border-gray-200">
+                          <button
+                            onClick={() => handleToggleStatut(permission)}
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all duration-200 shadow-sm hover:shadow ${
+                              permission.statut
+                                ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-green-200 hover:from-green-100 hover:to-emerald-100' 
+                                : 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border-gray-200 hover:from-gray-100 hover:to-gray-200'
+                            }`}
+                          >
+                            {permission.statut ? (
+                              <>
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span>Active</span>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                                <span>Inactive</span>
+                              </>
+                            )}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEdit(permission)}
+                              className="p-2.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded-xl hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
+                              title="Modifier"
+                            >
+                              <FiEdit2 size={17} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(permission)}
+                              className="p-2.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-xl hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+                              title="Supprimer"
+                            >
+                              <FiTrash2 size={17} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedRow === permission.id && (
+                        <tr className="bg-gradient-to-r from-violet-50 to-violet-25">
+                          <td colSpan="7" className="px-6 py-4">
+                            <div className="bg-white rounded-xl border border-violet-200 p-5">
+                              <div className="grid grid-cols-3 gap-6">
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">ID Permission</div>
+                                  <div className="text-sm text-gray-900 font-mono">#{permission.id}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Groupe</div>
+                                  <div className="text-sm text-gray-900 font-medium">{permission.groupe_details?.name || 'N/A'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Module</div>
+                                  <div className="text-sm text-gray-900 font-medium">{permission.module_details?.nom_affiche || 'N/A'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Entité</div>
+                                  <div className="text-sm text-gray-900">
+                                    {permission.entite_details?.raison_sociale || 'Toutes les entités'}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Type d'accès</div>
+                                  <div className={`inline-flex items-center px-3 py-1.5 rounded-lg border ${getAccesBadgeClasses(permission.acces)}`}>
+                                    {/* ICÔNE RETIRÉE */}
+                                    <span className="text-sm font-medium">{getAccesLabel(permission.acces)}</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Statut</div>
+                                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium ${
+                                    permission.statut
+                                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-green-200' 
+                                      : 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border-gray-200'
+                                  }`}>
+                                    {permission.statut ? (
+                                      <>
+                                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                        <span>Active</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                                        <span>Inactive</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                {permission.description && (
+                                  <div className="col-span-3">
+                                    <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Description</div>
+                                    <div className="text-sm text-gray-900">{permission.description}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* Pagination - COULEUR VIOLETTE */}
         {filteredPermissions.length > 0 && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
-                  Lignes par page:
-                </span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="border border-gray-300 rounded px-3 py-1 text-sm"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPermissions.length)} sur {filteredPermissions.length}
-                </span>
+          <div className="px-6 py-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700">
+                    Page {currentPage} sur {totalPages}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-sm text-gray-700">
+                    {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPermissions.length)} sur {filteredPermissions.length} permissions
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-2 rounded-lg border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page précédente"
                 >
-                  Précédent
+                  <FiChevronLeft />
                 </button>
 
                 {/* Numéros de page */}
-                <div className="flex space-x-1">
+                <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNumber;
                     if (totalPages <= 5) {
@@ -575,10 +801,10 @@ export default function PermissionsPage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`w-8 h-8 rounded border text-sm ${
+                        className={`min-w-[40px] h-10 rounded-lg border text-sm font-medium transition-all duration-200 ${
                           currentPage === pageNumber
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow-md'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                         }`}
                       >
                         {pageNumber}
@@ -590,13 +816,14 @@ export default function PermissionsPage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-2 rounded-lg border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page suivante"
                 >
-                  Suivant
+                  <FiChevronRight />
                 </button>
               </div>
             </div>
@@ -622,7 +849,7 @@ export default function PermissionsPage() {
   );
 }
 
-// Composant Modal pour le formulaire des permissions
+// COMPOSANT MODAL POUR LES PERMISSIONS - DESIGN AVEC VIOLETTE
 function PermissionFormModal({ permission, groupes, modules, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     groupe: permission?.groupe?.id || '',
@@ -708,174 +935,239 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {permission ? 'Modifier la permission' : 'Créer une nouvelle permission'}
-          </h2>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        {/* Header du modal avec gradient - COULEUR VIOLETTE */}
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-2xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <FiShield className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">
+                  {permission ? 'Modifier la permission' : 'Nouvelle Permission'}
+                </h2>
+                <p className="text-violet-100 text-xs mt-0.5">
+                  Définissez les accès d'un groupe à un module
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
         </div>
         
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 text-sm">{error}</span>
+          <div className="mx-6 mt-4 bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 rounded-r-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <FiX className="text-red-600" />
+              </div>
+              <span className="text-red-800 text-sm font-medium">{error}</span>
             </div>
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Groupe */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Groupe d'utilisateurs *
-              </label>
-              <select
-                required
-                value={formData.groupe}
-                onChange={(e) => handleChange('groupe', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Sélectionnez un groupe</option>
-                {groupes.map(groupe => (
-                  <option key={groupe.id} value={groupe.id}>
-                    {groupe.name}
-                  </option>
-                ))}
-              </select>
+        <form onSubmit={handleSubmit} className="p-6 space-y-8">
+          {/* Section 1: Informations Générales - COULEUR VIOLETTE */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-violet-600 to-violet-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Informations Générales</h3>
             </div>
             
-            {/* Module */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Module *
-              </label>
-              <select
-                required
-                value={formData.module}
-                onChange={(e) => handleChange('module', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Sélectionnez un module</option>
-                {modules.map(module => (
-                  <option key={module.id} value={module.id}>
-                    {module.nom_affiche}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            {/* Entité */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Entité (optionnel)
-              </label>
-              <select
-                value={formData.entite}
-                onChange={(e) => handleChange('entite', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Toutes les entités</option>
-                {entites.map(entite => (
-                  <option key={entite.id} value={entite.id}>
-                    {entite.raison_sociale}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Laisser vide pour appliquer à toutes les entités
-              </p>
-            </div>
-            
-            {/* Type d'accès */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Type d'accès *
-              </label>
-              <select
-                required
-                value={formData.acces}
-                onChange={(e) => handleChange('acces', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {TYPES_ACCES.map(type => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="md:col-span-2">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.statut}
-                  onChange={(e) => handleChange('statut', e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">Permission active</span>
-              </label>
-              <p className="text-xs text-gray-500 mt-1">
-                Les permissions inactives ne seront pas appliquées
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Groupe */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Groupe d'utilisateurs <span className="text-red-500">*</span>
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-xl blur opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                  <div className="relative">
+                    <FiUsers className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
+                    <select
+                      required
+                      value={formData.groupe}
+                      onChange={(e) => handleChange('groupe', e.target.value)}
+                      className="relative w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white appearance-none"
+                    >
+                      <option value="">Sélectionnez un groupe</option>
+                      {groupes.map(groupe => (
+                        <option key={groupe.id} value={groupe.id}>
+                          {groupe.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Module */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Module <span className="text-red-500">*</span>
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-xl blur opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                  <div className="relative">
+                    <FiLayers className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
+                    <select
+                      required
+                      value={formData.module}
+                      onChange={(e) => handleChange('module', e.target.value)}
+                      className="relative w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white appearance-none"
+                    >
+                      <option value="">Sélectionnez un module</option>
+                      {modules.map(module => (
+                        <option key={module.id} value={module.id}>
+                          {module.nom_affiche}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Entité */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Entité (optionnel)
+                </label>
+                <div className="relative">
+                  <FiBriefcase className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <select
+                    value={formData.entite}
+                    onChange={(e) => handleChange('entite', e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white appearance-none"
+                  >
+                    <option value="">Toutes les entités</option>
+                    {entites.map(entite => (
+                      <option key={entite.id} value={entite.id}>
+                        {entite.raison_sociale}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Laisser vide pour appliquer à toutes les entités
+                </p>
+              </div>
+              
+              {/* Type d'accès */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Type d'accès <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={formData.acces}
+                  onChange={(e) => handleChange('acces', e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                >
+                  {TYPES_ACCES.map(type => {
+                    return (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-3 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.statut}
+                    onChange={(e) => handleChange('statut', e.target.checked)}
+                    className="w-5 h-5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Permission active</span>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Les permissions inactives ne seront pas appliquées
+                    </p>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 
-          {/* Aperçu */}
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu de la permission</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center space-x-2">
-                <span className="font-medium">Groupe:</span>
-                <span className="bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                  {previewData.groupe}
-                </span>
+          {/* Section 2: Aperçu - DESIGN AMÉLIORÉ */}
+          <div className="bg-gradient-to-br from-violet-50 to-white rounded-2xl p-6 border border-violet-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-violet-600 to-violet-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Aperçu de la permission</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Groupe</div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-violet-50 rounded-lg">
+                    <FiUsers className="w-4 h-4 text-violet-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-900">{previewData.groupe}</span>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="font-medium">Module:</span>
-                <span className="text-gray-600">
-                  {previewData.module}
-                </span>
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Module</div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <FiLayers className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-900">{previewData.module}</span>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="font-medium">Entité:</span>
-                <span className="text-gray-600">
-                  {previewData.entite}
-                </span>
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Entité</div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-50 rounded-lg">
+                    <FiBriefcase className="w-4 h-4 text-green-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-900">{previewData.entite}</span>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="font-medium">Accès:</span>
-                <span className={`inline-flex px-2 py-1 rounded text-xs font-medium border ${
-                  previewData.acces?.bgColor || 'bg-gray-100'
-                } ${previewData.acces?.textColor || 'text-gray-800'} ${
-                  previewData.acces?.borderColor || 'border-gray-300'
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Type d'accès</div>
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${previewData.acces?.bgColor || 'bg-gray-100'} ${previewData.acces?.textColor || 'text-gray-800'} ${previewData.acces?.borderColor || 'border-gray-300'}`}>
+                  <span className="text-sm font-medium">{previewData.acces?.label || 'Inconnu'}</span>
+                </div>
+              </div>
+              <div className="col-span-2 bg-white rounded-xl p-4 border border-gray-200">
+                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Statut</div>
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium ${
+                  formData.statut
+                    ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-green-200' 
+                    : 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border-gray-200'
                 }`}>
-                  {previewData.acces?.label || 'Inconnu'}
-                </span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="font-medium">Statut:</span>
-                <span className={`text-xs px-2 py-1 rounded ${
-                  formData.statut 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {previewData.statut}
-                </span>
+                  {formData.statut ? (
+                    <>
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span>Active</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                      <span>Inactive</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+          {/* Boutons d'action - COULEUR VIOLETTE */}
+          <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+              className="px-6 py-3.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium hover:shadow-sm"
               disabled={loading}
             >
               Annuler
@@ -883,15 +1175,19 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
+              className="px-6 py-3.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-xl hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-semibold flex items-center space-x-2 shadow-md hover:shadow-lg"
             >
-              {loading && (
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
+              {loading ? (
+                <>
+                  <FiRefreshCw className="animate-spin" />
+                  <span>Sauvegarde...</span>
+                </>
+              ) : (
+                <>
+                  <FiCheck />
+                  <span>{permission ? 'Mettre à jour' : 'Créer la permission'}</span>
+                </>
               )}
-              <span>{loading ? 'Sauvegarde...' : permission ? 'Mettre à jour' : 'Créer la permission'}</span>
             </button>
           </div>
         </form>

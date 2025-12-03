@@ -531,9 +531,7 @@ export default function EntitiesPage() {
                 <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Pays
                 </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Ville
-                </th>
+                
                 <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Téléphone
                 </th>
@@ -640,11 +638,7 @@ export default function EntitiesPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 border-r border-gray-200">
-                        <div className="text-sm text-gray-700">
-                          {getVilleName(entity.ville) || '-'}
-                        </div>
-                      </td>
+                      
                       <td className="px-6 py-4 border-r border-gray-200">
                         <div className="text-sm text-gray-700">
                           {entity.telephone || '-'}
