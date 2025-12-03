@@ -1,42 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { apiClient } from '../../services/apiClient';
 import { 
-  FiRefreshCw, 
-  FiPlus, 
-  FiEdit2, 
-  FiTrash2, 
-  FiSearch, 
-  FiFilter, 
-  FiX, 
-  FiCheck, 
-  FiMail, 
-  FiPhone, 
-  FiUser, 
-  FiUsers,
-  FiChevronLeft, 
-  FiChevronRight,
-  FiDownload,
-  FiUpload,
-  FiEye,
-  FiMoreVertical,
-  FiChevronDown,
-  FiChevronUp,
-  FiCheckCircle,
-  FiXCircle,
-  FiUserCheck,
-  FiGlobe,
-  FiBriefcase,
-  FiCalendar,
-  FiLock,
-  FiUnlock,
-  FiLogIn,
-  FiActivity,
-  FiImage
+  FiRefreshCw, FiPlus, FiEdit2, FiTrash2, FiSearch, FiFilter, FiX, 
+  FiCheck, FiMail, FiPhone, FiUser, FiUsers, FiChevronLeft, FiChevronRight,
+  FiDownload, FiUpload, FiEye, FiMoreVertical, FiChevronDown, FiChevronUp,
+  FiCheckCircle, FiXCircle, FiUserCheck, FiGlobe, FiBriefcase, FiCalendar,
+  FiLock, FiUnlock, FiLogIn, FiActivity, FiImage, FiShield, FiKey
 } from "react-icons/fi";
 
 export default function UtilisateurPage() {
   const [utilisateurs, setUtilisateurs] = useState([]);
+  const [groupes, setGroupes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingGroups, setLoadingGroups] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingUtilisateur, setEditingUtilisateur] = useState(null);
@@ -50,6 +26,7 @@ export default function UtilisateurPage() {
 
   useEffect(() => {
     fetchUtilisateurs();
+    fetchGroupes();
   }, []);
 
   const fetchUtilisateurs = async () => {
@@ -64,6 +41,8 @@ export default function UtilisateurPage() {
         utilisateursData = response;
       } else if (response && Array.isArray(response.results)) {
         utilisateursData = response.results;
+      } else if (response && Array.isArray(response.data)) {
+        utilisateursData = response.data;
       } else {
         setError('Format de données inattendu');
         utilisateursData = [];
@@ -78,25 +57,59 @@ export default function UtilisateurPage() {
     }
   };
 
+  const fetchGroupes = async () => {
+    try {
+      setLoadingGroups(true);
+      const response = await apiClient.get('/groupes/');
+      
+      let groupesData = [];
+      if (Array.isArray(response)) {
+        groupesData = response;
+      } else if (response && Array.isArray(response.results)) {
+        groupesData = response.results;
+      } else if (response && Array.isArray(response.data)) {
+        groupesData = response.data;
+      } else {
+        console.warn('Format de données groupes inattendu:', response);
+        groupesData = [];
+      }
+
+      setGroupes(groupesData);
+      console.log('✅ Groupes chargés:', groupesData.length);
+    } catch (err) {
+      console.error('❌ Erreur chargement groupes:', err);
+      setGroupes([]);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
   // Filtrage et recherche
-  const filteredUtilisateurs = utilisateurs.filter(utilisateur => {
-    const matchesSearch = 
-      utilisateur.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      utilisateur.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      utilisateur.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      utilisateur.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      utilisateur.telephone?.includes(searchTerm);
-    
-    const matchesStatut = filterStatut === '' || 
-      utilisateur.statut?.toString() === filterStatut;
-    
-    return matchesSearch && matchesStatut;
-  });
+  const filteredUtilisateurs = useMemo(() => {
+    return utilisateurs.filter(utilisateur => {
+      const matchesSearch = 
+        utilisateur.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        utilisateur.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        utilisateur.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        utilisateur.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        utilisateur.telephone?.includes(searchTerm);
+      
+      const matchesStatut = filterStatut === '' || 
+        utilisateur.statut?.toString() === filterStatut;
+      
+      return matchesSearch && matchesStatut;
+    });
+  }, [utilisateurs, searchTerm, filterStatut]);
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentUtilisateurs = Array.isArray(filteredUtilisateurs) ? filteredUtilisateurs.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const currentUtilisateurs = useMemo(() => 
+    Array.isArray(filteredUtilisateurs) 
+      ? filteredUtilisateurs.slice(indexOfFirstItem, indexOfLastItem) 
+      : []
+  , [filteredUtilisateurs, indexOfFirstItem, indexOfLastItem]);
+  
   const totalPages = Math.ceil((Array.isArray(filteredUtilisateurs) ? filteredUtilisateurs.length : 0) / itemsPerPage);
 
   // Changement de page
@@ -113,13 +126,13 @@ export default function UtilisateurPage() {
     );
   };
 
-  const selectAllRows = () => {
+  const selectAllRows = useCallback(() => {
     if (selectedRows.length === currentUtilisateurs.length) {
       setSelectedRows([]);
     } else {
       setSelectedRows(currentUtilisateurs.map(utilisateur => utilisateur.id));
     }
-  };
+  }, [currentUtilisateurs, selectedRows.length]);
 
   // Gestion des lignes expansibles
   const toggleExpandRow = (id) => {
@@ -153,7 +166,8 @@ export default function UtilisateurPage() {
     try {
       const nouveauStatut = utilisateur.statut === 'actif' ? 'inactif' : 'actif';
       await apiClient.patch(`/users/${utilisateur.id}/`, {
-        statut: nouveauStatut
+        statut: nouveauStatut,
+        is_active: nouveauStatut === 'actif'
       });
       fetchUtilisateurs();
     } catch (err) {
@@ -178,12 +192,12 @@ export default function UtilisateurPage() {
     setCurrentPage(1);
   };
 
-  // Statistiques - 3 cartes seulement
-  const stats = {
+  // Statistiques - 3 cartes seulement (comme dans votre code original)
+  const stats = useMemo(() => ({
     total: utilisateurs.length,
     actifs: utilisateurs.filter(u => u.statut === 'actif').length,
     inactifs: utilisateurs.filter(u => u.statut === 'inactif').length,
-  };
+  }), [utilisateurs]);
 
   if (loading) {
     return (
@@ -223,7 +237,7 @@ export default function UtilisateurPage() {
               onClick={handleRetry}
               className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow-md flex items-center gap-2 group"
             >
-              <FiRefreshCw className="group-hover:rotate-180 transition-transform duration-500" />
+              <FiRefreshCw className={`${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
               <span className="font-medium">Actualiser</span>
             </button>
             <button 
@@ -366,7 +380,7 @@ export default function UtilisateurPage() {
         </div>
       </div>
 
-      {/* Tableau Principal */}
+      {/* Tableau Principal - MÊME STRUCTURE QUE VOTRE CODE ORIGINAL */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         {/* En-tête du tableau avec actions - COULEUR VIOLETTE */}
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
@@ -418,7 +432,7 @@ export default function UtilisateurPage() {
           </div>
         </div>
 
-        {/* Tableau - SUPPRIME LES COLONNES ENTITES ET DERNIERE CONNEXION */}
+        {/* Tableau - STRUCTURE IDENTIQUE À VOTRE CODE ORIGINAL */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
@@ -725,6 +739,8 @@ export default function UtilisateurPage() {
       {showForm && (
         <UtilisateurFormModal
           utilisateur={editingUtilisateur}
+          groupes={groupes}
+          loadingGroups={loadingGroups}
           onClose={() => {
             setShowForm(false);
             setEditingUtilisateur(null);
@@ -736,14 +752,15 @@ export default function UtilisateurPage() {
   );
 }
 
-// COMPOSANT MODAL POUR LES UTILISATEURS - COULEUR VIOLETTE
-function UtilisateurFormModal({ utilisateur, onClose, onSuccess }) {
+// COMPOSANT MODAL POUR LES UTILISATEURS - AVEC PATCH POUR LES MODIFICATIONS
+function UtilisateurFormModal({ utilisateur, groupes, loadingGroups, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     email: utilisateur?.email || '',
     first_name: utilisateur?.first_name || '',
     last_name: utilisateur?.last_name || '',
     telephone: utilisateur?.telephone || '',
     statut: utilisateur?.statut || 'actif',
+    groups: utilisateur?.groups?.map(g => g.id) || [],
   });
 
   const [photoFile, setPhotoFile] = useState(null);
@@ -751,11 +768,15 @@ function UtilisateurFormModal({ utilisateur, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  useEffect(() => {
+    console.log('👤 Utilisateur en édition:', utilisateur);
+    console.log('👤 Groupes IDs:', utilisateur?.groups?.map(g => g.id));
+  }, [utilisateur]);
+
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setPhotoFile(file);
-      // Créer une prévisualisation
       const reader = new FileReader();
       reader.onloadend = () => {
         setPhotoPreview(reader.result);
@@ -764,58 +785,60 @@ function UtilisateurFormModal({ utilisateur, onClose, onSuccess }) {
     }
   };
 
+  const toggleGroup = (groupId) => {
+    setFormData(prev => ({
+      ...prev,
+      groups: prev.groups.includes(groupId)
+        ? prev.groups.filter(id => id !== groupId)
+        : [...prev.groups, groupId]
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      // Créer FormData pour gérer le fichier photo
-      const formDataToSend = new FormData();
-      
-      // Ajouter les champs texte
-      formDataToSend.append('email', formData.email);
-      formDataToSend.append('first_name', formData.first_name);
-      formDataToSend.append('last_name', formData.last_name);
-      formDataToSend.append('telephone', formData.telephone);
-      formDataToSend.append('statut', formData.statut);
-
-      // Ajouter le fichier photo s'il y en a un
-      if (photoFile) {
-        formDataToSend.append('photo', photoFile);
-      }
-
       if (utilisateur) {
-        // MODIFICATION
-        const response = await apiClient.put(`/users/${utilisateur.id}/`, formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        console.log('✅ Utilisateur modifié:', response);
+        // MODIFICATION - Utiliser PATCH pour mise à jour partielle
+        const patchData = {
+          email: formData.email,
+          first_name: formData.first_name || '',
+          last_name: formData.last_name || '',
+          telephone: formData.telephone || '',
+          statut: formData.statut || 'actif',
+          groups: formData.groups, // Liste d'IDs
+          is_active: formData.statut === 'actif', // Synchronisé avec Django
+        };
+
+        console.log('📤 Données PATCH envoyées:', patchData);
+        console.log('📤 URL:', `/users/${utilisateur.id}/`);
+        
+        const response = await apiClient.patch(`/users/${utilisateur.id}/`, patchData);
+        console.log('✅ Réponse PATCH:', response);
+        onSuccess();
         
       } else {
-        // CRÉATION - Utiliser le endpoint Djoser
-        // Pour la création, on doit aussi envoyer username
-        // On génère un username à partir de l'email
-        const username = formData.email.split('@')[0];
-        formDataToSend.append('username', username);
+        // CRÉATION - Djoser (sans mot de passe)
+        const djoserData = {
+          email: formData.email,
+          first_name: formData.first_name || '',
+          last_name: formData.last_name || '',
+          telephone: formData.telephone || '',
+        };
 
-        console.log('📤 Création utilisateur avec FormData');
-
-        // Utiliser le endpoint Djoser pour bénéficier de l'envoi d'email
-        const response = await apiClient.post('/auth/users/', formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        console.log('✅ Utilisateur créé (Djoser):', response);
+        console.log('📤 Création utilisateur (Djoser):', djoserData);
+        
+        const djoserResponse = await apiClient.post('/auth/users/', djoserData);
+        console.log('✅ Réponse Djoser:', djoserResponse);
+        onSuccess();
       }
-      
-      onSuccess();
       
     } catch (err) {
       console.error('❌ Erreur sauvegarde utilisateur:', err);
+      console.error('❌ Détails erreur:', err.response?.data);
+      console.error('❌ Statut erreur:', err.response?.status);
       
       let errorMessage = 'Erreur lors de la sauvegarde';
       if (err.response?.data) {
@@ -860,7 +883,7 @@ function UtilisateurFormModal({ utilisateur, onClose, onSuccess }) {
                 </h2>
                 {!utilisateur && (
                   <p className="text-violet-100 text-xs mt-0.5">
-                    Créez un nouvel utilisateur dans le système
+                    L'utilisateur recevra un email pour définir son mot de passe
                   </p>
                 )}
               </div>
@@ -968,6 +991,11 @@ function UtilisateurFormModal({ utilisateur, onClose, onSuccess }) {
                     />
                   </div>
                 </div>
+                {!utilisateur && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Un email sera envoyé à cette adresse pour activer le compte et définir le mot de passe
+                  </p>
+                )}
               </div>
               
               <div>
@@ -1021,6 +1049,83 @@ function UtilisateurFormModal({ utilisateur, onClose, onSuccess }) {
             </div>
           </div>
 
+          {/* Section 3: Groupes d'appartenance */}
+          <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl p-6 border border-violet-200">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-violet-600 to-violet-400 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Groupes d'appartenance</h3>
+            </div>
+
+            {loadingGroups ? (
+              <div className="text-center py-4">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-violet-600"></div>
+                <p className="text-gray-500 mt-2">Chargement des groupes...</p>
+              </div>
+            ) : groupes.length === 0 ? (
+              <div className="text-center py-4">
+                <FiUsers className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                <p className="text-gray-500">Aucun groupe disponible</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Créez d'abord des groupes dans la section "Groupes"
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                  {groupes.map(groupe => (
+                    <label
+                      key={groupe.id}
+                      className={`flex items-center gap-3 p-4 rounded-xl border transition-all duration-200 cursor-pointer ${
+                        formData.groups.includes(groupe.id)
+                          ? 'bg-white border-violet-400 shadow-sm'
+                          : 'bg-white border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.groups.includes(groupe.id)}
+                        onChange={() => toggleGroup(groupe.id)}
+                        className="w-5 h-5 text-violet-600 rounded focus:ring-violet-500"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{groupe.name}</div>
+                        {groupe.description && (
+                          <div className="text-xs text-gray-500 mt-1 truncate">
+                            {groupe.description}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {formData.groups.length} groupe(s) sélectionné(s)
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Information pour la création */}
+          {!utilisateur && (
+            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+              <div className="flex items-center gap-3 mb-4">
+                <FiMail className="w-5 h-5 text-blue-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Activation du compte</h3>
+              </div>
+              <div className="space-y-3">
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Processus d'activation :</span>
+                </p>
+                <ul className="text-sm text-gray-600 space-y-2 list-disc pl-5">
+                  <li>Un email sera envoyé à <span className="font-medium">{formData.email}</span></li>
+                  <li>L'utilisateur cliquera sur le lien d'activation dans l'email</li>
+                  <li>Il définira son propre mot de passe sécurisé</li>
+                  <li>Le compte sera activé automatiquement</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
           {/* Aperçu */}
           <div className="bg-gradient-to-br from-violet-50 to-white rounded-2xl p-6 border border-violet-100">
             <div className="flex items-center gap-3 mb-6">
@@ -1055,8 +1160,12 @@ function UtilisateurFormModal({ utilisateur, onClose, onSuccess }) {
                 </div>
               </div>
               <div className="bg-white rounded-xl p-4 border border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Téléphone</div>
-                <div className="text-sm font-medium text-gray-900">{formData.telephone || 'Non défini'}</div>
+                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Groupes</div>
+                <div className="text-sm font-medium text-gray-900">
+                  {formData.groups.length > 0 
+                    ? `${formData.groups.length} groupe(s)` 
+                    : 'Aucun groupe'}
+                </div>
               </div>
             </div>
           </div>

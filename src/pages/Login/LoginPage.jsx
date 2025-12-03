@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState(""); // ← CHANGEMENT ICI
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,11 +16,11 @@ export default function LoginPage() {
     setLoading(true);
     
     try {
-const API_URL = "http://localhost:8000/api/auth/jwt/create/";
+      const API_URL = "http://localhost:8000/api/auth/jwt/create/";
       
-      // IMPORTANT : Maintenant avec email
+      // Djoser JWT avec votre configuration (LOGIN_FIELD = 'email')
       const credentials = {
-        email: email,  // ← CHANGEMENT ICI (au lieu de username)
+        email: email,      // ← Djoser configuré pour accepter "email" comme identifiant
         password: password
       };
 
@@ -59,7 +59,7 @@ const API_URL = "http://localhost:8000/api/auth/jwt/create/";
           errorMessage = data.detail;
         } else if (data.non_field_errors) {
           errorMessage = data.non_field_errors[0];
-        } else if (data.email) { // ← CHANGEMENT ICI
+        } else if (data.email) {
           errorMessage = `Email: ${data.email[0]}`;
         } else if (data.password) {
           errorMessage = `Mot de passe: ${data.password[0]}`;
@@ -132,10 +132,10 @@ const API_URL = "http://localhost:8000/api/auth/jwt/create/";
               <label className="block">
                 <div className="relative">
                   <input
-                    type="email" // ← CHANGEMENT ICI
+                    type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Adresse email" // ← CHANGEMENT ICI
+                    placeholder="Adresse email"
                     className="w-full border border-gray-200 rounded-full px-4 py-3 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                     aria-label="Adresse email"
                     required
