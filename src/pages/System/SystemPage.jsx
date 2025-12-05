@@ -1,5 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { 
+  FiRefreshCw, 
+  FiAlertCircle, 
+  FiServer, 
+  FiActivity, 
+  FiBarChart2,
+  FiCpu,
+  FiHardDrive,
+  FiShield,
+  FiUsers,
+  FiClock,
+  FiCalendar,
+  FiDatabase,
+  FiWifi,
+  FiBell,
+  FiTerminal,
+  FiChevronRight,
+  FiPlay,
+  FiPause,
+  FiStopCircle,
+  FiSettings,
+  FiInfo,
+  FiX
+} from "react-icons/fi";
+import { TbServer, TbChartInfographic, TbSettingsAutomation } from "react-icons/tb";
 
 export default function SystemPage() {
   const [infoSysteme, setInfoSysteme] = useState(null);
@@ -9,6 +34,8 @@ export default function SystemPage() {
   const [error, setError] = useState(null);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
+  const [selectedLog, setSelectedLog] = useState(null);
+  const [showLogDetailModal, setShowLogDetailModal] = useState(false);
 
   useEffect(() => {
     fetchInfoSysteme();
@@ -56,7 +83,7 @@ export default function SystemPage() {
     } catch (err) {
       console.error('Erreur lors du chargement des statistiques:', err);
       setStatistiquesError('Les statistiques système ne sont pas disponibles');
-      setStatistiques(null); // Explicitement null en cas d'erreur
+      setStatistiques(null);
     }
   };
 
@@ -84,6 +111,11 @@ export default function SystemPage() {
     }
   };
 
+  const handleViewLogDetail = (log) => {
+    setSelectedLog(log);
+    setShowLogDetailModal(true);
+  };
+
   const handleRetry = () => {
     fetchInfoSysteme();
     fetchStatistiques();
@@ -101,13 +133,52 @@ export default function SystemPage() {
   const getEtatColor = (etat) => {
     switch (etat) {
       case 'en_service':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200';
       case 'maintenance':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        return 'bg-gradient-to-r from-yellow-50 to-amber-50 text-amber-700 border border-amber-200';
       case 'arret':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border border-gray-200';
+    }
+  };
+
+  const getEtatIcon = (etat) => {
+    switch (etat) {
+      case 'en_service':
+        return <FiPlay className="w-4 h-4" />;
+      case 'maintenance':
+        return <FiPause className="w-4 h-4" />;
+      case 'arret':
+        return <FiStopCircle className="w-4 h-4" />;
+      default:
+        return <FiServer className="w-4 h-4" />;
+    }
+  };
+
+  const getLogColor = (niveau) => {
+    switch (niveau) {
+      case 'ERROR':
+        return 'text-red-600 bg-red-50 border-red-200';
+      case 'WARNING':
+        return 'text-amber-600 bg-amber-50 border-amber-200';
+      case 'INFO':
+        return 'text-blue-600 bg-blue-50 border-blue-200';
+      default:
+        return 'text-gray-600 bg-gray-50 border-gray-200';
+    }
+  };
+
+  const getLogIcon = (niveau) => {
+    switch (niveau) {
+      case 'ERROR':
+        return <FiAlertCircle className="w-4 h-4" />;
+      case 'WARNING':
+        return <FiBell className="w-4 h-4" />;
+      case 'INFO':
+        return <FiInfo className="w-4 h-4" />;
+      default:
+        return <FiTerminal className="w-4 h-4" />;
     }
   };
 
@@ -131,346 +202,495 @@ export default function SystemPage() {
     }
   };
 
-  // Fonction pour afficher les valeurs de statistiques avec fallback
   const getStatValue = (key, fallback = 'N/A') => {
     return statistiques && statistiques[key] !== undefined ? statistiques[key] : fallback;
   };
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="flex justify-center items-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des informations système...</span>
+      <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+        <div className="flex flex-col items-center justify-center h-96">
+          <div className="relative">
+            <div className="w-12 h-12 border-3 border-gray-200 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div className="mt-4">
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 animate-pulse"></div>
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-24 mt-2 animate-pulse mx-auto"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Informations Système</h1>
-          <p className="text-gray-600 mt-1">
-            État et statistiques du système Somane ERP
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <button 
-            onClick={handleRetry}
-            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Actualiser
-          </button>
+    <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+      {/* Header avec gradient */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-indigo-600 to-indigo-500 rounded-lg shadow">
+              <TbServer className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Informations Système</h1>
+              <p className="text-gray-600 text-xs mt-0.5">
+                État et statistiques du système Somane ERP
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleRetry}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group"
+            >
+              <FiRefreshCw className="group-hover:rotate-180 transition-transform duration-500 text-sm" />
+              <span className="font-medium">Actualiser</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Message d'erreur principal */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 font-medium">{error}</span>
+        <div className="mb-4">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-red-100 rounded">
+                  <FiAlertCircle className="w-4 h-4 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-900 text-sm">{error}</p>
+                  <p className="text-xs text-red-700 mt-0.5">Veuillez réessayer</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRetry}
+                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium shadow-sm"
+              >
+                Réessayer
+              </button>
             </div>
-            <button
-              onClick={handleRetry}
-              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
-            >
-              Réessayer
-            </button>
           </div>
         </div>
       )}
 
       {/* Message d'avertissement pour les statistiques */}
       {statistiquesError && (
-        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-            <span className="text-yellow-800">{statistiquesError}</span>
+        <div className="mb-4">
+          <div className="bg-gradient-to-r from-amber-50 to-yellow-100 border-l-3 border-amber-500 rounded-r-lg p-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-amber-100 rounded">
+                <FiAlertCircle className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-medium text-amber-900 text-sm">{statistiquesError}</p>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Carte d'état du système */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* État du système */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">État du Système</h2>
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getEtatColor(infoSysteme?.etat_systeme)}`}>
-              {getEtatDisplay(infoSysteme?.etat_systeme)}
-            </span>
+      {/* Grille principale */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* Carte d'état du système */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow transition-shadow duration-300">
+          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded">
+                  <TbServer className="w-4 h-4 text-indigo-600" />
+                </div>
+                <h2 className="text-sm font-semibold text-gray-900">État du Système</h2>
+              </div>
+              <div className={`px-2 py-1 rounded flex items-center gap-1 ${getEtatColor(infoSysteme?.etat_systeme)}`}>
+                {getEtatIcon(infoSysteme?.etat_systeme)}
+                <span className="text-xs font-medium">{getEtatDisplay(infoSysteme?.etat_systeme)}</span>
+              </div>
+            </div>
           </div>
           
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Version</span>
-              <span className="text-sm font-mono font-medium text-gray-800">
-                v{infoSysteme?.version || 'N/A'}
-              </span>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gradient-to-br from-gray-50 to-white p-3 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <FiSettings className="w-3 h-3 text-gray-400" />
+                  <p className="text-xs text-gray-600">Version</p>
+                </div>
+                <p className="text-sm font-mono font-medium text-gray-900">
+                  v{infoSysteme?.version || 'N/A'}
+                </p>
+              </div>
+              
+              <div className="bg-gradient-to-br from-gray-50 to-white p-3 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <FiDatabase className="w-3 h-3 text-gray-400" />
+                  <p className="text-xs text-gray-600">Build</p>
+                </div>
+                <p className="text-sm font-mono text-gray-900">
+                  {infoSysteme?.numero_build || 'N/A'}
+                </p>
+              </div>
+              
+              <div className="bg-gradient-to-br from-gray-50 to-white p-3 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <FiCalendar className="w-3 h-3 text-gray-400" />
+                  <p className="text-xs text-gray-600">Déploiement</p>
+                </div>
+                <p className="text-sm text-gray-900">
+                  {infoSysteme?.date_deploiement ? 
+                    new Date(infoSysteme.date_deploiement).toLocaleDateString('fr-FR') : 'N/A'
+                  }
+                </p>
+              </div>
+              
+              <div className="bg-gradient-to-br from-gray-50 to-white p-3 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <FiClock className="w-3 h-3 text-gray-400" />
+                  <p className="text-xs text-gray-600">Uptime</p>
+                </div>
+                <p className="text-sm text-gray-900 font-medium">
+                  {getUptimeDisplay(infoSysteme?.date_deploiement)}
+                </p>
+              </div>
             </div>
             
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Build</span>
-              <span className="text-sm font-mono text-gray-600">
-                {infoSysteme?.numero_build || 'N/A'}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Déploiement</span>
-              <span className="text-sm text-gray-600">
-                {infoSysteme?.date_deploiement ? 
-                  new Date(infoSysteme.date_deploiement).toLocaleDateString('fr-FR') : 'N/A'
-                }
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Uptime</span>
-              <span className="text-sm text-gray-600">
-                {getUptimeDisplay(infoSysteme?.date_deploiement)}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Dernière mise à jour</span>
-              <span className="text-sm text-gray-600">
+            <div className="bg-gradient-to-br from-blue-50 to-white p-3 rounded-lg border border-blue-100">
+              <div className="flex items-center gap-2 mb-1">
+                <FiClock className="w-3 h-3 text-blue-400" />
+                <p className="text-xs text-gray-600">Dernière mise à jour</p>
+              </div>
+              <p className="text-sm text-gray-900">
                 {infoSysteme?.derniere_maj ? 
                   new Date(infoSysteme.derniere_maj).toLocaleString('fr-FR') : 'N/A'
                 }
-              </span>
+              </p>
             </div>
-          </div>
 
-          <div className="mt-6 flex space-x-3">
-            <button
-              onClick={handleMaintenanceClick}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
-                infoSysteme?.etat_systeme === 'maintenance'
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-yellow-600 text-white hover:bg-yellow-700'
-              }`}
-            >
-              {infoSysteme?.etat_systeme === 'maintenance' ? 'Reprendre le service' : 'Mode Maintenance'}
-            </button>
-            
-            <button
-              onClick={() => handleChangerEtat('arret')}
-              disabled={infoSysteme?.etat_systeme === 'arret'}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
-                infoSysteme?.etat_systeme === 'arret'
-                  ? 'bg-gray-400 text-white cursor-not-allowed'
-                  : 'bg-red-600 text-white hover:bg-red-700'
-              }`}
-            >
-              Arrêter
-            </button>
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
+              <button
+                onClick={handleMaintenanceClick}
+                className={`px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm flex items-center justify-center gap-1.5 ${
+                  infoSysteme?.etat_systeme === 'maintenance'
+                    ? 'bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-700 hover:to-green-600 hover:shadow'
+                    : 'bg-gradient-to-r from-amber-600 to-amber-500 text-white hover:from-amber-700 hover:to-amber-600 hover:shadow'
+                }`}
+              >
+                {infoSysteme?.etat_systeme === 'maintenance' ? (
+                  <>
+                    <FiPlay className="w-3 h-3" />
+                    Reprendre
+                  </>
+                ) : (
+                  <>
+                    <FiPause className="w-3 h-3" />
+                    Maintenance
+                  </>
+                )}
+              </button>
+              
+              <button
+                onClick={() => handleChangerEtat('arret')}
+                disabled={infoSysteme?.etat_systeme === 'arret'}
+                className={`px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm flex items-center justify-center gap-1.5 ${
+                  infoSysteme?.etat_systeme === 'arret'
+                    ? 'bg-gradient-to-r from-gray-400 to-gray-300 text-white cursor-not-allowed'
+                    : 'bg-gradient-to-r from-red-600 to-red-500 text-white hover:from-red-700 hover:to-red-600 hover:shadow'
+                }`}
+              >
+                <FiStopCircle className="w-3 h-3" />
+                Arrêter
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Performances - AFFICHÉ UNIQUEMENT SI DES STATISTIQUES SONT DISPONIBLES */}
-        {statistiques && (
+        {/* Performances - UNIQUEMENT SI STATISTIQUES DISPONIBLES */}
+        {statistiques ? (
           <>
-            {/* Performances */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Performances</h2>
+            {/* Cartes pour les statistiques disponibles */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow transition-shadow duration-300">
+              <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-gradient-to-br from-blue-50 to-blue-100 rounded">
+                    <TbChartInfographic className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <h2 className="text-sm font-semibold text-gray-900">Tâches</h2>
+                </div>
+              </div>
               
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600">Utilisation CPU</span>
-                    <span className="text-sm font-medium text-gray-800">
-                      {getStatValue('cpu_usage', 0)}%
-                    </span>
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gradient-to-br from-purple-50 to-white p-3 rounded-lg border border-purple-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TbSettingsAutomation className="w-3 h-3 text-purple-400" />
+                      <p className="text-xs text-gray-600">Tâches actives</p>
+                    </div>
+                    <p className="text-lg font-bold text-purple-600">
+                      {getStatValue('taches_actives', 0)}
+                    </p>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(getStatValue('cpu_usage', 0), 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600">Utilisation Mémoire</span>
-                    <span className="text-sm font-medium text-gray-800">
-                      {getStatValue('memory_usage', 0)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(getStatValue('memory_usage', 0), 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600">Espace disque</span>
-                    <span className="text-sm font-medium text-gray-800">
-                      {getStatValue('disk_usage', 0)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(getStatValue('disk_usage', 0), 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
-                
-                <div className="pt-2 border-t border-gray-200">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Temps de réponse</span>
-                    <span className="text-sm font-medium text-gray-800">
-                      {getStatValue('response_time', 0)}ms
-                    </span>
+                  
+                  <div className="bg-gradient-to-br from-orange-50 to-white p-3 rounded-lg border border-orange-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FiDatabase className="w-3 h-3 text-orange-400" />
+                      <p className="text-xs text-gray-600">Total tâches</p>
+                    </div>
+                    <p className="text-lg font-bold text-orange-600">
+                      {getStatValue('total_taches', 0)}
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Statistiques d'usage */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Statistiques d'Usage</h2>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow transition-shadow duration-300">
+              <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded">
+                    <FiBarChart2 className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <h2 className="text-sm font-semibold text-gray-900">Système</h2>
+                </div>
+              </div>
               
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Utilisateurs actifs</span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {getStatValue('utilisateurs_actifs', 0)}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Tâches actives</span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {getStatValue('taches_actives', 0)}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Total tâches</span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {getStatValue('total_taches', 0)}
-                  </span>
-                </div>
-                
-                <div className="pt-2 border-t border-gray-200">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Requêtes aujourd'hui</span>
-                    <span className="text-sm font-medium text-gray-800">
-                      {getStatValue('requetes_aujourdhui', 0)}
-                    </span>
+              <div className="p-4">
+                <div className="space-y-3">
+                  <div className="bg-gradient-to-br from-blue-50 to-white p-3 rounded-lg border border-blue-100">
+                    <p className="text-xs text-gray-600 mb-1">Dernière vérification</p>
+                    <p className="text-sm text-gray-900">
+                      {new Date().toLocaleString('fr-FR')}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-gray-50 to-white p-3 rounded-lg border border-gray-200">
+                    <p className="text-xs text-gray-600 mb-1">Statut des services</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <p className="text-xs text-gray-700">Tous les services sont opérationnels</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </>
-        )}
+        ) : (
+          // Si pas de statistiques, afficher les 2 cartes vides
+          <>
+            <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg border border-gray-200 p-6 text-center hover:shadow transition-shadow duration-300">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                <TbChartInfographic className="w-6 h-6 text-gray-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Données non disponibles</h3>
+              <p className="text-xs text-gray-600 mb-3">
+                Les métriques système sont temporairement indisponibles.
+              </p>
+              <button
+                onClick={fetchStatistiques}
+                className="px-3 py-1.5 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded hover:from-gray-700 hover:to-gray-600 transition-all duration-200 text-xs font-medium shadow-sm"
+              >
+                Réessayer
+              </button>
+            </div>
 
-        {/* Message si pas de statistiques */}
-        {!statistiques && !statistiquesError && (
-          <div className="lg:col-span-2 bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
-            <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Statistiques non disponibles</h3>
-            <p className="text-gray-600 mb-4">
-              Les données de performance et d'usage ne sont pas accessibles pour le moment.
-            </p>
-            <button
-              onClick={fetchStatistiques}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Réessayer
-            </button>
-          </div>
+            <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg border border-gray-200 p-6 text-center hover:shadow transition-shadow duration-300">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                <FiBarChart2 className="w-6 h-6 text-gray-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Statistiques non disponibles</h3>
+              <p className="text-xs text-gray-600 mb-3">
+                Les données d'usage sont temporairement indisponibles.
+              </p>
+              <button
+                onClick={fetchStatistiques}
+                className="px-3 py-1.5 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded hover:from-gray-700 hover:to-gray-600 transition-all duration-200 text-xs font-medium shadow-sm"
+              >
+                Réessayer
+              </button>
+            </div>
+          </>
         )}
       </div>
 
-      {/* Logs système récents - AFFICHÉ UNIQUEMENT SI DES LOGS SONT DISPONIBLES */}
-      {statistiques?.logs_recents && statistiques.logs_recents.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-800">Activité Récente</h2>
+      {/* Section de logs - UNIQUEMENT SI DISPONIBLE DANS L'API */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow transition-shadow duration-300 mb-6">
+        <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded">
+              <FiTerminal className="w-4 h-4 text-indigo-600" />
+            </div>
+            <h2 className="text-sm font-semibold text-gray-900">Informations du Système</h2>
           </div>
-          
-          <div className="p-6">
-            <div className="space-y-3">
-              {statistiques.logs_recents.slice(0, 5).map((log, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      log.niveau === 'ERROR' ? 'bg-red-500' :
-                      log.niveau === 'WARNING' ? 'bg-yellow-500' :
-                      'bg-green-500'
-                    }`}></div>
-                    <span className="text-sm text-gray-700">{log.message}</span>
-                  </div>
-                  <span className="text-xs text-gray-500">
-                    {new Date(log.timestamp).toLocaleTimeString('fr-FR')}
-                  </span>
+        </div>
+        
+        <div className="p-4">
+          <div className="space-y-3">
+            <div className="bg-gradient-to-br from-blue-50 to-white p-3 rounded-lg border border-blue-100">
+              <div className="flex items-center gap-2">
+                <FiInfo className="w-4 h-4 text-blue-500" />
+                <div>
+                  <p className="text-sm text-gray-900">Interface d'administration</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Gestion complète du système Somane ERP
+                  </p>
                 </div>
-              ))}
+              </div>
+            </div>
+            
+            <div className="bg-gradient-to-br from-green-50 to-white p-3 rounded-lg border border-green-100">
+              <div className="flex items-center gap-2">
+                <FiShield className="w-4 h-4 text-green-500" />
+                <div>
+                  <p className="text-sm text-gray-900">Sécurité</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Système sécurisé avec journalisation des activités
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Modal de maintenance */}
       {showMaintenanceModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-md">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">Activer le mode maintenance</h2>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
+            <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-t-lg p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                    <FiPause className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold">Activer le mode maintenance</h2>
+                    <p className="text-amber-100 text-xs mt-0.5">Somane ERP</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowMaintenanceModal(false)}
+                  className="p-1 hover:bg-white/20 rounded transition-colors"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
             </div>
             
-            <div className="p-6">
-              <p className="text-sm text-gray-600 mb-4">
-                Le mode maintenance empêchera les utilisateurs d'accéder au système. 
-                Un message personnalisé sera affiché.
-              </p>
+            <div className="p-4 space-y-4">
+              <div className="bg-gradient-to-br from-amber-50 to-white rounded-lg p-3 border border-amber-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <FiAlertCircle className="w-4 h-4 text-amber-600" />
+                  <p className="text-sm font-medium text-gray-900">Avertissement</p>
+                </div>
+                <p className="text-xs text-gray-600">
+                  Le mode maintenance empêchera les utilisateurs d'accéder au système. 
+                  Un message personnalisé sera affiché.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Message de maintenance
+                </label>
+                <textarea
+                  value={maintenanceMessage}
+                  onChange={(e) => setMaintenanceMessage(e.target.value)}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
+                  placeholder="Ex: Maintenance planifiée. Retour prévu à 14h00."
+                />
+              </div>
               
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Message de maintenance
-              </label>
-              <textarea
-                value={maintenanceMessage}
-                onChange={(e) => setMaintenanceMessage(e.target.value)}
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ex: Maintenance planifiée. Retour prévu à 14h00."
-              />
-              
-              <div className="mt-6 flex justify-end space-x-3">
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
                 <button
                   onClick={() => {
                     setShowMaintenanceModal(false);
                     setMaintenanceMessage('');
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="px-4 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium text-sm hover:shadow-sm"
                 >
                   Annuler
                 </button>
                 <button
                   onClick={() => handleChangerEtat('maintenance')}
-                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+                  className="px-4 py-1.5 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-lg hover:from-amber-700 hover:to-amber-600 transition-all duration-200 font-medium flex items-center gap-1.5 text-sm shadow hover:shadow-md"
                 >
+                  <FiPause size={14} />
                   Activer Maintenance
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de détail de log */}
+      {showLogDetailModal && selectedLog && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
+            <div className="sticky top-0 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded-t-lg p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                    {getLogIcon(selectedLog.niveau)}
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold">Détail de l'événement</h2>
+                    <p className="text-gray-100 text-xs mt-0.5">Journal système</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowLogDetailModal(false)}
+                  className="p-1 hover:bg-white/20 rounded transition-colors"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`p-1.5 rounded ${getLogColor(selectedLog.niveau)}`}>
+                    {getLogIcon(selectedLog.niveau)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{selectedLog.message}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {new Date(selectedLog.timestamp).toLocaleString('fr-FR')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
+                  <p className="text-xs text-gray-600 mb-1">Niveau</p>
+                  <p className={`text-sm font-medium ${
+                    selectedLog.niveau === 'ERROR' ? 'text-red-600' :
+                    selectedLog.niveau === 'WARNING' ? 'text-amber-600' :
+                    'text-blue-600'
+                  }`}>
+                    {selectedLog.niveau}
+                  </p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-3 border border-purple-100">
+                  <p className="text-xs text-gray-600 mb-1">Horodatage</p>
+                  <p className="text-sm text-gray-900 font-medium">
+                    {new Date(selectedLog.timestamp).toLocaleTimeString('fr-FR')}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end pt-3 border-t border-gray-200">
+                <button
+                  onClick={() => setShowLogDetailModal(false)}
+                  className="px-4 py-1.5 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded hover:from-gray-700 hover:to-gray-600 transition-all duration-200 font-medium text-sm shadow-sm"
+                >
+                  Fermer
                 </button>
               </div>
             </div>

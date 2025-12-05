@@ -1,5 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { 
+  FiRefreshCw, FiPlus, FiEdit2, FiTrash2, FiSearch, FiFilter, FiX, 
+  FiCheck, FiChevronLeft, FiChevronRight, FiDownload, FiUpload,
+  FiEye, FiCheckCircle, FiXCircle, FiCreditCard, FiGlobe, FiMapPin
+} from "react-icons/fi";
 
 export default function BanksPage() {
   const [banques, setBanques] = useState([]);
@@ -8,11 +13,14 @@ export default function BanksPage() {
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingBanque, setEditingBanque] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedBanque, setSelectedBanque] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPays, setFilterPays] = useState('');
+  const [selectedRows, setSelectedRows] = useState([]);
 
   useEffect(() => {
     fetchBanques();
@@ -38,8 +46,9 @@ export default function BanksPage() {
 
       setBanques(banquesData);
     } catch (err) {
-      console.error('❌ Erreur lors du chargement des banques:', err);
+      console.error('Erreur lors du chargement des banques:', err);
       setError('Erreur lors du chargement des banques');
+      setBanques([]);
     } finally {
       setLoading(false);
     }
@@ -66,28 +75,47 @@ export default function BanksPage() {
   };
 
   // Filtrage et recherche
-  const filteredBanques = banques.filter(banque => {
-    const matchesSearch = 
-      banque.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      banque.code_bic?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      banque.adresse?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesPays = filterPays === '' || 
-      (banque.pays && banque.pays.id.toString() === filterPays);
-    
-    return matchesSearch && matchesPays;
-  });
+  const filteredBanques = useMemo(() => {
+    return banques.filter(banque => {
+      const matchesSearch = 
+        banque.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        banque.code_bic?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        banque.adresse?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesPays = filterPays === '' || 
+        (banque.pays && banque.pays.id.toString() === filterPays);
+      
+      return matchesSearch && matchesPays;
+    });
+  }, [banques, searchTerm, filterPays]);
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentBanques = Array.isArray(filteredBanques) ? filteredBanques.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredBanques) ? filteredBanques.length : 0) / itemsPerPage);
+  const currentBanques = filteredBanques.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredBanques.length / itemsPerPage);
 
   // Changement de page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
   const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
+
+  // Gestion des sélections
+  const toggleRowSelection = (id) => {
+    setSelectedRows(prev => 
+      prev.includes(id) 
+        ? prev.filter(rowId => rowId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const selectAllRows = useCallback(() => {
+    if (selectedRows.length === currentBanques.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(currentBanques.map(banque => banque.id));
+    }
+  }, [currentBanques, selectedRows.length]);
 
   // Gestion des actions
   const handleNewBanque = () => {
@@ -112,6 +140,11 @@ export default function BanksPage() {
     }
   };
 
+  const handleViewDetails = (banque) => {
+    setSelectedBanque(banque);
+    setShowDetailModal(true);
+  };
+
   const handleFormSuccess = () => {
     setShowForm(false);
     setEditingBanque(null);
@@ -122,228 +155,384 @@ export default function BanksPage() {
     fetchBanques();
   };
 
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setFilterPays('');
+    setCurrentPage(1);
+  };
+
+  // Statistiques - SIMPLIFIÉES (seulement 3 cartes)
+  const stats = useMemo(() => ({
+    total: banques.length,
+    withBic: banques.filter(b => b.code_bic).length,
+    uniqueCountries: new Set(banques.map(b => b.pays?.id).filter(id => id)).size
+  }), [banques]);
+
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="flex justify-center items-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des banques...</span>
+      <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+        <div className="flex flex-col items-center justify-center h-96">
+          <div className="relative">
+            <div className="w-12 h-12 border-3 border-gray-200 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div className="mt-4">
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 animate-pulse"></div>
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-24 mt-2 animate-pulse mx-auto"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Banques</h1>
-          <p className="text-gray-600 mt-1">
-            {filteredBanques.length} banque(s) trouvée(s)
-            {(searchTerm || filterPays) && ' • Filtres actifs'}
-          </p>
+    <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+      {/* Header avec gradient - COMPACT */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-violet-600 to-violet-500 rounded-lg shadow">
+              <FiCreditCard className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Gestion des Banques</h1>
+              <p className="text-gray-600 text-xs mt-0.5">
+                Gérez vos informations bancaires
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleRetry}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group"
+            >
+              <FiRefreshCw className="group-hover:rotate-180 transition-transform duration-500 text-sm" />
+              <span className="font-medium">Actualiser</span>
+            </button>
+            <button 
+              onClick={handleNewBanque}
+              className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group shadow"
+            >
+              <FiPlus className="group-hover:rotate-90 transition-transform duration-300 text-sm" />
+              <span className="font-semibold">Nouvelle Banque</span>
+            </button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <button 
-            onClick={handleRetry}
-            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Actualiser
-          </button>
-          <button 
-            onClick={handleNewBanque}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Nouvelle Banque
-          </button>
+
+        {/* Statistiques en ligne - SIMPLIFIÉES (3 cartes seulement) - COMPACT */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Total des banques</p>
+                <p className="text-lg font-bold text-gray-900 mt-0.5">{stats.total}</p>
+              </div>
+              <div className="p-1.5 bg-violet-50 rounded">
+                <FiCreditCard className="w-4 h-4 text-violet-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Avec code BIC</p>
+                <p className="text-lg font-bold text-green-600 mt-0.5">{stats.withBic}</p>
+              </div>
+              <div className="p-1.5 bg-green-50 rounded">
+                <FiCheckCircle className="w-4 h-4 text-green-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Pays représentés</p>
+                <p className="text-lg font-bold text-purple-600 mt-0.5">{stats.uniqueCountries}</p>
+              </div>
+              <div className="p-1.5 bg-purple-50 rounded">
+                <FiGlobe className="w-4 h-4 text-purple-600" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Message d'erreur */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 font-medium">{error}</span>
+        <div className="mb-4">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-red-100 rounded">
+                  <FiX className="w-4 h-4 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-900 text-sm">{error}</p>
+                  <p className="text-xs text-red-700 mt-0.5">Veuillez réessayer</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRetry}
+                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium shadow-sm"
+              >
+                Réessayer
+              </button>
             </div>
-            <button
-              onClick={handleRetry}
-              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
-            >
-              Réessayer
-            </button>
           </div>
         </div>
       )}
 
-      {/* Filtres et Recherche */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nom, BIC, adresse..."
-            />
+      {/* Barre d'outils - Filtres et Recherche - COMPACT */}
+      <div className="mb-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900 text-sm">Filtres et Recherche</h3>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-600">
+                {filteredBanques.length} résultat(s)
+              </span>
+              {(searchTerm || filterPays) && (
+                <button
+                  onClick={handleResetFilters}
+                  className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs font-medium flex items-center gap-1"
+                >
+                  <FiX size={12} />
+                  Effacer
+                </button>
+              )}
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Pays</label>
-            <select
-              value={filterPays}
-              onChange={(e) => setFilterPays(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Tous les pays</option>
-              {pays.map(paysItem => (
-                <option key={paysItem.id} value={paysItem.id}>
-                  {paysItem.nom}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="md:col-span-2 flex items-end">
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilterPays('');
-                setCurrentPage(1);
-              }}
-              className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
-            >
-              Réinitialiser
-            </button>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-lg blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10 text-sm" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white relative z-10 text-sm"
+                    placeholder="Nom, BIC, adresse..."
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Pays</label>
+              <div className="relative">
+                <FiGlobe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+                <select
+                  value={filterPays}
+                  onChange={(e) => setFilterPays(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
+                >
+                  <option value="">Tous les pays</option>
+                  {pays.map(paysItem => (
+                    <option key={paysItem.id} value={paysItem.id}>
+                      {paysItem.nom_fr || paysItem.nom}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleResetFilters}
+                className="w-full px-3 py-2 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 rounded-lg hover:from-gray-200 hover:to-gray-100 transition-all duration-300 border border-gray-300 font-medium flex items-center justify-center gap-1.5 text-sm"
+              >
+                <FiX className="group-hover:rotate-90 transition-transform duration-300" />
+                Réinitialiser tout
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">{banques.length}</div>
-          <div className="text-sm text-gray-600">Total des banques</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-green-600">
-            {banques.filter(b => b.code_bic).length}
+      {/* Tableau Principal */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {/* En-tête du tableau avec actions - COMPACT */}
+        <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={selectedRows.length === currentBanques.length && currentBanques.length > 0}
+                  onChange={selectAllRows}
+                  className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                />
+                <span className="text-xs text-gray-700">
+                  {selectedRows.length} sélectionné(s)
+                </span>
+              </div>
+              {selectedRows.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <button className="px-2 py-1 bg-violet-50 text-violet-700 rounded text-xs font-medium hover:bg-violet-100 transition-colors">
+                    <FiDownload size={12} />
+                  </button>
+                  <button className="px-2 py-1 bg-red-50 text-red-700 rounded text-xs font-medium hover:bg-red-100 transition-colors">
+                    <FiTrash2 size={12} />
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiDownload size={16} />
+              </button>
+              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiUpload size={16} />
+              </button>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
+              >
+                <option value={5}>5 lignes</option>
+                <option value={10}>10 lignes</option>
+                <option value={20}>20 lignes</option>
+                <option value={50}>50 lignes</option>
+              </select>
+            </div>
           </div>
-          <div className="text-sm text-gray-600">Avec code BIC</div>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-purple-600">
-            {new Set(banques.map(b => b.pays?.id).filter(id => id)).size}
-          </div>
-          <div className="text-sm text-gray-600">Pays représentés</div>
-        </div>
-      </div>
 
-      {/* Tableau */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
+        {/* Tableau SIMPLIFIÉ (5 colonnes seulement) */}
         <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
+          <table className="min-w-full divide-y divide-gray-200">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-300">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  ID
+              <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.length === currentBanques.length && currentBanques.length > 0}
+                      onChange={selectAllRows}
+                      className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                    />
+                    ID
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  Nom de la Banque
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Code BIC
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Pays
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Adresse
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {currentBanques.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {banques.length === 0 ? 'Aucune banque trouvée' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="5" className="px-3 py-6 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-3">
+                        <FiCreditCard className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-base font-semibold text-gray-900 mb-1.5">
+                        {banques.length === 0 ? 'Aucune banque trouvée' : 'Aucun résultat pour votre recherche'}
+                      </h3>
+                      <p className="text-gray-600 mb-4 max-w-md text-sm">
+                        {banques.length === 0 
+                          ? 'Commencez par créer votre première banque' 
+                          : 'Essayez de modifier vos critères de recherche ou de filtres'}
+                      </p>
+                      {banques.length === 0 && (
+                        <button 
+                          onClick={handleNewBanque}
+                          className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1.5 text-sm"
+                        >
+                          <FiPlus />
+                          Créer ma première banque
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                currentBanques.map((banque, index) => (
+                currentBanques.map((banque) => (
                   <tr 
-                    key={banque.id} 
-                    className={`${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                    } hover:bg-gray-100 transition-colors border-b border-gray-300`}
+                    key={banque.id}
+                    className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
+                      selectedRows.includes(banque.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
+                    }`}
                   >
-                    <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {banque.id}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      {banque.nom}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {banque.code_bic ? (
-                        <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                          {banque.code_bic}
+                    <td className="px-3 py-2 whitespace-nowrap border-r border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(banque.id)}
+                          onChange={() => toggleRowSelection(banque.id)}
+                          className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                        />
+                        <span className="px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
+                          #{banque.id}
                         </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {banque.pays ? (
-                        <div className="flex items-center space-x-2">
-                          <span className="font-mono bg-green-50 px-2 py-1 rounded border border-green-200">
-                            {banque.pays.code_iso}
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">{banque.nom}</div>
+                        <div className="text-xs text-gray-500 truncate max-w-[200px]">
+                          {banque.adresse || 'Aucune adresse'}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="text-sm text-gray-700">
+                        {banque.code_bic ? (
+                          <span className="px-2 py-1 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded border border-blue-200 text-xs font-medium">
+                            {banque.code_bic}
                           </span>
-                          <span>{banque.pays.nom}</span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
+                        ) : '-'}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {banque.adresse ? (
-                        <div className="max-w-xs truncate" title={banque.adresse}>
-                          {banque.adresse}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="flex items-center gap-1.5">
+                        {banque.pays ? (
+                          <>
+                            <span className="text-base">{banque.pays.emoji || '🌍'}</span>
+                            <span className="text-sm text-gray-700">{banque.pays.nom_fr || banque.pays.nom}</span>
+                          </>
+                        ) : (
+                          <span className="text-sm text-gray-500">-</span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex space-x-3">
-                        <button 
-                          onClick={() => handleEdit(banque)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleViewDetails(banque)}
+                          className="p-1.5 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded-lg hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Voir détails"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          Éditer
+                          <FiEye size={14} />
                         </button>
-                        <button 
-                          onClick={() => handleDelete(banque)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
+                        <button
+                          onClick={() => handleEdit(banque)}
+                          className="p-1.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded-lg hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Modifier"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Supprimer
+                          <FiEdit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(banque)}
+                          className="p-1.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-lg hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Supprimer"
+                        >
+                          <FiTrash2 size={14} />
                         </button>
                       </div>
                     </td>
@@ -354,47 +543,38 @@ export default function BanksPage() {
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* Pagination - COMPACT */}
         {filteredBanques.length > 0 && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
-                  Lignes par page:
-                </span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="border border-gray-300 rounded px-3 py-1 text-sm"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredBanques.length)} sur {filteredBanques.length}
-                </span>
+          <div className="px-4 py-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-700">
+                    Page {currentPage} sur {totalPages}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-xs text-gray-700">
+                    {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredBanques.length)} sur {filteredBanques.length} banques
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-1.5 rounded border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page précédente"
                 >
-                  Précédent
+                  <FiChevronLeft size={14} />
                 </button>
 
                 {/* Numéros de page */}
-                <div className="flex space-x-1">
+                <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNumber;
                     if (totalPages <= 5) {
@@ -411,10 +591,10 @@ export default function BanksPage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`w-8 h-8 rounded border text-sm ${
+                        className={`min-w-[32px] h-8 rounded border text-xs font-medium transition-all duration-200 ${
                           currentPage === pageNumber
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                         }`}
                       >
                         {pageNumber}
@@ -426,13 +606,14 @@ export default function BanksPage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-1.5 rounded border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page suivante"
                 >
-                  Suivant
+                  <FiChevronRight size={14} />
                 </button>
               </div>
             </div>
@@ -452,191 +633,158 @@ export default function BanksPage() {
           onSuccess={handleFormSuccess}
         />
       )}
+
+      {/* Modal de détails */}
+      {showDetailModal && selectedBanque && (
+        <BanqueDetailModal
+          banque={selectedBanque}
+          onClose={() => {
+            setShowDetailModal(false);
+            setSelectedBanque(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-// Composant Modal pour le formulaire des banques - AVEC DROPDOWNS AVEC RECHERCHE
+// MODAL DE DÉTAILS POUR LES BANQUES
+function BanqueDetailModal({ banque, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header du modal */}
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                <FiCreditCard className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">Détails de la banque</h2>
+                <p className="text-violet-100 text-xs mt-0.5">{banque.nom}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-white/20 rounded transition-colors"
+            >
+              <FiX size={18} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          {/* Informations Générales */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              Informations Générales
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">ID</p>
+                <p className="text-sm text-gray-900 font-medium font-mono">#{banque.id}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Nom de la banque</p>
+                <p className="text-sm text-gray-900 font-medium">{banque.nom}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Code BIC/SWIFT</p>
+                <p className="text-sm text-gray-900">
+                  {banque.code_bic ? (
+                    <span className="px-2 py-1 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded border border-blue-200 text-xs font-medium">
+                      {banque.code_bic}
+                    </span>
+                  ) : 'Non défini'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Localisation */}
+          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-3 border border-blue-100">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              Localisation
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Adresse</p>
+                <p className="text-sm text-gray-900">{banque.adresse || 'Non définie'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Pays</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base">{banque.pays?.emoji || '🌍'}</span>
+                  <p className="text-sm text-gray-900">{banque.pays?.nom_fr || banque.pays?.nom || 'Non défini'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Informations supplémentaires */}
+          {banque.telephone || banque.email || banque.site_web ? (
+            <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-lg p-3 border border-violet-100">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+                Contact
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {banque.telephone && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-0.5">Téléphone</p>
+                    <p className="text-sm text-gray-900">{banque.telephone}</p>
+                  </div>
+                )}
+                {banque.email && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-0.5">Email</p>
+                    <p className="text-sm text-gray-900">{banque.email}</p>
+                  </div>
+                )}
+                {banque.site_web && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-0.5">Site web</p>
+                    <p className="text-sm text-gray-900">{banque.site_web}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Bouton de fermeture */}
+        <div className="p-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded hover:from-gray-700 hover:to-gray-600 transition-all duration-200 font-medium text-sm shadow-sm"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// COMPOSANT MODAL POUR LES BANQUES - FORMULAIRE COMPACT
 function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     nom: banque?.nom || '',
     code_bic: banque?.code_bic || '',
     adresse: banque?.adresse || '',
-    pays: banque?.pays?.id || ''
+    telephone: banque?.telephone || '',
+    email: banque?.email || '',
+    site_web: banque?.site_web || '',
+    pays: banque?.pays?.id || '',
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // État pour la recherche dans le dropdown
-  const [searchPays, setSearchPays] = useState('');
-
-  // Composant réutilisable pour les dropdowns avec recherche
-  const SearchableDropdown = ({ 
-    label, 
-    value, 
-    onChange, 
-    options, 
-    searchValue,
-    onSearchChange,
-    placeholder,
-    required = false,
-    disabled = false,
-    getOptionLabel = (option) => option,
-    getOptionValue = (option) => option,
-    renderOption = (option) => getOptionLabel(option)
-  }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef(null);
-    const inputRef = useRef(null);
-
-    const filteredOptions = options.filter(option =>
-      getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
-    );
-
-    const selectedOption = options.find(opt => getOptionValue(opt) === value);
-
-    // Gestion robuste du clic externe
-    useEffect(() => {
-      const handleMouseDown = (event) => {
-        if (!dropdownRef.current?.contains(event.target)) {
-          setIsOpen(false);
-          onSearchChange('');
-        }
-      };
-
-      document.addEventListener('mousedown', handleMouseDown, true);
-      
-      return () => {
-        document.removeEventListener('mousedown', handleMouseDown, true);
-      };
-    }, [onSearchChange]);
-
-    const handleToggle = () => {
-      if (!disabled) {
-        setIsOpen(!isOpen);
-        if (!isOpen) {
-          setTimeout(() => {
-            inputRef.current?.focus();
-          }, 0);
-        } else {
-          onSearchChange('');
-        }
-      }
-    };
-
-    const handleInputMouseDown = (e) => {
-      e.stopPropagation();
-    };
-
-    const handleInputFocus = (e) => {
-      e.stopPropagation();
-    };
-
-    const handleInputClick = (e) => {
-      e.stopPropagation();
-    };
-
-    const handleOptionClick = (optionValue) => {
-      onChange(optionValue);
-      setIsOpen(false);
-      onSearchChange('');
-    };
-
-    return (
-      <div className="relative" ref={dropdownRef}>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {label} {required && '*'}
-        </label>
-        
-        {/* Bouton d'ouverture du dropdown */}
-        <button
-          type="button"
-          onClick={handleToggle}
-          onMouseDown={(e) => e.preventDefault()}
-          disabled={disabled}
-          className={`w-full text-left border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-            disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:border-gray-400'
-          }`}
-        >
-          {selectedOption ? (
-            <span className="block truncate">{getOptionLabel(selectedOption)}</span>
-          ) : (
-            <span className="text-gray-500">{placeholder || `Sélectionnez ${label.toLowerCase()}`}</span>
-          )}
-          <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </span>
-        </button>
-
-        {/* Dropdown avec recherche */}
-        {isOpen && (
-          <div 
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden"
-            onMouseDown={handleInputMouseDown}
-          >
-            {/* Barre de recherche */}
-            <div className="p-2 border-b border-gray-200">
-              <div className="relative">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={searchValue}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  onMouseDown={handleInputMouseDown}
-                  onClick={handleInputClick}
-                  onFocus={handleInputFocus}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  placeholder={`Rechercher...`}
-                  autoFocus
-                />
-                <svg className="w-4 h-4 absolute right-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {filteredOptions.length} résultat(s) trouvé(s)
-              </p>
-            </div>
-            
-            {/* Liste des options */}
-            <div className="max-h-48 overflow-y-auto">
-              {filteredOptions.length === 0 ? (
-                <div className="p-4 text-center text-gray-500 text-sm">
-                  Aucun résultat trouvé pour "{searchValue}"
-                </div>
-              ) : (
-                filteredOptions.map((option, index) => (
-                  <div
-                    key={index}
-                    className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
-                      value === getOptionValue(option) ? 'bg-blue-100 text-blue-800' : 'text-gray-700'
-                    }`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onClick={() => handleOptionClick(getOptionValue(option))}
-                  >
-                    {renderOption(option)}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Affichage de la valeur sélectionnée */}
-        {selectedOption && !isOpen && (
-          <p className="text-sm text-green-600 mt-1">
-            Sélectionné: {getOptionLabel(selectedOption)}
-          </p>
-        )}
-      </div>
-    );
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -644,7 +792,7 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
     setError(null);
 
     // Validation
-    if (!formData.nom) {
+    if (!formData.nom.trim()) {
       setError('Le nom de la banque est obligatoire');
       setLoading(false);
       return;
@@ -667,6 +815,7 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
       
       onSuccess();
     } catch (err) {
+      console.error('Erreur sauvegarde banque:', err);
       const errorMessage = err.message || 'Erreur lors de la sauvegarde';
       setError(errorMessage);
     } finally {
@@ -682,107 +831,171 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {banque ? 'Modifier la banque' : 'Créer une nouvelle banque'}
-          </h2>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header du modal avec gradient - COMPACT */}
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                <FiCreditCard className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">
+                  {banque ? 'Modifier la banque' : 'Nouvelle Banque'}
+                </h2>
+                {!banque && (
+                  <p className="text-violet-100 text-xs mt-0.5">
+                    Créez une nouvelle banque dans le système
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-white/20 rounded transition-colors"
+            >
+              <FiX size={18} />
+            </button>
+          </div>
         </div>
         
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 text-sm">{error}</span>
+          <div className="mx-4 mt-3 bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-red-100 rounded">
+                <FiX className="text-red-600" size={14} />
+              </div>
+              <span className="text-red-800 text-xs font-medium">{error}</span>
             </div>
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Nom de la banque */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom de la banque *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.nom}
-                onChange={(e) => handleChange('nom', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Banque Centrale, Société Générale..."
-              />
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* Section 1: Informations Générales - COMPACT */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Informations Générales</h3>
             </div>
             
-            {/* Code BIC */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code BIC/SWIFT
-              </label>
-              <input
-                type="text"
-                value={formData.code_bic}
-                onChange={(e) => handleChange('code_bic', e.target.value.toUpperCase())}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                placeholder="ABCDEFGHXXX"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                8 ou 11 caractères (ex: BFTGTGPT)
-              </p>
-            </div>
-            
-            {/* Pays avec recherche */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Pays
-              </label>
-              <SearchableDropdown
-                label="Pays"
-                value={formData.pays}
-                onChange={(value) => handleChange('pays', parseInt(value))}
-                options={pays}
-                searchValue={searchPays}
-                onSearchChange={setSearchPays}
-                placeholder="Sélectionnez un pays"
-                getOptionLabel={(paysItem) => `${paysItem.emoji} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
-                getOptionValue={(paysItem) => paysItem.id}
-              />
-            </div>
-            
-            {/* Adresse */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Adresse
-              </label>
-              <textarea
-                value={formData.adresse}
-                onChange={(e) => handleChange('adresse', e.target.value)}
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Adresse complète de la banque..."
-              />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Nom de la banque <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.nom}
+                  onChange={(e) => handleChange('nom', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
+                  placeholder="Ex: Banque Centrale, Société Générale..."
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Code BIC/SWIFT</label>
+                <input
+                  type="text"
+                  value={formData.code_bic}
+                  onChange={(e) => handleChange('code_bic', e.target.value.toUpperCase())}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm font-mono"
+                  placeholder="ABCDEFGHXXX"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Pays</label>
+                <div className="relative">
+                  <FiGlobe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  <select
+                    value={formData.pays}
+                    onChange={(e) => handleChange('pays', e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm appearance-none"
+                  >
+                    <option value="">Sélectionnez un pays</option>
+                    {pays.map(paysItem => (
+                      <option key={paysItem.id} value={paysItem.id}>
+                        {paysItem.emoji} {paysItem.nom_fr || paysItem.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Aperçu */}
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu de la banque</h3>
-            <div className="space-y-2 text-sm">
-              <div><strong>Nom:</strong> {formData.nom || 'Non défini'}</div>
-              <div><strong>BIC:</strong> {formData.code_bic || 'Non défini'}</div>
-              <div><strong>Pays:</strong> {pays.find(p => p.id == formData.pays)?.nom || 'Non défini'}</div>
+          {/* Section 2: Adresse - COMPACT */}
+          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-3 border border-blue-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Adresse</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Adresse complète</label>
+                <textarea
+                  value={formData.adresse}
+                  onChange={(e) => handleChange('adresse', e.target.value)}
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
+                  placeholder="Adresse complète de la banque..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Contact - COMPACT */}
+          <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-lg p-3 border border-violet-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Contact</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Téléphone</label>
+                <input
+                  type="tel"
+                  value={formData.telephone}
+                  onChange={(e) => handleChange('telephone', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
+                  placeholder="+228 XX XXX XXX"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
+                  placeholder="contact@banque.tg"
+                />
+              </div>
+              
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Site web</label>
+                <input
+                  type="url"
+                  value={formData.site_web}
+                  onChange={(e) => handleChange('site_web', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
+                  placeholder="https://www.banque.tg"
+                />
+              </div>
             </div>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+          {/* Boutons d'action - COMPACT */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+              className="px-4 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium text-sm hover:shadow-sm"
               disabled={loading}
             >
               Annuler
@@ -790,15 +1003,19 @@ function BanqueFormModal({ banque, pays, onClose, onSuccess }) {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
+              className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-medium flex items-center space-x-1.5 shadow hover:shadow-md text-sm"
             >
-              {loading && (
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
+              {loading ? (
+                <>
+                  <FiRefreshCw className="animate-spin" size={14} />
+                  <span>Sauvegarde...</span>
+                </>
+              ) : (
+                <>
+                  <FiCheck size={14} />
+                  <span>{banque ? 'Mettre à jour' : 'Créer la banque'}</span>
+                </>
               )}
-              <span>{loading ? 'Sauvegarde...' : banque ? 'Mettre à jour' : 'Créer la banque'}</span>
             </button>
           </div>
         </form>

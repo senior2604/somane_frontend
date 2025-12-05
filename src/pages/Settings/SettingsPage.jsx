@@ -1,5 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { 
+  FiRefreshCw, 
+  FiPlus, 
+  FiEdit2, 
+  FiTrash2, 
+  FiSearch, 
+  FiFilter, 
+  FiX, 
+  FiCheck, 
+  FiGlobe, 
+  FiLock, 
+  FiUnlock, 
+  FiEye,
+  FiChevronLeft, 
+  FiChevronRight,
+  FiSettings,
+  FiShield,
+  FiDatabase,
+  FiHash,
+  FiType,
+  FiList,
+  FiCode,
+  FiDownload,
+  FiUpload,
+  FiCalendar,
+  FiInfo,
+  FiAlertCircle
+} from "react-icons/fi";
+import { TbSettings } from "react-icons/tb";
 
 export default function ParametresPage() {
   const [parametres, setParametres] = useState([]);
@@ -8,12 +37,15 @@ export default function ParametresPage() {
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingParametre, setEditingParametre] = useState(null);
+  const [selectedParametre, setSelectedParametre] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEntite, setFilterEntite] = useState('');
   const [filterModifiable, setFilterModifiable] = useState('');
+  const [selectedRows, setSelectedRows] = useState([]);
 
   useEffect(() => {
     fetchParametres();
@@ -94,6 +126,23 @@ export default function ParametresPage() {
   const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
+  // Gestion des sélections
+  const toggleRowSelection = (id) => {
+    setSelectedRows(prev => 
+      prev.includes(id) 
+        ? prev.filter(rowId => rowId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const selectAllRows = () => {
+    if (selectedRows.length === currentParametres.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(currentParametres.map(parametre => parametre.id));
+    }
+  };
+
   // Gestion des actions
   const handleNewParametre = () => {
     setEditingParametre(null);
@@ -129,6 +178,11 @@ export default function ParametresPage() {
     }
   };
 
+  const handleViewDetails = (parametre) => {
+    setSelectedParametre(parametre);
+    setShowDetailModal(true);
+  };
+
   const handleFormSuccess = () => {
     setShowForm(false);
     setEditingParametre(null);
@@ -139,292 +193,466 @@ export default function ParametresPage() {
     fetchParametres();
   };
 
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setFilterEntite('');
+    setFilterModifiable('');
+    setCurrentPage(1);
+  };
+
   // Fonction pour formater l'affichage de la valeur
   const formatValeur = (valeur) => {
+    if (valeur === null || valeur === undefined) return '-';
     if (typeof valeur === 'object') {
-      return JSON.stringify(valeur);
+      try {
+        return JSON.stringify(valeur, null, 2);
+      } catch {
+        return String(valeur);
+      }
     }
     return String(valeur);
   };
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="flex justify-center items-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des paramètres...</span>
+      <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+        <div className="flex flex-col items-center justify-center h-96">
+          <div className="relative">
+            <div className="w-12 h-12 border-3 border-gray-200 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div className="mt-4">
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 animate-pulse"></div>
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-24 mt-2 animate-pulse mx-auto"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Paramètres</h1>
-          <p className="text-gray-600 mt-1">
-            {filteredParametres.length} paramètre(s) trouvé(s)
-            {(searchTerm || filterEntite || filterModifiable) && ' • Filtres actifs'}
-          </p>
+    <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+      {/* Header avec gradient */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-blue-600 to-blue-500 rounded-lg shadow">
+              <TbSettings className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Gestion des Paramètres</h1>
+              <p className="text-gray-600 text-xs mt-0.5">
+                Gérez les paramètres système et par entité
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleRetry}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group"
+            >
+              <FiRefreshCw className="group-hover:rotate-180 transition-transform duration-500 text-sm" />
+              <span className="font-medium">Actualiser</span>
+            </button>
+            <button 
+              onClick={handleNewParametre}
+              className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group shadow"
+            >
+              <FiPlus className="group-hover:rotate-90 transition-transform duration-300 text-sm" />
+              <span className="font-semibold">Nouveau Paramètre</span>
+            </button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <button 
-            onClick={handleRetry}
-            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Actualiser
-          </button>
-          <button 
-            onClick={handleNewParametre}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Nouveau Paramètre
-          </button>
+
+        {/* Statistiques en ligne */}
+        <div className="grid grid-cols-4 gap-3 mb-4">
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Total des paramètres</p>
+                <p className="text-lg font-bold text-gray-900 mt-0.5">{parametres.length}</p>
+              </div>
+              <div className="p-1.5 bg-blue-50 rounded">
+                <FiDatabase className="w-4 h-4 text-blue-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Paramètres modifiables</p>
+                <p className="text-lg font-bold text-green-600 mt-0.5">
+                  {parametres.filter(p => p.modifiable).length}
+                </p>
+              </div>
+              <div className="p-1.5 bg-green-50 rounded">
+                <FiUnlock className="w-4 h-4 text-green-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Paramètres globaux</p>
+                <p className="text-lg font-bold text-purple-600 mt-0.5">
+                  {parametres.filter(p => !p.entite).length}
+                </p>
+              </div>
+              <div className="p-1.5 bg-purple-50 rounded">
+                <FiGlobe className="w-4 h-4 text-purple-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Entités configurées</p>
+                <p className="text-lg font-bold text-orange-600 mt-0.5">
+                  {new Set(parametres.map(p => p.entite?.id).filter(id => id)).size}
+                </p>
+              </div>
+              <div className="p-1.5 bg-orange-50 rounded">
+                <TbSettings className="w-4 h-4 text-orange-600" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Message d'erreur */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 font-medium">{error}</span>
+        <div className="mb-4">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-red-100 rounded">
+                  <FiAlertCircle className="w-4 h-4 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-900 text-sm">{error}</p>
+                  <p className="text-xs text-red-700 mt-0.5">Veuillez réessayer</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRetry}
+                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium shadow-sm"
+              >
+                Réessayer
+              </button>
             </div>
-            <button
-              onClick={handleRetry}
-              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
-            >
-              Réessayer
-            </button>
           </div>
         </div>
       )}
 
-      {/* Filtres et Recherche */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Clé, description, valeur..."
-            />
+      {/* Barre d'outils - Filtres et Recherche */}
+      <div className="mb-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900 text-sm">Filtres et Recherche</h3>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-600">
+                {filteredParametres.length} résultat(s)
+              </span>
+              {(searchTerm || filterEntite || filterModifiable) && (
+                <button
+                  onClick={handleResetFilters}
+                  className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs font-medium flex items-center gap-1"
+                >
+                  <FiX size={12} />
+                  Effacer
+                </button>
+              )}
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Portée</label>
-            <select
-              value={filterEntite}
-              onChange={(e) => setFilterEntite(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Toutes les portées</option>
-              <option value="global">Paramètres globaux</option>
-              {entites.map(entite => (
-                <option key={entite.id} value={entite.id}>
-                  {entite.raison_sociale}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Modifiable</label>
-            <select
-              value={filterModifiable}
-              onChange={(e) => setFilterModifiable(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Tous les statuts</option>
-              <option value="true">Modifiable</option>
-              <option value="false">Non modifiable</option>
-            </select>
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilterEntite('');
-                setFilterModifiable('');
-                setCurrentPage(1);
-              }}
-              className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
-            >
-              Réinitialiser
-            </button>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-500 rounded-lg blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10 text-sm" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white relative z-10 text-sm"
+                    placeholder="Clé, description, valeur..."
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Portée</label>
+              <div className="relative">
+                <FiGlobe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+                <select
+                  value={filterEntite}
+                  onChange={(e) => setFilterEntite(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white appearance-none text-sm"
+                >
+                  <option value="">Toutes les portées</option>
+                  <option value="global">Paramètres globaux</option>
+                  {entites.map(entite => (
+                    <option key={entite.id} value={entite.id}>
+                      {entite.raison_sociale}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Modifiable</label>
+              <div className="relative">
+                <FiFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+                <select
+                  value={filterModifiable}
+                  onChange={(e) => setFilterModifiable(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white appearance-none text-sm"
+                >
+                  <option value="">Tous les statuts</option>
+                  <option value="true">Modifiable</option>
+                  <option value="false">Non modifiable</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleResetFilters}
+                className="w-full px-3 py-2 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 rounded-lg hover:from-gray-200 hover:to-gray-100 transition-all duration-300 border border-gray-300 font-medium flex items-center justify-center gap-1.5 text-sm"
+              >
+                <FiX className="group-hover:rotate-90 transition-transform duration-300" />
+                Réinitialiser tout
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">{parametres.length}</div>
-          <div className="text-sm text-gray-600">Total des paramètres</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-green-600">
-            {parametres.filter(p => p.modifiable).length}
+      {/* Tableau Principal */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {/* En-tête du tableau avec actions */}
+        <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={selectedRows.length === currentParametres.length && currentParametres.length > 0}
+                  onChange={selectAllRows}
+                  className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                />
+                <span className="text-xs text-gray-700">
+                  {selectedRows.length} sélectionné(s)
+                </span>
+              </div>
+              {selectedRows.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <button className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium hover:bg-blue-100 transition-colors">
+                    <FiDownload size={12} />
+                  </button>
+                  <button className="px-2 py-1 bg-red-50 text-red-700 rounded text-xs font-medium hover:bg-red-100 transition-colors">
+                    <FiTrash2 size={12} />
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiDownload size={16} />
+              </button>
+              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiUpload size={16} />
+              </button>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value={5}>5 lignes</option>
+                <option value={10}>10 lignes</option>
+                <option value={20}>20 lignes</option>
+                <option value={50}>50 lignes</option>
+              </select>
+            </div>
           </div>
-          <div className="text-sm text-gray-600">Paramètres modifiables</div>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-purple-600">
-            {parametres.filter(p => !p.entite).length}
-          </div>
-          <div className="text-sm text-gray-600">Paramètres globaux</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-orange-600">
-            {new Set(parametres.map(p => p.entite?.id).filter(id => id)).size}
-          </div>
-          <div className="text-sm text-gray-600">Entités configurées</div>
-        </div>
-      </div>
 
-      {/* Tableau */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
+        {/* Tableau */}
         <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
+          <table className="min-w-full divide-y divide-gray-200">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-300">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  ID
+              <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.length === currentParametres.length && currentParametres.length > 0}
+                      onChange={selectAllRows}
+                      className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                    />
+                    ID
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Clé
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Valeur
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Description
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Portée
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Modifiable
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Dernière modif
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {currentParametres.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {parametres.length === 0 ? 'Aucun paramètre trouvé' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan="7" className="px-3 py-6 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-3">
+                        <TbSettings className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-base font-semibold text-gray-900 mb-1.5">
+                        {parametres.length === 0 ? 'Aucun paramètre trouvé' : 'Aucun résultat pour votre recherche'}
+                      </h3>
+                      <p className="text-gray-600 mb-4 max-w-md text-sm">
+                        {parametres.length === 0 
+                          ? 'Commencez par créer votre premier paramètre' 
+                          : 'Essayez de modifier vos critères de recherche ou de filtres'}
+                      </p>
+                      {parametres.length === 0 && (
+                        <button 
+                          onClick={handleNewParametre}
+                          className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all duration-300 font-medium flex items-center gap-1.5 text-sm"
+                        >
+                          <FiPlus />
+                          Créer mon premier paramètre
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                currentParametres.map((parametre, index) => (
+                currentParametres.map((parametre) => (
                   <tr 
-                    key={parametre.id} 
-                    className={`${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                    } hover:bg-gray-100 transition-colors border-b border-gray-300`}
+                    key={parametre.id}
+                    className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
+                      selectedRows.includes(parametre.id) ? 'bg-gradient-to-r from-blue-50 to-blue-25' : 'bg-white'
+                    }`}
                   >
-                    <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {parametre.id}
-                    </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-gray-900 font-mono">
-                          {parametre.cle}
+                    <td className="px-3 py-2 whitespace-nowrap border-r border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(parametre.id)}
+                          onChange={() => toggleRowSelection(parametre.id)}
+                          className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                        />
+                        <span className="px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
+                          #{parametre.id}
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900 font-mono">{parametre.cle}</div>
+                        <div className="text-xs text-gray-500">
+                          {parametre.entite ? 'Spécifique' : 'Global'}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 border-r border-gray-200">
                       <div className="max-w-xs">
-                        <span className="text-sm text-gray-600 bg-gray-50 px-2 py-1 rounded border border-gray-200 break-all">
+                        <div className="text-sm text-gray-600 bg-gray-50 px-2 py-1 rounded border border-gray-200 break-all font-mono text-xs max-h-20 overflow-y-auto">
                           {formatValeur(parametre.valeur)}
-                        </span>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      <div className="max-w-xs truncate" title={parametre.description}>
-                        {parametre.description}
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="max-w-xs">
+                        <div className="text-sm text-gray-900 truncate" title={parametre.description}>
+                          {parametre.description}
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
+                    <td className="px-3 py-2 border-r border-gray-200">
                       {parametre.entite ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border border-blue-200">
                           {parametre.entite.raison_sociale}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-green-50 to-emerald-100 text-green-700 border border-green-200">
                           Global
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        parametre.modifiable 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {parametre.modifiable ? 'Oui' : 'Non'}
-                      </span>
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="flex items-center">
+                        <div className={`px-2 py-1 rounded flex items-center gap-1 ${
+                          parametre.modifiable
+                            ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
+                            : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
+                        }`}>
+                          {parametre.modifiable ? (
+                            <>
+                              <FiUnlock className="w-3 h-3" />
+                              <span className="text-xs font-medium">Oui</span>
+                            </>
+                          ) : (
+                            <>
+                              <FiLock className="w-3 h-3" />
+                              <span className="text-xs font-medium">Non</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {new Date(parametre.date_maj).toLocaleDateString('fr-FR')}
-                      <br />
-                      <span className="text-xs text-gray-400">
-                        {new Date(parametre.date_maj).toLocaleTimeString('fr-FR')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex space-x-2">
-                        <button 
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleViewDetails(parametre)}
+                          className="p-1.5 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded-lg hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Voir détails"
+                        >
+                          <FiEye size={14} />
+                        </button>
+                        <button
                           onClick={() => handleToggleModifiable(parametre)}
-                          className={`text-sm font-medium transition-colors flex items-center gap-1 ${
-                            parametre.modifiable 
-                              ? 'text-orange-600 hover:text-orange-800' 
-                              : 'text-green-600 hover:text-green-800'
+                          className={`p-1.5 rounded-lg hover:shadow transition-all duration-200 ${
+                            parametre.modifiable
+                              ? 'bg-gradient-to-r from-orange-50 to-amber-100 text-orange-700 hover:from-orange-100 hover:to-amber-200'
+                              : 'bg-gradient-to-r from-green-50 to-emerald-100 text-green-700 hover:from-green-100 hover:to-emerald-200'
                           }`}
+                          title={parametre.modifiable ? 'Verrouiller' : 'Déverrouiller'}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            {parametre.modifiable ? (
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                            ) : (
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                            )}
-                          </svg>
-                          {parametre.modifiable ? 'Verrouiller' : 'Déverrouiller'}
+                          {parametre.modifiable ? <FiLock size={14} /> : <FiUnlock size={14} />}
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleEdit(parametre)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
+                          className="p-1.5 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded-lg hover:from-blue-100 hover:to-blue-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Modifier"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          Éditer
+                          <FiEdit2 size={14} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleDelete(parametre)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
+                          className="p-1.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-lg hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Supprimer"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Supprimer
+                          <FiTrash2 size={14} />
                         </button>
                       </div>
                     </td>
@@ -437,45 +665,36 @@ export default function ParametresPage() {
 
         {/* Pagination */}
         {filteredParametres.length > 0 && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
-                  Lignes par page:
-                </span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="border border-gray-300 rounded px-3 py-1 text-sm"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredParametres.length)} sur {filteredParametres.length}
-                </span>
+          <div className="px-4 py-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-700">
+                    Page {currentPage} sur {totalPages}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-xs text-gray-700">
+                    {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredParametres.length)} sur {filteredParametres.length} paramètres
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-1.5 rounded border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page précédente"
                 >
-                  Précédent
+                  <FiChevronLeft size={14} />
                 </button>
 
                 {/* Numéros de page */}
-                <div className="flex space-x-1">
+                <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNumber;
                     if (totalPages <= 5) {
@@ -492,10 +711,10 @@ export default function ParametresPage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`w-8 h-8 rounded border text-sm ${
+                        className={`min-w-[32px] h-8 rounded border text-xs font-medium transition-all duration-200 ${
                           currentPage === pageNumber
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white border-blue-600 shadow'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                         }`}
                       >
                         {pageNumber}
@@ -507,13 +726,14 @@ export default function ParametresPage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-1.5 rounded border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page suivante"
                 >
-                  Suivant
+                  <FiChevronRight size={14} />
                 </button>
               </div>
             </div>
@@ -533,11 +753,190 @@ export default function ParametresPage() {
           onSuccess={handleFormSuccess}
         />
       )}
+
+      {/* Modal de détails */}
+      {showDetailModal && selectedParametre && (
+        <ParametreDetailModal
+          parametre={selectedParametre}
+          onClose={() => {
+            setShowDetailModal(false);
+            setSelectedParametre(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-// Composant Modal pour le formulaire des paramètres
+// MODAL DE DÉTAILS
+function ParametreDetailModal({ parametre, onClose }) {
+  const formatValeurDisplay = (valeur) => {
+    if (typeof valeur === 'object' && valeur !== null) {
+      return (
+        <pre className="bg-gray-50 p-3 rounded border border-gray-200 overflow-x-auto text-sm font-mono">
+          {JSON.stringify(valeur, null, 2)}
+        </pre>
+      );
+    }
+    return (
+      <div className="bg-gray-50 px-3 py-2 rounded border border-gray-200 text-sm font-mono">
+        {String(valeur)}
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header du modal */}
+        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-t-lg p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                <TbSettings className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">Détails du paramètre</h2>
+                <p className="text-blue-100 text-xs mt-0.5 font-mono">{parametre.cle}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-white/20 rounded transition-colors"
+            >
+              <FiX size={18} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          {/* Informations Générales */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              Informations Générales
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Clé</p>
+                <p className="text-sm text-gray-900 font-mono font-medium">{parametre.cle}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Type de valeur</p>
+                <p className="text-sm text-gray-900">
+                  {typeof parametre.valeur === 'object' ? 'Object/JSON' : 
+                   typeof parametre.valeur === 'boolean' ? 'Booléen' : 
+                   typeof parametre.valeur === 'number' ? 'Nombre' : 'Texte'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Date de création</p>
+                <p className="text-sm text-gray-900">
+                  {parametre.date_creation ? new Date(parametre.date_creation).toLocaleDateString('fr-FR') : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Dernière modification</p>
+                <p className="text-sm text-gray-900">
+                  {new Date(parametre.date_maj).toLocaleDateString('fr-FR')}
+                  <span className="text-xs text-gray-500 ml-2">
+                    {new Date(parametre.date_maj).toLocaleTimeString('fr-FR')}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              Description
+            </h3>
+            <p className="text-sm text-gray-900">{parametre.description || 'Aucune description'}</p>
+          </div>
+
+          {/* Valeur */}
+          <div className="bg-gradient-to-br from-emerald-50 to-white rounded-lg p-3 border border-emerald-100">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-emerald-600 to-emerald-400 rounded"></div>
+              Valeur
+            </h3>
+            {formatValeurDisplay(parametre.valeur)}
+          </div>
+
+          {/* Portée et Statut */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-3 border border-purple-100">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                <div className="w-1 h-4 bg-gradient-to-b from-purple-600 to-purple-400 rounded"></div>
+                Portée
+              </h3>
+              <div>
+                {parametre.entite ? (
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{parametre.entite.raison_sociale}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Paramètre spécifique à l'entité</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Global</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Paramètre système global</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-orange-50 to-white rounded-lg p-3 border border-orange-100">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                <div className="w-1 h-4 bg-gradient-to-b from-orange-600 to-orange-400 rounded"></div>
+                Statut
+              </h3>
+              <div className="flex flex-col gap-2">
+                <div className={`px-2 py-1 rounded flex items-center gap-1 w-fit ${
+                  parametre.modifiable
+                    ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
+                    : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
+                }`}>
+                  {parametre.modifiable ? (
+                    <>
+                      <FiUnlock className="w-3 h-3" />
+                      <span className="text-xs font-medium">Modifiable</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiLock className="w-3 h-3" />
+                      <span className="text-xs font-medium">Non modifiable</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  {parametre.modifiable 
+                    ? 'Ce paramètre peut être modifié par les utilisateurs autorisés'
+                    : 'Ce paramètre est verrouillé et ne peut être modifié'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bouton de fermeture */}
+        <div className="p-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded hover:from-gray-700 hover:to-gray-600 transition-all duration-200 font-medium text-sm shadow-sm"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// COMPOSANT MODAL POUR LE FORMULAIRE DES PARAMÈTRES
 function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     cle: parametre?.cle || '',
@@ -584,6 +983,12 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
 
     if (!formData.valeur) {
       setError('La valeur est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.description) {
+      setError('La description est obligatoire');
       setLoading(false);
       return;
     }
@@ -654,7 +1059,7 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
           <select
             value={formData.valeur}
             onChange={(e) => handleChange('valeur', e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           >
             <option value="true">True</option>
             <option value="false">False</option>
@@ -663,178 +1068,256 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
       
       case 'nombre':
         return (
-          <input
-            type="number"
-            step="any"
-            value={formData.valeur}
-            onChange={(e) => handleChange('valeur', e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="0.00"
-          />
+          <div className="relative">
+            <FiHash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+            <input
+              type="number"
+              step="any"
+              value={formData.valeur}
+              onChange={(e) => handleChange('valeur', e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              placeholder="0.00"
+            />
+          </div>
         );
       
       case 'json':
         return (
-          <textarea
-            value={formData.valeur}
-            onChange={(e) => handleChange('valeur', e.target.value)}
-            rows={6}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-            placeholder='{"key": "value"}'
-          />
+          <div className="relative">
+            <FiCode className="absolute left-3 top-3 text-gray-400 text-sm" />
+            <textarea
+              value={formData.valeur}
+              onChange={(e) => handleChange('valeur', e.target.value)}
+              rows={6}
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+              placeholder='{"key": "value"}'
+            />
+          </div>
         );
       
       default:
         return (
-          <textarea
-            value={formData.valeur}
-            onChange={(e) => handleChange('valeur', e.target.value)}
-            rows={3}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Valeur du paramètre..."
-          />
+          <div className="relative">
+            <FiType className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+            <textarea
+              value={formData.valeur}
+              onChange={(e) => handleChange('valeur', e.target.value)}
+              rows={3}
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              placeholder="Valeur du paramètre..."
+            />
+          </div>
         );
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {parametre ? 'Modifier le paramètre' : 'Créer un nouveau paramètre'}
-          </h2>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header du modal avec gradient */}
+        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-t-lg p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                <TbSettings className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">
+                  {parametre ? 'Modifier le paramètre' : 'Nouveau Paramètre'}
+                </h2>
+                {!parametre && (
+                  <p className="text-blue-100 text-xs mt-0.5">
+                    Créez un nouveau paramètre système
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-white/20 rounded transition-colors"
+            >
+              <FiX size={18} />
+            </button>
+          </div>
         </div>
         
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 text-sm">{error}</span>
+          <div className="mx-4 mt-3 bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-red-100 rounded">
+                <FiAlertCircle className="text-red-600" size={14} />
+              </div>
+              <span className="text-red-800 text-xs font-medium">{error}</span>
             </div>
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Clé */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Clé *
-              </label>
-              <input
-                type="text"
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* Section 1: Informations Générales */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Informations Générales</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {/* Clé */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Clé <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <FiHash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+                  <input
+                    type="text"
+                    required
+                    value={formData.cle}
+                    onChange={(e) => handleChange('cle', e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm font-mono"
+                    placeholder="NOM_DU_PARAMETRE"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Identifiant unique en majuscules
+                </p>
+              </div>
+              
+              {/* Type de valeur */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Type de valeur
+                </label>
+                <div className="relative">
+                  <FiList className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+                  <select
+                    value={valeurType}
+                    onChange={(e) => setValeurType(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm appearance-none"
+                  >
+                    <option value="texte">Texte</option>
+                    <option value="nombre">Nombre</option>
+                    <option value="boolean">Booléen</option>
+                    <option value="json">JSON</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Portée */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Portée
+                </label>
+                <div className="relative">
+                  <FiGlobe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+                  <select
+                    value={formData.entite}
+                    onChange={(e) => handleChange('entite', e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm appearance-none"
+                  >
+                    <option value="">Paramètre global</option>
+                    {entites.map(entite => (
+                      <option key={entite.id} value={entite.id}>
+                        {entite.raison_sociale}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Vide = paramètre global
+                </p>
+              </div>
+              
+              {/* Modifiable */}
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={formData.modifiable}
+                      onChange={(e) => handleChange('modifiable', e.target.checked)}
+                      className="sr-only"
+                    />
+                    <div className={`w-10 h-5 rounded-full transition-colors duration-300 ${
+                      formData.modifiable ? 'bg-green-500' : 'bg-gray-300'
+                    }`}>
+                      <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-300 ${
+                        formData.modifiable ? 'transform translate-x-5' : ''
+                      }`}></div>
+                    </div>
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Paramètre modifiable
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Description */}
+          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Description</h3>
+            </div>
+            <div className="relative">
+              <FiInfo className="absolute left-3 top-3 text-gray-400 text-sm" />
+              <textarea
                 required
-                value={formData.cle}
-                onChange={(e) => handleChange('cle', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                placeholder="NOM_DU_PARAMETRE"
+                value={formData.description}
+                onChange={(e) => handleChange('description', e.target.value)}
+                rows={2}
+                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                placeholder="Description détaillée du paramètre..."
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Identifiant unique en majuscules
-              </p>
-            </div>
-            
-            {/* Type de valeur */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Type de valeur
-              </label>
-              <select
-                value={valeurType}
-                onChange={(e) => setValeurType(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="texte">Texte</option>
-                <option value="nombre">Nombre</option>
-                <option value="boolean">Booléen</option>
-                <option value="json">JSON</option>
-              </select>
-            </div>
-            
-            {/* Portée */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Portée
-              </label>
-              <select
-                value={formData.entite}
-                onChange={(e) => handleChange('entite', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Paramètre global</option>
-                {entites.map(entite => (
-                  <option key={entite.id} value={entite.id}>
-                    {entite.raison_sociale}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Vide = paramètre global
-              </p>
-            </div>
-            
-            {/* Modifiable */}
-            <div className="flex items-end">
-              <label className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  checked={formData.modifiable}
-                  onChange={(e) => handleChange('modifiable', e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  Paramètre modifiable
-                </span>
-              </label>
             </div>
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description *
-            </label>
-            <textarea
-              required
-              value={formData.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              rows={2}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Description détaillée du paramètre..."
-            />
-          </div>
-
-          {/* Valeur */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Valeur *
-            </label>
+          {/* Section 3: Valeur */}
+          <div className="bg-gradient-to-br from-emerald-50 to-white rounded-lg p-3 border border-emerald-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-emerald-600 to-emerald-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Valeur</h3>
+            </div>
             {renderValeurInput()}
           </div>
 
           {/* Aperçu */}
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu du paramètre</h3>
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-gray-600 to-gray-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Aperçu du paramètre</h3>
+            </div>
             <div className="space-y-2 text-sm">
-              <div><strong>Clé:</strong> {formData.cle || 'Non défini'}</div>
-              <div><strong>Valeur:</strong> 
-                <span className="ml-2 bg-gray-100 px-2 py-1 rounded text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <strong className="text-gray-700 w-24">Clé:</strong>
+                <span className="bg-gray-100 px-2 py-1 rounded text-xs font-mono flex-1">
+                  {formData.cle || 'Non défini'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <strong className="text-gray-700 w-24">Valeur:</strong>
+                <span className="bg-gray-100 px-2 py-1 rounded text-xs font-mono flex-1 truncate">
                   {formData.valeur || 'Non défini'}
                 </span>
               </div>
-              <div><strong>Portée:</strong> {
-                formData.entite 
-                  ? entites.find(e => e.id == formData.entite)?.raison_sociale 
-                  : 'Global'
-              }</div>
-              <div><strong>Modifiable:</strong> 
-                <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+              <div className="flex items-center gap-2">
+                <strong className="text-gray-700 w-24">Portée:</strong>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  formData.entite 
+                    ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border border-blue-200'
+                    : 'bg-gradient-to-r from-green-50 to-emerald-100 text-green-700 border border-green-200'
+                }`}>
+                  {formData.entite 
+                    ? entites.find(e => e.id == formData.entite)?.raison_sociale 
+                    : 'Global'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <strong className="text-gray-700 w-24">Modifiable:</strong>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
                   formData.modifiable 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
+                    ? 'bg-gradient-to-r from-green-50 to-emerald-100 text-green-700 border border-green-200'
+                    : 'bg-gradient-to-r from-red-50 to-pink-100 text-red-700 border border-red-200'
                 }`}>
                   {formData.modifiable ? 'Oui' : 'Non'}
                 </span>
@@ -842,11 +1325,12 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
             </div>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+          {/* Boutons d'action */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+              className="px-4 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium text-sm hover:shadow-sm"
               disabled={loading}
             >
               Annuler
@@ -854,15 +1338,19 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
+              className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 transition-all duration-200 font-medium flex items-center gap-1.5 shadow hover:shadow-md text-sm"
             >
-              {loading && (
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
+              {loading ? (
+                <>
+                  <FiRefreshCw className="animate-spin" size={14} />
+                  <span>Sauvegarde...</span>
+                </>
+              ) : (
+                <>
+                  <FiCheck size={14} />
+                  <span>{parametre ? 'Mettre à jour' : 'Créer le paramètre'}</span>
+                </>
               )}
-              <span>{loading ? 'Sauvegarde...' : parametre ? 'Mettre à jour' : 'Créer le paramètre'}</span>
             </button>
           </div>
         </form>

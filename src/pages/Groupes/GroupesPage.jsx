@@ -3,8 +3,8 @@ import { apiClient } from '../../services/apiClient';
 import { 
   FiRefreshCw, FiPlus, FiEdit2, FiTrash2, FiSearch, FiFilter, FiX, 
   FiCheck, FiUsers, FiChevronLeft, FiChevronRight, FiDownload, FiUpload,
-  FiChevronDown, FiChevronUp, FiCheckCircle, FiXCircle, FiShield, FiKey,
-  FiUserCheck, FiLock, FiUnlock, FiEye, FiMoreVertical, FiFolder
+  FiEye, FiCheckCircle, FiXCircle, FiUserCheck, FiShield, FiFolder,
+  FiKey, FiLock, FiUnlock, FiMoreVertical
 } from "react-icons/fi";
 
 export default function GroupsPage() {
@@ -13,12 +13,13 @@ export default function GroupsPage() {
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
-  const [expandedRow, setExpandedRow] = useState(null);
 
   useEffect(() => {
     fetchGroupes();
@@ -45,7 +46,7 @@ export default function GroupsPage() {
 
       setGroupes(groupesData);
     } catch (err) {
-      console.error('❌ Erreur lors du chargement des groupes:', err);
+      console.error('Erreur lors du chargement des groupes:', err);
       setError('Erreur lors du chargement des groupes');
     } finally {
       setLoading(false);
@@ -91,11 +92,6 @@ export default function GroupsPage() {
     }
   }, [currentGroupes, selectedRows.length]);
 
-  // Gestion des lignes expansibles
-  const toggleExpandRow = (id) => {
-    setExpandedRow(expandedRow === id ? null : id);
-  };
-
   // Gestion des actions
   const handleNewGroup = () => {
     setEditingGroup(null);
@@ -108,7 +104,7 @@ export default function GroupsPage() {
   };
 
   const handleDelete = async (group) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le groupe "${group.name}" ? Cette action est irréversible.`)) {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le groupe "${group.name}" ?`)) {
       try {
         await apiClient.delete(`/groupes/${group.id}/`);
         fetchGroupes();
@@ -117,6 +113,11 @@ export default function GroupsPage() {
         console.error('Error deleting group:', err);
       }
     }
+  };
+
+  const handleViewDetails = (group) => {
+    setSelectedGroup(group);
+    setShowDetailModal(true);
   };
 
   const handleFormSuccess = () => {
@@ -134,7 +135,7 @@ export default function GroupsPage() {
     setCurrentPage(1);
   };
 
-  // Statistiques - 3 cartes comme dans le design utilisateur
+  // Statistiques - SIMPLIFIÉES (seulement 3 cartes)
   const stats = useMemo(() => ({
     total: groupes.length,
     withPermissions: groupes.filter(g => g.modules_autorises && g.modules_autorises.length > 0).length,
@@ -143,15 +144,15 @@ export default function GroupsPage() {
 
   if (loading) {
     return (
-      <div className="p-6 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+      <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
         <div className="flex flex-col items-center justify-center h-96">
           <div className="relative">
-            <div className="w-16 h-16 border-4 border-gray-200 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-12 h-12 border-3 border-gray-200 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
-          <div className="mt-6">
-            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-48 animate-pulse"></div>
-            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 mt-3 animate-pulse mx-auto"></div>
+          <div className="mt-4">
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 animate-pulse"></div>
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-24 mt-2 animate-pulse mx-auto"></div>
           </div>
         </div>
       </div>
@@ -159,71 +160,71 @@ export default function GroupsPage() {
   }
 
   return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 to-white min-h-screen">
-      {/* Header avec gradient - COULEUR VIOLETTE */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-violet-600 to-violet-500 rounded-xl shadow-lg">
-              <FiUsers className="w-6 h-6 text-white" />
+    <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+      {/* Header avec gradient - COMPACT */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-violet-600 to-violet-500 rounded-lg shadow">
+              <FiShield className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Gestion des Groupes</h1>
-              <p className="text-gray-600 text-sm mt-1">
+              <h1 className="text-xl font-bold text-gray-900">Gestion des Groupes</h1>
+              <p className="text-gray-600 text-xs mt-0.5">
                 Gérez les groupes d'utilisateurs et leurs permissions
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button 
               onClick={handleRetry}
-              className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow-md flex items-center gap-2 group"
+              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group"
             >
-              <FiRefreshCw className={`${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+              <FiRefreshCw className={`${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500 text-sm'}`} />
               <span className="font-medium">Actualiser</span>
             </button>
             <button 
               onClick={handleNewGroup}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 hover:shadow-lg flex items-center gap-2 group shadow-md"
+              className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group shadow"
             >
-              <FiPlus className="group-hover:rotate-90 transition-transform duration-300" />
+              <FiPlus className="group-hover:rotate-90 transition-transform duration-300 text-sm" />
               <span className="font-semibold">Nouveau Groupe</span>
             </button>
           </div>
         </div>
 
-        {/* Statistiques en ligne - 3 CARTES - COULEUR VIOLETTE */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+        {/* Statistiques en ligne - SIMPLIFIÉES (3 cartes seulement) - COMPACT */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total des groupes</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+                <p className="text-xs text-gray-600">Total des groupes</p>
+                <p className="text-lg font-bold text-gray-900 mt-0.5">{stats.total}</p>
               </div>
-              <div className="p-2 bg-violet-50 rounded-lg">
-                <FiUsers className="w-5 h-5 text-violet-600" />
+              <div className="p-1.5 bg-violet-50 rounded">
+                <FiUsers className="w-4 h-4 text-violet-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Avec permissions</p>
-                <p className="text-2xl font-bold text-green-600 mt-1">{stats.withPermissions}</p>
+                <p className="text-xs text-gray-600">Avec permissions</p>
+                <p className="text-lg font-bold text-green-600 mt-0.5">{stats.withPermissions}</p>
               </div>
-              <div className="p-2 bg-green-50 rounded-lg">
-                <FiCheckCircle className="w-5 h-5 text-green-600" />
+              <div className="p-1.5 bg-green-50 rounded">
+                <FiCheckCircle className="w-4 h-4 text-green-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Utilisateurs totaux</p>
-                <p className="text-2xl font-bold text-purple-600 mt-1">{stats.totalUsers}</p>
+                <p className="text-xs text-gray-600">Utilisateurs totaux</p>
+                <p className="text-lg font-bold text-purple-600 mt-0.5">{stats.totalUsers}</p>
               </div>
-              <div className="p-2 bg-purple-50 rounded-lg">
-                <FiUserCheck className="w-5 h-5 text-purple-600" />
+              <div className="p-1.5 bg-purple-50 rounded">
+                <FiUserCheck className="w-4 h-4 text-purple-600" />
               </div>
             </div>
           </div>
@@ -232,21 +233,21 @@ export default function GroupsPage() {
 
       {/* Message d'erreur */}
       {error && (
-        <div className="mb-6">
-          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 rounded-r-xl p-4 shadow-sm">
+        <div className="mb-4">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <FiX className="w-5 h-5 text-red-600" />
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-red-100 rounded">
+                  <FiX className="w-4 h-4 text-red-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-red-900">{error}</p>
-                  <p className="text-sm text-red-700 mt-1">Veuillez réessayer</p>
+                  <p className="font-medium text-red-900 text-sm">{error}</p>
+                  <p className="text-xs text-red-700 mt-0.5">Veuillez réessayer</p>
                 </div>
               </div>
               <button
                 onClick={handleRetry}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium shadow-sm"
+                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium shadow-sm"
               >
                 Réessayer
               </button>
@@ -255,39 +256,39 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* Barre d'outils - Filtres et Recherche - COULEUR VIOLETTE */}
-      <div className="mb-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Filtres et Recherche</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">
+      {/* Barre d'outils - Filtres et Recherche - COMPACT */}
+      <div className="mb-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900 text-sm">Filtres et Recherche</h3>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-600">
                 {filteredGroupes.length} résultat(s)
               </span>
               {searchTerm && (
                 <button
                   onClick={handleResetFilters}
-                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-1"
+                  className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs font-medium flex items-center gap-1"
                 >
-                  <FiX size={14} />
+                  <FiX size={12} />
                   Effacer
                 </button>
               )}
             </div>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Recherche</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
               <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-lg blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
                 <div className="relative">
-                  <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10 text-sm" />
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white relative z-10"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white relative z-10 text-sm"
                     placeholder="Rechercher un groupe..."
                   />
                 </div>
@@ -296,7 +297,7 @@ export default function GroupsPage() {
             <div className="flex items-end">
               <button
                 onClick={handleResetFilters}
-                className="w-full px-4 py-3 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 rounded-xl hover:from-gray-200 hover:to-gray-100 transition-all duration-300 border border-gray-300 font-medium flex items-center justify-center gap-2 group"
+                className="w-full px-3 py-2 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 rounded-lg hover:from-gray-200 hover:to-gray-100 transition-all duration-300 border border-gray-300 font-medium flex items-center justify-center gap-1.5 text-sm"
               >
                 <FiX className="group-hover:rotate-90 transition-transform duration-300" />
                 Réinitialiser tout
@@ -307,39 +308,39 @@ export default function GroupsPage() {
       </div>
 
       {/* Tableau Principal */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        {/* En-tête du tableau avec actions - COULEUR VIOLETTE */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {/* En-tête du tableau avec actions - COMPACT */}
+        <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
                 <input
                   type="checkbox"
                   checked={selectedRows.length === currentGroupes.length && currentGroupes.length > 0}
                   onChange={selectAllRows}
-                  className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                  className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                 />
-                <span className="text-sm text-gray-700">
+                <span className="text-xs text-gray-700">
                   {selectedRows.length} sélectionné(s)
                 </span>
               </div>
               {selectedRows.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <button className="px-3 py-1.5 bg-violet-50 text-violet-700 rounded-lg text-sm font-medium hover:bg-violet-100 transition-colors">
-                    <FiDownload size={14} />
+                <div className="flex items-center gap-1.5">
+                  <button className="px-2 py-1 bg-violet-50 text-violet-700 rounded text-xs font-medium hover:bg-violet-100 transition-colors">
+                    <FiDownload size={12} />
                   </button>
-                  <button className="px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors">
-                    <FiTrash2 size={14} />
+                  <button className="px-2 py-1 bg-red-50 text-red-700 rounded text-xs font-medium hover:bg-red-100 transition-colors">
+                    <FiTrash2 size={12} />
                   </button>
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600">
-                <FiDownload size={18} />
+            <div className="flex items-center gap-2">
+              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiDownload size={16} />
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600">
-                <FiUpload size={18} />
+              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiUpload size={16} />
               </button>
               <select
                 value={itemsPerPage}
@@ -347,7 +348,7 @@ export default function GroupsPage() {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
               >
                 <option value={5}>5 lignes</option>
                 <option value={10}>10 lignes</option>
@@ -358,35 +359,35 @@ export default function GroupsPage() {
           </div>
         </div>
 
-        {/* Tableau */}
+        {/* Tableau SIMPLIFIÉ (5 colonnes) */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
               <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  <div className="flex items-center gap-2">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  <div className="flex items-center gap-1.5">
                     <input
                       type="checkbox"
                       checked={selectedRows.length === currentGroupes.length && currentGroupes.length > 0}
                       onChange={selectAllRows}
-                      className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                      className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                     />
                     ID
                   </div>
                 </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Groupe
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  Nom du Groupe
                 </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Description
                 </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Modules
                 </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Utilisateurs
                 </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -394,15 +395,15 @@ export default function GroupsPage() {
             <tbody className="divide-y divide-gray-200">
               {currentGroupes.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center">
+                  <td colSpan="6" className="px-3 py-6 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
-                        <FiUsers className="w-10 h-10 text-gray-400" />
+                      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-3">
+                        <FiUsers className="w-8 h-8 text-gray-400" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      <h3 className="text-base font-semibold text-gray-900 mb-1.5">
                         {groupes.length === 0 ? 'Aucun groupe trouvé' : 'Aucun résultat pour votre recherche'}
                       </h3>
-                      <p className="text-gray-600 mb-6 max-w-md">
+                      <p className="text-gray-600 mb-4 max-w-md text-sm">
                         {groupes.length === 0 
                           ? 'Commencez par créer votre premier groupe' 
                           : 'Essayez de modifier vos critères de recherche'}
@@ -410,7 +411,7 @@ export default function GroupsPage() {
                       {groupes.length === 0 && (
                         <button 
                           onClick={handleNewGroup}
-                          className="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-xl hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-2"
+                          className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1.5 text-sm"
                         >
                           <FiPlus />
                           Créer mon premier groupe
@@ -420,169 +421,119 @@ export default function GroupsPage() {
                   </td>
                 </tr>
               ) : (
-                currentGroupes.map((group, index) => (
-                  <React.Fragment key={group.id}>
-                    <tr 
-                      className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
-                        selectedRows.includes(group.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
-                      } ${expandedRow === group.id ? 'bg-gradient-to-r from-violet-50 to-violet-25' : ''}`}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedRows.includes(group.id)}
-                            onChange={() => toggleRowSelection(group.id)}
-                            className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
-                          />
-                          <button
-                            onClick={() => toggleExpandRow(group.id)}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                          >
-                            {expandedRow === group.id ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
-                          </button>
-                          <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
-                            #{group.id}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 border-r border-gray-200">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-violet-100 to-violet-200 rounded-full flex items-center justify-center">
-                            <FiFolder className="w-5 h-5 text-violet-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-semibold text-gray-900">{group.name}</div>
-                            <div className="text-xs text-gray-500">
-                              {group.user_count || 0} membre(s)
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 border-r border-gray-200">
-                        <div className="text-sm text-gray-600 line-clamp-2">
-                          {group.description || 'Aucune description'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 border-r border-gray-200">
-                        <div className="flex flex-wrap gap-1">
-                          {group.modules_autorises && group.modules_autorises.length > 0 ? (
-                            <>
-                              {group.modules_autorises.slice(0, 3).map((module, idx) => (
-                                <span key={idx} className="inline-flex px-2 py-1 rounded-lg text-xs bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium border border-violet-200">
-                                  {module}
-                                </span>
-                              ))}
-                              {group.modules_autorises.length > 3 && (
-                                <span className="inline-flex px-2 py-1 rounded-lg text-xs bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 font-medium border border-gray-200">
-                                  +{group.modules_autorises.length - 3}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="inline-flex px-2 py-1 rounded-lg text-xs bg-gradient-to-r from-gray-50 to-gray-100 text-gray-500 font-medium border border-gray-200">
-                              Aucun module
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 border-r border-gray-200">
-                        <span className="inline-flex px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200">
-                          {group.user_count || 0} utilisateur(s)
+                currentGroupes.map((group) => (
+                  <tr 
+                    key={group.id}
+                    className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
+                      selectedRows.includes(group.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
+                    }`}
+                  >
+                    <td className="px-3 py-2 whitespace-nowrap border-r border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(group.id)}
+                          onChange={() => toggleRowSelection(group.id)}
+                          className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                        />
+                        <span className="px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
+                          #{group.id}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEdit(group)}
-                            className="p-2.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded-xl hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
-                            title="Modifier"
-                          >
-                            <FiEdit2 size={17} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(group)}
-                            className="p-2.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-xl hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
-                            title="Supprimer"
-                          >
-                            <FiTrash2 size={17} />
-                          </button>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 bg-violet-100 rounded">
+                          <FiFolder className="w-3 h-3 text-violet-700" />
                         </div>
-                      </td>
-                    </tr>
-                    {expandedRow === group.id && (
-                      <tr className="bg-gradient-to-r from-violet-50 to-violet-25">
-                        <td colSpan="6" className="px-6 py-4">
-                          <div className="bg-white rounded-xl border border-violet-200 p-5">
-                            <div className="grid grid-cols-3 gap-6">
-                              <div>
-                                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">ID</div>
-                                <div className="text-sm text-gray-900 font-mono">#{group.id}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Nom</div>
-                                <div className="text-sm text-gray-900 font-medium">{group.name}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Utilisateurs</div>
-                                <div className="text-sm text-gray-900">{group.user_count || 0} membre(s)</div>
-                              </div>
-                              <div className="col-span-3">
-                                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Description</div>
-                                <div className="text-sm text-gray-900">{group.description || 'Aucune description'}</div>
-                              </div>
-                              {group.modules_autorises && group.modules_autorises.length > 0 && (
-                                <div className="col-span-3">
-                                  <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Modules Autorisés</div>
-                                  <div className="flex flex-wrap gap-2">
-                                    {group.modules_autorises.map((module, idx) => (
-                                      <span key={idx} className="inline-flex px-3 py-1.5 rounded-lg text-sm bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium border border-violet-200">
-                                        {module}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{group.name}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="text-sm text-gray-600 truncate max-w-[200px]">
+                        {group.description || 'Aucune description'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="flex flex-wrap gap-1">
+                        {group.modules_autorises && group.modules_autorises.length > 0 ? (
+                          <>
+                            <span className="inline-flex px-1.5 py-0.5 rounded text-xs bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium border border-violet-200">
+                              {group.modules_autorises.length} module(s)
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-500">Aucun module</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <span className="inline-flex px-2 py-1 rounded text-xs font-medium bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200">
+                        {group.user_count || 0} utilisateur(s)
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleViewDetails(group)}
+                          className="p-1.5 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded-lg hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Voir détails"
+                        >
+                          <FiEye size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(group)}
+                          className="p-1.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded-lg hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Modifier"
+                        >
+                          <FiEdit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(group)}
+                          className="p-1.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-lg hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Supprimer"
+                        >
+                          <FiTrash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination - COULEUR VIOLETTE */}
+        {/* Pagination - COMPACT */}
         {filteredGroupes.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700">
+          <div className="px-4 py-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-700">
                     Page {currentPage} sur {totalPages}
                   </span>
                   <span className="text-gray-300">•</span>
-                  <span className="text-sm text-gray-700">
+                  <span className="text-xs text-gray-700">
                     {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredGroupes.length)} sur {filteredGroupes.length} groupes
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`p-2 rounded-lg border transition-all duration-200 ${
+                  className={`p-1.5 rounded border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
                   title="Page précédente"
                 >
-                  <FiChevronLeft />
+                  <FiChevronLeft size={14} />
                 </button>
 
                 {/* Numéros de page */}
@@ -603,9 +554,9 @@ export default function GroupsPage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`min-w-[40px] h-10 rounded-lg border text-sm font-medium transition-all duration-200 ${
+                        className={`min-w-[32px] h-8 rounded border text-xs font-medium transition-all duration-200 ${
                           currentPage === pageNumber
-                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow-md'
+                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow'
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                         }`}
                       >
@@ -618,14 +569,14 @@ export default function GroupsPage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`p-2 rounded-lg border transition-all duration-200 ${
+                  className={`p-1.5 rounded border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
                   title="Page suivante"
                 >
-                  <FiChevronRight />
+                  <FiChevronRight size={14} />
                 </button>
               </div>
             </div>
@@ -644,11 +595,143 @@ export default function GroupsPage() {
           onSuccess={handleFormSuccess}
         />
       )}
+
+      {/* Modal de détails */}
+      {showDetailModal && selectedGroup && (
+        <GroupDetailModal
+          group={selectedGroup}
+          onClose={() => {
+            setShowDetailModal(false);
+            setSelectedGroup(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-// COMPOSANT MODAL POUR LES GROUPES - DESIGN COORDONNÉ AVEC VIOLETTE
+// MODAL DE DÉTAILS POUR LES GROUPES
+function GroupDetailModal({ group, onClose }) {
+  const availableModules = [
+    'Core/Noyau',
+    'Achat',
+    'Vente', 
+    'Comptabilité',
+    'RH/Paie',
+    'Stock',
+    'Production',
+    'Projet',
+    'CRM',
+    'Maintenance'
+  ];
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header du modal */}
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                <FiShield className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">Détails du groupe</h2>
+                <p className="text-violet-100 text-xs mt-0.5">{group.name}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-white/20 rounded transition-colors"
+            >
+              <FiX size={18} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          {/* Informations Générales */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              Informations Générales
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">ID</p>
+                <p className="text-sm text-gray-900 font-medium font-mono">#{group.id}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Nom du Groupe</p>
+                <p className="text-sm text-gray-900 font-medium">{group.name}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Utilisateurs</p>
+                <p className="text-sm text-gray-900">{group.user_count || 0} membre(s)</p>
+              </div>
+              <div className="md:col-span-3">
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Description</p>
+                <p className="text-sm text-gray-900">{group.description || 'Aucune description'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Modules Autorisés */}
+          <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-lg p-3 border border-violet-100">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              Modules Autorisés
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {group.modules_autorises && group.modules_autorises.length > 0 ? (
+                group.modules_autorises.map((module, idx) => (
+                  <span key={idx} className="inline-flex px-3 py-1.5 rounded-lg text-sm bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium border border-violet-200">
+                    {module}
+                  </span>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">Aucun module autorisé</p>
+              )}
+            </div>
+          </div>
+
+          {/* Modules non Autorisés */}
+          {group.modules_autorises && group.modules_autorises.length > 0 && (
+            <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                <div className="w-1 h-4 bg-gradient-to-b from-gray-600 to-gray-400 rounded"></div>
+                Modules Non Autorisés
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {availableModules
+                  .filter(module => !group.modules_autorises.includes(module))
+                  .map((module, idx) => (
+                    <span key={idx} className="inline-flex px-3 py-1.5 rounded-lg text-sm bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 font-medium border border-gray-200">
+                      {module}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bouton de fermeture */}
+        <div className="p-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded hover:from-gray-700 hover:to-gray-600 transition-all duration-200 font-medium text-sm shadow-sm"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// COMPOSANT MODAL POUR LES GROUPES - FORMULAIRE COMPACT
 function GroupFormModal({ group, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     name: group?.name || '',
@@ -678,6 +761,12 @@ function GroupFormModal({ group, onClose, onSuccess }) {
     setLoading(true);
     setError(null);
 
+    if (!formData.name.trim()) {
+      setError('Le nom du groupe est obligatoire');
+      setLoading(false);
+      return;
+    }
+
     try {
       const url = group 
         ? `/groupes/${group.id}/`
@@ -685,7 +774,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
       
       const method = group ? 'PUT' : 'POST';
 
-      const response = await apiClient.request(url, {
+      await apiClient.request(url, {
         method: method,
         body: JSON.stringify(formData),
         headers: {
@@ -693,10 +782,9 @@ function GroupFormModal({ group, onClose, onSuccess }) {
         }
       });
       
-      console.log('✅ Réponse:', response);
       onSuccess();
     } catch (err) {
-      console.error('❌ Erreur sauvegarde groupe:', err);
+      console.error('Erreur sauvegarde groupe:', err);
       const errorMessage = err.message || 'Erreur lors de la sauvegarde';
       setError(errorMessage);
     } finally {
@@ -721,103 +809,102 @@ function GroupFormModal({ group, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        {/* Header du modal avec gradient - COULEUR VIOLETTE */}
-        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-2xl p-4">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header du modal avec gradient - COMPACT */}
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
-                <FiShield className="w-5 h-5" />
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                <FiShield className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-lg font-bold">
+                <h2 className="text-base font-bold">
                   {group ? 'Modifier le groupe' : 'Nouveau Groupe'}
                 </h2>
-                <p className="text-violet-100 text-xs mt-0.5">
-                  Définissez les permissions d'accès aux modules
-                </p>
+                {!group && (
+                  <p className="text-violet-100 text-xs mt-0.5">
+                    Créez un nouveau groupe dans le système
+                  </p>
+                )}
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+              className="p-1 hover:bg-white/20 rounded transition-colors"
             >
-              <FiX size={20} />
+              <FiX size={18} />
             </button>
           </div>
         </div>
         
         {error && (
-          <div className="mx-6 mt-4 bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 rounded-r-xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-100 rounded-lg">
-                <FiX className="text-red-600" />
+          <div className="mx-4 mt-3 bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-red-100 rounded">
+                <FiX className="text-red-600" size={14} />
               </div>
-              <span className="text-red-800 text-sm font-medium">{error}</span>
+              <span className="text-red-800 text-xs font-medium">{error}</span>
             </div>
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-8">
-          {/* Section 1: Informations Générales - COULEUR VIOLETTE */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1.5 h-8 bg-gradient-to-b from-violet-600 to-violet-400 rounded-full"></div>
-              <h3 className="text-lg font-semibold text-gray-900">Informations Générales</h3>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* Section 1: Informations Générales - COMPACT */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Informations Générales</h3>
             </div>
             
-            <div className="grid grid-cols-1 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   Nom du Groupe <span className="text-red-500">*</span>
                 </label>
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-xl blur opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
-                  <div className="relative">
-                    <FiFolder className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => handleChange('name', e.target.value)}
-                      className="relative w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
-                      placeholder="Ex: Administrateurs, Managers, Opérateurs..."
-                    />
-                  </div>
+                <div className="relative">
+                  <FiFolder className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => handleChange('name', e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
+                    placeholder="Ex: Administrateurs, Managers, Opérateurs..."
+                  />
                 </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => handleChange('description', e.target.value)}
-                  rows={3}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
                   placeholder="Description du groupe et de ses permissions..."
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 2: Modules Autorisés - DESIGN AVEC VIOLETTE */}
-          <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl p-6 border border-violet-200">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1.5 h-8 bg-gradient-to-b from-violet-600 to-violet-400 rounded-full"></div>
-              <h3 className="text-lg font-semibold text-gray-900">Modules Autorisés</h3>
+          {/* Section 2: Modules Autorisés - COMPACT */}
+          <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-lg p-3 border border-violet-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Modules Autorisés</h3>
             </div>
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-xs text-gray-600 mb-3">
               Sélectionnez les modules auxquels ce groupe aura accès
             </p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {availableModules.map(module => (
                 <label 
                   key={module} 
-                  className={`flex items-center gap-3 p-4 rounded-xl border transition-all duration-200 cursor-pointer ${
+                  className={`flex items-center gap-2 p-3 rounded-lg border transition-all duration-200 cursor-pointer text-sm ${
                     formData.modules_autorises.includes(module)
-                      ? 'bg-white border-violet-400 shadow-sm'
+                      ? 'bg-white border-violet-400'
                       : 'bg-white border-gray-200 hover:border-gray-300'
                   }`}
                 >
@@ -825,70 +912,73 @@ function GroupFormModal({ group, onClose, onSuccess }) {
                     type="checkbox"
                     checked={formData.modules_autorises.includes(module)}
                     onChange={() => toggleModule(module)}
-                    className="w-5 h-5 text-violet-600 rounded focus:ring-violet-500"
+                    className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500"
                   />
                   <div className="flex-1">
                     <div className="font-medium text-gray-900">{module}</div>
                   </div>
                   {formData.modules_autorises.includes(module) && (
-                    <div className="p-1.5 bg-gradient-to-r from-violet-100 to-violet-200 rounded-lg">
-                      <FiCheck className="w-4 h-4 text-violet-600" />
+                    <div className="p-1 bg-gradient-to-r from-violet-100 to-violet-200 rounded">
+                      <FiCheck className="w-3 h-3 text-violet-600" />
                     </div>
                   )}
                 </label>
               ))}
             </div>
             
-            <div className="mt-6 text-sm text-gray-600">
-              <div className="flex items-center gap-2">
-                <FiCheckCircle className="w-4 h-4 text-green-600" />
+            <div className="mt-3 text-xs text-gray-600">
+              <div className="flex items-center gap-1.5">
+                <FiCheckCircle className="w-3 h-3 text-green-600" />
                 <span>{formData.modules_autorises.length} module(s) sélectionné(s)</span>
               </div>
             </div>
           </div>
 
           {/* Aperçu */}
-          <div className="bg-gradient-to-br from-violet-50 to-white rounded-2xl p-6 border border-violet-100">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1.5 h-8 bg-gradient-to-b from-violet-600 to-violet-400 rounded-full"></div>
-              <h3 className="text-lg font-semibold text-gray-900">Aperçu du groupe</h3>
+          <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-3 border border-violet-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Aperçu du groupe</h3>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl p-4 border border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Nom du groupe</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white rounded-lg p-2 border border-gray-200">
+                <div className="text-xs font-medium text-gray-500 mb-1">Nom du groupe</div>
                 <div className="text-sm font-medium text-gray-900">{formData.name || 'Non défini'}</div>
               </div>
-              <div className="bg-white rounded-xl p-4 border border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Modules</div>
+              <div className="bg-white rounded-lg p-2 border border-gray-200">
+                <div className="text-xs font-medium text-gray-500 mb-1">Modules</div>
                 <div className="text-sm font-medium text-gray-900">
                   {formData.modules_autorises.length > 0 
                     ? `${formData.modules_autorises.length} module(s)` 
                     : 'Aucun module'}
                 </div>
               </div>
-              <div className="col-span-2 bg-white rounded-xl p-4 border border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Modules sélectionnés</div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.modules_autorises.length > 0 ? (
-                    formData.modules_autorises.map((module, idx) => (
-                      <span key={idx} className="inline-flex px-3 py-1 rounded-lg text-xs bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium border border-violet-200">
+              {formData.modules_autorises.length > 0 && (
+                <div className="col-span-2 bg-white rounded-lg p-2 border border-gray-200">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Modules sélectionnés</div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {formData.modules_autorises.slice(0, 5).map((module, idx) => (
+                      <span key={idx} className="inline-flex px-2 py-0.5 rounded text-xs bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium border border-violet-200">
                         {module}
                       </span>
-                    ))
-                  ) : (
-                    <span className="text-sm text-gray-500">Aucun module sélectionné</span>
-                  )}
+                    ))}
+                    {formData.modules_autorises.length > 5 && (
+                      <span className="inline-flex px-2 py-0.5 rounded text-xs bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 font-medium border border-gray-200">
+                        +{formData.modules_autorises.length - 5} de plus
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
           
-          {/* Boutons d'action - COULEUR VIOLETTE */}
-          <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
+          {/* Boutons d'action - COMPACT */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium hover:shadow-sm"
+              className="px-4 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium text-sm hover:shadow-sm"
               disabled={loading}
             >
               Annuler
@@ -896,16 +986,16 @@ function GroupFormModal({ group, onClose, onSuccess }) {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-3.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-xl hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-semibold flex items-center space-x-2 shadow-md hover:shadow-lg"
+              className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-medium flex items-center space-x-1.5 shadow hover:shadow-md text-sm"
             >
               {loading ? (
                 <>
-                  <FiRefreshCw className="animate-spin" />
+                  <FiRefreshCw className="animate-spin" size={14} />
                   <span>Sauvegarde...</span>
                 </>
               ) : (
                 <>
-                  <FiCheck />
+                  <FiCheck size={14} />
                   <span>{group ? 'Mettre à jour' : 'Créer le groupe'}</span>
                 </>
               )}
