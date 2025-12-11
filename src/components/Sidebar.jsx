@@ -20,7 +20,8 @@ import {
   FiFlag,
   FiCreditCard,
   FiLink,
-  FiTrendingUp
+  FiTrendingUp,
+  FiGlobe as FiRegion
 } from "react-icons/fi";
 import { useState } from "react";
 
@@ -49,7 +50,7 @@ export default function Sidebar() {
       name: "Tableau de Bord",
       icon: <FiHome />,
       path: "/dashboard",
-      isSimpleLink: true  // Pour le différencier des catégories avec sous-menus
+      isSimpleLink: true
     },
     {
       id: "organisation",
@@ -58,7 +59,11 @@ export default function Sidebar() {
       items: [
         { name: "Entités", path: "/entities", icon: <FiBriefcase /> },
         { name: "Partenaires", path: "/partners", icon: <FiUserPlus /> },
-        { name: "Utilisateurs", path: "/users", icon: <FiUsers /> },
+        { 
+          name: "Utilisateurs × Groupes", 
+          path: "/users", 
+          icon: <FiUsers />,
+        },
         { name: "Utilisateurs × Entités", path: "/userentities", icon: <FiLink /> },
       ]
     },
@@ -67,8 +72,11 @@ export default function Sidebar() {
       name: "Sécurité",
       icon: <FiShield />,
       items: [
-        { name: "Groupes", path: "/groupes", icon: <FiShield /> },
-        { name: "Permissions", path: "/permissions", icon: <FiList /> },
+        { 
+          name: "Groupes × Permissions", 
+          path: "/permissions", 
+          icon: <FiShield />,
+        },
       ]
     },
     {
@@ -76,11 +84,13 @@ export default function Sidebar() {
       name: "Géographie",
       icon: <FiGlobe />,
       items: [
-        { name: "Pays", path: "/countries", icon: <FiGlobe /> },
-        { name: "États/Provinces", path: "/states", icon: <FiMap /> },
-        { name: "Devises", path: "/currencies", icon: <FiDollarSign /> },
-        { name: "Taux de change", path: "/ExchangeRates", icon: <FiTrendingUp /> },
+        { 
+          name: "Géographie x Devises", 
+          path: "/countries", 
+          icon: <FiGlobe />,
+        },
         { name: "Langues", path: "/languages", icon: <FiFlag /> },
+        { name: "Taux de change", path: "/ExchangeRates", icon: <FiTrendingUp /> },
       ]
     },
     {
@@ -167,19 +177,21 @@ export default function Sidebar() {
                 {openCategories[category.id] && (
                   <div className="ml-10 mt-1 space-y-0.5">
                     {category.items.map((item) => (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
-                        isActive(item.path)
-                          ? "bg-violet-50 text-violet-700 font-medium"
-                          : "text-gray-600 hover:bg-gray-50 hover:text-violet-600"
-                      }`}
-                    >
-                      <span className="text-violet-600">{item.icon}</span>
-                      <span>{item.name}</span>
-                    </Link>
-                  ))}
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={`flex flex-col px-3 py-2 rounded-lg text-sm transition-all duration-200 group ${
+                          isActive(item.path)
+                            ? "bg-violet-50 text-violet-700 font-medium"
+                            : "text-gray-600 hover:bg-gray-50 hover:text-violet-600"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-violet-600">{item.icon}</span>
+                          <span className="font-medium">{item.name}</span>
+                        </div>
+                      </Link>
+                    ))}
                   </div>
                 )}
               </>

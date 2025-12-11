@@ -37,9 +37,98 @@ import {
   FiPackage,
   FiCreditCard as FiCreditCardIcon,
   FiDollarSign as FiDollarSignIcon,
-  FiInfo
+  FiInfo,
+  FiExternalLink,
+  FiImage
 } from "react-icons/fi";
 import { TbBuildingSkyscraper } from "react-icons/tb";
+
+// FONCTIONS UTILITAIRES POUR LA VALIDATION TÉLÉPHONE (IDEM ENTITÉS)
+const validatePhoneByCountry = (phone, countryData) => {
+  if (!phone || !countryData) return { valid: true, message: '' };
+  
+  const indicatif = (countryData.indicatif_tel || countryData.code_tel || '').replace('+', '');
+  let phoneNumber = phone.replace(/\s+/g, '');
+  
+  if (phoneNumber.startsWith(`+${indicatif}`) || phoneNumber.startsWith(indicatif)) {
+    phoneNumber = phoneNumber.replace(`+${indicatif}`, '').replace(indicatif, '');
+  }
+  
+  if (countryData.code_iso === 'TG') {
+    if (phoneNumber.length !== 8) {
+      return { 
+        valid: false, 
+        message: `Le numéro togolais doit avoir 8 chiffres (format: ${indicatif} XX XX XX XX)` 
+      };
+    }
+    if (!/^\d{8}$/.test(phoneNumber)) {
+      return { 
+        valid: false, 
+        message: 'Le numéro ne doit contenir que des chiffres' 
+      };
+    }
+  }
+  
+  if (countryData.code_iso === 'CI') {
+    if (phoneNumber.length !== 8) {
+      return { 
+        valid: false, 
+        message: `Le numéro ivoirien doit avoir 8 chiffres (format: ${indicatif} XX XX XX XX)` 
+      };
+    }
+  }
+  
+  if (countryData.code_iso === 'BJ') {
+    if (phoneNumber.length !== 8) {
+      return { 
+        valid: false, 
+        message: `Le numéro béninois doit avoir 8 chiffres (format: ${indicatif} XX XX XX XX)` 
+      };
+    }
+  }
+  
+  if (countryData.code_iso === 'FR') {
+    if (phoneNumber.length !== 9) {
+      return { 
+        valid: false, 
+        message: `Le numéro français doit avoir 9 chiffres (format: ${indicatif} X XX XX XX XX)` 
+      };
+    }
+  }
+  
+  if (phoneNumber.length < 4) {
+    return { valid: false, message: 'Numéro trop court (minimum 4 chiffres)' };
+  }
+  
+  if (!/^\d+$/.test(phoneNumber)) {
+    return { valid: false, message: 'Le numéro ne doit contenir que des chiffres' };
+  }
+  
+  return { valid: true, message: '' };
+};
+
+const formatPhoneDisplay = (phone, countryData) => {
+  if (!phone || !countryData) return phone;
+  
+  const indicatif = (countryData.indicatif_tel || countryData.code_tel || '').replace('+', '');
+  let phoneNumber = phone.replace(/\s+/g, '');
+  
+  if (phoneNumber.startsWith(`+${indicatif}`) || phoneNumber.startsWith(indicatif)) {
+    phoneNumber = phoneNumber.replace(`+${indicatif}`, '').replace(indicatif, '');
+  }
+  
+  if (['TG', 'CI', 'BJ'].includes(countryData.code_iso)) {
+    if (phoneNumber.length === 8) {
+      return `+${indicatif} ${phoneNumber.substring(0, 2)} ${phoneNumber.substring(2, 4)} ${phoneNumber.substring(4, 6)} ${phoneNumber.substring(6, 8)}`;
+    }
+  } else if (countryData.code_iso === 'FR') {
+    if (phoneNumber.length === 9) {
+      return `+${indicatif} ${phoneNumber.charAt(0)} ${phoneNumber.substring(1, 3)} ${phoneNumber.substring(3, 5)} ${phoneNumber.substring(5, 7)} ${phoneNumber.substring(7, 9)}`;
+    }
+  }
+  
+  return `+${indicatif} ${phoneNumber}`;
+};
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState([]);
@@ -57,51 +146,41 @@ export default function PartnersPage() {
   const [filterType, setFilterType] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
 
+  // Chargement initial - COMME DANS ENTITÉS
   useEffect(() => {
-    fetchPartners();
-    fetchPays();
+    fetchAllData();
   }, []);
 
-  const fetchPartners = async () => {
+  const fetchAllData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await apiClient.get('/partenaires/');
+      const [partnersRes, paysRes] = await Promise.all([
+        apiClient.get('/partenaires/'),
+        apiClient.get('/pays/')
+      ]);
       
-      if (Array.isArray(response)) {
-        setPartners(response);
-      } else if (response && Array.isArray(response.results)) {
-        setPartners(response.results);
-      } else {
-        setError('Format de données inattendu');
-        setPartners([]);
-      }
+      const extractData = (response) => {
+        if (Array.isArray(response)) return response;
+        if (response && Array.isArray(response.results)) return response.results;
+        if (response && Array.isArray(response.data)) return response.data;
+        return [];
+      };
+      
+      setPartners(extractData(partnersRes));
+      setPays(extractData(paysRes));
+      
     } catch (err) {
-      console.error('Erreur lors du chargement des partenaires:', err);
-      setError('Erreur lors du chargement des partenaires');
+      console.error('Erreur lors du chargement des données:', err);
+      setError('Erreur lors du chargement des données');
       setPartners([]);
+      setPays([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchPays = async () => {
-    try {
-      const response = await apiClient.get('/pays/');
-      
-      if (Array.isArray(response)) {
-        setPays(response);
-      } else {
-        setPays([]);
-      }
-    } catch (err) {
-      console.error('Erreur chargement pays:', err);
-      setPays([]);
-    }
-  };
-
-  // Fonction utilitaire pour extraire le nom de la ville
   const getVilleName = (ville) => {
     if (!ville) return '';
     if (typeof ville === 'string') return ville;
@@ -111,34 +190,39 @@ export default function PartnersPage() {
     return String(ville);
   };
 
-  // Filtrage et recherche
+  // Types de partenaires avec style cohérent
+  const partnerTypes = [
+    { value: 'client', label: 'Client', icon: FiUserCheck, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700' },
+    { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck, color: 'from-blue-600 to-blue-500', bgColor: 'bg-blue-100', textColor: 'text-blue-700' },
+    { value: 'employe', label: 'Employé', icon: FiUsers, color: 'from-emerald-600 to-emerald-500', bgColor: 'bg-emerald-100', textColor: 'text-emerald-700' },
+    { value: 'debiteur', label: 'Débiteur', icon: FiDollarSignIcon, color: 'from-amber-600 to-amber-500', bgColor: 'bg-amber-100', textColor: 'text-amber-700' },
+    { value: 'crediteur', label: 'Créditeur', icon: FiCreditCardIcon, color: 'from-rose-600 to-rose-500', bgColor: 'bg-rose-100', textColor: 'text-rose-700' },
+  ];
+
+  // Filtrage et recherche - COMME DANS ENTITÉS
   const filteredPartners = partners.filter(partner => {
-    const villeNom = getVilleName(partner.ville).toLowerCase();
-    const nom = (partner.nom || '').toLowerCase();
-    const email = (partner.email || '').toLowerCase();
-    
     const matchesSearch = 
-      nom.includes(searchTerm.toLowerCase()) ||
-      email.includes(searchTerm.toLowerCase()) ||
-      villeNom.includes(searchTerm.toLowerCase());
+      (partner.nom || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (partner.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getVilleName(partner.ville).toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesType = !filterType || partner.type_partenaire === filterType;
     
     return matchesSearch && matchesType;
   });
 
-  // Calculs pour la pagination
+  // Calculs pour la pagination - COMME DANS ENTITÉS
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentPartners = Array.isArray(filteredPartners) ? filteredPartners.slice(indexOfFirstItem, indexOfLastItem) : [];
   const totalPages = Math.ceil((Array.isArray(filteredPartners) ? filteredPartners.length : 0) / itemsPerPage);
 
-  // Changement de page
+  // Pagination - COMME DANS ENTITÉS
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
   const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
-  // Gestion des sélections
+  // Gestion des sélections - COMME DANS ENTITÉS
   const toggleRowSelection = (id) => {
     setSelectedRows(prev => 
       prev.includes(id) 
@@ -155,7 +239,7 @@ export default function PartnersPage() {
     }
   };
 
-  // Gestion des actions
+  // Gestion des actions - COMME DANS ENTITÉS
   const handleNewPartner = () => {
     setEditingPartner(null);
     setShowForm(true);
@@ -167,10 +251,10 @@ export default function PartnersPage() {
   };
 
   const handleDelete = async (partner) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le partenaire "${partner.nom}" ?`)) {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le partenaire "${partner.nom}" ? Cette action est irréversible.`)) {
       try {
         await apiClient.delete(`/partenaires/${partner.id}/`);
-        fetchPartners();
+        fetchAllData();
       } catch (err) {
         setError('Erreur lors de la suppression');
         console.error('Error deleting partner:', err);
@@ -186,29 +270,20 @@ export default function PartnersPage() {
   const handleFormSuccess = () => {
     setShowForm(false);
     setEditingPartner(null);
-    fetchPartners();
+    fetchAllData();
   };
 
   const handleRetry = () => {
-    fetchPartners();
+    fetchAllData();
   };
 
-  const handleResetFilters = () => {
+  const resetFilters = () => {
     setSearchTerm('');
     setFilterType('');
     setCurrentPage(1);
   };
 
-  // Types de partenaires
-  const partnerTypes = [
-    { value: 'client', label: 'Client', icon: FiUserCheck, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
-    { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
-    { value: 'employe', label: 'Employé', icon: FiUsers, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
-    { value: 'debiteur', label: 'Débiteur', icon: FiDollarSignIcon, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
-    { value: 'crediteur', label: 'Créditeur', icon: FiCreditCardIcon, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700', borderColor: 'border-violet-300' },
-  ];
-
-  // Statistiques - SIMPLIFIÉES (seulement 3 cartes)
+  // Statistiques - COMME DANS ENTITÉS
   const stats = {
     total: partners.length,
     actifs: partners.filter(p => p.statut).length,
@@ -234,8 +309,9 @@ export default function PartnersPage() {
 
   return (
     <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
-      {/* Header avec gradient - COMPACT */}
+      {/* HEADER COMPACT COMME DANS ENTITÉS */}
       <div className="mb-6">
+        {/* Ligne supérieure avec titre */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-gradient-to-br from-violet-600 to-violet-500 rounded-lg shadow">
@@ -248,79 +324,140 @@ export default function PartnersPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+        </div>
+
+        {/* Barre de recherche au centre COMME DANS ENTITÉS */}
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <div className="relative flex items-center">
+            <div className="relative flex-1">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-24 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm w-80"
+                placeholder="Rechercher un partenaire..."
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <FiX size={14} />
+                </button>
+              )}
+              
+              {/* Bouton de filtre avec dropdown */}
+              <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
+                <button
+                  onClick={() => {}}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                >
+                  <FiChevronDown size={12} />
+                  <span>Filtre</span>
+                </button>
+              </div>
+            </div>
+            
             <button 
               onClick={handleRetry}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group"
+              className="ml-3 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center gap-1.5 text-sm"
             >
-              <FiRefreshCw className="group-hover:rotate-180 transition-transform duration-500 text-sm" />
-              <span className="font-medium">Actualiser</span>
+              <FiRefreshCw className={`${loading ? 'animate-spin' : ''}`} size={14} />
+              <span>Actualiser</span>
             </button>
+            
             <button 
               onClick={handleNewPartner}
-              className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group shadow"
+              className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
             >
-              <FiPlus className="group-hover:rotate-90 transition-transform duration-300 text-sm" />
-              <span className="font-semibold">Nouveau Partenaire</span>
+              <FiPlus size={14} />
+              <span>Nouveau Partenaire</span>
             </button>
           </div>
         </div>
 
-        {/* Statistiques en ligne - SIMPLIFIÉES (3 cartes seulement) - COMPACT */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+        {/* Statistiques en ligne compactes COMME DANS ENTITÉS */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Total des partenaires</p>
-                <p className="text-lg font-bold text-gray-900 mt-0.5">{stats.total}</p>
+                <p className="text-xs text-gray-600">Total partenaires</p>
+                <p className="text-sm font-bold text-violet-600 mt-0.5">{stats.total}</p>
               </div>
-              <div className="p-1.5 bg-violet-50 rounded">
-                <FiUsers className="w-4 h-4 text-violet-600" />
+              <div className="p-1 bg-violet-50 rounded">
+                <FiUsers className="w-3 h-3 text-violet-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Part. actifs</p>
-                <p className="text-lg font-bold text-green-600 mt-0.5">{stats.actifs}</p>
+                <p className="text-xs text-gray-600">Actifs</p>
+                <p className="text-sm font-bold text-green-600 mt-0.5">{stats.actifs}</p>
               </div>
-              <div className="p-1.5 bg-green-50 rounded">
-                <FiCheckCircle className="w-4 h-4 text-green-600" />
+              <div className="p-1 bg-green-50 rounded">
+                <FiCheckCircle className="w-3 h-3 text-green-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Part. inactifs</p>
-                <p className="text-lg font-bold text-red-600 mt-0.5">{stats.inactifs}</p>
+                <p className="text-xs text-gray-600">Inactifs</p>
+                <p className="text-sm font-bold text-red-600 mt-0.5">{stats.inactifs}</p>
               </div>
-              <div className="p-1.5 bg-red-50 rounded">
-                <FiXCircle className="w-4 h-4 text-red-600" />
+              <div className="p-1 bg-red-50 rounded">
+                <FiXCircle className="w-3 h-3 text-red-600" />
               </div>
             </div>
           </div>
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Types différents</p>
+                <p className="text-sm font-bold text-blue-600 mt-0.5">
+                  {[...new Set(partners.map(p => p.type_partenaire))].length}
+                </p>
+              </div>
+              <div className="p-1 bg-blue-50 rounded">
+                <FiUserCheck className="w-3 h-3 text-blue-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Onglets (si besoin pour une future fonctionnalité) */}
+        <div className="flex border-b border-gray-200 mb-3">
+          <button
+            onClick={() => {
+              setCurrentPage(1);
+              setSelectedRows([]);
+              resetFilters();
+            }}
+            className="px-4 py-1.5 text-xs font-medium border-b-2 border-violet-600 text-violet-600 transition-colors"
+          >
+            Tous les partenaires
+          </button>
         </div>
       </div>
 
-      {/* Message d'erreur */}
+      {/* Message d'erreur compact COMME DANS ENTITÉS */}
       {error && (
         <div className="mb-4">
-          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3 shadow-sm">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-2 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-red-100 rounded">
-                  <FiX className="w-4 h-4 text-red-600" />
+                <div className="p-1 bg-red-100 rounded">
+                  <FiX className="w-3 h-3 text-red-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-red-900 text-sm">{error}</p>
-                  <p className="text-xs text-red-700 mt-0.5">Veuillez réessayer</p>
+                  <p className="font-medium text-red-900 text-xs">{error}</p>
                 </div>
               </div>
               <button
                 onClick={handleRetry}
-                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium shadow-sm"
+                className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-xs font-medium"
               >
                 Réessayer
               </button>
@@ -329,109 +466,30 @@ export default function PartnersPage() {
         </div>
       )}
 
-      {/* Barre d'outils - Filtres et Recherche - COMPACT */}
-      <div className="mb-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900 text-sm">Filtres et Recherche</h3>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-600">
-                {filteredPartners.length} résultat(s)
-              </span>
-              {(searchTerm || filterType) && (
-                <button
-                  onClick={handleResetFilters}
-                  className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs font-medium flex items-center gap-1"
-                >
-                  <FiX size={12} />
-                  Effacer
-                </button>
-              )}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
-              <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-lg blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-                <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10 text-sm" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white relative z-10 text-sm"
-                    placeholder="Rechercher un partenaire..."
-                  />
-                </div>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Type de Partenaire</label>
-              <div className="relative">
-                <FiFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
-                >
-                  <option value="">Tous les types</option>
-                  {partnerTypes.map(type => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex items-end">
-              <button
-                onClick={handleResetFilters}
-                className="w-full px-3 py-2 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 rounded-lg hover:from-gray-200 hover:to-gray-100 transition-all duration-300 border border-gray-300 font-medium flex items-center justify-center gap-1.5 text-sm"
-              >
-                <FiX className="group-hover:rotate-90 transition-transform duration-300" />
-                Réinitialiser tout
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tableau Principal */}
+      {/* Tableau Principal COMME DANS ENTITÉS */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {/* En-tête du tableau avec actions - COMPACT */}
-        <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+        {/* En-tête du tableau avec actions compact */}
+        <div className="px-3 py-2 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5">
                 <input
                   type="checkbox"
                   checked={selectedRows.length === currentPartners.length && currentPartners.length > 0}
                   onChange={selectAllRows}
-                  className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                  className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                 />
                 <span className="text-xs text-gray-700">
                   {selectedRows.length} sélectionné(s)
                 </span>
               </div>
-              {selectedRows.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <button className="px-2 py-1 bg-violet-50 text-violet-700 rounded text-xs font-medium hover:bg-violet-100 transition-colors">
-                    <FiDownload size={12} />
-                  </button>
-                  <button className="px-2 py-1 bg-red-50 text-red-700 rounded text-xs font-medium hover:bg-red-100 transition-colors">
-                    <FiTrash2 size={12} />
-                  </button>
-                </div>
-              )}
             </div>
-            <div className="flex items-center gap-2">
-              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
-                <FiDownload size={16} />
+            <div className="flex items-center gap-1">
+              <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiDownload size={14} />
               </button>
-              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
-                <FiUpload size={16} />
+              <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiUpload size={14} />
               </button>
               <select
                 value={itemsPerPage}
@@ -439,7 +497,7 @@ export default function PartnersPage() {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
+                className="border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
               >
                 <option value={5}>5 lignes</option>
                 <option value={10}>10 lignes</option>
@@ -450,30 +508,33 @@ export default function PartnersPage() {
           </div>
         </div>
 
-        {/* Tableau SIMPLIFIÉ (5 colonnes seulement) */}
+        {/* Tableau */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
               <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <input
                       type="checkbox"
                       checked={selectedRows.length === currentPartners.length && currentPartners.length > 0}
                       onChange={selectAllRows}
-                      className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                      className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                     />
                     ID
                   </div>
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Nom / Raison Sociale
+                  Partenaire
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Type
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Téléphone
+                  Contact
+                </th>
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  Localisation
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Statut
@@ -483,29 +544,30 @@ export default function PartnersPage() {
                 </th>
               </tr>
             </thead>
+            
             <tbody className="divide-y divide-gray-200">
               {currentPartners.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-3 py-6 text-center">
+                  <td colSpan={7} className="px-3 py-4 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-3">
-                        <FiUsers className="w-8 h-8 text-gray-400" />
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
+                        <FiUsers className="w-6 h-6 text-gray-400" />
                       </div>
-                      <h3 className="text-base font-semibold text-gray-900 mb-1.5">
-                        {partners.length === 0 ? 'Aucun partenaire trouvé' : 'Aucun résultat pour votre recherche'}
+                      <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                        {partners.length === 0 ? 'Aucun partenaire trouvé' : 'Aucun résultat'}
                       </h3>
-                      <p className="text-gray-600 mb-4 max-w-md text-sm">
+                      <p className="text-gray-600 text-xs mb-3 max-w-md">
                         {partners.length === 0 
                           ? 'Commencez par créer votre premier partenaire' 
-                          : 'Essayez de modifier vos critères de recherche ou de filtres'}
+                          : 'Essayez de modifier vos critères de recherche'}
                       </p>
                       {partners.length === 0 && (
                         <button 
                           onClick={handleNewPartner}
-                          className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1.5 text-sm"
+                          className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
                         >
-                          <FiPlus />
-                          Créer mon premier partenaire
+                          <FiPlus size={12} />
+                          Créer partenaire
                         </button>
                       )}
                     </div>
@@ -523,43 +585,66 @@ export default function PartnersPage() {
                         selectedRows.includes(partner.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
                       }`}
                     >
+                      {/* ID avec checkbox */}
                       <td className="px-3 py-2 whitespace-nowrap border-r border-gray-200">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <input
                             type="checkbox"
                             checked={selectedRows.includes(partner.id)}
                             onChange={() => toggleRowSelection(partner.id)}
-                            className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                            className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                           />
-                          <span className="px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
+                          <span className="px-1 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
                             #{partner.id}
                           </span>
                         </div>
                       </td>
+                      
+                      {/* Partenaire */}
                       <td className="px-3 py-2 border-r border-gray-200">
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{partner.nom}</div>
-                          <div className="text-xs text-gray-500 truncate max-w-[200px]">{partner.email || 'Aucun email'}</div>
+                          <div className="text-xs font-semibold text-gray-900 truncate max-w-[150px]">{partner.nom}</div>
+                          <div className="text-xs text-gray-500 truncate max-w-[150px]">{partner.email || '-'}</div>
                         </div>
                       </td>
+                      
+                      {/* Type */}
                       <td className="px-3 py-2 border-r border-gray-200">
                         <div className="flex items-center gap-1.5">
                           <div className={`p-1 ${typeInfo.bgColor} rounded`}>
                             <IconComponent className={`w-3 h-3 ${typeInfo.textColor}`} />
                           </div>
-                          <span className={`text-sm font-medium ${typeInfo.textColor}`}>
+                          <span className={`text-xs font-medium ${typeInfo.textColor}`}>
                             {typeInfo.label}
                           </span>
                         </div>
                       </td>
+                      
+                      {/* Contact */}
                       <td className="px-3 py-2 border-r border-gray-200">
-                        <div className="text-sm text-gray-700">
-                          {partner.telephone || '-'}
+                        <div className="flex flex-col">
+                          <div className="text-xs text-gray-900 truncate">{partner.telephone || '-'}</div>
+                          <div className="text-xs text-gray-500 truncate">{partner.email || '-'}</div>
                         </div>
                       </td>
+                      
+                      {/* Localisation */}
+                      <td className="px-3 py-2 border-r border-gray-200">
+                        <div className="flex flex-col">
+                          <div className="text-xs text-gray-900">
+                            {partner.ville_details?.nom || getVilleName(partner.ville) || '-'}
+                          </div>
+                          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                            {partner.pays_details?.emoji || '🌍'}
+                            <span className="truncate max-w-[80px]">{partner.pays_details?.nom || '-'}</span>
+                          </div>
+                        </div>
+                      </td>
+                      
+                      {/* Statut */}
                       <td className="px-3 py-2 border-r border-gray-200">
                         <div className="flex items-center">
-                          <div className={`px-2 py-1 rounded flex items-center gap-1 ${
+                          <div className={`px-1.5 py-0.5 rounded flex items-center gap-1 ${
                             partner.statut
                               ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
                               : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
@@ -578,28 +663,30 @@ export default function PartnersPage() {
                           </div>
                         </div>
                       </td>
+                      
+                      {/* Actions */}
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleViewDetails(partner)}
-                            className="p-1.5 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded-lg hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
+                            className="p-1 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
                             title="Voir détails"
                           >
-                            <FiEye size={14} />
+                            <FiEye size={12} />
                           </button>
                           <button
                             onClick={() => handleEdit(partner)}
-                            className="p-1.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded-lg hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
+                            className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
                             title="Modifier"
                           >
-                            <FiEdit2 size={14} />
+                            <FiEdit2 size={12} />
                           </button>
                           <button
                             onClick={() => handleDelete(partner)}
-                            className="p-1.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-lg hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+                            className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
                             title="Supprimer"
                           >
-                            <FiTrash2 size={14} />
+                            <FiTrash2 size={12} />
                           </button>
                         </div>
                       </td>
@@ -611,12 +698,12 @@ export default function PartnersPage() {
           </table>
         </div>
 
-        {/* Pagination - COMPACT */}
-        {filteredPartners.length > 0 && (
-          <div className="px-4 py-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
+        {/* Pagination compact COMME DANS ENTITÉS */}
+        {currentPartners.length > 0 && (
+          <div className="px-3 py-2 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <span className="text-xs text-gray-700">
                     Page {currentPage} sur {totalPages}
                   </span>
@@ -627,22 +714,22 @@ export default function PartnersPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`p-1.5 rounded border transition-all duration-200 ${
+                  className={`p-1 rounded border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
                   title="Page précédente"
                 >
-                  <FiChevronLeft size={14} />
+                  <FiChevronLeft size={12} />
                 </button>
 
                 {/* Numéros de page */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNumber;
                     if (totalPages <= 5) {
@@ -659,7 +746,7 @@ export default function PartnersPage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`min-w-[32px] h-8 rounded border text-xs font-medium transition-all duration-200 ${
+                        className={`min-w-[28px] h-7 rounded border text-xs font-medium transition-all duration-200 ${
                           currentPage === pageNumber
                             ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow'
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
@@ -674,14 +761,14 @@ export default function PartnersPage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`p-1.5 rounded border transition-all duration-200 ${
+                  className={`p-1 rounded border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
                   title="Page suivante"
                 >
-                  <FiChevronRight size={14} />
+                  <FiChevronRight size={12} />
                 </button>
               </div>
             </div>
@@ -689,7 +776,7 @@ export default function PartnersPage() {
         )}
       </div>
 
-      {/* Formulaire Modal */}
+      {/* Modaux */}
       {showForm && (
         <PartnerFormModal
           partner={editingPartner}
@@ -702,7 +789,6 @@ export default function PartnersPage() {
         />
       )}
 
-      {/* Modal de détails */}
       {showDetailModal && selectedPartner && (
         <PartnerDetailModal
           partner={selectedPartner}
@@ -716,14 +802,14 @@ export default function PartnersPage() {
   );
 }
 
-// MODAL DE DÉTAILS POUR LES PARTENAIRES
+// MODAL DE DÉTAILS PARTENAIRE - STYLE COMME ENTITÉS
 function PartnerDetailModal({ partner, onClose }) {
   const partnerTypes = [
-    { value: 'client', label: 'Client', icon: FiUserCheck },
-    { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck },
-    { value: 'employe', label: 'Employé', icon: FiUsers },
-    { value: 'debiteur', label: 'Débiteur', icon: FiDollarSignIcon },
-    { value: 'crediteur', label: 'Créditeur', icon: FiCreditCardIcon },
+    { value: 'client', label: 'Client', icon: FiUserCheck, color: 'from-violet-600 to-violet-500' },
+    { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck, color: 'from-blue-600 to-blue-500' },
+    { value: 'employe', label: 'Employé', icon: FiUsers, color: 'from-emerald-600 to-emerald-500' },
+    { value: 'debiteur', label: 'Débiteur', icon: FiDollarSignIcon, color: 'from-amber-600 to-amber-500' },
+    { value: 'crediteur', label: 'Créditeur', icon: FiCreditCardIcon, color: 'from-rose-600 to-rose-500' },
   ];
 
   const typeInfo = partnerTypes.find(t => t.value === partner.type_partenaire) || partnerTypes[0];
@@ -740,7 +826,7 @@ function PartnerDetailModal({ partner, onClose }) {
                 <FiUsers className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-base font-bold">Détails du partenaire</h2>
+                <h2 className="text-base font-bold">Détails du Partenaire</h2>
                 <p className="text-violet-100 text-xs mt-0.5">{partner.nom}</p>
               </div>
             </div>
@@ -754,131 +840,160 @@ function PartnerDetailModal({ partner, onClose }) {
         </div>
         
         <div className="p-4 space-y-4">
+          {/* En-tête avec badge */}
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-4 mb-6">
+            <div className="w-32 h-32 bg-gradient-to-br from-violet-100 to-violet-200 rounded-lg flex items-center justify-center overflow-hidden border-2 border-violet-300">
+              <IconComponent className="w-16 h-16 text-violet-600" />
+            </div>
+            <div className="flex-1 text-center md:text-left">
+              <h1 className="text-xl font-bold text-gray-900">{partner.nom}</h1>
+              <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
+                <div className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${typeInfo.color} text-white`}>
+                  <div className="flex items-center gap-1">
+                    <IconComponent className="w-3 h-3" />
+                    {typeInfo.label}
+                  </div>
+                </div>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                  partner.statut
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {partner.statut ? 'Actif' : 'Inactif'}
+                </span>
+                {partner.pays_details && (
+                  <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                    <FiGlobe className="w-3 h-3 mr-1" />
+                    {partner.pays_details.nom}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Informations Générales */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-4 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
               Informations Générales
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Nom / Raison Sociale</p>
-                <p className="text-sm text-gray-900 font-medium">{partner.nom}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Identifiant</p>
+                <p className="text-sm text-gray-900 font-mono font-medium">#{partner.id}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Type de Partenaire</p>
-                <div className="flex items-center gap-1.5">
-                  <div className={`p-1 bg-violet-100 rounded`}>
-                    <IconComponent className="w-3 h-3 text-violet-700" />
-                  </div>
-                  <span className="text-sm text-violet-700 font-medium">{typeInfo.label}</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Statut</p>
-                <div className={`px-2 py-1 rounded inline-flex items-center gap-1 ${
-                  partner.statut
-                    ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
-                    : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
-                }`}>
-                  {partner.statut ? (
-                    <>
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                      <span className="text-xs font-medium">Actif</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
-                      <span className="text-xs font-medium">Inactif</span>
-                    </>
-                  )}
-                </div>
+                <p className="text-xs font-medium text-gray-500 mb-1">Date d'enregistrement</p>
+                <p className="text-sm text-gray-900">
+                  {partner.date_creation ? new Date(partner.date_creation).toLocaleDateString('fr-FR') : '-'}
+                </p>
               </div>
             </div>
           </div>
 
           {/* Informations Légales */}
-          <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-3 border border-violet-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-4 border border-blue-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
               Informations Légales
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Registre de Commerce</p>
-                <p className="text-sm text-gray-900">{partner.registre_commerce || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Numéro Fiscal</p>
-                <p className="text-sm text-gray-900">{partner.numero_fiscal || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Sécurité Sociale</p>
-                <p className="text-sm text-gray-900">{partner.securite_sociale || '-'}</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {partner.registre_commerce && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1">Registre de Commerce</p>
+                  <p className="text-sm text-gray-900 font-medium">{partner.registre_commerce}</p>
+                </div>
+              )}
+              {partner.numero_fiscal && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1">Numéro Fiscal</p>
+                  <p className="text-sm text-gray-900 font-medium">{partner.numero_fiscal}</p>
+                </div>
+              )}
+              {partner.securite_sociale && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1">Sécurité Sociale</p>
+                  <p className="text-sm text-gray-900">{partner.securite_sociale}</p>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Localisation */}
-          <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-3 border border-purple-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+          <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-4 border border-purple-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
               <div className="w-1 h-4 bg-gradient-to-b from-purple-600 to-purple-400 rounded"></div>
               Localisation
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Adresse</p>
-                <p className="text-sm text-gray-900">{partner.adresse || '-'}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Adresse</p>
+                <p className="text-sm text-gray-900 whitespace-pre-line">{partner.adresse || '-'}</p>
+                {partner.complement_adresse && (
+                  <p className="text-sm text-gray-600 mt-1">{partner.complement_adresse}</p>
+                )}
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Complément d'adresse</p>
-                <p className="text-sm text-gray-900">{partner.complement_adresse || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Code Postal</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Code Postal</p>
                 <p className="text-sm text-gray-900">{partner.code_postal || '-'}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Pays</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base">{partner.pays_details?.emoji || '🌍'}</span>
-                  <p className="text-sm text-gray-900">{partner.pays_details?.nom || '-'}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Pays</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{partner.pays_details?.emoji || '🌍'}</span>
+                  <p className="text-sm text-gray-900 font-medium">{partner.pays_details?.nom || '-'}</p>
+                  {partner.pays_details?.indicatif_tel && (
+                    <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                      {partner.pays_details.indicatif_tel}
+                    </span>
+                  )}
                 </div>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Région</p>
-                <p className="text-sm text-gray-900">
-                  {partner.region_details?.nom || partner.region || '-'}
-                </p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Région/État</p>
+                <p className="text-sm text-gray-900">{partner.region_details?.nom || '-'}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Ville</p>
-                <p className="text-sm text-gray-900">
-                  {partner.ville_details?.nom || (typeof partner.ville === 'object' ? partner.ville.nom : partner.ville) || '-'}
-                </p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Ville</p>
+                <p className="text-sm text-gray-900">{partner.ville_details?.nom || '-'}</p>
               </div>
             </div>
           </div>
 
           {/* Contact */}
-          <div className="bg-gradient-to-br from-cyan-50 to-white rounded-lg p-3 border border-cyan-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+          <div className="bg-gradient-to-br from-cyan-50 to-white rounded-lg p-4 border border-cyan-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
               <div className="w-1 h-4 bg-gradient-to-b from-cyan-600 to-cyan-400 rounded"></div>
               Contact
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Téléphone</p>
-                <p className="text-sm text-gray-900">{partner.telephone || '-'}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Téléphone</p>
+                <div className="flex items-center gap-2">
+                  <FiPhone className="w-4 h-4 text-gray-400" />
+                  <p className="text-sm text-gray-900">{partner.telephone || '-'}</p>
+                </div>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Email</p>
-                <p className="text-sm text-gray-900">{partner.email || '-'}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Email</p>
+                <div className="flex items-center gap-2">
+                  <FiMail className="w-4 h-4 text-gray-400" />
+                  <a href={`mailto:${partner.email}`} className="text-sm text-blue-600 hover:underline">
+                    {partner.email || '-'}
+                  </a>
+                </div>
               </div>
-              <div className="md:col-span-2">
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Site Web</p>
-                <p className="text-sm text-violet-600">{partner.site_web || '-'}</p>
-              </div>
+              {partner.site_web && (
+                <div className="md:col-span-2">
+                  <p className="text-xs font-medium text-gray-500 mb-1">Site Web</p>
+                  <div className="flex items-center gap-2">
+                    <FiGlobe className="w-4 h-4 text-gray-400" />
+                    <a href={partner.site_web} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">
+                      {partner.site_web}
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -899,41 +1014,58 @@ function PartnerDetailModal({ partner, onClose }) {
   );
 }
 
-// COMPOSANT MODAL POUR LES PARTENAIRES - FORMULAIRE COMPACT
+// COMPOSANT MODAL AVEC DROPDOWNS AVEC RECHERCHE INTÉGRÉE - FORMULAIRE COMPLET COMME ENTITÉS
 function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
-  // États pour le formulaire
+  // États pour le formulaire - STRUCTURE COMME ENTITÉS
   const [formData, setFormData] = useState({
+    // 1. Informations de base
     nom: partner?.nom || '',
     type_partenaire: partner?.type_partenaire || 'client',
+    
+    // 2. Informations légales
     registre_commerce: partner?.registre_commerce || '',
     numero_fiscal: partner?.numero_fiscal || '',
     securite_sociale: partner?.securite_sociale || '',
+    
+    // 3. Localisation (ordre correct comme entités)
+    pays: partner?.pays?.id || partner?.pays || '',
+    region: partner?.region?.id || partner?.region || '',
+    ville: partner?.ville?.id || partner?.ville || '',
+    
+    // 4. Adresse
     adresse: partner?.adresse || '',
     complement_adresse: partner?.complement_adresse || '',
     code_postal: partner?.code_postal || '',
-    ville: partner?.ville?.id || '',
-    region: partner?.region?.id || '',
-    pays: partner?.pays?.id || '',
+    
+    // 5. Contact
     telephone: partner?.telephone || '',
     email: partner?.email || '',
     site_web: partner?.site_web || '',
+    
+    // 6. Paramètres
     statut: partner?.statut !== undefined ? partner.statut : true,
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [phoneError, setPhoneError] = useState('');
   
   // ÉTATS POUR LISTES DYNAMIQUES
   const [subdivisions, setSubdivisions] = useState([]);
   const [villes, setVilles] = useState([]);
   const [loadingSubdivisions, setLoadingSubdivisions] = useState(false);
   const [loadingVilles, setLoadingVilles] = useState(false);
+  
+  // ÉTATS POUR LE PAYS SÉLECTIONNÉ ET SON INDICATIF
+  const [selectedPays, setSelectedPays] = useState(null);
+  const [indicatif, setIndicatif] = useState('');
 
   // ÉTATS POUR RECHERCHE DANS LES DROPDOWNS
   const [searchPays, setSearchPays] = useState('');
   const [searchSubdivision, setSearchSubdivision] = useState('');
   const [searchVille, setSearchVille] = useState('');
 
+  // Types de partenaires
   const partnerTypes = [
     { value: 'client', label: 'Client', icon: FiUserCheck },
     { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck },
@@ -948,12 +1080,12 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
   // Filtrer les listes avec la recherche
   const filteredPays = paysArray.filter(paysItem =>
     (paysItem.nom_fr || paysItem.nom).toLowerCase().includes(searchPays.toLowerCase()) ||
-    paysItem.code_iso.toLowerCase().includes(searchPays.toLowerCase())
+    (paysItem.code_iso || '').toLowerCase().includes(searchPays.toLowerCase())
   );
 
   const filteredSubdivisions = subdivisions.filter(subdivision =>
     subdivision.nom.toLowerCase().includes(searchSubdivision.toLowerCase()) ||
-    subdivision.code.toLowerCase().includes(searchSubdivision.toLowerCase())
+    (subdivision.code || '').toLowerCase().includes(searchSubdivision.toLowerCase())
   );
 
   const filteredVilles = villes.filter(ville =>
@@ -961,7 +1093,29 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     (ville.code_postal && ville.code_postal.includes(searchVille))
   );
 
-  // CHARGEMENT DYNAMIQUE DES SUBDIVISIONS
+  // DÉTECTER L'INDICATIF DU PAYS - COMME DANS ENTITÉS
+  useEffect(() => {
+    if (formData.pays) {
+      const paysId = typeof formData.pays === 'object' ? formData.pays.id : formData.pays;
+      const paysTrouve = paysArray.find(p => p.id === parseInt(paysId));
+      
+      if (paysTrouve) {
+        setSelectedPays(paysTrouve);
+        const indicatifPays = paysTrouve.indicatif_tel || paysTrouve.code_tel || '';
+        setIndicatif(indicatifPays);
+        
+        if (formData.telephone) {
+          const validation = validatePhoneByCountry(formData.telephone, paysTrouve);
+          setPhoneError(validation.message);
+        }
+      }
+    } else {
+      setSelectedPays(null);
+      setIndicatif('');
+    }
+  }, [formData.pays, formData.telephone, paysArray]);
+
+  // CHARGEMENT DYNAMIQUE DES SUBDIVISIONS - COMME DANS ENTITÉS
   useEffect(() => {
     const fetchSubdivisions = async () => {
       if (formData.pays) {
@@ -978,7 +1132,6 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
           
           setSubdivisions(subdivisionsData);
           
-          // Réinitialiser la subdivision si elle ne fait pas partie du nouveau pays
           if (formData.region) {
             const currentSubdivisionExists = subdivisionsData.some(
               sub => sub.id.toString() === formData.region.toString()
@@ -1002,7 +1155,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     fetchSubdivisions();
   }, [formData.pays, formData.region]);
 
-  // CHARGEMENT DYNAMIQUE DES VILLES
+  // CHARGEMENT DYNAMIQUE DES VILLES - COMME DANS ENTITÉS
   useEffect(() => {
     const fetchVilles = async () => {
       if (formData.region) {
@@ -1019,7 +1172,6 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
           
           setVilles(villesData);
           
-          // Réinitialiser la ville si elle ne fait pas partie de la nouvelle subdivision
           if (formData.ville) {
             const currentVilleExists = villesData.some(
               ville => ville.id.toString() === formData.ville.toString()
@@ -1047,9 +1199,10 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setPhoneError('');
 
-    // Validation
-    if (!formData.nom) {
+    // Validation - COMME DANS ENTITÉS
+    if (!formData.nom.trim()) {
       setError('Le nom est obligatoire');
       setLoading(false);
       return;
@@ -1062,7 +1215,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     }
 
     if (!formData.region) {
-      setError('La région (état/province) est obligatoire');
+      setError('La région/état/province est obligatoire');
       setLoading(false);
       return;
     }
@@ -1073,8 +1226,38 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
       return;
     }
 
-    if (!formData.telephone) {
+    if (!formData.adresse.trim()) {
+      setError('L\'adresse est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.telephone.trim()) {
       setError('Le téléphone est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    // Validation téléphone - COMME DANS ENTITÉS
+    if (formData.telephone && selectedPays) {
+      const validation = validatePhoneByCountry(formData.telephone, selectedPays);
+      if (!validation.valid) {
+        setError(validation.message);
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (!formData.email.trim()) {
+      setError('L\'email est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    // Validation email - COMME DANS ENTITÉS
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Veuillez entrer un email valide');
       setLoading(false);
       return;
     }
@@ -1091,7 +1274,9 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
         ...formData,
       };
 
-      await apiClient.request(url, {
+      console.log('📤 Données envoyées:', submitData);
+      
+      const response = await apiClient.request(url, {
         method: method,
         body: JSON.stringify(submitData),
         headers: {
@@ -1099,9 +1284,26 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
         }
       });
       
+      console.log('✅ Réponse:', response);
       onSuccess();
+      
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors de la sauvegarde';
+      console.error('❌ Erreur sauvegarde partenaire:', err);
+      
+      let errorMessage = 'Erreur lors de la sauvegarde';
+      if (err.response?.data) {
+        const errorData = err.response.data;
+        if (typeof errorData === 'object') {
+          errorMessage = Object.entries(errorData)
+            .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+            .join('\n');
+        } else {
+          errorMessage = JSON.stringify(errorData);
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -1115,7 +1317,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
     }));
   };
 
-  // Composant réutilisable pour les dropdowns avec recherche
+  // Composant réutilisable pour les dropdowns avec recherche - COMME DANS ENTITÉS
   const SearchableDropdown = ({ 
     label, 
     value, 
@@ -1294,7 +1496,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
       <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl">
-        {/* Header du modal avec gradient - COMPACT */}
+        {/* Header du modal avec gradient - COMPACT COMME DANS ENTITÉS */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1327,20 +1529,21 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
               <div className="p-1.5 bg-red-100 rounded">
                 <FiX className="text-red-600" size={14} />
               </div>
-              <span className="text-red-800 text-xs font-medium">{error}</span>
+              <span className="text-red-800 text-xs font-medium whitespace-pre-line">{error}</span>
             </div>
           </div>
         )}
         
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Section 1: Informations Générales - COMPACT */}
+          {/* Section 1: Informations de Base (ORDRE CORRECT COMME ENTITÉS) */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Informations Générales</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Informations de Base</h3>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {/* 1. Nom */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Nom / Raison Sociale <span className="text-red-500">*</span>
@@ -1355,6 +1558,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                 />
               </div>
               
+              {/* 2. Type de Partenaire */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Type de Partenaire <span className="text-red-500">*</span>
@@ -1373,6 +1577,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                 </select>
               </div>
               
+              {/* 3. Statut */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Statut</label>
                 <select
@@ -1387,10 +1592,10 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Section 2: Informations Légales - COMPACT */}
-          <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-3 border border-violet-100">
+          {/* Section 2: Informations Légales - COMME DANS ENTITÉS */}
+          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Informations Légales</h3>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -1429,7 +1634,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Section 3: Localisation - COMPACT */}
+          {/* Section 3: Localisation (ORDRE CORRECT COMME ENTITÉS) */}
           <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-3 border border-purple-100">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-purple-600 to-purple-400 rounded"></div>
@@ -1437,42 +1642,6 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Adresse complète <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  required
-                  value={formData.adresse}
-                  onChange={(e) => handleChange('adresse', e.target.value)}
-                  rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                  placeholder="Adresse complète"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Complément d'adresse</label>
-                <input
-                  type="text"
-                  value={formData.complement_adresse}
-                  onChange={(e) => handleChange('complement_adresse', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                  placeholder="Bâtiment, étage, etc."
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Code Postal</label>
-                <input
-                  type="text"
-                  value={formData.code_postal}
-                  onChange={(e) => handleChange('code_postal', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                  placeholder="Code postal"
-                />
-              </div>
-
               {/* Pays avec recherche */}
               <div>
                 <SearchableDropdown
@@ -1485,7 +1654,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                   placeholder="Sélectionnez un pays"
                   required={true}
                   icon={FiGlobe}
-                  getOptionLabel={(paysItem) => `${paysItem.emoji} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
+                  getOptionLabel={(paysItem) => `${paysItem.emoji || '🌍'} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
                   getOptionValue={(paysItem) => paysItem.id}
                 />
               </div>
@@ -1513,7 +1682,7 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                   </p>
                 )}
                 {loadingSubdivisions && (
-                  <p className="text-xs text-violet-500 mt-1 flex items-center gap-1">
+                  <p className="text-xs text-blue-500 mt-1 flex items-center gap-1">
                     <FiRefreshCw className="animate-spin" size={10} />
                     Chargement des subdivisions...
                   </p>
@@ -1543,67 +1712,151 @@ function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
                   </p>
                 )}
                 {loadingVilles && (
-                  <p className="text-xs text-violet-500 mt-1 flex items-center gap-1">
+                  <p className="text-xs text-blue-500 mt-1 flex items-center gap-1">
                     <FiRefreshCw className="animate-spin" size={10} />
                     Chargement des villes...
                   </p>
                 )}
               </div>
+
+              {/* Code Postal */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Code Postal</label>
+                <input
+                  type="text"
+                  value={formData.code_postal}
+                  onChange={(e) => handleChange('code_postal', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
+                  placeholder="Code postal"
+                />
+              </div>
+
+              {/* Adresse complète */}
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Adresse complète <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  value={formData.adresse}
+                  onChange={(e) => handleChange('adresse', e.target.value)}
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
+                  placeholder="Adresse complète"
+                />
+              </div>
+
+              {/* Complément d'adresse */}
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Complément d'adresse</label>
+                <input
+                  type="text"
+                  value={formData.complement_adresse}
+                  onChange={(e) => handleChange('complement_adresse', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
+                  placeholder="Bâtiment, étage, bureau, etc."
+                />
+              </div>
             </div>
           </div>
 
-          {/* Section 4: Contact - COMPACT */}
+          {/* Section 4: Contact - COMME DANS ENTITÉS */}
           <div className="bg-gradient-to-br from-cyan-50 to-white rounded-lg p-3 border border-cyan-100">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-cyan-600 to-cyan-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Contact</h3>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {/* Téléphone avec indicatif - COMME DANS ENTITÉS */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Téléphone <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <FiPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1.5">
+                    <FiPhone className="text-gray-400" size={16} />
+                    {indicatif && (
+                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-medium rounded border border-blue-200">
+                        {indicatif}
+                      </span>
+                    )}
+                  </div>
+                  
                   <input
                     type="tel"
                     required
                     value={formData.telephone}
-                    onChange={(e) => handleChange('telephone', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                    placeholder="+228 XX XXX XXX"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      handleChange('telephone', value);
+                      
+                      // Validation en temps réel
+                      if (value && selectedPays) {
+                        const validation = validatePhoneByCountry(value, selectedPays);
+                        setPhoneError(validation.message);
+                      }
+                    }}
+                    className={`w-full ${indicatif ? 'pl-28' : 'pl-9'} pr-3 py-2 border ${phoneError ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-transparent text-sm`}
+                    placeholder={selectedPays ? `Ex: ${formatPhoneDisplay('12345678', selectedPays).replace(indicatif, '').trim()}` : "Numéro de téléphone"}
+                    disabled={!formData.pays}
                   />
                 </div>
+                
+                {phoneError ? (
+                  <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                    <FiX size={12} />
+                    {phoneError}
+                  </p>
+                ) : formData.telephone && selectedPays && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <FiCheck size={12} />
+                    Format: {formatPhoneDisplay(formData.telephone, selectedPays)}
+                  </p>
+                )}
+                
+                {!formData.pays && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sélectionnez d'abord un pays pour activer la validation téléphone
+                  </p>
+                )}
               </div>
               
+              {/* Email */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
                 <div className="relative">
                   <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                   <input
                     type="email"
+                    required
                     value={formData.email}
                     onChange={(e) => handleChange('email', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-transparent text-sm"
                     placeholder="contact@entreprise.tg"
                   />
                 </div>
               </div>
               
+              {/* Site Web */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">Site Web</label>
-                <input
-                  type="url"
-                  value={formData.site_web}
-                  onChange={(e) => handleChange('site_web', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                  placeholder="https://www.example.com"
-                />
+                <div className="relative">
+                  <FiGlobe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="url"
+                    value={formData.site_web}
+                    onChange={(e) => handleChange('site_web', e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-transparent text-sm"
+                    placeholder="https://www.example.com"
+                  />
+                </div>
               </div>
             </div>
           </div>
           
-          {/* Boutons d'action - COMPACT */}
+          {/* Boutons d'action - COMME DANS ENTITÉS */}
           <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button
               type="button"

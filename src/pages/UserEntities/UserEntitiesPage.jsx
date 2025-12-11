@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { apiClient } from '../../services/apiClient';
 import { 
   FiRefreshCw, 
@@ -17,6 +17,7 @@ import {
   FiUsers,
   FiChevronLeft, 
   FiChevronRight,
+  FiChevronDown ,
   FiDownload,
   FiUpload,
   FiCalendar,
@@ -24,7 +25,9 @@ import {
   FiToggleRight,
   FiGlobe,
   FiEye,
-  FiInfo
+  FiInfo,
+  FiExternalLink,
+  FiImage
 } from "react-icons/fi";
 
 export default function UtilisateurEntitePage() {
@@ -45,88 +48,54 @@ export default function UtilisateurEntitePage() {
   const [filterActif, setFilterActif] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
 
+  // Chargement initial - COMME DANS ENTITÉS
   useEffect(() => {
-    fetchAffiliations();
-    fetchUtilisateurs();
-    fetchEntites();
+    fetchAllData();
   }, []);
 
-  const fetchAffiliations = async () => {
+  const fetchAllData = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await apiClient.get('/utilisateurentites/');
       
-      let affiliationsData = [];
-      if (Array.isArray(response)) {
-        affiliationsData = response;
-      } else if (response && Array.isArray(response.results)) {
-        affiliationsData = response.results;
-      } else {
-        setError('Format de données inattendu');
-        affiliationsData = [];
-      }
-
-      setAffiliations(affiliationsData);
+      const [affiliationsRes, utilisateursRes, entitesRes] = await Promise.all([
+        apiClient.get('/utilisateurentites/'),
+        apiClient.get('/users/'),
+        apiClient.get('/entites/')
+      ]);
+      
+      const extractData = (response) => {
+        if (Array.isArray(response)) return response;
+        if (response && Array.isArray(response.results)) return response.results;
+        if (response && Array.isArray(response.data)) return response.data;
+        return [];
+      };
+      
+      setAffiliations(extractData(affiliationsRes));
+      setUtilisateurs(extractData(utilisateursRes));
+      setEntites(extractData(entitesRes));
+      
     } catch (err) {
-      console.error('❌ Erreur lors du chargement des affiliations:', err);
-      setError('Erreur lors du chargement des affiliations utilisateur-entité');
+      console.error('Erreur lors du chargement des données:', err);
+      setError('Erreur lors du chargement des données');
+      setAffiliations([]);
+      setUtilisateurs([]);
+      setEntites([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchUtilisateurs = async () => {
-    try {
-      const response = await apiClient.get('/users/');
-      
-      let utilisateursData = [];
-      if (Array.isArray(response)) {
-        utilisateursData = response;
-      } else if (response && Array.isArray(response.results)) {
-        utilisateursData = response.results;
-      } else {
-        utilisateursData = [];
-      }
-
-      setUtilisateurs(utilisateursData);
-    } catch (err) {
-      console.error('Error fetching utilisateurs:', err);
-      setUtilisateurs([]);
-    }
-  };
-
-  const fetchEntites = async () => {
-    try {
-      const response = await apiClient.get('/entites/');
-      
-      let entitesData = [];
-      if (Array.isArray(response)) {
-        entitesData = response;
-      } else if (response && Array.isArray(response.results)) {
-        entitesData = response.results;
-      } else {
-        entitesData = [];
-      }
-
-      setEntites(entitesData);
-    } catch (err) {
-      console.error('Error fetching entites:', err);
-      setEntites([]);
-    }
-  };
-
-  // Filtrage et recherche
+  // Filtrage et recherche - COMME DANS ENTITÉS
   const filteredAffiliations = useMemo(() => {
     return affiliations.filter(affiliation => {
       const matchesSearch = 
-        affiliation.utilisateur_details?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        affiliation.utilisateur_details?.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        affiliation.entite_details?.raison_sociale?.toLowerCase().includes(searchTerm.toLowerCase());
+        (affiliation.utilisateur_details?.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (affiliation.utilisateur_details?.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (affiliation.entite_details?.raison_sociale || '').toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesEntite = filterEntite === '' || 
-        (affiliation.entite && affiliation.entite.id.toString() === filterEntite);
+      const matchesEntite = !filterEntite || 
+        (affiliation.entite && affiliation.entite.id && affiliation.entite.id.toString() === filterEntite);
       
       const matchesActif = filterActif === '' || 
         affiliation.actif.toString() === filterActif;
@@ -135,7 +104,7 @@ export default function UtilisateurEntitePage() {
     });
   }, [affiliations, searchTerm, filterEntite, filterActif]);
 
-  // Calculs pour la pagination
+  // Calculs pour la pagination - COMME DANS ENTITÉS
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentAffiliations = useMemo(() => 
@@ -146,12 +115,12 @@ export default function UtilisateurEntitePage() {
   
   const totalPages = Math.ceil((Array.isArray(filteredAffiliations) ? filteredAffiliations.length : 0) / itemsPerPage);
 
-  // Changement de page
+  // Pagination - COMME DANS ENTITÉS
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
   const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
-  // Gestion des sélections
+  // Gestion des sélections - COMME DANS ENTITÉS
   const toggleRowSelection = (id) => {
     setSelectedRows(prev => 
       prev.includes(id) 
@@ -160,15 +129,15 @@ export default function UtilisateurEntitePage() {
     );
   };
 
-  const selectAllRows = useCallback(() => {
+  const selectAllRows = () => {
     if (selectedRows.length === currentAffiliations.length) {
       setSelectedRows([]);
     } else {
       setSelectedRows(currentAffiliations.map(affiliation => affiliation.id));
     }
-  }, [currentAffiliations, selectedRows.length]);
+  };
 
-  // Gestion des actions
+  // Gestion des actions - COMME DANS ENTITÉS
   const handleNewAffiliation = () => {
     setEditingAffiliation(null);
     setShowForm(true);
@@ -180,13 +149,13 @@ export default function UtilisateurEntitePage() {
   };
 
   const handleDelete = async (affiliation) => {
-    const utilisateurNom = affiliation.utilisateur?.email || affiliation.utilisateur?.username;
-    const entiteNom = affiliation.entite?.raison_sociale;
+    const utilisateurNom = affiliation.utilisateur?.email || affiliation.utilisateur?.username || 'Utilisateur';
+    const entiteNom = affiliation.entite?.raison_sociale || 'Entité';
     
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer l'affiliation "${utilisateurNom} @ ${entiteNom}" ?`)) {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer l'affiliation "${utilisateurNom} @ ${entiteNom}" ? Cette action est irréversible.`)) {
       try {
         await apiClient.delete(`/utilisateurentites/${affiliation.id}/`);
-        fetchAffiliations();
+        fetchAllData();
       } catch (err) {
         setError('Erreur lors de la suppression');
         console.error('Error deleting affiliation:', err);
@@ -199,7 +168,7 @@ export default function UtilisateurEntitePage() {
       await apiClient.patch(`/utilisateurentites/${affiliation.id}/`, {
         actif: !affiliation.actif
       });
-      fetchAffiliations();
+      fetchAllData();
     } catch (err) {
       setError('Erreur lors de la modification');
       console.error('Error toggling actif:', err);
@@ -224,7 +193,7 @@ export default function UtilisateurEntitePage() {
         est_defaut: true
       });
       
-      fetchAffiliations();
+      fetchAllData();
     } catch (err) {
       setError('Erreur lors de la modification');
       console.error('Error setting default:', err);
@@ -239,24 +208,25 @@ export default function UtilisateurEntitePage() {
   const handleFormSuccess = () => {
     setShowForm(false);
     setEditingAffiliation(null);
-    fetchAffiliations();
+    fetchAllData();
   };
 
   const handleRetry = () => {
-    fetchAffiliations();
+    fetchAllData();
   };
 
-  const handleResetFilters = () => {
+  const resetFilters = () => {
     setSearchTerm('');
     setFilterEntite('');
     setFilterActif('');
     setCurrentPage(1);
   };
 
-  // Statistiques - SIMPLIFIÉES (3 cartes seulement)
+  // Statistiques - COMME DANS ENTITÉS (4 cartes)
   const stats = useMemo(() => ({
     total: affiliations.length,
     actives: affiliations.filter(a => a.actif).length,
+    inactives: affiliations.filter(a => !a.actif).length,
     defaut: affiliations.filter(a => a.est_defaut).length,
   }), [affiliations]);
 
@@ -279,8 +249,9 @@ export default function UtilisateurEntitePage() {
 
   return (
     <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
-      {/* Header avec gradient - COMPACT */}
+      {/* HEADER COMPACT COMME DANS ENTITÉS */}
       <div className="mb-6">
+        {/* Ligne supérieure avec titre */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-gradient-to-br from-violet-600 to-violet-500 rounded-lg shadow">
@@ -293,79 +264,138 @@ export default function UtilisateurEntitePage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+        </div>
+
+        {/* Barre de recherche au centre COMME DANS ENTITÉS */}
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <div className="relative flex items-center">
+            <div className="relative flex-1">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-24 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm w-80"
+                placeholder="Rechercher une affiliation..."
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <FiX size={14} />
+                </button>
+              )}
+              
+              {/* Bouton de filtre avec dropdown */}
+              <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
+                <button
+                  onClick={() => {}}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                >
+                  <FiChevronDown size={12} />
+                  <span>Filtre</span>
+                </button>
+              </div>
+            </div>
+            
             <button 
               onClick={handleRetry}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group"
+              className="ml-3 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center gap-1.5 text-sm"
             >
-              <FiRefreshCw className="group-hover:rotate-180 transition-transform duration-500 text-sm" />
-              <span className="font-medium">Actualiser</span>
+              <FiRefreshCw className={`${loading ? 'animate-spin' : ''}`} size={14} />
+              <span>Actualiser</span>
             </button>
+            
             <button 
               onClick={handleNewAffiliation}
-              className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group shadow"
+              className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
             >
-              <FiPlus className="group-hover:rotate-90 transition-transform duration-300 text-sm" />
-              <span className="font-semibold">Nouvelle Affiliation</span>
+              <FiPlus size={14} />
+              <span>Nouvelle Affiliation</span>
             </button>
           </div>
         </div>
 
-        {/* Statistiques en ligne - 3 CARTES SEULEMENT - COMPACT */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+        {/* Statistiques en ligne compactes COMME DANS ENTITÉS */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Total des affiliations</p>
-                <p className="text-lg font-bold text-gray-900 mt-0.5">{stats.total}</p>
+                <p className="text-xs text-gray-600">Total affiliations</p>
+                <p className="text-sm font-bold text-violet-600 mt-0.5">{stats.total}</p>
               </div>
-              <div className="p-1.5 bg-violet-50 rounded">
-                <FiUsers className="w-4 h-4 text-violet-600" />
+              <div className="p-1 bg-violet-50 rounded">
+                <FiUsers className="w-3 h-3 text-violet-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Affiliations actives</p>
-                <p className="text-lg font-bold text-green-600 mt-0.5">{stats.actives}</p>
+                <p className="text-xs text-gray-600">Actives</p>
+                <p className="text-sm font-bold text-green-600 mt-0.5">{stats.actives}</p>
               </div>
-              <div className="p-1.5 bg-green-50 rounded">
-                <FiCheckCircle className="w-4 h-4 text-green-600" />
+              <div className="p-1 bg-green-50 rounded">
+                <FiCheckCircle className="w-3 h-3 text-green-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Entités par défaut</p>
-                <p className="text-lg font-bold text-purple-600 mt-0.5">{stats.defaut}</p>
+                <p className="text-xs text-gray-600">Inactives</p>
+                <p className="text-sm font-bold text-red-600 mt-0.5">{stats.inactives}</p>
               </div>
-              <div className="p-1.5 bg-purple-50 rounded">
-                <FiStar className="w-4 h-4 text-purple-600" />
+              <div className="p-1 bg-red-50 rounded">
+                <FiXCircle className="w-3 h-3 text-red-600" />
               </div>
             </div>
           </div>
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Par défaut</p>
+                <p className="text-sm font-bold text-purple-600 mt-0.5">{stats.defaut}</p>
+              </div>
+              <div className="p-1 bg-purple-50 rounded">
+                <FiStar className="w-3 h-3 text-purple-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Onglets */}
+        <div className="flex border-b border-gray-200 mb-3">
+          <button
+            onClick={() => {
+              setCurrentPage(1);
+              setSelectedRows([]);
+              resetFilters();
+            }}
+            className="px-4 py-1.5 text-xs font-medium border-b-2 border-violet-600 text-violet-600 transition-colors"
+          >
+            Toutes les affiliations
+          </button>
         </div>
       </div>
 
-      {/* Message d'erreur */}
+      {/* Message d'erreur compact COMME DANS ENTITÉS */}
       {error && (
         <div className="mb-4">
-          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3 shadow-sm">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-2 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-red-100 rounded">
-                  <FiX className="w-4 h-4 text-red-600" />
+                <div className="p-1 bg-red-100 rounded">
+                  <FiX className="w-3 h-3 text-red-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-red-900 text-sm">{error}</p>
-                  <p className="text-xs text-red-700 mt-0.5">Veuillez réessayer</p>
+                  <p className="font-medium text-red-900 text-xs">{error}</p>
                 </div>
               </div>
               <button
                 onClick={handleRetry}
-                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium shadow-sm"
+                className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-xs font-medium"
               >
                 Réessayer
               </button>
@@ -374,124 +404,30 @@ export default function UtilisateurEntitePage() {
         </div>
       )}
 
-      {/* Barre d'outils - Filtres et Recherche - COMPACT */}
-      <div className="mb-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900 text-sm">Filtres et Recherche</h3>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-600">
-                {filteredAffiliations.length} résultat(s)
-              </span>
-              {(searchTerm || filterEntite || filterActif) && (
-                <button
-                  onClick={handleResetFilters}
-                  className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs font-medium flex items-center gap-1"
-                >
-                  <FiX size={12} />
-                  Effacer
-                </button>
-              )}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
-              <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-violet-500 rounded-lg blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-                <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10 text-sm" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white relative z-10 text-sm"
-                    placeholder="Rechercher une affiliation..."
-                  />
-                </div>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Entité</label>
-              <div className="relative">
-                <FiBriefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
-                <select
-                  value={filterEntite}
-                  onChange={(e) => setFilterEntite(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
-                >
-                  <option value="">Toutes les entités</option>
-                  {entites.map(entite => (
-                    <option key={entite.id} value={entite.id}>
-                      {entite.raison_sociale}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Statut</label>
-              <div className="relative">
-                <FiFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
-                <select
-                  value={filterActif}
-                  onChange={(e) => setFilterActif(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
-                >
-                  <option value="">Tous les statuts</option>
-                  <option value="true">Actif</option>
-                  <option value="false">Inactif</option>
-                </select>
-              </div>
-            </div>
-            <div className="lg:col-span-3 flex items-end">
-              <button
-                onClick={handleResetFilters}
-                className="w-full px-3 py-2 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 rounded-lg hover:from-gray-200 hover:to-gray-100 transition-all duration-300 border border-gray-300 font-medium flex items-center justify-center gap-1.5 text-sm"
-              >
-                <FiX className="group-hover:rotate-90 transition-transform duration-300" />
-                Réinitialiser tout
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tableau Principal - SIMPLIFIÉ (6 colonnes seulement) */}
+      {/* Tableau Principal COMME DANS ENTITÉS */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {/* En-tête du tableau avec actions - COMPACT */}
-        <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+        {/* En-tête du tableau avec actions compact */}
+        <div className="px-3 py-2 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5">
                 <input
                   type="checkbox"
                   checked={selectedRows.length === currentAffiliations.length && currentAffiliations.length > 0}
                   onChange={selectAllRows}
-                  className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                  className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                 />
                 <span className="text-xs text-gray-700">
                   {selectedRows.length} sélectionné(s)
                 </span>
               </div>
-              {selectedRows.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <button className="px-2 py-1 bg-violet-50 text-violet-700 rounded text-xs font-medium hover:bg-violet-100 transition-colors">
-                    <FiDownload size={12} />
-                  </button>
-                  <button className="px-2 py-1 bg-red-50 text-red-700 rounded text-xs font-medium hover:bg-red-100 transition-colors">
-                    <FiTrash2 size={12} />
-                  </button>
-                </div>
-              )}
             </div>
-            <div className="flex items-center gap-2">
-              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
-                <FiDownload size={16} />
+            <div className="flex items-center gap-1">
+              <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiDownload size={14} />
               </button>
-              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
-                <FiUpload size={16} />
+              <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiUpload size={14} />
               </button>
               <select
                 value={itemsPerPage}
@@ -499,7 +435,7 @@ export default function UtilisateurEntitePage() {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
+                className="border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
               >
                 <option value={5}>5 lignes</option>
                 <option value={10}>10 lignes</option>
@@ -510,18 +446,18 @@ export default function UtilisateurEntitePage() {
           </div>
         </div>
 
-        {/* Tableau SIMPLIFIÉ */}
+        {/* Tableau */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
               <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <input
                       type="checkbox"
                       checked={selectedRows.length === currentAffiliations.length && currentAffiliations.length > 0}
                       onChange={selectAllRows}
-                      className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                      className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                     />
                     ID
                   </div>
@@ -543,29 +479,30 @@ export default function UtilisateurEntitePage() {
                 </th>
               </tr>
             </thead>
+            
             <tbody className="divide-y divide-gray-200">
               {currentAffiliations.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-3 py-6 text-center">
+                  <td colSpan={6} className="px-3 py-4 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-3">
-                        <FiUsers className="w-8 h-8 text-gray-400" />
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
+                        <FiUsers className="w-6 h-6 text-gray-400" />
                       </div>
-                      <h3 className="text-base font-semibold text-gray-900 mb-1.5">
-                        {affiliations.length === 0 ? 'Aucune affiliation trouvée' : 'Aucun résultat pour votre recherche'}
+                      <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                        {affiliations.length === 0 ? 'Aucune affiliation trouvée' : 'Aucun résultat'}
                       </h3>
-                      <p className="text-gray-600 mb-4 max-w-md text-sm">
+                      <p className="text-gray-600 text-xs mb-3 max-w-md">
                         {affiliations.length === 0 
                           ? 'Commencez par créer votre première affiliation' 
-                          : 'Essayez de modifier vos critères de recherche ou de filtres'}
+                          : 'Essayez de modifier vos critères de recherche'}
                       </p>
                       {affiliations.length === 0 && (
                         <button 
                           onClick={handleNewAffiliation}
-                          className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1.5 text-sm"
+                          className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
                         >
-                          <FiPlus />
-                          Créer ma première affiliation
+                          <FiPlus size={12} />
+                          Créer affiliation
                         </button>
                       )}
                     </div>
@@ -574,45 +511,52 @@ export default function UtilisateurEntitePage() {
               ) : (
                 currentAffiliations.map((affiliation) => (
                   <tr 
-                    key={affiliation.id} 
+                    key={affiliation.id}
                     className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
                       selectedRows.includes(affiliation.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
                     }`}
                   >
+                    {/* ID avec checkbox */}
                     <td className="px-3 py-2 whitespace-nowrap border-r border-gray-200">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(affiliation.id)}
                           onChange={() => toggleRowSelection(affiliation.id)}
-                          className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                          className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                         />
-                        <span className="px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
+                        <span className="px-1 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
                           #{affiliation.id}
                         </span>
                       </div>
                     </td>
+                    
+                    {/* Utilisateur */}
                     <td className="px-3 py-2 border-r border-gray-200">
                       <div>
-                        <div className="text-sm font-semibold text-gray-900 truncate max-w-[150px]">
+                        <div className="text-xs font-semibold text-gray-900 truncate max-w-[150px]">
                           {affiliation.utilisateur_details?.email || '-'}
                         </div>
                         <div className="text-xs text-gray-500">
-                          @{affiliation.utilisateur_details?.username}
+                          @{affiliation.utilisateur_details?.username || '-'}
                         </div>
                       </div>
                     </td>
+                    
+                    {/* Entité */}
                     <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="text-sm font-medium text-gray-900 truncate max-w-[150px]">
+                      <div className="text-xs font-medium text-gray-900 truncate max-w-[150px]">
                         {affiliation.entite_details?.raison_sociale || '-'}
                       </div>
                       <div className="text-xs text-gray-500 truncate max-w-[150px]">
                         {affiliation.entite_details?.telephone || '-'}
                       </div>
                     </td>
+                    
+                    {/* Statut */}
                     <td className="px-3 py-2 border-r border-gray-200">
                       <div className="flex items-center">
-                        <div className={`px-2 py-1 rounded flex items-center gap-1 ${
+                        <div className={`px-1.5 py-0.5 rounded flex items-center gap-1 ${
                           affiliation.actif
                             ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
                             : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
@@ -631,10 +575,12 @@ export default function UtilisateurEntitePage() {
                         </div>
                       </div>
                     </td>
+                    
+                    {/* Défaut */}
                     <td className="px-3 py-2 border-r border-gray-200">
                       <div className="flex items-center justify-center">
                         {affiliation.est_defaut ? (
-                          <div className="px-2 py-1 bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 rounded border border-purple-200 flex items-center gap-1">
+                          <div className="px-1.5 py-0.5 bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 rounded border border-purple-200 flex items-center gap-1">
                             <FiStar className="w-2.5 h-2.5" />
                             <span className="text-xs font-medium">Défaut</span>
                           </div>
@@ -643,18 +589,20 @@ export default function UtilisateurEntitePage() {
                         )}
                       </div>
                     </td>
+                    
+                    {/* Actions */}
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleViewDetails(affiliation)}
-                          className="p-1.5 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded-lg hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
+                          className="p-1 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
                           title="Voir détails"
                         >
-                          <FiEye size={14} />
+                          <FiEye size={12} />
                         </button>
                         <button
                           onClick={() => handleToggleActif(affiliation)}
-                          className={`p-1.5 rounded-lg transition-all duration-200 shadow-sm hover:shadow ${
+                          className={`p-1 rounded transition-all duration-200 shadow-sm hover:shadow ${
                             affiliation.actif
                               ? 'bg-gradient-to-r from-orange-50 to-orange-100 text-orange-700 hover:from-orange-100 hover:to-orange-200'
                               : 'bg-gradient-to-r from-green-50 to-green-100 text-green-700 hover:from-green-100 hover:to-green-200'
@@ -662,33 +610,33 @@ export default function UtilisateurEntitePage() {
                           title={affiliation.actif ? 'Désactiver' : 'Activer'}
                         >
                           {affiliation.actif ? (
-                            <FiToggleRight size={14} />
+                            <FiToggleRight size={12} />
                           ) : (
-                            <FiToggleLeft size={14} />
+                            <FiToggleLeft size={12} />
                           )}
                         </button>
                         {!affiliation.est_defaut && (
                           <button
                             onClick={() => handleSetDefault(affiliation)}
-                            className="p-1.5 bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 rounded-lg hover:from-purple-100 hover:to-purple-200 transition-all duration-200 shadow-sm hover:shadow"
+                            className="p-1 bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 rounded hover:from-purple-100 hover:to-purple-200 transition-all duration-200 shadow-sm hover:shadow"
                             title="Définir comme défaut"
                           >
-                            <FiStar size={14} />
+                            <FiStar size={12} />
                           </button>
                         )}
                         <button
                           onClick={() => handleEdit(affiliation)}
-                          className="p-1.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded-lg hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
+                          className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
                           title="Modifier"
                         >
-                          <FiEdit2 size={14} />
+                          <FiEdit2 size={12} />
                         </button>
                         <button
                           onClick={() => handleDelete(affiliation)}
-                          className="p-1.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-lg hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+                          className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
                           title="Supprimer"
                         >
-                          <FiTrash2 size={14} />
+                          <FiTrash2 size={12} />
                         </button>
                       </div>
                     </td>
@@ -699,12 +647,12 @@ export default function UtilisateurEntitePage() {
           </table>
         </div>
 
-        {/* Pagination - COMPACT */}
-        {filteredAffiliations.length > 0 && (
-          <div className="px-4 py-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
+        {/* Pagination compact COMME DANS ENTITÉS */}
+        {currentAffiliations.length > 0 && (
+          <div className="px-3 py-2 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <span className="text-xs text-gray-700">
                     Page {currentPage} sur {totalPages}
                   </span>
@@ -715,22 +663,22 @@ export default function UtilisateurEntitePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`p-1.5 rounded border transition-all duration-200 ${
+                  className={`p-1 rounded border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
                   title="Page précédente"
                 >
-                  <FiChevronLeft size={14} />
+                  <FiChevronLeft size={12} />
                 </button>
 
                 {/* Numéros de page */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNumber;
                     if (totalPages <= 5) {
@@ -747,7 +695,7 @@ export default function UtilisateurEntitePage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`min-w-[32px] h-8 rounded border text-xs font-medium transition-all duration-200 ${
+                        className={`min-w-[28px] h-7 rounded border text-xs font-medium transition-all duration-200 ${
                           currentPage === pageNumber
                             ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow'
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
@@ -762,14 +710,14 @@ export default function UtilisateurEntitePage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`p-1.5 rounded border transition-all duration-200 ${
+                  className={`p-1 rounded border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
                   title="Page suivante"
                 >
-                  <FiChevronRight size={14} />
+                  <FiChevronRight size={12} />
                 </button>
               </div>
             </div>
@@ -777,7 +725,7 @@ export default function UtilisateurEntitePage() {
         )}
       </div>
 
-      {/* Formulaire Modal */}
+      {/* Modaux */}
       {showForm && (
         <UtilisateurEntiteFormModal
           affiliation={editingAffiliation}
@@ -791,7 +739,6 @@ export default function UtilisateurEntitePage() {
         />
       )}
 
-      {/* Modal de détails */}
       {showDetailModal && selectedAffiliation && (
         <UtilisateurEntiteDetailModal
           affiliation={selectedAffiliation}
@@ -805,7 +752,7 @@ export default function UtilisateurEntitePage() {
   );
 }
 
-// MODAL DE DÉTAILS POUR LES AFFILIATIONS
+// MODAL DE DÉTAILS AFFILIATION - STYLE COMME ENTITÉS
 function UtilisateurEntiteDetailModal({ affiliation, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
@@ -818,7 +765,7 @@ function UtilisateurEntiteDetailModal({ affiliation, onClose }) {
                 <FiUsers className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-base font-bold">Détails de l'affiliation</h2>
+                <h2 className="text-base font-bold">Détails de l'Affiliation</h2>
                 <p className="text-violet-100 text-xs mt-0.5">
                   {affiliation.utilisateur_details?.email} @ {affiliation.entite_details?.raison_sociale}
                 </p>
@@ -834,29 +781,59 @@ function UtilisateurEntiteDetailModal({ affiliation, onClose }) {
         </div>
         
         <div className="p-4 space-y-4">
+          {/* En-tête avec badges */}
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-4 mb-6">
+            <div className="w-32 h-32 bg-gradient-to-br from-violet-100 to-violet-200 rounded-lg flex items-center justify-center overflow-hidden border-2 border-violet-300">
+              <FiUsers className="w-16 h-16 text-violet-600" />
+            </div>
+            <div className="flex-1 text-center md:text-left">
+              <h1 className="text-xl font-bold text-gray-900">
+                {affiliation.utilisateur_details?.email} @ {affiliation.entite_details?.raison_sociale}
+              </h1>
+              <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                  affiliation.actif
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {affiliation.actif ? 'Active' : 'Inactive'}
+                </span>
+                {affiliation.est_defaut && (
+                  <span className="inline-flex items-center px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                    <FiStar className="w-3 h-3 mr-1" />
+                    Entité par défaut
+                  </span>
+                )}
+                <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                  <FiCalendar className="w-3 h-3 mr-1" />
+                  {new Date(affiliation.date_creation).toLocaleDateString('fr-FR')}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Informations Générales */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-4 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
               Informations Générales
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">ID</p>
-                <p className="text-sm text-gray-900 font-medium">#{affiliation.id}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Identifiant</p>
+                <p className="text-sm text-gray-900 font-mono font-medium">#{affiliation.id}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Date de création</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Date de création</p>
                 <p className="text-sm text-gray-900">
-                  {new Date(affiliation.date_creation).toLocaleDateString('fr-FR')} à{' '}
-                  {new Date(affiliation.date_creation).toLocaleTimeString('fr-FR')}
+                  {affiliation.date_creation ? new Date(affiliation.date_creation).toLocaleDateString('fr-FR') : '-'}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Dernière modification</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Dernière modification</p>
                 <p className="text-sm text-gray-900">
                   {affiliation.date_modification 
-                    ? `${new Date(affiliation.date_modification).toLocaleDateString('fr-FR')} à ${new Date(affiliation.date_modification).toLocaleTimeString('fr-FR')}`
+                    ? new Date(affiliation.date_modification).toLocaleDateString('fr-FR')
                     : 'Jamais modifiée'}
                 </p>
               </div>
@@ -864,32 +841,28 @@ function UtilisateurEntiteDetailModal({ affiliation, onClose }) {
           </div>
 
           {/* Informations Utilisateur */}
-          <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-3 border border-violet-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-4 border border-blue-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
               Informations Utilisateur
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Email</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Email</p>
                 <p className="text-sm text-gray-900 font-medium">{affiliation.utilisateur_details?.email || '-'}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Nom d'utilisateur</p>
-                <p className="text-sm text-gray-900">@{affiliation.utilisateur_details?.username}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Nom d'utilisateur</p>
+                <p className="text-sm text-gray-900">@{affiliation.utilisateur_details?.username || '-'}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Nom complet</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Nom complet</p>
                 <p className="text-sm text-gray-900">
-                  {affiliation.utilisateur_details?.first_name} {affiliation.utilisateur_details?.last_name}
+                  {affiliation.utilisateur_details?.first_name || ''} {affiliation.utilisateur_details?.last_name || ''}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Téléphone</p>
-                <p className="text-sm text-gray-900">{affiliation.utilisateur_details?.telephone || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Statut utilisateur</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Statut utilisateur</p>
                 <div className={`px-2 py-1 rounded inline-flex items-center gap-1 ${
                   affiliation.utilisateur_details?.statut === 'actif'
                     ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
@@ -912,64 +885,44 @@ function UtilisateurEntiteDetailModal({ affiliation, onClose }) {
           </div>
 
           {/* Informations Entité */}
-          <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-3 border border-purple-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+          <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-4 border border-purple-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
               <div className="w-1 h-4 bg-gradient-to-b from-purple-600 to-purple-400 rounded"></div>
               Informations Entité
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Raison Sociale</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Raison Sociale</p>
                 <p className="text-sm text-gray-900 font-medium">{affiliation.entite_details?.raison_sociale || '-'}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Téléphone</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Téléphone</p>
                 <p className="text-sm text-gray-900">{affiliation.entite_details?.telephone || '-'}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Email</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Email</p>
                 <p className="text-sm text-gray-900">{affiliation.entite_details?.email || '-'}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Activité</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Activité</p>
                 <p className="text-sm text-gray-900">{affiliation.entite_details?.activite || '-'}</p>
               </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Adresse</p>
+              <div className="md:col-span-2">
+                <p className="text-xs font-medium text-gray-500 mb-1">Adresse</p>
                 <p className="text-sm text-gray-900">{affiliation.entite_details?.adresse || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Statut entité</p>
-                <div className={`px-2 py-1 rounded inline-flex items-center gap-1 ${
-                  affiliation.entite_details?.statut
-                    ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
-                    : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
-                }`}>
-                  {affiliation.entite_details?.statut ? (
-                    <>
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                      <span className="text-xs font-medium">Actif</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
-                      <span className="text-xs font-medium">Inactif</span>
-                    </>
-                  )}
-                </div>
               </div>
             </div>
           </div>
 
           {/* Paramètres de l'affiliation */}
-          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+          <div className="bg-gradient-to-br from-cyan-50 to-white rounded-lg p-4 border border-cyan-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-cyan-600 to-cyan-400 rounded"></div>
               Paramètres de l'affiliation
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Statut de l'affiliation</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Statut de l'affiliation</p>
                 <div className={`px-2 py-1 rounded inline-flex items-center gap-1 ${
                   affiliation.actif
                     ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
@@ -989,7 +942,7 @@ function UtilisateurEntiteDetailModal({ affiliation, onClose }) {
                 </div>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Entité par défaut</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Entité par défaut</p>
                 <div className={`px-2 py-1 rounded inline-flex items-center gap-1 ${
                   affiliation.est_defaut
                     ? 'bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 border border-purple-200' 
@@ -1027,39 +980,40 @@ function UtilisateurEntiteDetailModal({ affiliation, onClose }) {
   );
 }
 
-// COMPOSANT MODAL POUR LES AFFILIATIONS - FORMULAIRE COMPACT
+// COMPOSANT MODAL AVEC FORMULAIRE COMPLET COMME ENTITÉS
 function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClose, onSuccess }) {
+  // États pour le formulaire
   const [formData, setFormData] = useState({
-    utilisateur: affiliation?.utilisateur?.id || '',
-    entite: affiliation?.entite?.id || '',
+    utilisateur: affiliation?.utilisateur?.id || affiliation?.utilisateur || '',
+    entite: affiliation?.entite?.id || affiliation?.entite || '',
     est_defaut: affiliation?.est_defaut || false,
     actif: affiliation?.actif ?? true
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // ÉTATS POUR RECHERCHE DANS LES DROPDOWNS
+  const [searchUtilisateur, setSearchUtilisateur] = useState('');
+  const [searchEntite, setSearchEntite] = useState('');
 
-  // Fonction pour trouver l'utilisateur sélectionné
-  const getSelectedUtilisateur = () => {
-    if (!formData.utilisateur) return null;
-    
-    const utilisateurId = formData.utilisateur.toString();
-    return utilisateurs.find(u => 
-      u.id?.toString() === utilisateurId ||
-      u.id === formData.utilisateur
-    );
-  };
+  // S'assurer que les tableaux sont toujours des tableaux
+  const utilisateursArray = Array.isArray(utilisateurs) ? utilisateurs : [];
+  const entitesArray = Array.isArray(entites) ? entites : [];
 
-  // Fonction pour trouver l'entité sélectionnée
-  const getSelectedEntite = () => {
-    if (!formData.entite) return null;
-    
-    const entiteId = formData.entite.toString();
-    return entites.find(e => 
-      e.id?.toString() === entiteId ||
-      e.id === formData.entite
-    );
-  };
+  // Filtrer les listes avec la recherche
+  const filteredUtilisateurs = utilisateursArray.filter(utilisateur =>
+    (utilisateur.email || '').toLowerCase().includes(searchUtilisateur.toLowerCase()) ||
+    (utilisateur.username || '').toLowerCase().includes(searchUtilisateur.toLowerCase()) ||
+    (utilisateur.first_name || '').toLowerCase().includes(searchUtilisateur.toLowerCase()) ||
+    (utilisateur.last_name || '').toLowerCase().includes(searchUtilisateur.toLowerCase())
+  );
+
+  const filteredEntites = entitesArray.filter(entite =>
+    (entite.raison_sociale || '').toLowerCase().includes(searchEntite.toLowerCase()) ||
+    (entite.email || '').toLowerCase().includes(searchEntite.toLowerCase()) ||
+    (entite.telephone || '').toLowerCase().includes(searchEntite.toLowerCase())
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1067,8 +1021,14 @@ function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClos
     setError(null);
 
     // Validation
-    if (!formData.utilisateur || !formData.entite) {
-      setError('L\'utilisateur et l\'entité sont obligatoires');
+    if (!formData.utilisateur) {
+      setError('L\'utilisateur est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.entite) {
+      setError('L\'entité est obligatoire');
       setLoading(false);
       return;
     }
@@ -1115,27 +1075,186 @@ function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClos
     }));
   };
 
-  // Rendu conditionnel si les données ne sont pas chargées
-  if (utilisateurs.length === 0 || entites.length === 0) {
+  // Composant réutilisable pour les dropdowns avec recherche - COMME DANS ENTITÉS
+  const SearchableDropdown = ({ 
+    label, 
+    value, 
+    onChange, 
+    options, 
+    searchValue,
+    onSearchChange,
+    placeholder,
+    required = false,
+    disabled = false,
+    icon: Icon,
+    getOptionLabel = (option) => option,
+    getOptionValue = (option) => option,
+    renderOption = (option) => getOptionLabel(option)
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+    const inputRef = useRef(null);
+
+    const filteredOptions = options.filter(option =>
+      getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
+    );
+
+    const selectedOption = options.find(opt => getOptionValue(opt) === value);
+
+    useEffect(() => {
+      const handleMouseDown = (event) => {
+        if (!dropdownRef.current?.contains(event.target)) {
+          setIsOpen(false);
+          onSearchChange('');
+        }
+      };
+
+      document.addEventListener('mousedown', handleMouseDown, true);
+      
+      return () => {
+        document.removeEventListener('mousedown', handleMouseDown, true);
+      };
+    }, [onSearchChange]);
+
+    const handleToggle = () => {
+      if (!disabled) {
+        setIsOpen(!isOpen);
+        if (!isOpen) {
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 0);
+        } else {
+          onSearchChange('');
+        }
+      }
+    };
+
+    const handleInputMouseDown = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputFocus = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleInputClick = (e) => {
+      e.stopPropagation();
+    };
+
+    const handleOptionClick = (optionValue) => {
+      onChange(optionValue);
+      setIsOpen(false);
+      onSearchChange('');
+    };
+
     return (
-      <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-        <div className="bg-white rounded-lg w-full max-w-2xl p-4">
-          <div className="flex flex-col items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-600 mb-3"></div>
-            <p className="text-gray-600 text-sm">Chargement des données utilisateurs et entités...</p>
+      <div className="relative" ref={dropdownRef}>
+        {label && (
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            {label} {required && <span className="text-red-500">*</span>}
+          </label>
+        )}
+        
+        {/* Bouton d'ouverture du dropdown */}
+        <button
+          type="button"
+          onClick={handleToggle}
+          onMouseDown={(e) => e.preventDefault()}
+          disabled={disabled}
+          className={`w-full text-left border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent transition-all text-sm ${
+            disabled 
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+              : 'bg-white hover:border-gray-400'
+          } ${isOpen ? 'ring-1 ring-violet-500 border-violet-500' : ''}`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {Icon && <Icon className="text-gray-400" size={16} />}
+              {selectedOption ? (
+                <span className="text-gray-900 font-medium truncate">{getOptionLabel(selectedOption)}</span>
+              ) : (
+                <span className="text-gray-500 truncate">{placeholder || `Sélectionnez...`}</span>
+              )}
+            </div>
+            <svg className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
-        </div>
+        </button>
+
+        {/* Dropdown avec recherche */}
+        {isOpen && (
+          <div 
+            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-56 overflow-hidden"
+            onMouseDown={handleInputMouseDown}
+          >
+            {/* Barre de recherche */}
+            <div className="p-2 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+              <div className="relative">
+                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchValue}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onMouseDown={handleInputMouseDown}
+                  onClick={handleInputClick}
+                  onFocus={handleInputFocus}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm bg-white"
+                  placeholder={`Rechercher...`}
+                  autoFocus
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1 px-1">
+                {filteredOptions.length} résultat(s) trouvé(s)
+              </p>
+            </div>
+            
+            {/* Liste des options */}
+            <div className="max-h-44 overflow-y-auto">
+              {filteredOptions.length === 0 ? (
+                <div className="p-4 text-center">
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <FiSearch className="text-gray-400" />
+                  </div>
+                  <p className="text-gray-500 text-xs">Aucun résultat trouvé</p>
+                </div>
+              ) : (
+                filteredOptions.map((option, index) => (
+                  <div
+                    key={index}
+                    className={`px-3 py-2 cursor-pointer hover:bg-violet-50 text-sm border-b border-gray-100 last:border-b-0 transition-colors ${
+                      value === getOptionValue(option) ? 'bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium' : 'text-gray-700'
+                    }`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onClick={() => handleOptionClick(getOptionValue(option))}
+                  >
+                    {renderOption(option)}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Affichage de la valeur sélectionnée */}
+        {selectedOption && !isOpen && (
+          <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+            <FiCheck size={12} />
+            Sélectionné: <span className="font-medium truncate">{getOptionLabel(selectedOption)}</span>
+          </p>
+        )}
       </div>
     );
-  }
-
-  const selectedUtilisateur = getSelectedUtilisateur();
-  const selectedEntite = getSelectedEntite();
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
-        {/* Header du modal - COMPACT */}
+      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header du modal avec gradient - COMPACT COMME DANS ENTITÉS */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1168,70 +1287,60 @@ function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClos
               <div className="p-1.5 bg-red-100 rounded">
                 <FiX className="text-red-600" size={14} />
               </div>
-              <span className="text-red-800 text-xs font-medium">{error}</span>
+              <span className="text-red-800 text-xs font-medium whitespace-pre-line">{error}</span>
             </div>
           </div>
         )}
         
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Section 1: Sélection - COMPACT */}
+          {/* Section 1: Sélection (ORDRE CORRECT COMME ENTITÉS) */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Sélection</h3>
             </div>
             
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {/* Utilisateur avec recherche */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Utilisateur <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" size={16} />
-                  <select
-                    required
-                    value={formData.utilisateur}
-                    onChange={(e) => handleChange('utilisateur', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
-                  >
-                    <option value="">Sélectionnez un utilisateur</option>
-                    {utilisateurs.map(utilisateur => (
-                      <option key={utilisateur.id} value={utilisateur.id}>
-                        {utilisateur.email} ({utilisateur.username})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SearchableDropdown
+                  label="Utilisateur"
+                  value={formData.utilisateur}
+                  onChange={(value) => handleChange('utilisateur', value)}
+                  options={utilisateursArray}
+                  searchValue={searchUtilisateur}
+                  onSearchChange={setSearchUtilisateur}
+                  placeholder="Sélectionnez un utilisateur"
+                  required={true}
+                  icon={FiUser}
+                  getOptionLabel={(utilisateur) => `${utilisateur.email} (@${utilisateur.username})`}
+                  getOptionValue={(utilisateur) => utilisateur.id}
+                />
               </div>
-              
+
+              {/* Entité avec recherche */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Entité <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <FiBriefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" size={16} />
-                  <select
-                    required
-                    value={formData.entite}
-                    onChange={(e) => handleChange('entite', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
-                  >
-                    <option value="">Sélectionnez une entité</option>
-                    {entites.map(entite => (
-                      <option key={entite.id} value={entite.id}>
-                        {entite.raison_sociale}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SearchableDropdown
+                  label="Entité"
+                  value={formData.entite}
+                  onChange={(value) => handleChange('entite', value)}
+                  options={entitesArray}
+                  searchValue={searchEntite}
+                  onSearchChange={setSearchEntite}
+                  placeholder="Sélectionnez une entité"
+                  required={true}
+                  icon={FiBriefcase}
+                  getOptionLabel={(entite) => `${entite.raison_sociale}`}
+                  getOptionValue={(entite) => entite.id}
+                />
               </div>
             </div>
           </div>
 
-          {/* Section 2: Paramètres - COMPACT */}
-          <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-3 border border-violet-100">
+          {/* Section 2: Paramètres */}
+          <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-3 border border-purple-100">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              <div className="w-1 h-4 bg-gradient-to-b from-purple-600 to-purple-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Paramètres</h3>
             </div>
             
@@ -1265,7 +1374,7 @@ function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClos
                     Entité par défaut
                   </span>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Cette entité sera sélectionnée par défaut
+                    Cette entité sera sélectionnée par défaut pour cet utilisateur
                   </p>
                 </div>
               </label>
@@ -1278,61 +1387,29 @@ function UtilisateurEntiteFormModal({ affiliation, utilisateurs, entites, onClos
               <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Aperçu de l'affiliation</h3>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="bg-white rounded-lg p-2 border border-gray-200">
                 <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Utilisateur</div>
                 <div className="text-xs font-medium text-gray-900 truncate">
-                  {selectedUtilisateur ? 
-                    selectedUtilisateur.email || selectedUtilisateur.username || `Utilisateur #${formData.utilisateur}`
+                  {formData.utilisateur ? 
+                    utilisateursArray.find(u => u.id == formData.utilisateur)?.email || 
+                    `Utilisateur #${formData.utilisateur}`
                     : 'Non défini'}
                 </div>
-                {selectedUtilisateur && (
-                  <div className="text-xs text-gray-500 mt-0.5 truncate">
-                    @{selectedUtilisateur.username}
-                  </div>
-                )}
               </div>
               <div className="bg-white rounded-lg p-2 border border-gray-200">
                 <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Entité</div>
                 <div className="text-xs font-medium text-gray-900 truncate">
-                  {selectedEntite ? 
-                    selectedEntite.raison_sociale || `Entité #${formData.entite}`
+                  {formData.entite ? 
+                    entitesArray.find(e => e.id === formData.entite)?.raison_sociale || 
+                    `Entité #${formData.entite}`
                     : 'Non défini'}
-                </div>
-                {selectedEntite && (
-                  <div className="text-xs text-gray-500 mt-0.5 truncate">
-                    {selectedEntite.telephone || 'Aucun téléphone'}
-                  </div>
-                )}
-              </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Statut</div>
-                <div>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                    formData.actif 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {formData.actif ? 'Actif' : 'Inactif'}
-                  </span>
-                </div>
-              </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Par défaut</div>
-                <div>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                    formData.est_defaut 
-                      ? 'bg-purple-100 text-purple-800' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {formData.est_defaut ? 'Oui' : 'Non'}
-                  </span>
                 </div>
               </div>
             </div>
           </div>
           
-          {/* Boutons d'action - COMPACT */}
+          {/* Boutons d'action - COMME DANS ENTITÉS */}
           <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button
               type="button"
