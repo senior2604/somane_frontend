@@ -35,7 +35,8 @@ import {
   FiImage,
   FiCheckCircle,
   FiXCircle,
-  FiMap
+  FiMap,
+  FiFolder
 } from "react-icons/fi";
 import { TbBuildingSkyscraper } from "react-icons/tb";
 
@@ -145,6 +146,7 @@ export default function EntitiesPage() {
   const [filterStatut, setFilterStatut] = useState('');
   const [filterPays, setFilterPays] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   // Chargement initial
   useEffect(() => {
@@ -207,10 +209,10 @@ export default function EntitiesPage() {
       (entity.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       getVilleName(entity.ville).toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatut = !filterStatut || 
+    const matchesStatut = filterStatut === '' || 
       (filterStatut === 'actif' ? entity.statut : !entity.statut);
     
-    const matchesPays = !filterPays || 
+    const matchesPays = filterPays === '' || 
       (entity.pays && entity.pays.id && entity.pays.id.toString() === filterPays);
     
     return matchesSearch && matchesStatut && matchesPays;
@@ -287,6 +289,7 @@ export default function EntitiesPage() {
     setFilterStatut('');
     setFilterPays('');
     setCurrentPage(1);
+    setShowFilterDropdown(false);
   };
 
   // Statistiques
@@ -294,7 +297,7 @@ export default function EntitiesPage() {
     total: entities.length,
     actives: entities.filter(e => e.statut).length,
     inactives: entities.filter(e => !e.statut).length,
-    withLogo: entities.filter(e => e.logo).length,
+    withParent: entities.filter(e => e.parent_id).length, // Nouveau : Sociétés avec société mère
   };
 
   if (loading) {
@@ -318,21 +321,6 @@ export default function EntitiesPage() {
     <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
       {/* HEADER COMPACT AVEC RECHERCHE AU CENTRE */}
       <div className="mb-6">
-        {/* Ligne supérieure avec titre */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-br from-violet-600 to-violet-500 rounded-lg shadow">
-              <TbBuildingSkyscraper className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Gestion des Sociétés</h1>
-              <p className="text-gray-600 text-xs mt-0.5">
-                Gérez toutes les sociétés de votre organisation
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Barre de recherche au centre */}
         <div className="flex items-center justify-center gap-3 mb-4">
           <div className="relative flex items-center">
@@ -357,12 +345,67 @@ export default function EntitiesPage() {
               {/* Bouton de filtre avec dropdown */}
               <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
                 <button
-                  onClick={() => {}}
-                  className="flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium ${
+                    filterStatut || filterPays ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-700'
+                  } hover:bg-gray-200 transition-colors`}
                 >
                   <FiChevronDown size={12} />
                   <span>Filtre</span>
                 </button>
+                
+                {/* Dropdown des filtres */}
+                {showFilterDropdown && (
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                    <div className="p-2">
+                      <p className="text-xs font-medium text-gray-700 mb-2">Filtrer par</p>
+                      
+                      {/* Filtre Statut */}
+                      <div className="space-y-1 mb-3">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Statut</p>
+                        <button
+                          onClick={() => {
+                            setFilterStatut('');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${!filterStatut ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Tous les statuts
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterStatut('actif');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterStatut === 'actif' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Actives seulement
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterStatut('inactif');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterStatut === 'inactif' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Inactives seulement
+                        </button>
+                      </div>
+                      
+                      
+                      
+                      {/* Réinitialiser */}
+                      {(searchTerm || filterStatut || filterPays) && (
+                        <button
+                          onClick={resetFilters}
+                          className="w-full mt-2 px-2 py-1.5 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200 transition-colors"
+                        >
+                          Réinitialiser les filtres
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -384,13 +427,13 @@ export default function EntitiesPage() {
           </div>
         </div>
 
-        {/* Statistiques en ligne compactes */}
+        {/* Statistiques en ligne compactes - AMÉLIORÉES */}
         <div className="grid grid-cols-4 gap-2 mb-3">
           <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Total sociétés</p>
-                <p className="text-sm font-bold text-violet-600 mt-0.5">{stats.total}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Total:</span>
+                <span className="text-sm font-bold text-violet-600">{stats.total}</span>
               </div>
               <div className="p-1 bg-violet-50 rounded">
                 <TbBuildingSkyscraper className="w-3 h-3 text-violet-600" />
@@ -399,9 +442,9 @@ export default function EntitiesPage() {
           </div>
           <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Actives</p>
-                <p className="text-sm font-bold text-green-600 mt-0.5">{stats.actives}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Actives:</span>
+                <span className="text-sm font-bold text-green-600">{stats.actives}</span>
               </div>
               <div className="p-1 bg-green-50 rounded">
                 <FiCheckCircle className="w-3 h-3 text-green-600" />
@@ -410,9 +453,9 @@ export default function EntitiesPage() {
           </div>
           <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Inactives</p>
-                <p className="text-sm font-bold text-red-600 mt-0.5">{stats.inactives}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Inactives:</span>
+                <span className="text-sm font-bold text-red-600">{stats.inactives}</span>
               </div>
               <div className="p-1 bg-red-50 rounded">
                 <FiXCircle className="w-3 h-3 text-red-600" />
@@ -421,18 +464,18 @@ export default function EntitiesPage() {
           </div>
           <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Avec logo</p>
-                <p className="text-sm font-bold text-blue-600 mt-0.5">{stats.withLogo}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Filiales:</span>
+                <span className="text-sm font-bold text-blue-600">{stats.withParent}</span>
               </div>
               <div className="p-1 bg-blue-50 rounded">
-                <FiImage className="w-3 h-3 text-blue-600" />
+                <FiFolder className="w-3 h-3 text-blue-600" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Onglets (si besoin pour une future fonctionnalité) */}
+        {/* Onglets */}
         <div className="flex border-b border-gray-200 mb-3">
           <button
             onClick={() => {
@@ -488,6 +531,20 @@ export default function EntitiesPage() {
                   {selectedRows.length} sélectionné(s)
                 </span>
               </div>
+              {(filterStatut || filterPays) && (
+                <div className="flex items-center gap-1">
+                  {filterStatut && (
+                    <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-xs rounded border border-violet-200">
+                      {filterStatut === 'actif' ? 'Actives' : 'Inactives'}
+                    </span>
+                  )}
+                  {filterPays && (
+                    <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-xs rounded border border-violet-200">
+                      Pays: {pays.find(p => p.id.toString() === filterPays)?.nom_fr || filterPays}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
@@ -1009,7 +1066,7 @@ function EntityDetailModal({ entity, onClose }) {
                     <a href={entity.site_web} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">
                       {entity.site_web}
                     </a>
-                </div>
+                  </div>
                 </div>
               )}
             </div>

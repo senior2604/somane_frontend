@@ -250,19 +250,7 @@ export default function TauxChangePage() {
       {/* HEADER COMPACT COMME DANS BANQUES */}
       <div className="mb-6">
         {/* Ligne supérieure avec titre */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-br from-violet-600 to-violet-500 rounded-lg shadow">
-              <FiActivity className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Gestion des Taux de Change</h1>
-              <p className="text-gray-600 text-xs mt-0.5">
-                Gérez vos taux de change et devises
-              </p>
-            </div>
-          </div>
-        </div>
+        
 
         {/* Barre de recherche au centre COMME DANS BANQUES */}
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -316,52 +304,53 @@ export default function TauxChangePage() {
         </div>
 
         {/* Statistiques en ligne compactes COMME DANS BANQUES */}
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Total taux</p>
-                <p className="text-sm font-bold text-violet-600 mt-0.5">{stats.total}</p>
-              </div>
-              <div className="p-1 bg-violet-50 rounded">
-                <FiActivity className="w-3 h-3 text-violet-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Devises</p>
-                <p className="text-sm font-bold text-emerald-600 mt-0.5">{stats.uniqueDevises}</p>
-              </div>
-              <div className="p-1 bg-emerald-50 rounded">
-                <FiGlobe className="w-3 h-3 text-emerald-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Dates</p>
-                <p className="text-sm font-bold text-amber-600 mt-0.5">{stats.uniqueDates}</p>
-              </div>
-              <div className="p-1 bg-amber-50 rounded">
-                <FiCalendar className="w-3 h-3 text-amber-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Entités</p>
-                <p className="text-sm font-bold text-blue-600 mt-0.5">{stats.uniqueEntites}</p>
-              </div>
-              <div className="p-1 bg-blue-50 rounded">
-                <FiTrendingUp className="w-3 h-3 text-blue-600" />
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Statistiques en ligne compactes - FORMAT IDENTIQUE AUX AUTRES PAGES */}
+<div className="grid grid-cols-4 gap-2 mb-3">
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Total:</span>
+        <span className="text-sm font-bold text-violet-600">{stats.total}</span>
+      </div>
+      <div className="p-1 bg-violet-50 rounded">
+        <FiActivity className="w-3 h-3 text-violet-600" />
+      </div>
+    </div>
+  </div>
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Devises:</span>
+        <span className="text-sm font-bold text-emerald-600">{stats.uniqueDevises}</span>
+      </div>
+      <div className="p-1 bg-emerald-50 rounded">
+        <FiGlobe className="w-3 h-3 text-emerald-600" />
+      </div>
+    </div>
+  </div>
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Dates:</span>
+        <span className="text-sm font-bold text-amber-600">{stats.uniqueDates}</span>
+      </div>
+      <div className="p-1 bg-amber-50 rounded">
+        <FiCalendar className="w-3 h-3 text-amber-600" />
+      </div>
+    </div>
+  </div>
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Entités:</span>
+        <span className="text-sm font-bold text-blue-600">{stats.uniqueEntites}</span>
+      </div>
+      <div className="p-1 bg-blue-50 rounded">
+        <FiTrendingUp className="w-3 h-3 text-blue-600" />
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* Onglets */}
         <div className="flex border-b border-gray-200 mb-3">

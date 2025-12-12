@@ -311,20 +311,7 @@ export default function PartnersPage() {
     <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
       {/* HEADER COMPACT COMME DANS ENTITÉS */}
       <div className="mb-6">
-        {/* Ligne supérieure avec titre */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-br from-violet-600 to-violet-500 rounded-lg shadow">
-              <FiUsers className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Gestion des Partenaires</h1>
-              <p className="text-gray-600 text-xs mt-0.5">
-                Gérez tous vos partenaires commerciaux
-              </p>
-            </div>
-          </div>
-        </div>
+     
 
         {/* Barre de recherche au centre COMME DANS ENTITÉS */}
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -378,54 +365,55 @@ export default function PartnersPage() {
         </div>
 
         {/* Statistiques en ligne compactes COMME DANS ENTITÉS */}
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Total partenaires</p>
-                <p className="text-sm font-bold text-violet-600 mt-0.5">{stats.total}</p>
-              </div>
-              <div className="p-1 bg-violet-50 rounded">
-                <FiUsers className="w-3 h-3 text-violet-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Actifs</p>
-                <p className="text-sm font-bold text-green-600 mt-0.5">{stats.actifs}</p>
-              </div>
-              <div className="p-1 bg-green-50 rounded">
-                <FiCheckCircle className="w-3 h-3 text-green-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Inactifs</p>
-                <p className="text-sm font-bold text-red-600 mt-0.5">{stats.inactifs}</p>
-              </div>
-              <div className="p-1 bg-red-50 rounded">
-                <FiXCircle className="w-3 h-3 text-red-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Types différents</p>
-                <p className="text-sm font-bold text-blue-600 mt-0.5">
-                  {[...new Set(partners.map(p => p.type_partenaire))].length}
-                </p>
-              </div>
-              <div className="p-1 bg-blue-50 rounded">
-                <FiUserCheck className="w-3 h-3 text-blue-600" />
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Statistiques en ligne compactes - FORMAT IDENTIQUE AUX ENTITÉS */}
+<div className="grid grid-cols-4 gap-2 mb-3">
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Total:</span>
+        <span className="text-sm font-bold text-violet-600">{stats.total}</span>
+      </div>
+      <div className="p-1 bg-violet-50 rounded">
+        <FiUsers className="w-3 h-3 text-violet-600" />
+      </div>
+    </div>
+  </div>
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Actifs:</span>
+        <span className="text-sm font-bold text-green-600">{stats.actifs}</span>
+      </div>
+      <div className="p-1 bg-green-50 rounded">
+        <FiCheckCircle className="w-3 h-3 text-green-600" />
+      </div>
+    </div>
+  </div>
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Inactifs:</span>
+        <span className="text-sm font-bold text-red-600">{stats.inactifs}</span>
+      </div>
+      <div className="p-1 bg-red-50 rounded">
+        <FiXCircle className="w-3 h-3 text-red-600" />
+      </div>
+    </div>
+  </div>
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Types:</span>
+        <span className="text-sm font-bold text-blue-600">
+          {[...new Set(partners.map(p => p.type_partenaire))].length}
+        </span>
+      </div>
+      <div className="p-1 bg-blue-50 rounded">
+        <FiUserCheck className="w-3 h-3 text-blue-600" />
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* Onglets (si besoin pour une future fonctionnalité) */}
         <div className="flex border-b border-gray-200 mb-3">

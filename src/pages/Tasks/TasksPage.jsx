@@ -1,5 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { 
+  FiRefreshCw, 
+  FiPlus, 
+  FiEdit2, 
+  FiTrash2, 
+  FiSearch, 
+  FiFilter, 
+  FiX, 
+  FiCheck, 
+  FiPlay,
+  FiPause,
+  FiCalendar,
+  FiClock,
+  FiDatabase,
+  FiGlobe,
+  FiFileText,
+  FiChevronLeft,
+  FiChevronRight,
+  FiDownload,
+  FiUpload,
+  FiEye,
+  FiCheckCircle,
+  FiXCircle,
+  FiAlertCircle,
+  FiInfo,
+  FiMoreVertical,
+  FiChevronDown,
+  FiChevronUp
+} from "react-icons/fi";
+import { TbClock } from "react-icons/tb";
 
 export default function TasksPage() {
   const [taches, setTaches] = useState([]);
@@ -17,6 +47,8 @@ export default function TasksPage() {
   const [filterEntite, setFilterEntite] = useState('');
   const [filterFrequence, setFilterFrequence] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   useEffect(() => {
     fetchTaches();
@@ -72,9 +104,9 @@ export default function TasksPage() {
   // Filtrage et recherche
   const filteredTaches = taches.filter(tache => {
     const matchesSearch = 
-      tache.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tache.modele_cible?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tache.fonction?.toLowerCase().includes(searchTerm.toLowerCase());
+      (tache.nom || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tache.modele_cible || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tache.fonction || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesEntite = filterEntite === '' || 
       (tache.entite && tache.entite.id.toString() === filterEntite) ||
@@ -99,6 +131,23 @@ export default function TasksPage() {
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
   const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
   const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
+
+  // Gestion des sélections
+  const toggleRowSelection = (id) => {
+    setSelectedRows(prev => 
+      prev.includes(id) 
+        ? prev.filter(rowId => rowId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const selectAllRows = () => {
+    if (selectedRows.length === currentTaches.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(currentTaches.map(tache => tache.id));
+    }
+  };
 
   // Gestion des actions
   const handleNewTache = () => {
@@ -162,6 +211,16 @@ export default function TasksPage() {
     fetchTaches();
   };
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setFilterEntite('');
+    setFilterFrequence('');
+    setFilterStatut('');
+    setCurrentPage(1);
+    setShowFilterDropdown(false);
+  };
+
+  // Utilitaires d'affichage
   const getFrequenceDisplay = (frequence) => {
     const frequences = {
       'hourly': 'Toutes les heures',
@@ -192,367 +251,607 @@ export default function TasksPage() {
 
   const getStatutColor = (statut) => {
     switch (statut) {
-      case 'Bientôt': return 'text-orange-600 bg-orange-100';
-      case 'En retard': return 'text-red-600 bg-red-100';
-      case 'Planifiée': return 'text-green-600 bg-green-100';
-      case 'Inactive': return 'text-gray-600 bg-gray-100';
-      default: return 'text-gray-600 bg-gray-100';
+      case 'Bientôt': return 'bg-gradient-to-r from-orange-50 to-orange-100 text-orange-700 border border-orange-200';
+      case 'En retard': return 'bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200';
+      case 'Planifiée': return 'bg-gradient-to-r from-green-50 to-green-100 text-green-700 border border-green-200';
+      case 'Inactive': return 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border border-gray-200';
+      default: return 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border border-gray-200';
     }
+  };
+
+  // Statistiques
+  const stats = {
+    total: taches.length,
+    actives: taches.filter(t => t.active).length,
+    globales: taches.filter(t => !t.entite).length,
+    enRetard: taches.filter(t => {
+      if (!t.active) return false;
+      const maintenant = new Date();
+      const prochaine = new Date(t.prochaine_execution);
+      return prochaine < maintenant;
+    }).length,
   };
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="flex justify-center items-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des tâches automatiques...</span>
+      <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+        <div className="flex flex-col items-center justify-center h-96">
+          <div className="relative">
+            <div className="w-12 h-12 border-3 border-gray-200 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div className="mt-4">
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 animate-pulse"></div>
+            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-24 mt-2 animate-pulse mx-auto"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Tâches Automatiques</h1>
-          <p className="text-gray-600 mt-1">
-            {filteredTaches.length} tâche(s) trouvée(s)
-            {(searchTerm || filterEntite || filterFrequence || filterStatut) && ' • Filtres actifs'}
-          </p>
+    <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+      {/* HEADER COMPACT AVEC RECHERCHE AU CENTRE */}
+      <div className="mb-6">
+        {/* Barre de recherche au centre */}
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <div className="relative flex items-center">
+            <div className="relative flex-1">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-24 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm w-80"
+                placeholder="Rechercher une tâche..."
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <FiX size={14} />
+                </button>
+              )}
+              
+              {/* Bouton de filtre avec dropdown */}
+              <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
+                <button
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium ${
+                    filterEntite || filterFrequence || filterStatut ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-700'
+                  } hover:bg-gray-200 transition-colors`}
+                >
+                  <FiChevronDown size={12} />
+                  <span>Filtre</span>
+                </button>
+                
+                {/* Dropdown des filtres */}
+                {showFilterDropdown && (
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                    <div className="p-2">
+                      <p className="text-xs font-medium text-gray-700 mb-2">Filtrer par</p>
+                      
+                      {/* Filtre Portée */}
+                      <div className="space-y-1 mb-3">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Portée</p>
+                        <button
+                          onClick={() => {
+                            setFilterEntite('');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${!filterEntite ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Toutes les portées
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterEntite('global');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterEntite === 'global' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Tâches globales
+                        </button>
+                        {entites.slice(0, 5).map(entite => (
+                          <button
+                            key={entite.id}
+                            onClick={() => {
+                              setFilterEntite(entite.id.toString());
+                              setShowFilterDropdown(false);
+                            }}
+                            className={`w-full text-left px-2 py-1.5 rounded text-xs truncate ${
+                              filterEntite === entite.id.toString() ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            {entite.raison_sociale}
+                          </button>
+                        ))}
+                      </div>
+                      
+                      {/* Filtre Fréquence */}
+                      <div className="space-y-1 mb-3">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Fréquence</p>
+                        <button
+                          onClick={() => {
+                            setFilterFrequence('');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${!filterFrequence ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Toutes les fréquences
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterFrequence('hourly');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterFrequence === 'hourly' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Toutes les heures
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterFrequence('daily');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterFrequence === 'daily' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Quotidienne
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterFrequence('weekly');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterFrequence === 'weekly' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Hebdomadaire
+                        </button>
+                      </div>
+                      
+                      {/* Filtre Statut */}
+                      <div className="space-y-1 mb-3">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Statut</p>
+                        <button
+                          onClick={() => {
+                            setFilterStatut('');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${!filterStatut ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Tous les statuts
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterStatut('true');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterStatut === 'true' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Actives seulement
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterStatut('false');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterStatut === 'false' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Inactives seulement
+                        </button>
+                      </div>
+                      
+                      {/* Réinitialiser */}
+                      {(searchTerm || filterEntite || filterFrequence || filterStatut) && (
+                        <button
+                          onClick={resetFilters}
+                          className="w-full mt-2 px-2 py-1.5 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200 transition-colors"
+                        >
+                          Réinitialiser les filtres
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <button 
+              onClick={handleRetry}
+              className="ml-3 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center gap-1.5 text-sm"
+            >
+              <FiRefreshCw className={`${loading ? 'animate-spin' : ''}`} size={14} />
+              <span>Actualiser</span>
+            </button>
+            
+            <button 
+              onClick={handleNewTache}
+              className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
+            >
+              <FiPlus size={14} />
+              <span>Nouvelle Tâche</span>
+            </button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <button 
-            onClick={handleRetry}
-            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+
+        {/* Statistiques en ligne compactes */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Total:</span>
+                <span className="text-sm font-bold text-violet-600">{stats.total}</span>
+              </div>
+              <div className="p-1 bg-violet-50 rounded">
+                <TbClock className="w-3 h-3 text-violet-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Actives:</span>
+                <span className="text-sm font-bold text-green-600">{stats.actives}</span>
+              </div>
+              <div className="p-1 bg-green-50 rounded">
+                <FiCheckCircle className="w-3 h-3 text-green-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Globales:</span>
+                <span className="text-sm font-bold text-blue-600">{stats.globales}</span>
+              </div>
+              <div className="p-1 bg-blue-50 rounded">
+                <FiGlobe className="w-3 h-3 text-blue-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">En retard:</span>
+                <span className="text-sm font-bold text-red-600">{stats.enRetard}</span>
+              </div>
+              <div className="p-1 bg-red-50 rounded">
+                <FiAlertCircle className="w-3 h-3 text-red-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Onglets */}
+        <div className="flex border-b border-gray-200 mb-3">
+          <button
+            onClick={() => {
+              setCurrentPage(1);
+              setSelectedRows([]);
+              resetFilters();
+            }}
+            className="px-4 py-1.5 text-xs font-medium border-b-2 border-violet-600 text-violet-600 transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Actualiser
-          </button>
-          <button 
-            onClick={handleNewTache}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Nouvelle Tâche
+            Toutes les tâches
           </button>
         </div>
       </div>
 
-      {/* Message d'erreur */}
+      {/* Message d'erreur compact */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 font-medium">{error}</span>
+        <div className="mb-4">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-2 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-red-100 rounded">
+                  <FiX className="w-3 h-3 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-900 text-xs">{error}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRetry}
+                className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-xs font-medium"
+              >
+                Réessayer
+              </button>
             </div>
-            <button
-              onClick={handleRetry}
-              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
-            >
-              Réessayer
-            </button>
           </div>
         </div>
       )}
 
-      {/* Filtres et Recherche */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nom, modèle, fonction..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Portée</label>
-            <select
-              value={filterEntite}
-              onChange={(e) => setFilterEntite(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Toutes les portées</option>
-              <option value="global">Tâches globales</option>
-              {entites.map(entite => (
-                <option key={entite.id} value={entite.id}>
-                  {entite.raison_sociale}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Fréquence</label>
-            <select
-              value={filterFrequence}
-              onChange={(e) => setFilterFrequence(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Toutes les fréquences</option>
-              <option value="hourly">Toutes les heures</option>
-              <option value="daily">Quotidienne</option>
-              <option value="weekly">Hebdomadaire</option>
-              <option value="monthly">Mensuelle</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-            <select
-              value={filterStatut}
-              onChange={(e) => setFilterStatut(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Tous les statuts</option>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </select>
+      {/* Tableau Principal */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {/* En-tête du tableau avec actions compact */}
+        <div className="px-3 py-2 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={selectedRows.length === currentTaches.length && currentTaches.length > 0}
+                  onChange={selectAllRows}
+                  className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                />
+                <span className="text-xs text-gray-700">
+                  {selectedRows.length} sélectionné(s)
+                </span>
+              </div>
+              {(filterEntite || filterFrequence || filterStatut) && (
+                <div className="flex items-center gap-1">
+                  {filterEntite && (
+                    <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-xs rounded border border-violet-200">
+                      {filterEntite === 'global' ? 'Globales' : `Société: ${entites.find(e => e.id.toString() === filterEntite)?.raison_sociale || filterEntite}`}
+                    </span>
+                  )}
+                  {filterFrequence && (
+                    <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-xs rounded border border-violet-200">
+                      Fréquence: {getFrequenceDisplay(filterFrequence)}
+                    </span>
+                  )}
+                  {filterStatut && (
+                    <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-xs rounded border border-violet-200">
+                      {filterStatut === 'true' ? 'Actives' : 'Inactives'}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiDownload size={14} />
+              </button>
+              <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiUpload size={14} />
+              </button>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
+              >
+                <option value={5}>5 lignes</option>
+                <option value={10}>10 lignes</option>
+                <option value={20}>20 lignes</option>
+                <option value={50}>50 lignes</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setFilterEntite('');
-              setFilterFrequence('');
-              setFilterStatut('');
-              setCurrentPage(1);
-            }}
-            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
-          >
-            Réinitialiser
-          </button>
-        </div>
-      </div>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-blue-600">{taches.length}</div>
-          <div className="text-sm text-gray-600">Total des tâches</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-green-600">
-            {taches.filter(t => t.active).length}
-          </div>
-          <div className="text-sm text-gray-600">Tâches actives</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-purple-600">
-            {taches.filter(t => !t.entite).length}
-          </div>
-          <div className="text-sm text-gray-600">Tâches globales</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4">
-          <div className="text-2xl font-bold text-orange-600">
-            {taches.filter(t => {
-              if (!t.active) return false;
-              const maintenant = new Date();
-              const prochaine = new Date(t.prochaine_execution);
-              return prochaine < maintenant;
-            }).length}
-          </div>
-          <div className="text-sm text-gray-600">En retard</div>
-        </div>
-      </div>
-
-      {/* Tableau */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden">
+        {/* Tableau */}
         <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
+          <table className="min-w-full divide-y divide-gray-200">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-300">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom
+              <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.length === currentTaches.length && currentTaches.length > 0}
+                      onChange={selectAllRows}
+                      className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                    />
+                    Tâche
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Portée
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Fréquence
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Modèle cible
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Dernière exécution
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Prochaine exécution
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Statut
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody>
+            
+            <tbody className="divide-y divide-gray-200">
               {currentTaches.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
-                    {taches.length === 0 ? 'Aucune tâche trouvée' : 'Aucun résultat pour votre recherche'}
+                  <td colSpan={7} className="px-3 py-4 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
+                        <TbClock className="w-6 h-6 text-gray-400" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                        {taches.length === 0 ? 'Aucune tâche trouvée' : 'Aucun résultat'}
+                      </h3>
+                      <p className="text-gray-600 text-xs mb-3 max-w-md">
+                        {taches.length === 0 
+                          ? 'Commencez par créer votre première tâche automatique' 
+                          : 'Essayez de modifier vos critères de recherche'}
+                      </p>
+                      {taches.length === 0 && (
+                        <button 
+                          onClick={handleNewTache}
+                          className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
+                        >
+                          <FiPlus size={12} />
+                          Créer tâche
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                currentTaches.map((tache, index) => (
+                currentTaches.map((tache) => (
                   <tr 
-                    key={tache.id} 
-                    className={`${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                    } hover:bg-gray-100 transition-colors border-b border-gray-300`}
+                    key={tache.id}
+                    className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
+                      selectedRows.includes(tache.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
+                    }`}
                   >
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-gray-900">
-                          {tache.nom}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {tache.fonction}
-                        </span>
+                    {/* Tâche avec checkbox */}
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(tache.id)}
+                          onChange={() => toggleRowSelection(tache.id)}
+                          className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                        />
+                        <div>
+                          <div className="text-xs font-semibold text-gray-900 truncate max-w-[120px]">
+                            {tache.nom}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {tache.fonction}
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
+                    
+                    {/* Portée */}
+                    <td className="px-3 py-2 border-r border-gray-200">
                       {tache.entite ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {tache.entite.raison_sociale}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Global
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {getFrequenceDisplay(tache.frequence)}
-                      {tache.heure_execution && (
-                        <div className="text-xs text-gray-400">
-                          à {tache.heure_execution}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      <span className="font-mono bg-gray-50 px-2 py-1 rounded border text-xs">
-                        {tache.modele_cible}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {tache.derniere_execution ? (
-                        <div>
-                          {new Date(tache.derniere_execution).toLocaleDateString('fr-FR')}
-                          <br />
-                          <span className="text-xs text-gray-400">
-                            {new Date(tache.derniere_execution).toLocaleTimeString('fr-FR')}
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-6 h-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center border border-blue-200">
+                            <FiDatabase className="w-3 h-3 text-blue-600" />
+                          </div>
+                          <span className="text-xs text-gray-900 truncate max-w-[80px]">
+                            {tache.entite.raison_sociale}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-400">Jamais</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {tache.prochaine_execution ? (
-                        <div>
-                          {new Date(tache.prochaine_execution).toLocaleDateString('fr-FR')}
-                          <br />
-                          <span className="text-xs text-gray-400">
-                            {new Date(tache.prochaine_execution).toLocaleTimeString('fr-FR')}
-                          </span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-6 h-6 bg-gradient-to-br from-green-50 to-green-100 rounded-full flex items-center justify-center border border-green-200">
+                            <FiGlobe className="w-3 h-3 text-green-600" />
+                          </div>
+                          <span className="text-xs text-gray-900">Globale</span>
                         </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <div className="flex flex-col space-y-1">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          tache.active 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {tache.active ? 'Active' : 'Inactive'}
-                        </span>
-                        {tache.active && (
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatutColor(getStatutProchaineExecution(tache))}`}>
-                            {getStatutProchaineExecution(tache)}
-                          </span>
+                    
+                    {/* Fréquence */}
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="flex flex-col">
+                        <div className="text-xs text-gray-900">
+                          {getFrequenceDisplay(tache.frequence)}
+                        </div>
+                        {tache.heure_execution && (
+                          <div className="text-xs text-gray-500 flex items-center gap-0.5 mt-0.5">
+                            <FiClock size={10} />
+                            <span>{tache.heure_execution}</span>
+                          </div>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col space-y-2">
-                        <div className="flex space-x-2">
-                          <button 
-                            onClick={() => handleToggleActive(tache)}
-                            className={`text-xs font-medium transition-colors flex items-center gap-1 ${
-                              tache.active 
-                                ? 'text-orange-600 hover:text-orange-800' 
-                                : 'text-green-600 hover:text-green-800'
-                            }`}
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              {tache.active ? (
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              ) : (
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                              )}
-                            </svg>
-                            {tache.active ? 'Désactiver' : 'Activer'}
-                          </button>
-                          <button 
-                            onClick={() => handleExecuteNow(tache)}
-                            disabled={!tache.active}
-                            className={`text-xs font-medium transition-colors flex items-center gap-1 ${
-                              tache.active 
-                                ? 'text-purple-600 hover:text-purple-800' 
-                                : 'text-gray-400 cursor-not-allowed'
-                            }`}
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            </svg>
-                            Exécuter
-                          </button>
+                    
+                    {/* Modèle cible */}
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="px-1.5 py-0.5 bg-gray-50 text-gray-800 rounded border border-gray-200 text-xs font-mono truncate max-w-[100px]">
+                        {tache.modele_cible}
+                      </div>
+                    </td>
+                    
+                    {/* Dernière exécution */}
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="flex flex-col">
+                        {tache.derniere_execution ? (
+                          <>
+                            <div className="text-xs text-gray-900">
+                              {new Date(tache.derniere_execution).toLocaleDateString('fr-FR')}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(tache.derniere_execution).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-400">Jamais</span>
+                        )}
+                      </div>
+                    </td>
+                    
+                    {/* Statut */}
+                    <td className="px-3 py-2 border-r border-gray-200">
+                      <div className="flex flex-col gap-1">
+                        <div className={`px-1.5 py-0.5 rounded flex items-center gap-1 text-xs ${
+                          tache.active
+                            ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
+                            : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
+                        }`}>
+                          {tache.active ? (
+                            <>
+                              <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                              <span className="font-medium">Active</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+                              <span className="font-medium">Inactive</span>
+                            </>
+                          )}
                         </div>
-                        <div className="flex space-x-2">
-                          <button 
-                            onClick={() => handleShowLogs(tache)}
-                            className="text-blue-600 hover:text-blue-800 text-xs font-medium transition-colors flex items-center gap-1"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            Logs
-                          </button>
-                          <button 
-                            onClick={() => handleEdit(tache)}
-                            className="text-blue-600 hover:text-blue-800 text-xs font-medium transition-colors flex items-center gap-1"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Éditer
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(tache)}
-                            className="text-red-600 hover:text-red-800 text-xs font-medium transition-colors flex items-center gap-1"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Supprimer
-                          </button>
-                        </div>
+                        {tache.active && (
+                          <div className={`px-1.5 py-0.5 rounded flex items-center gap-1 text-xs ${getStatutColor(getStatutProchaineExecution(tache))}`}>
+                            {getStatutProchaineExecution(tache)}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    
+                    {/* Actions */}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleToggleActive(tache)}
+                          className={`p-1 rounded transition-all duration-200 shadow-sm hover:shadow ${
+                            tache.active
+                              ? 'bg-gradient-to-r from-orange-50 to-orange-100 text-orange-700 hover:from-orange-100 hover:to-orange-200'
+                              : 'bg-gradient-to-r from-green-50 to-green-100 text-green-700 hover:from-green-100 hover:to-green-200'
+                          }`}
+                          title={tache.active ? 'Désactiver' : 'Activer'}
+                        >
+                          {tache.active ? <FiPause size={12} /> : <FiPlay size={12} />}
+                        </button>
+                        <button
+                          onClick={() => handleExecuteNow(tache)}
+                          disabled={!tache.active}
+                          className={`p-1 rounded transition-all duration-200 shadow-sm hover:shadow ${
+                            tache.active
+                              ? 'bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 hover:from-purple-100 hover:to-purple-200'
+                              : 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-400 cursor-not-allowed'
+                          }`}
+                          title="Exécuter maintenant"
+                        >
+                          <FiPlay size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleShowLogs(tache)}
+                          className="p-1 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded hover:from-blue-100 hover:to-blue-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Voir les logs"
+                        >
+                          <FiEye size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(tache)}
+                          className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Modifier"
+                        >
+                          <FiEdit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(tache)}
+                          className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Supprimer"
+                        >
+                          <FiTrash2 size={12} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -562,47 +861,38 @@ export default function TasksPage() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {filteredTaches.length > 0 && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
-                  Lignes par page:
-                </span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="border border-gray-300 rounded px-3 py-1 text-sm"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="text-sm text-gray-700">
-                  {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredTaches.length)} sur {filteredTaches.length}
-                </span>
+        {/* Pagination compact */}
+        {currentTaches.length > 0 && (
+          <div className="px-3 py-2 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-gray-700">
+                    Page {currentPage} sur {totalPages}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-xs text-gray-700">
+                    {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredTaches.length)} sur {filteredTaches.length} tâches
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-1 rounded border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page précédente"
                 >
-                  Précédent
+                  <FiChevronLeft size={12} />
                 </button>
 
                 {/* Numéros de page */}
-                <div className="flex space-x-1">
+                <div className="flex items-center gap-0.5">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNumber;
                     if (totalPages <= 5) {
@@ -619,10 +909,10 @@ export default function TasksPage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`w-8 h-8 rounded border text-sm ${
+                        className={`min-w-[28px] h-7 rounded border text-xs font-medium transition-all duration-200 ${
                           currentPage === pageNumber
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                         }`}
                       >
                         {pageNumber}
@@ -634,13 +924,14 @@ export default function TasksPage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded border text-sm ${
+                  className={`p-1 rounded border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
+                  title="Page suivante"
                 >
-                  Suivant
+                  <FiChevronRight size={12} />
                 </button>
               </div>
             </div>
@@ -648,7 +939,7 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Formulaire Modal */}
+      {/* Modaux */}
       {showForm && (
         <TacheFormModal
           tache={editingTache}
@@ -661,8 +952,7 @@ export default function TasksPage() {
         />
       )}
 
-      {/* Modal des logs */}
-      {showLogs && (
+      {showLogs && selectedTache && (
         <LogsModal
           tache={selectedTache}
           onClose={() => {
@@ -675,7 +965,7 @@ export default function TasksPage() {
   );
 }
 
-// Composant Modal pour le formulaire des tâches - VERSION CORRIGÉE
+// MODAL DE FORMULAIRE TÂCHE - DESIGN MISE À JOUR
 function TacheFormModal({ tache, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     nom: tache?.nom || '',
@@ -765,11 +1055,9 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
         heure_execution: formData.heure_execution || null,
         entite: formData.entite || null,
         active: formData.active,
-        prochaine_execution: prochaineExecution, // CHAMP OBLIGATOIRE AJOUTÉ
+        prochaine_execution: prochaineExecution,
         derniere_execution: null
       };
-
-      console.log('📤 Payload envoyé:', payload);
 
       const url = tache 
         ? `/taches/${tache.id}/`
@@ -785,12 +1073,10 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
         }
       });
       
-      console.log('✅ Tâche sauvegardée:', response);
       onSuccess();
     } catch (err) {
       console.error('❌ Erreur sauvegarde:', err);
       
-      // Affiche plus de détails sur l'erreur
       let errorMessage = 'Erreur lors de la sauvegarde';
       if (err.response?.data) {
         errorMessage = `Erreur ${err.response.status}: ${JSON.stringify(err.response.data)}`;
@@ -812,185 +1098,237 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {tache ? 'Modifier la tâche' : 'Créer une nouvelle tâche'}
-          </h2>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header du modal */}
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                <TbClock className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">
+                  {tache ? 'Modifier la tâche' : 'Nouvelle Tâche Automatique'}
+                </h2>
+                <p className="text-violet-100 text-xs mt-0.5">
+                  Configurez une tâche planifiée
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-white/20 rounded transition-colors"
+            >
+              <FiX size={18} />
+            </button>
+          </div>
         </div>
         
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 text-sm">{error}</span>
+          <div className="mx-4 mt-3 bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-red-100 rounded">
+                <FiX className="text-red-600" size={14} />
+              </div>
+              <span className="text-red-800 text-xs font-medium whitespace-pre-line">{error}</span>
             </div>
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Nom */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom de la tâche *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.nom}
-                onChange={(e) => handleChange('nom', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ex: Nettoyage des anciennes données"
-              />
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* Section 1: Configuration de base */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Configuration de Base</h3>
             </div>
             
-            {/* Modèle cible */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Modèle cible *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.modele_cible}
-                onChange={(e) => handleChange('modele_cible', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                placeholder="Ex: core.Partenaire"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Format: application.Modele
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Nom */}
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Nom de la tâche <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.nom}
+                  onChange={(e) => handleChange('nom', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
+                  placeholder="Ex: Nettoyage des anciennes données"
+                />
+              </div>
+              
+              {/* Modèle cible */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Modèle cible <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.modele_cible}
+                  onChange={(e) => handleChange('modele_cible', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm font-mono"
+                  placeholder="Ex: core.Partenaire"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Format: application.Modele
+                </p>
+              </div>
+              
+              {/* Fonction */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Fonction <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.fonction}
+                  onChange={(e) => handleChange('fonction', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
+                  placeholder="Ex: nettoyer_anciennes_donnees"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Nom de la fonction à exécuter
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Planification */}
+          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Planification</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Fréquence */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Fréquence <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={formData.frequence}
+                  onChange={(e) => handleChange('frequence', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  <option value="hourly">Toutes les heures</option>
+                  <option value="daily">Quotidienne</option>
+                  <option value="weekly">Hebdomadaire</option>
+                  <option value="monthly">Mensuelle</option>
+                </select>
+              </div>
+              
+              {/* Heure d'exécution */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Heure d'exécution
+                </label>
+                <div className="relative">
+                  <FiClock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="time"
+                    value={formData.heure_execution}
+                    onChange={(e) => handleChange('heure_execution', e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Pour daily/weekly/monthly uniquement
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Portée */}
+          <div className="bg-gradient-to-br from-emerald-50 to-white rounded-lg p-3 border border-emerald-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-emerald-600 to-emerald-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Portée</h3>
             </div>
             
-            {/* Fonction */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fonction *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.fonction}
-                onChange={(e) => handleChange('fonction', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ex: nettoyer_anciennes_donnees"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Nom de la fonction à exécuter
-              </p>
-            </div>
-            
-            {/* Fréquence */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fréquence *
-              </label>
-              <select
-                required
-                value={formData.frequence}
-                onChange={(e) => handleChange('frequence', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="hourly">Toutes les heures</option>
-                <option value="daily">Quotidienne</option>
-                <option value="weekly">Hebdomadaire</option>
-                <option value="monthly">Mensuelle</option>
-              </select>
-            </div>
-            
-            {/* Heure d'exécution */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Heure d'exécution
-              </label>
-              <input
-                type="time"
-                value={formData.heure_execution}
-                onChange={(e) => handleChange('heure_execution', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Pour daily/weekly/monthly
-              </p>
-            </div>
-            
-            {/* Portée */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Portée
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Portée d'exécution
               </label>
               <select
                 value={formData.entite}
                 onChange={(e) => handleChange('entite', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent text-sm"
               >
-                <option value="">Tâche globale</option>
+                <option value="">Tâche globale (toutes les sociétés)</option>
                 {entites.map(entite => (
                   <option key={entite.id} value={entite.id}>
-                    {entite.raison_sociale}
+                    Société: {entite.raison_sociale}
                   </option>
                 ))}
               </select>
-            </div>
-            
-            {/* Active */}
-            <div className="flex items-end">
-              <label className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  checked={formData.active}
-                  onChange={(e) => handleChange('active', e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  Tâche active
-                </span>
-              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Sélectionnez une société spécifique ou laissez vide pour une tâche globale
+              </p>
             </div>
           </div>
 
-          {/* Aperçu */}
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Aperçu de la tâche</h3>
-            <div className="space-y-2 text-sm">
-              <div><strong>Nom:</strong> {formData.nom || 'Non défini'}</div>
-              <div><strong>Modèle:</strong> {formData.modele_cible || 'Non défini'}</div>
-              <div><strong>Fonction:</strong> {formData.fonction || 'Non défini'}</div>
-              <div><strong>Fréquence:</strong> {
-                formData.frequence === 'hourly' ? 'Toutes les heures' :
-                formData.frequence === 'daily' ? 'Quotidienne' :
-                formData.frequence === 'weekly' ? 'Hebdomadaire' :
-                formData.frequence === 'monthly' ? 'Mensuelle' : 'Non défini'
-              }</div>
-              <div><strong>Portée:</strong> {
-                formData.entite 
-                  ? entites.find(e => e.id == formData.entite)?.raison_sociale 
-                  : 'Globale'
-              }</div>
-              <div><strong>Statut:</strong> 
-                <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                  formData.active 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {formData.active ? 'Active' : 'Inactive'}
-                </span>
+          {/* Section 4: Statut */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-3 border border-violet-100">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+                <h3 className="text-sm font-semibold text-gray-900">Statut</h3>
               </div>
-              <div><strong>Prochaine exécution:</strong> {
-                new Date(calculerProchaineExecution(formData.frequence, formData.heure_execution)).toLocaleString('fr-FR')
-              }</div>
+              <div className="flex items-center">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={formData.active}
+                      onChange={(e) => handleChange('active', e.target.checked)}
+                      className="sr-only"
+                    />
+                    <div className={`w-10 h-6 rounded-full transition-colors duration-200 ${
+                      formData.active ? 'bg-violet-600' : 'bg-gray-300'
+                    }`}></div>
+                    <div className={`absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 transform ${
+                      formData.active ? 'translate-x-4' : 'translate-x-0'
+                    }`}></div>
+                  </div>
+                  <span className="text-sm text-gray-700">
+                    {formData.active ? 'Tâche active' : 'Tâche inactive'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Aperçu */}
+            <div className="bg-gradient-to-br from-amber-50 to-white rounded-lg p-3 border border-amber-100">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-1 h-4 bg-gradient-to-b from-amber-600 to-amber-400 rounded"></div>
+                <h3 className="text-sm font-semibold text-gray-900">Aperçu</h3>
+              </div>
+              <div className="space-y-1 text-xs">
+                <div><span className="font-medium">Prochaine exécution:</span> {
+                  new Date(calculerProchaineExecution(formData.frequence, formData.heure_execution)).toLocaleString('fr-FR')
+                }</div>
+                <div><span className="font-medium">Portée:</span> {
+                  formData.entite 
+                    ? entites.find(e => e.id == formData.entite)?.raison_sociale 
+                    : 'Globale'
+                }</div>
+              </div>
             </div>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+          {/* Boutons d'action */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+              className="px-4 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium text-sm hover:shadow-sm"
               disabled={loading}
             >
               Annuler
@@ -998,15 +1336,19 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
+              className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-medium flex items-center space-x-1.5 shadow hover:shadow-md text-sm"
             >
-              {loading && (
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
+              {loading ? (
+                <>
+                  <FiRefreshCw className="animate-spin" size={14} />
+                  <span>Sauvegarde...</span>
+                </>
+              ) : (
+                <>
+                  <FiCheck size={14} />
+                  <span>{tache ? 'Mettre à jour' : 'Créer la tâche'}</span>
+                </>
               )}
-              <span>{loading ? 'Sauvegarde...' : tache ? 'Mettre à jour' : 'Créer la tâche'}</span>
             </button>
           </div>
         </form>
@@ -1015,7 +1357,7 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
   );
 }
 
-// Composant Modal pour les logs d'exécution
+// MODAL DES LOGS D'EXÉCUTION - DESIGN MISE À JOUR
 function LogsModal({ tache, onClose }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1027,7 +1369,6 @@ function LogsModal({ tache, onClose }) {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      // Récupérer les logs de la tâche
       const response = await apiClient.get(`/taches/${tache.id}/logs/`);
       setLogs(Array.isArray(response) ? response : []);
     } catch (err) {
@@ -1039,43 +1380,63 @@ function LogsModal({ tache, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[80vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-800">
-              Logs d'exécution - {tache.nom}
-            </h2>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[80vh] overflow-y-auto shadow-xl">
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
+                <FiFileText className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">Logs d'exécution</h2>
+                <p className="text-violet-100 text-xs mt-0.5">{tache.nom}</p>
+              </div>
+            </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="p-1 hover:bg-white/20 rounded transition-colors"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <FiX size={18} />
             </button>
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-4">
           {loading ? (
-            <div className="flex justify-center items-center p-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2">Chargement des logs...</span>
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="relative">
+                <div className="w-8 h-8 border-2 border-gray-200 rounded-full"></div>
+                <div className="absolute top-0 left-0 w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <div className="mt-4">
+                <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-24 animate-pulse mx-auto"></div>
+              </div>
             </div>
           ) : logs.length === 0 ? (
-            <div className="text-center text-gray-500 p-8">
-              Aucun log disponible pour cette tâche
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-3">
+                <FiFileText className="w-6 h-6 text-gray-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                Aucun log disponible
+              </h3>
+              <p className="text-gray-600 text-xs">
+                Cette tâche n'a pas encore été exécutée
+              </p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {logs.map((log, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                <div 
+                  key={index} 
+                  className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200 hover:border-gray-300 transition-colors"
+                >
                   <div className="flex justify-between items-start mb-2">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                       log.statut === 'succes' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
+                        ? 'bg-gradient-to-r from-green-50 to-green-100 text-green-700 border border-green-200' 
+                        : 'bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200'
                     }`}>
                       {log.statut === 'succes' ? 'Succès' : 'Échec'}
                     </span>
@@ -1083,11 +1444,11 @@ function LogsModal({ tache, onClose }) {
                       {new Date(log.date_execution).toLocaleString('fr-FR')}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-700">
+                  <div className="text-sm text-gray-700 mb-2">
                     {log.message}
                   </div>
                   {log.erreur && (
-                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 font-mono">
+                    <div className="mt-2 p-2 bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded text-xs text-red-700 font-mono whitespace-pre-wrap">
                       {log.erreur}
                     </div>
                   )}

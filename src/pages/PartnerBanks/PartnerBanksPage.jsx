@@ -94,7 +94,7 @@ export default function PartnerBanksPage() {
     }
   };
 
-  // Filtrage et recherche - OPTIMISÉ
+  // Filtrage et recherche
   const filteredPartnerBanks = partnerBanks.filter(partnerBank => {
     const matchesSearch = 
       (partnerBank.numero_compte || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -183,7 +183,7 @@ export default function PartnerBanksPage() {
     setCurrentPage(1);
   };
 
-  // Statistiques - STYLE SIMILAIRE
+  // Statistiques - FORMAT IDENTIQUE AUX AUTRES PAGES
   const stats = {
     total: partnerBanks.length,
     partenairesUniques: new Set(partnerBanks.map(pb => pb.partenaire).filter(id => id)).size,
@@ -197,7 +197,7 @@ export default function PartnerBanksPage() {
         <div className="flex flex-col items-center justify-center h-96">
           <div className="relative">
             <div className="w-12 h-12 border-3 border-gray-200 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
           <div className="mt-4">
             <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 animate-pulse"></div>
@@ -210,23 +210,8 @@ export default function PartnerBanksPage() {
 
   return (
     <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
-      {/* HEADER COMPACT AVEC RECHERCHE AU CENTRE - NOUVEAU STYLE */}
+      {/* HEADER COMPACT AVEC RECHERCHE AU CENTRE */}
       <div className="mb-6">
-        {/* Ligne supérieure avec titre */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-br from-blue-600 to-blue-500 rounded-lg shadow">
-              <TbBuildingBank className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Comptes Bancaires Partenaires</h1>
-              <p className="text-gray-600 text-xs mt-0.5">
-                Gérez les comptes bancaires de vos partenaires
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Barre de recherche au centre */}
         <div className="flex items-center justify-center gap-3 mb-4">
           <div className="relative flex items-center">
@@ -236,7 +221,7 @@ export default function PartnerBanksPage() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-24 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm w-80"
+                className="pl-9 pr-24 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm w-80"
                 placeholder="Rechercher un compte..."
               />
               {searchTerm && (
@@ -270,7 +255,7 @@ export default function PartnerBanksPage() {
             
             <button 
               onClick={handleNewPartnerBank}
-              className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
+              className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
             >
               <FiPlus size={14} />
               <span>Nouveau Compte</span>
@@ -278,35 +263,35 @@ export default function PartnerBanksPage() {
           </div>
         </div>
 
-        {/* Statistiques en ligne compactes - NOUVEAU STYLE */}
+        {/* Statistiques en ligne compactes - FORMAT IDENTIQUE */}
         <div className="grid grid-cols-4 gap-2 mb-3">
           <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Total comptes</p>
-                <p className="text-sm font-bold text-blue-600 mt-0.5">{stats.total}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Total:</span>
+                <span className="text-sm font-bold text-violet-600">{stats.total}</span>
               </div>
-              <div className="p-1 bg-blue-50 rounded">
-                <TbBuildingBank className="w-3 h-3 text-blue-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Partenaires</p>
-                <p className="text-sm font-bold text-green-600 mt-0.5">{stats.partenairesUniques}</p>
-              </div>
-              <div className="p-1 bg-green-50 rounded">
-                <FiUsers className="w-3 h-3 text-green-600" />
+              <div className="p-1 bg-violet-50 rounded">
+                <TbBuildingBank className="w-3 h-3 text-violet-600" />
               </div>
             </div>
           </div>
           <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Banques</p>
-                <p className="text-sm font-bold text-purple-600 mt-0.5">{stats.banquesUniques}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Partenaires:</span>
+                <span className="text-sm font-bold text-emerald-600">{stats.partenairesUniques}</span>
+              </div>
+              <div className="p-1 bg-emerald-50 rounded">
+                <FiUsers className="w-3 h-3 text-emerald-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Banques:</span>
+                <span className="text-sm font-bold text-purple-600">{stats.banquesUniques}</span>
               </div>
               <div className="p-1 bg-purple-50 rounded">
                 <FiPocket className="w-3 h-3 text-purple-600" />
@@ -315,18 +300,18 @@ export default function PartnerBanksPage() {
           </div>
           <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Entités</p>
-                <p className="text-sm font-bold text-orange-600 mt-0.5">{stats.entitesUniques}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Entités:</span>
+                <span className="text-sm font-bold text-amber-600">{stats.entitesUniques}</span>
               </div>
-              <div className="p-1 bg-orange-50 rounded">
-                <FiBriefcase className="w-3 h-3 text-orange-600" />
+              <div className="p-1 bg-amber-50 rounded">
+                <FiBriefcase className="w-3 h-3 text-amber-600" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Onglets (si besoin pour une future fonctionnalité) */}
+        {/* Onglets */}
         <div className="flex border-b border-gray-200 mb-3">
           <button
             onClick={() => {
@@ -334,7 +319,7 @@ export default function PartnerBanksPage() {
               setSelectedRows([]);
               resetFilters();
             }}
-            className="px-4 py-1.5 text-xs font-medium border-b-2 border-blue-600 text-blue-600 transition-colors"
+            className="px-4 py-1.5 text-xs font-medium border-b-2 border-violet-600 text-violet-600 transition-colors"
           >
             Tous les comptes
           </button>
@@ -376,7 +361,7 @@ export default function PartnerBanksPage() {
                   type="checkbox"
                   checked={selectedRows.length === currentPartnerBanks.length && currentPartnerBanks.length > 0}
                   onChange={selectAllRows}
-                  className="w-3 h-3 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                  className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                 />
                 <span className="text-xs text-gray-700">
                   {selectedRows.length} sélectionné(s)
@@ -396,7 +381,7 @@ export default function PartnerBanksPage() {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                className="border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
               >
                 <option value={5}>5 lignes</option>
                 <option value={10}>10 lignes</option>
@@ -418,7 +403,7 @@ export default function PartnerBanksPage() {
                       type="checkbox"
                       checked={selectedRows.length === currentPartnerBanks.length && currentPartnerBanks.length > 0}
                       onChange={selectAllRows}
-                      className="w-3 h-3 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                      className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                     />
                     ID
                   </div>
@@ -460,7 +445,7 @@ export default function PartnerBanksPage() {
                       {partnerBanks.length === 0 && (
                         <button 
                           onClick={handleNewPartnerBank}
-                          className="px-3 py-1 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded hover:from-blue-700 hover:to-blue-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
+                          className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
                         >
                           <FiPlus size={12} />
                           Créer compte
@@ -474,7 +459,7 @@ export default function PartnerBanksPage() {
                   <tr 
                     key={partnerBank.id}
                     className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
-                      selectedRows.includes(partnerBank.id) ? 'bg-gradient-to-r from-blue-50 to-blue-25' : 'bg-white'
+                      selectedRows.includes(partnerBank.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
                     }`}
                   >
                     {/* ID avec checkbox */}
@@ -484,7 +469,7 @@ export default function PartnerBanksPage() {
                           type="checkbox"
                           checked={selectedRows.includes(partnerBank.id)}
                           onChange={() => toggleRowSelection(partnerBank.id)}
-                          className="w-3 h-3 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                          className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                         />
                         <span className="px-1 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
                           #{partnerBank.id}
@@ -495,8 +480,8 @@ export default function PartnerBanksPage() {
                     {/* Partenaire */}
                     <td className="px-3 py-2 border-r border-gray-200">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-green-50 to-green-100 rounded-full flex items-center justify-center border border-green-200">
-                          <FiUsers className="w-4 h-4 text-green-600" />
+                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-full flex items-center justify-center border border-emerald-200">
+                          <FiUsers className="w-4 h-4 text-emerald-600" />
                         </div>
                         <div>
                           <div className="text-xs font-semibold text-gray-900 truncate max-w-[120px]">
@@ -530,7 +515,7 @@ export default function PartnerBanksPage() {
                     
                     {/* Numéro de compte */}
                     <td className="px-3 py-2 border-r border-gray-200">
-                      <span className="font-mono text-xs bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 px-2 py-1 rounded border border-blue-200">
+                      <span className="font-mono text-xs bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 px-2 py-1 rounded border border-violet-200">
                         {partnerBank.numero_compte}
                       </span>
                     </td>
@@ -538,8 +523,8 @@ export default function PartnerBanksPage() {
                     {/* Entité */}
                     <td className="px-3 py-2 border-r border-gray-200">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-orange-50 to-orange-100 rounded-full flex items-center justify-center border border-orange-200">
-                          <FiBriefcase className="w-4 h-4 text-orange-600" />
+                        <div className="w-8 h-8 bg-gradient-to-br from-amber-50 to-amber-100 rounded-full flex items-center justify-center border border-amber-200">
+                          <FiBriefcase className="w-4 h-4 text-amber-600" />
                         </div>
                         <div className="text-xs text-gray-900 truncate max-w-[100px]">
                           {partnerBank.entite_details?.raison_sociale || partnerBank.entite?.raison_sociale || '-'}
@@ -559,7 +544,7 @@ export default function PartnerBanksPage() {
                         </button>
                         <button
                           onClick={() => handleEdit(partnerBank)}
-                          className="p-1 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded hover:from-blue-100 hover:to-blue-200 transition-all duration-200 shadow-sm hover:shadow"
+                          className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
                           title="Modifier"
                         >
                           <FiEdit2 size={12} />
@@ -630,7 +615,7 @@ export default function PartnerBanksPage() {
                         onClick={() => paginate(pageNumber)}
                         className={`min-w-[28px] h-7 rounded border text-xs font-medium transition-all duration-200 ${
                           currentPage === pageNumber
-                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white border-blue-600 shadow'
+                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow'
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                         }`}
                       >
@@ -686,9 +671,8 @@ export default function PartnerBanksPage() {
   );
 }
 
-// MODAL DE DÉTAILS - NOUVEAU STYLE
+// MODAL DE DÉTAILS
 function PartnerBankDetailModal({ partnerBank, onClose }) {
-  // Utiliser directement les *_details du serializer
   const partenaire = partnerBank.partenaire_details || partnerBank.partenaire;
   const banque = partnerBank.banque_details || partnerBank.banque;
   const entite = partnerBank.entite_details || partnerBank.entite;
@@ -697,7 +681,7 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
       <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
         {/* Header du modal */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-t-lg p-3">
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
@@ -705,7 +689,7 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
               </div>
               <div>
                 <h2 className="text-base font-bold">Détails du Compte Bancaire</h2>
-                <p className="text-blue-100 text-xs mt-0.5">{partnerBank.numero_compte}</p>
+                <p className="text-violet-100 text-xs mt-0.5">{partnerBank.numero_compte}</p>
               </div>
             </div>
             <button
@@ -720,18 +704,18 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
         <div className="p-4 space-y-4">
           {/* En-tête avec informations principales */}
           <div className="flex flex-col md:flex-row items-center md:items-start gap-4 mb-6">
-            <div className="w-32 h-32 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center overflow-hidden border-2 border-blue-300">
-              <TbBuildingBank className="w-16 h-16 text-blue-600" />
+            <div className="w-32 h-32 bg-gradient-to-br from-violet-100 to-violet-200 rounded-lg flex items-center justify-center overflow-hidden border-2 border-violet-300">
+              <TbBuildingBank className="w-16 h-16 text-violet-600" />
             </div>
             <div className="flex-1 text-center md:text-left">
               <h1 className="text-xl font-bold text-gray-900">Compte Bancaire Partenaire</h1>
               <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
-                <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 rounded-full text-xs font-medium border border-blue-200">
+                <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-violet-100 to-violet-50 text-violet-800 rounded-full text-xs font-medium border border-violet-200">
                   <TbBuildingBank className="w-3 h-3 mr-1" />
                   Compte Partenaire
                 </span>
                 {partenaire?.type_partenaire && (
-                  <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-green-100 to-green-50 text-green-800 rounded-full text-xs font-medium border border-green-200">
+                  <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-emerald-100 to-emerald-50 text-emerald-800 rounded-full text-xs font-medium border border-emerald-200">
                     <FiUsers className="w-3 h-3 mr-1" />
                     {partenaire.type_partenaire}
                   </span>
@@ -743,13 +727,13 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
           {/* Informations du Compte */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-4 border border-gray-200">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
               Informations du Compte
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-xs font-medium text-gray-500 mb-1">Numéro de compte</p>
-                <p className="text-sm font-semibold text-blue-700 font-mono bg-blue-50 px-3 py-1.5 rounded border border-blue-200 inline-block">
+                <p className="text-sm font-semibold text-violet-700 font-mono bg-violet-50 px-3 py-1.5 rounded border border-violet-200 inline-block">
                   {partnerBank.numero_compte || '-'}
                 </p>
               </div>
@@ -763,9 +747,9 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
           </div>
 
           {/* Informations du Partenaire */}
-          <div className="bg-gradient-to-br from-green-50 to-white rounded-lg p-4 border border-green-200">
+          <div className="bg-gradient-to-br from-emerald-50 to-white rounded-lg p-4 border border-emerald-200">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-green-600 to-green-400 rounded"></div>
+              <div className="w-1 h-4 bg-gradient-to-b from-emerald-600 to-emerald-400 rounded"></div>
               Informations du Partenaire
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -833,9 +817,9 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
           </div>
 
           {/* Informations de l'Entité */}
-          <div className="bg-gradient-to-br from-orange-50 to-white rounded-lg p-4 border border-orange-200">
+          <div className="bg-gradient-to-br from-amber-50 to-white rounded-lg p-4 border border-amber-200">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-orange-600 to-orange-400 rounded"></div>
+              <div className="w-1 h-4 bg-gradient-to-b from-amber-600 to-amber-400 rounded"></div>
               Informations de l'Entité
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -874,9 +858,9 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
 
           {/* Informations de Création */}
           {(partnerBank.date_creation || partnerBank.date_maj) && (
-            <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-4 border border-blue-200">
+            <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-4 border border-violet-200">
               <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
-                <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+                <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
                 Informations de Création
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -917,7 +901,7 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
   );
 }
 
-// COMPOSANT MODAL POUR FORMULAIRE - NOUVEAU STYLE
+// COMPOSANT MODAL POUR FORMULAIRE
 function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     partenaire: partnerBank?.partenaire?.id || partnerBank?.partenaire || '',
@@ -1008,8 +992,8 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
       <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
-        {/* Header du modal avec gradient - COMPACT */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-t-lg p-3">
+        {/* Header du modal avec gradient */}
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
@@ -1020,7 +1004,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                   {partnerBank ? 'Modifier le compte bancaire' : 'Nouveau Compte Bancaire'}
                 </h2>
                 {!partnerBank && (
-                  <p className="text-blue-100 text-xs mt-0.5">
+                  <p className="text-violet-100 text-xs mt-0.5">
                     Créez un nouveau compte bancaire pour un partenaire
                   </p>
                 )}
@@ -1050,7 +1034,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
           {/* Section 1: Informations du Compte */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Informations du Compte</h3>
             </div>
             
@@ -1067,7 +1051,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                     required
                     value={formData.numero_compte}
                     onChange={(e) => handleChange('numero_compte', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white text-sm font-mono"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm font-mono"
                     placeholder="IBAN, numéro de compte..."
                   />
                 </div>
@@ -1084,7 +1068,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                     required
                     value={formData.partenaire}
                     onChange={(e) => handleChange('partenaire', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white appearance-none text-sm"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
                   >
                     <option value="">Sélectionnez un partenaire</option>
                     {partenaires.map(partenaire => (
@@ -1107,7 +1091,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                     required
                     value={formData.banque}
                     onChange={(e) => handleChange('banque', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white appearance-none text-sm"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
                   >
                     <option value="">Sélectionnez une banque</option>
                     {banques.map(banque => (
@@ -1130,7 +1114,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                     required
                     value={formData.entite}
                     onChange={(e) => handleChange('entite', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white appearance-none text-sm"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
                   >
                     <option value="">Sélectionnez une entité</option>
                     {entites.map(entite => (
@@ -1145,9 +1129,9 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
           </div>
 
           {/* Section 2: Aperçu */}
-          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
+          <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-3 border border-violet-100">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Aperçu du compte</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1167,7 +1151,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-500 mb-1">Numéro de compte</p>
-                <p className="text-sm font-semibold text-blue-700 font-mono">
+                <p className="text-sm font-semibold text-violet-700 font-mono">
                   {formData.numero_compte || 
                    <span className="text-red-500 text-xs">Saisie requis</span>}
                 </p>
@@ -1195,7 +1179,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 transition-all duration-200 font-medium flex items-center space-x-1.5 shadow hover:shadow-md text-sm"
+              className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-medium flex items-center space-x-1.5 shadow hover:shadow-md text-sm"
             >
               {loading ? (
                 <>

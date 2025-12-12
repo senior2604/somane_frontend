@@ -60,36 +60,20 @@ export default function Sidebar() {
         { name: "Entités", path: "/entities", icon: <FiBriefcase /> },
         { name: "Partenaires", path: "/partners", icon: <FiUserPlus /> },
         { 
-          name: "Utilisateurs × Groupes", 
+          name: "Gestion des utilisateurs", 
           path: "/users", 
           icon: <FiUsers />,
         },
-        { name: "Utilisateurs × Entités", path: "/userentities", icon: <FiLink /> },
+        { name: "Utilisateurs & Entités", path: "/userentities", icon: <FiLink /> },
       ]
     },
-    {
-      id: "securite",
-      name: "Sécurité",
-      icon: <FiShield />,
-      items: [
-        { 
-          name: "Groupes × Permissions", 
-          path: "/permissions", 
-          icon: <FiShield />,
-        },
-      ]
-    },
+    
     {
       id: "geographie",
       name: "Géographie",
       icon: <FiGlobe />,
       items: [
-        { 
-          name: "Géographie x Devises", 
-          path: "/countries", 
-          icon: <FiGlobe />,
-        },
-        { name: "Langues", path: "/languages", icon: <FiFlag /> },
+        ,        
         { name: "Taux de change", path: "/ExchangeRates", icon: <FiTrendingUp /> },
       ]
     },

@@ -27,9 +27,22 @@ import {
   FiPlus,
   FiLogIn,
   FiLogOut,
-  FiFileText
+  FiFileText,
+  FiCheckCircle,
+  FiXCircle,
+  FiMoreVertical,
+  FiChevronDown,
+  FiChevronUp,
+  FiExternalLink,
+  FiBriefcase,
+  FiHome,
+  FiCreditCard,
+  FiImage,
+  FiMap,
+  FiFolder,
+  FiPackage
 } from "react-icons/fi";
-import { TbHistory } from "react-icons/tb";
+import { TbHistory, TbBuildingSkyscraper, TbSettings } from "react-icons/tb";
 
 export default function JournalPage() {
   const [journal, setJournal] = useState([]);
@@ -49,6 +62,7 @@ export default function JournalPage() {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   useEffect(() => {
     fetchJournal();
@@ -207,7 +221,7 @@ export default function JournalPage() {
     fetchJournal();
   };
 
-  const handleResetFilters = () => {
+  const resetFilters = () => {
     setSearchTerm('');
     setFilterUtilisateur('');
     setFilterAction('');
@@ -216,6 +230,7 @@ export default function JournalPage() {
     setDateDebut('');
     setDateFin('');
     setCurrentPage(1);
+    setShowFilterDropdown(false);
   };
 
   const handleExport = async () => {
@@ -255,15 +270,15 @@ export default function JournalPage() {
 
   const getActionIcon = (action) => {
     switch (action) {
-      case 'creation': return <FiPlus className="w-4 h-4" />;
-      case 'modification': return <FiEdit className="w-4 h-4" />;
-      case 'suppression': return <FiTrash className="w-4 h-4" />;
-      case 'connexion': return <FiLogIn className="w-4 h-4" />;
-      case 'deconnexion': return <FiLogOut className="w-4 h-4" />;
-      case 'validation': return <FiCheck className="w-4 h-4" />;
-      case 'import': return <FiDownload className="w-4 h-4" />;
-      case 'export': return <FiUpload className="w-4 h-4" />;
-      default: return <FiFileText className="w-4 h-4" />;
+      case 'creation': return <FiPlus className="w-3 h-3" />;
+      case 'modification': return <FiEdit className="w-3 h-3" />;
+      case 'suppression': return <FiTrash className="w-3 h-3" />;
+      case 'connexion': return <FiLogIn className="w-3 h-3" />;
+      case 'deconnexion': return <FiLogOut className="w-3 h-3" />;
+      case 'validation': return <FiCheck className="w-3 h-3" />;
+      case 'import': return <FiDownload className="w-3 h-3" />;
+      case 'export': return <FiUpload className="w-3 h-3" />;
+      default: return <FiFileText className="w-3 h-3" />;
     }
   };
 
@@ -279,13 +294,25 @@ export default function JournalPage() {
     }
   };
 
+  // Statistiques
+  const stats = {
+    total: journal.length,
+    succes: journal.filter(j => j.statut === 'succes').length,
+    echecs: journal.filter(j => j.statut === 'echec').length,
+    utilisateursActifs: new Set(journal.map(j => j.utilisateur?.id).filter(id => id)).size,
+    creations: journal.filter(j => j.action === 'creation').length,
+    modifications: journal.filter(j => j.action === 'modification').length,
+    suppressions: journal.filter(j => j.action === 'suppression').length,
+    connexions: journal.filter(j => j.action === 'connexion').length
+  };
+
   if (loading) {
     return (
       <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
         <div className="flex flex-col items-center justify-center h-96">
           <div className="relative">
             <div className="w-12 h-12 border-3 border-gray-200 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
           <div className="mt-4">
             <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 animate-pulse"></div>
@@ -298,110 +325,234 @@ export default function JournalPage() {
 
   return (
     <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
-      {/* Header avec gradient */}
+      {/* HEADER COMPACT AVEC RECHERCHE AU CENTRE */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-br from-purple-600 to-purple-500 rounded-lg shadow">
-              <TbHistory className="w-5 h-5 text-white" />
+        {/* Barre de recherche au centre */}
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <div className="relative flex items-center">
+            <div className="relative flex-1">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-24 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm w-80"
+                placeholder="Rechercher dans le journal..."
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <FiX size={14} />
+                </button>
+              )}
+              
+              {/* Bouton de filtre avec dropdown */}
+              <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
+                <button
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium ${
+                    filterUtilisateur || filterAction || filterStatut || filterModele || dateDebut || dateFin 
+                      ? 'bg-violet-100 text-violet-700' 
+                      : 'bg-gray-100 text-gray-700'
+                  } hover:bg-gray-200 transition-colors`}
+                >
+                  <FiChevronDown size={12} />
+                  <span>Filtre</span>
+                </button>
+                
+                {/* Dropdown des filtres */}
+                {showFilterDropdown && (
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                    <div className="p-2">
+                      <p className="text-xs font-medium text-gray-700 mb-2">Filtres rapides</p>
+                      
+                      {/* Filtre Statut */}
+                      <div className="space-y-1 mb-3">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Statut</p>
+                        <button
+                          onClick={() => {
+                            setFilterStatut('');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${!filterStatut ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Tous les statuts
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterStatut('succes');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterStatut === 'succes' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Succès seulement
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterStatut('echec');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterStatut === 'echec' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Échecs seulement
+                        </button>
+                      </div>
+                      
+                      {/* Filtre Action */}
+                      <div className="space-y-1 mb-3">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Action</p>
+                        <button
+                          onClick={() => {
+                            setFilterAction('');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${!filterAction ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Toutes les actions
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterAction('creation');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterAction === 'creation' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Créations
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterAction('modification');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterAction === 'modification' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Modifications
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterAction('suppression');
+                            setShowFilterDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-xs ${filterAction === 'suppression' ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          Suppressions
+                        </button>
+                      </div>
+                      
+                      {/* Réinitialiser */}
+                      {(searchTerm || filterUtilisateur || filterAction || filterStatut || filterModele || dateDebut || dateFin) && (
+                        <button
+                          onClick={resetFilters}
+                          className="w-full mt-2 px-2 py-1.5 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200 transition-colors"
+                        >
+                          Réinitialiser les filtres
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Journal d'Activité</h1>
-              <p className="text-gray-600 text-xs mt-0.5">
-                Suivez toutes les activités du système en temps réel
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+            
             <button 
               onClick={handleRetry}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group"
+              className="ml-3 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center gap-1.5 text-sm"
             >
-              <FiRefreshCw className="group-hover:rotate-180 transition-transform duration-500 text-sm" />
-              <span className="font-medium">Actualiser</span>
+              <FiRefreshCw className={`${loading ? 'animate-spin' : ''}`} size={14} />
+              <span>Actualiser</span>
             </button>
+            
             <button 
               onClick={handleExport}
-              className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-700 hover:to-green-600 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group shadow"
+              className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
             >
-              <FiDownload className="group-hover:animate-bounce text-sm" />
-              <span className="font-semibold">Exporter CSV</span>
+              <FiDownload size={14} />
+              <span>Exporter CSV</span>
             </button>
           </div>
         </div>
 
-        {/* Statistiques en ligne */}
-        <div className="grid grid-cols-4 gap-3 mb-4">
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+        {/* Statistiques en ligne compactes - AMÉLIORÉES */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Total événements</p>
-                <p className="text-lg font-bold text-gray-900 mt-0.5">{journal.length}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Total:</span>
+                <span className="text-sm font-bold text-violet-600">{stats.total}</span>
               </div>
-              <div className="p-1.5 bg-purple-50 rounded">
-                <TbHistory className="w-4 h-4 text-purple-600" />
+              <div className="p-1 bg-violet-50 rounded">
+                <TbHistory className="w-3 h-3 text-violet-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Succès</p>
-                <p className="text-lg font-bold text-green-600 mt-0.5">
-                  {journal.filter(j => j.statut === 'succes').length}
-                </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Succès:</span>
+                <span className="text-sm font-bold text-green-600">{stats.succes}</span>
               </div>
-              <div className="p-1.5 bg-green-50 rounded">
-                <FiCheck className="w-4 h-4 text-green-600" />
+              <div className="p-1 bg-green-50 rounded">
+                <FiCheckCircle className="w-3 h-3 text-green-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Échecs</p>
-                <p className="text-lg font-bold text-red-600 mt-0.5">
-                  {journal.filter(j => j.statut === 'echec').length}
-                </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Échecs:</span>
+                <span className="text-sm font-bold text-red-600">{stats.echecs}</span>
               </div>
-              <div className="p-1.5 bg-red-50 rounded">
-                <FiAlertCircle className="w-4 h-4 text-red-600" />
+              <div className="p-1 bg-red-50 rounded">
+                <FiXCircle className="w-3 h-3 text-red-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow transition-shadow duration-300">
+          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Utilisateurs actifs</p>
-                <p className="text-lg font-bold text-blue-600 mt-0.5">
-                  {new Set(journal.map(j => j.utilisateur?.id).filter(id => id)).size}
-                </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Utilisateurs:</span>
+                <span className="text-sm font-bold text-blue-600">{stats.utilisateursActifs}</span>
               </div>
-              <div className="p-1.5 bg-blue-50 rounded">
-                <FiUsers className="w-4 h-4 text-blue-600" />
+              <div className="p-1 bg-blue-50 rounded">
+                <FiUsers className="w-3 h-3 text-blue-600" />
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Onglets */}
+        <div className="flex border-b border-gray-200 mb-3">
+          <button
+            onClick={() => {
+              setCurrentPage(1);
+              setSelectedRows([]);
+              resetFilters();
+            }}
+            className="px-4 py-1.5 text-xs font-medium border-b-2 border-violet-600 text-violet-600 transition-colors"
+          >
+            Toutes les activités
+          </button>
         </div>
       </div>
 
-      {/* Message d'erreur */}
+      {/* Message d'erreur compact */}
       {error && (
         <div className="mb-4">
-          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3 shadow-sm">
+          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-2 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-red-100 rounded">
-                  <FiAlertTriangle className="w-4 h-4 text-red-600" />
+                <div className="p-1 bg-red-100 rounded">
+                  <FiXCircle className="w-3 h-3 text-red-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-red-900 text-sm">{error}</p>
-                  <p className="text-xs text-red-700 mt-0.5">Veuillez réessayer</p>
+                  <p className="font-medium text-red-900 text-xs">{error}</p>
                 </div>
               </div>
               <button
                 onClick={handleRetry}
-                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium shadow-sm"
+                className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-xs font-medium"
               >
                 Réessayer
               </button>
@@ -410,108 +561,34 @@ export default function JournalPage() {
         </div>
       )}
 
-      {/* Barre d'outils - Filtres et Recherche */}
+      {/* Filtres avancés compacts */}
       <div className="mb-4">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900 text-sm">Filtres et Recherche Avancés</h3>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-600">
-                {filteredJournal.length} résultat(s)
-              </span>
-              {(searchTerm || filterUtilisateur || filterAction || filterStatut || filterModele || dateDebut || dateFin) && (
-                <button
-                  onClick={handleResetFilters}
-                  className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs font-medium flex items-center gap-1"
-                >
-                  <FiX size={12} />
-                  Effacer
-                </button>
-              )}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 mb-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
-              <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-purple-500 rounded-lg blur opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-                <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10 text-sm" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white relative z-10 text-sm"
-                    placeholder="Description, modèle, IP..."
-                  />
-                </div>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Utilisateur</label>
-              <div className="relative">
-                <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-6 gap-2">
+              <div className="col-span-1">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Utilisateur</label>
                 <select
                   value={filterUtilisateur}
                   onChange={(e) => setFilterUtilisateur(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white appearance-none text-sm"
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
                 >
-                  <option value="">Tous les utilisateurs</option>
+                  <option value="">Tous</option>
                   {utilisateurs.map(utilisateur => (
                     <option key={utilisateur.id} value={utilisateur.id}>
-                      {utilisateur.email}
+                      {utilisateur.email.split('@')[0]}
                     </option>
                   ))}
                 </select>
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Action</label>
-              <div className="relative">
-                <FiActivity className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
-                <select
-                  value={filterAction}
-                  onChange={(e) => setFilterAction(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white appearance-none text-sm"
-                >
-                  <option value="">Toutes les actions</option>
-                  {actionsPossibles.map(action => (
-                    <option key={action} value={action}>
-                      {action.charAt(0).toUpperCase() + action.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Statut</label>
-              <div className="relative">
-                <FiShield className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
-                <select
-                  value={filterStatut}
-                  onChange={(e) => setFilterStatut(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white appearance-none text-sm"
-                >
-                  <option value="">Tous les statuts</option>
-                  <option value="succes">Succès</option>
-                  <option value="echec">Échec</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Modèle</label>
-              <div className="relative">
-                <FiDatabase className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+              <div className="col-span-1">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Modèle</label>
                 <select
                   value={filterModele}
                   onChange={(e) => setFilterModele(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white appearance-none text-sm"
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
                 >
-                  <option value="">Tous les modèles</option>
+                  <option value="">Tous</option>
                   {modelesPossibles.map(modele => (
                     <option key={modele} value={modele}>
                       {modele}
@@ -519,39 +596,39 @@ export default function JournalPage() {
                   ))}
                 </select>
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Date début</label>
-              <div className="relative">
-                <FiCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+              <div className="col-span-1">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Date début</label>
                 <input
                   type="date"
                   value={dateDebut}
                   onChange={(e) => setDateDebut(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white text-sm"
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
                 />
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Date fin</label>
-              <div className="relative">
-                <FiCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+              <div className="col-span-1">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Date fin</label>
                 <input
                   type="date"
                   value={dateFin}
                   onChange={(e) => setDateFin(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white text-sm"
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
                 />
               </div>
-            </div>
-            <div className="flex items-end gap-2">
-              <button
-                onClick={fetchJournal}
-                className="flex-1 px-3 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-700 hover:to-purple-600 transition-all duration-300 font-medium flex items-center justify-center gap-1.5 text-sm shadow hover:shadow-md"
-              >
-                <FiFilter size={14} />
-                Appliquer
-              </button>
+              <div className="col-span-2 md:col-span-2 flex items-end gap-2">
+                <button
+                  onClick={fetchJournal}
+                  className="flex-1 px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-200 font-medium flex items-center justify-center gap-1 text-xs"
+                >
+                  <FiFilter size={12} />
+                  Appliquer
+                </button>
+                <button
+                  onClick={resetFilters}
+                  className="px-3 py-1 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-all duration-200 text-xs"
+                >
+                  <FiX size={12} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -559,25 +636,49 @@ export default function JournalPage() {
 
       {/* Tableau Principal */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {/* En-tête du tableau avec actions */}
-        <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+        {/* En-tête du tableau avec actions compact */}
+        <div className="px-3 py-2 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5">
                 <input
                   type="checkbox"
                   checked={selectedRows.length === currentJournal.length && currentJournal.length > 0}
                   onChange={selectAllRows}
-                  className="w-3.5 h-3.5 text-purple-600 rounded focus:ring-purple-500 border-gray-300"
+                  className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                 />
                 <span className="text-xs text-gray-700">
                   {selectedRows.length} sélectionné(s)
                 </span>
               </div>
+              {(filterUtilisateur || filterAction || filterStatut || filterModele || dateDebut || dateFin) && (
+                <div className="flex items-center gap-1">
+                  {filterStatut === 'succes' && (
+                    <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-xs rounded border border-violet-200">
+                      Succès
+                    </span>
+                  )}
+                  {filterStatut === 'echec' && (
+                    <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-xs rounded border border-violet-200">
+                      Échecs
+                    </span>
+                  )}
+                  {filterAction && (
+                    <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-xs rounded border border-violet-200">
+                      {filterAction}
+                    </span>
+                  )}
+                  {filterModele && (
+                    <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-xs rounded border border-violet-200">
+                      {filterModele}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
-                <FiDownload size={16} />
+            <div className="flex items-center gap-1">
+              <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
+                <FiDownload size={14} />
               </button>
               <select
                 value={itemsPerPage}
@@ -585,7 +686,7 @@ export default function JournalPage() {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent"
+                className="border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
               >
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
@@ -602,12 +703,12 @@ export default function JournalPage() {
             <thead>
               <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <input
                       type="checkbox"
                       checked={selectedRows.length === currentJournal.length && currentJournal.length > 0}
                       onChange={selectAllRows}
-                      className="w-3.5 h-3.5 text-purple-600 rounded focus:ring-purple-500 border-gray-300"
+                      className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                     />
                     Date/Heure
                   </div>
@@ -619,34 +720,32 @@ export default function JournalPage() {
                   Action
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Modèle & Objet
+                  Modèle
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                   Description
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Statut
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
+            
             <tbody className="divide-y divide-gray-200">
               {currentJournal.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-3 py-6 text-center">
+                  <td colSpan={6} className="px-3 py-4 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-3">
-                        <TbHistory className="w-8 h-8 text-gray-400" />
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
+                        <TbHistory className="w-6 h-6 text-gray-400" />
                       </div>
-                      <h3 className="text-base font-semibold text-gray-900 mb-1.5">
-                        {journal.length === 0 ? 'Aucun événement dans le journal' : 'Aucun résultat pour votre recherche'}
+                      <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                        {journal.length === 0 ? 'Aucun événement dans le journal' : 'Aucun résultat'}
                       </h3>
-                      <p className="text-gray-600 mb-4 max-w-md text-sm">
+                      <p className="text-gray-600 text-xs mb-3 max-w-md">
                         {journal.length === 0 
-                          ? 'Aucune activité n\'a encore été enregistrée dans le système' 
-                          : 'Essayez de modifier vos critères de recherche ou de filtres'}
+                          ? 'Aucune activité n\'a encore été enregistrée' 
+                          : 'Essayez de modifier vos critères de recherche'}
                       </p>
                     </div>
                   </td>
@@ -656,19 +755,20 @@ export default function JournalPage() {
                   <tr 
                     key={log.id}
                     className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
-                      selectedRows.includes(log.id) ? 'bg-gradient-to-r from-blue-50 to-blue-25' : 'bg-white'
+                      selectedRows.includes(log.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
                     }`}
                   >
+                    {/* Date/Heure avec checkbox */}
                     <td className="px-3 py-2 whitespace-nowrap border-r border-gray-200">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(log.id)}
                           onChange={() => toggleRowSelection(log.id)}
-                          className="w-3.5 h-3.5 text-purple-600 rounded focus:ring-purple-500 border-gray-300"
+                          className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                         />
                         <div className="flex flex-col">
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-xs font-medium text-gray-900">
                             {formatDateHeure(log.date_action).split(' ')[0]}
                           </span>
                           <span className="text-xs text-gray-500">
@@ -677,84 +777,92 @@ export default function JournalPage() {
                         </div>
                       </div>
                     </td>
+                    
+                    {/* Utilisateur */}
                     <td className="px-3 py-2 border-r border-gray-200">
-                      {log.utilisateur ? (
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-gray-900">
-                            {log.utilisateur.email}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {log.utilisateur.username}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">Système</span>
-                      )}
+                      <div className="flex flex-col">
+                        {log.utilisateur ? (
+                          <>
+                            <div className="text-xs font-medium text-gray-900 truncate max-w-[120px]">
+                              {log.utilisateur.email}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {log.utilisateur.username}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-400">Système</span>
+                        )}
+                      </div>
                     </td>
+                    
+                    {/* Action */}
                     <td className="px-3 py-2 border-r border-gray-200">
-                      <div className={`flex items-center gap-2 px-2 py-1 rounded border ${getActionColor(log.action)}`}>
+                      <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${getActionColor(log.action)} w-fit`}>
                         {getActionIcon(log.action)}
                         <span className="text-xs font-medium capitalize">
                           {log.action}
                         </span>
                       </div>
                     </td>
+                    
+                    {/* Modèle */}
                     <td className="px-3 py-2 border-r border-gray-200">
                       <div className="flex flex-col">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-xs font-medium text-gray-900">
                           {log.modele}
                         </span>
-                        {log.objet && (
-                          <span className="text-xs text-gray-500 truncate max-w-[200px]">
-                            {log.objet}
+                        {log.objet_id && (
+                          <span className="text-xs text-gray-500 font-mono">
+                            #{log.objet_id}
                           </span>
                         )}
-                        {log.objet_id && (
-                          <span className="text-xs text-gray-400 font-mono">
-                            ID: {log.objet_id}
-                          </span>
+                        {log.objet && (
+                          <div className="text-xs text-gray-500 truncate max-w-[100px]" title={log.objet}>
+                            {log.objet}
+                          </div>
                         )}
                       </div>
                     </td>
+                    
+                    {/* Description */}
                     <td className="px-3 py-2 border-r border-gray-200">
                       <div className="max-w-xs">
-                        <div className="text-sm text-gray-600 truncate" title={log.description}>
+                        <div className="text-xs text-gray-600 truncate" title={log.description}>
                           {log.description}
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="flex items-center">
-                        <div className={`px-2 py-1 rounded flex items-center gap-1 ${
+                    
+                    {/* Actions */}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleViewDetails(log)}
+                          className="p-1 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
+                          title="Voir détails"
+                        >
+                          <FiEye size={12} />
+                        </button>
+                        <div className={`px-1.5 py-0.5 rounded flex items-center gap-1 ${
                           log.statut === 'succes'
                             ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
                             : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
                         }`}>
                           {log.statut === 'succes' ? (
                             <>
-                              <FiCheck className="w-3 h-3" />
+                              <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
                               <span className="text-xs font-medium">Succès</span>
                             </>
                           ) : (
                             <>
-                              <FiAlertCircle className="w-3 h-3" />
+                              <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
                               <span className="text-xs font-medium">Échec</span>
                             </>
                           )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleViewDetails(log)}
-                          className="p-1.5 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded-lg hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
-                          title="Voir détails"
-                        >
-                          <FiEye size={14} />
-                        </button>
                         {log.ip_address && (
-                          <div className="px-2 py-1 bg-gray-50 text-gray-600 rounded text-xs font-mono border border-gray-200">
+                          <div className="px-1.5 py-0.5 bg-gray-50 text-gray-600 rounded text-xs font-mono border border-gray-200">
                             {log.ip_address}
                           </div>
                         )}
@@ -767,12 +875,12 @@ export default function JournalPage() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {filteredJournal.length > 0 && (
-          <div className="px-4 py-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
+        {/* Pagination compact */}
+        {currentJournal.length > 0 && (
+          <div className="px-3 py-2 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <span className="text-xs text-gray-700">
                     Page {currentPage} sur {totalPages}
                   </span>
@@ -783,22 +891,22 @@ export default function JournalPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`p-1.5 rounded border transition-all duration-200 ${
+                  className={`p-1 rounded border transition-all duration-200 ${
                     currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
                   title="Page précédente"
                 >
-                  <FiChevronLeft size={14} />
+                  <FiChevronLeft size={12} />
                 </button>
 
                 {/* Numéros de page */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNumber;
                     if (totalPages <= 5) {
@@ -815,9 +923,9 @@ export default function JournalPage() {
                       <button
                         key={pageNumber}
                         onClick={() => paginate(pageNumber)}
-                        className={`min-w-[32px] h-8 rounded border text-xs font-medium transition-all duration-200 ${
+                        className={`min-w-[28px] h-7 rounded border text-xs font-medium transition-all duration-200 ${
                           currentPage === pageNumber
-                            ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white border-purple-600 shadow'
+                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow'
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                         }`}
                       >
@@ -830,14 +938,14 @@ export default function JournalPage() {
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`p-1.5 rounded border transition-all duration-200 ${
+                  className={`p-1 rounded border transition-all duration-200 ${
                     currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
                   }`}
                   title="Page suivante"
                 >
-                  <FiChevronRight size={14} />
+                  <FiChevronRight size={12} />
                 </button>
               </div>
             </div>
@@ -859,7 +967,7 @@ export default function JournalPage() {
   );
 }
 
-// MODAL DE DÉTAILS DU JOURNAL
+// MODAL DE DÉTAILS DU JOURNAL - DESIGN MIS À JOUR
 function JournalDetailModal({ log, onClose }) {
   const formatDateComplete = (dateString) => {
     const date = new Date(dateString);
@@ -899,7 +1007,7 @@ function JournalDetailModal({ log, onClose }) {
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
       <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
         {/* Header du modal */}
-        <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-t-lg p-3">
+        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
@@ -907,7 +1015,7 @@ function JournalDetailModal({ log, onClose }) {
               </div>
               <div>
                 <h2 className="text-base font-bold">Détails de l'événement</h2>
-                <p className="text-purple-100 text-xs mt-0.5">#{log.id}</p>
+                <p className="text-violet-100 text-xs mt-0.5">#{log.id}</p>
               </div>
             </div>
             <button
@@ -920,56 +1028,99 @@ function JournalDetailModal({ log, onClose }) {
         </div>
         
         <div className="p-4 space-y-4">
-          {/* En-tête */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${actionDetails.bg} ${actionDetails.border}`}>
-                  <span className={`text-lg ${actionDetails.color}`}>
-                    {actionDetails.label.charAt(0)}
+          {/* En-tête avec icône */}
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-4 mb-6">
+            <div className="w-32 h-32 bg-gradient-to-br from-violet-100 to-violet-200 rounded-lg flex items-center justify-center overflow-hidden border-2 border-violet-300">
+              <TbHistory className="w-16 h-16 text-violet-600" />
+            </div>
+            <div className="flex-1 text-center md:text-left">
+              <h1 className="text-xl font-bold text-gray-900">{actionDetails.label} sur {log.modele}</h1>
+              <p className="text-gray-600 mt-1">{date} à {heure}</p>
+              <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                  log.statut === 'succes'
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {log.statut === 'succes' ? 'Succès' : 'Échec'}
+                </span>
+                <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                  <FiDatabase className="w-3 h-3 mr-1" />
+                  {log.modele}
+                </span>
+                {log.utilisateur && (
+                  <span className="inline-flex items-center px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
+                    <FiUser className="w-3 h-3 mr-1" />
+                    {log.utilisateur.email.split('@')[0]}
                   </span>
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900">{actionDetails.label} sur {log.modele}</h3>
-                  <p className="text-xs text-gray-500">{date} à {heure}</p>
-                </div>
-              </div>
-              <div className={`px-2 py-1 rounded flex items-center gap-1 ${
-                log.statut === 'succes'
-                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
-                  : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
-              }`}>
-                {log.statut === 'succes' ? (
-                  <>
-                    <FiCheck className="w-3 h-3" />
-                    <span className="text-xs font-medium">Succès</span>
-                  </>
-                ) : (
-                  <>
-                    <FiAlertCircle className="w-3 h-3" />
-                    <span className="text-xs font-medium">Échec</span>
-                  </>
                 )}
               </div>
             </div>
           </div>
 
           {/* Informations Générales */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-4 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              Informations Générales
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1">Action</p>
+                <div className={`px-2 py-1 rounded inline-flex items-center gap-1 w-fit ${actionDetails.bg} ${actionDetails.border} ${actionDetails.color}`}>
+                  {actionDetails.label}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1">Statut</p>
+                <div className={`px-2 py-1 rounded inline-flex items-center gap-1 w-fit ${
+                  log.statut === 'succes'
+                    ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
+                    : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
+                }`}>
+                  {log.statut === 'succes' ? (
+                    <>
+                      <FiCheck className="w-3 h-3" />
+                      <span className="text-xs font-medium">Succès</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiAlertCircle className="w-3 h-3" />
+                      <span className="text-xs font-medium">Échec</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1">Modèle</p>
+                <p className="text-sm text-gray-900 font-medium">{log.modele}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1">Date et heure</p>
+                <p className="text-sm text-gray-900">
+                  {date} à {heure}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Utilisateur et Contexte */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+            <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-4 border border-blue-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
                 <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
                 Utilisateur
               </h3>
               {log.utilisateur ? (
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-0.5">Email</p>
-                    <p className="text-sm text-gray-900 font-medium">{log.utilisateur.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-0.5">Nom d'utilisateur</p>
-                    <p className="text-sm text-gray-900">{log.utilisateur.username}</p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
+                      <FiUser className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{log.utilisateur.email}</div>
+                      <div className="text-xs text-gray-500">{log.utilisateur.username}</div>
+                    </div>
                   </div>
                   {log.utilisateur.nom && log.utilisateur.prenom && (
                     <div>
@@ -979,30 +1130,29 @@ function JournalDetailModal({ log, onClose }) {
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-gray-600">Action système</p>
+                <div className="flex items-center gap-2">
+                  <FiServer className="w-4 h-4 text-gray-400" />
+                  <p className="text-sm text-gray-600">Action système automatisée</p>
+                </div>
               )}
             </div>
 
-            <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-3 border border-purple-100">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
-                <div className="w-1 h-4 bg-gradient-to-b from-purple-600 to-purple-400 rounded"></div>
+            <div className="bg-gradient-to-br from-orange-50 to-white rounded-lg p-4 border border-orange-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
+                <div className="w-1 h-4 bg-gradient-to-b from-orange-600 to-orange-400 rounded"></div>
                 Contexte
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-0.5">Modèle</p>
-                  <p className="text-sm text-gray-900 font-medium">{log.modele}</p>
+                  <p className="text-xs font-medium text-gray-500 mb-0.5">Objet concerné</p>
+                  <p className="text-sm text-gray-900 font-medium">{log.objet || 'N/A'}</p>
                 </div>
-                {log.objet && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-0.5">Objet concerné</p>
-                    <p className="text-sm text-gray-900">{log.objet}</p>
-                  </div>
-                )}
                 {log.objet_id && (
                   <div>
                     <p className="text-xs font-medium text-gray-500 mb-0.5">Identifiant</p>
-                    <p className="text-sm text-gray-900 font-mono">#{log.objet_id}</p>
+                    <p className="text-sm text-gray-900 font-mono bg-gray-50 px-2 py-1 rounded border border-gray-200">
+                      #{log.objet_id}
+                    </p>
                   </div>
                 )}
               </div>
@@ -1010,8 +1160,8 @@ function JournalDetailModal({ log, onClose }) {
           </div>
 
           {/* Description */}
-          <div className="bg-gradient-to-br from-emerald-50 to-white rounded-lg p-3 border border-emerald-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+          <div className="bg-gradient-to-br from-emerald-50 to-white rounded-lg p-4 border border-emerald-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
               <div className="w-1 h-4 bg-gradient-to-b from-emerald-600 to-emerald-400 rounded"></div>
               Description
             </h3>
@@ -1021,15 +1171,15 @@ function JournalDetailModal({ log, onClose }) {
           </div>
 
           {/* Informations Techniques */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-4 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
               <div className="w-1 h-4 bg-gradient-to-b from-gray-600 to-gray-400 rounded"></div>
               Informations Techniques
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {log.ip_address && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-0.5">Adresse IP</p>
+                  <p className="text-xs font-medium text-gray-500 mb-1">Adresse IP</p>
                   <p className="text-sm font-mono text-gray-900 bg-gray-50 px-2 py-1 rounded border border-gray-200">
                     {log.ip_address}
                   </p>
@@ -1037,17 +1187,21 @@ function JournalDetailModal({ log, onClose }) {
               )}
               {log.user_agent && (
                 <div className="md:col-span-2">
-                  <p className="text-xs font-medium text-gray-500 mb-0.5">User Agent</p>
+                  <p className="text-xs font-medium text-gray-500 mb-1">User Agent</p>
                   <p className="text-xs font-mono text-gray-900 bg-gray-50 px-2 py-1 rounded border border-gray-200 break-all">
                     {log.user_agent}
                   </p>
                 </div>
               )}
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-0.5">Date exacte</p>
-                <p className="text-sm text-gray-900">
+                <p className="text-xs font-medium text-gray-500 mb-1">Timestamp</p>
+                <p className="text-sm text-gray-900 font-mono">
                   {new Date(log.date_action).toISOString()}
                 </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1">Identifiant</p>
+                <p className="text-sm text-gray-900 font-mono font-medium">#{log.id}</p>
               </div>
             </div>
           </div>

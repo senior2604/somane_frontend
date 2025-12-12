@@ -195,19 +195,7 @@ export default function BanksPage() {
       {/* HEADER COMPACT COMME DANS ENTITÉS */}
       <div className="mb-6">
         {/* Ligne supérieure avec titre */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-br from-violet-600 to-violet-500 rounded-lg shadow">
-              <FiCreditCard className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Gestion des Banques</h1>
-              <p className="text-gray-600 text-xs mt-0.5">
-                Gérez vos informations bancaires
-              </p>
-            </div>
-          </div>
-        </div>
+        
 
         {/* Barre de recherche au centre COMME DANS ENTITÉS */}
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -261,52 +249,53 @@ export default function BanksPage() {
         </div>
 
         {/* Statistiques en ligne compactes COMME DANS ENTITÉS */}
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Total banques</p>
-                <p className="text-sm font-bold text-violet-600 mt-0.5">{stats.total}</p>
-              </div>
-              <div className="p-1 bg-violet-50 rounded">
-                <FiCreditCard className="w-3 h-3 text-violet-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Avec BIC</p>
-                <p className="text-sm font-bold text-green-600 mt-0.5">{stats.withBic}</p>
-              </div>
-              <div className="p-1 bg-green-50 rounded">
-                <FiCheckCircle className="w-3 h-3 text-green-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Sans BIC</p>
-                <p className="text-sm font-bold text-amber-600 mt-0.5">{stats.withoutBic}</p>
-              </div>
-              <div className="p-1 bg-amber-50 rounded">
-                <FiXCircle className="w-3 h-3 text-amber-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Pays</p>
-                <p className="text-sm font-bold text-blue-600 mt-0.5">{stats.uniqueCountries}</p>
-              </div>
-              <div className="p-1 bg-blue-50 rounded">
-                <FiGlobe className="w-3 h-3 text-blue-600" />
-              </div>
-            </div>
-          </div>
-        </div>
+       {/* Statistiques en ligne compactes - FORMAT IDENTIQUE AUX AUTRES PAGES */}
+<div className="grid grid-cols-4 gap-2 mb-3">
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Total:</span>
+        <span className="text-sm font-bold text-violet-600">{stats.total}</span>
+      </div>
+      <div className="p-1 bg-violet-50 rounded">
+        <FiCreditCard className="w-3 h-3 text-violet-600" />
+      </div>
+    </div>
+  </div>
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Avec BIC:</span>
+        <span className="text-sm font-bold text-green-600">{stats.withBic}</span>
+      </div>
+      <div className="p-1 bg-green-50 rounded">
+        <FiCheckCircle className="w-3 h-3 text-green-600" />
+      </div>
+    </div>
+  </div>
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Sans BIC:</span>
+        <span className="text-sm font-bold text-amber-600">{stats.withoutBic}</span>
+      </div>
+      <div className="p-1 bg-amber-50 rounded">
+        <FiXCircle className="w-3 h-3 text-amber-600" />
+      </div>
+    </div>
+  </div>
+  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600">Pays:</span>
+        <span className="text-sm font-bold text-blue-600">{stats.uniqueCountries}</span>
+      </div>
+      <div className="p-1 bg-blue-50 rounded">
+        <FiGlobe className="w-3 h-3 text-blue-600" />
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* Onglets */}
         <div className="flex border-b border-gray-200 mb-3">

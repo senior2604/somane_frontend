@@ -228,17 +228,7 @@ export default function SystemPage() {
       {/* Header avec gradient */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-br from-indigo-600 to-indigo-500 rounded-lg shadow">
-              <TbServer className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Informations Système</h1>
-              <p className="text-gray-600 text-xs mt-0.5">
-                État et statistiques du système Somane ERP
-              </p>
-            </div>
-          </div>
+          
           <div className="flex items-center gap-2">
             <button 
               onClick={handleRetry}

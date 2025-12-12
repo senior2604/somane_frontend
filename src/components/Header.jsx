@@ -8,7 +8,7 @@ export default function Header() {
   const getPageTitle = () => {
     const routes = {
       '/dashboard': 'Tableau de Bord',
-      '/users': 'Utilisateurs',
+      '/users': 'Utilisateurs-Groupes-Permissions',
       '/entities': 'Entités',
       '/partners': 'Partenaires',
       '/groupes': 'Groupes',
@@ -23,7 +23,7 @@ export default function Header() {
       '/banks': 'Banques',
       '/PartnerBanks': 'Comptes Partenaires',
       '/ExchangeRates': 'Taux de change',
-      '/userentities': 'Utilisateurs × Entités',
+      '/userentities': 'Utilisateurs-Entités',
       '/tasks': 'Tâches Automatiques',
       '/system': 'Informations Système'
     };
