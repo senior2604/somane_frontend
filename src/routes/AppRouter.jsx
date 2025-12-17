@@ -19,6 +19,7 @@ import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
 import LanguagesPage from "../pages/Languages/LanguagesPage";
 import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
 import StatesPage from "../pages/States/StatesPage";
+import AchatPage from "../features/achat/AchatPage";
 
 // 🆕 IMPORT DES NOUVELLES PAGES D'AUTH
 import ActivationPage from "../pages/Auth/ActivationPage";
@@ -63,8 +64,7 @@ export default function AppRouter() {
           <Route path="/ExchangeRates" element={<ExchangeRatesPage/>}/>
           <Route path="/Languages" element={<LanguagesPage/>}/>
           <Route path="/States" element={<StatesPage/>}/>
-          
-          {/* Administration système */}
+          <Route path="/achats" element={<AchatPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/system" element={<SystemPage />} />
         </Route>
