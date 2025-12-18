@@ -25,7 +25,8 @@ import {
   FiMenu,
   FiX,
   FiChevronLeft,
-  FiChevronRight as FiChevronRightIcon
+  FiChevronRight as FiChevronRightIcon,
+  FiShoppingCart
 } from "react-icons/fi";
 import { useState, useEffect, useRef } from "react";
 
@@ -83,6 +84,7 @@ export default function Sidebar() {
     securite: false,
     geographie: false,
     banques: false,
+    achats: false,
     systeme: false
   });
 
@@ -155,6 +157,14 @@ export default function Sidebar() {
       items: [
         { name: "Banques", path: "/banks", icon: <FiCreditCard /> },
         { name: "Comptes Partenaires", path: "/PartnerBanks", icon: <FiList /> },
+      ]
+    },
+    {
+      id: "achats",
+      name: "Achats",
+      icon: <FiShoppingCart />,
+      items: [
+        { name: "Commandes d'Achat", path: "/achats", icon: <FiShoppingCart /> },
       ]
     },
     {
