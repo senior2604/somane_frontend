@@ -1,28 +1,24 @@
-// features/comptabilité/layouts/ComptabiliteLayout.jsx
-import { useState } from 'react';
+// features/comptabilite/layouts/ComptabiliteLayout.jsx
+import { Outlet } from "react-router-dom";
+import ComptabiliteSidebar from "../components/ComptabiliteSidebar";
+import Header from "../../../components/Header";
 
-import ComptabiliteSidebar from '../components/ComptabiliteSidebar';
-import ComptabiliteHeader from '../components/ComptabiliteHeader'; 
-
-export default function ComptabiliteLayout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
+export default function ComptabiliteLayout() {
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar SPÉCIFIQUE comptabilité */}
-      <ComptabiliteSidebar 
-        onMobileToggle={() => setSidebarOpen(!sidebarOpen)}
-        isMobileOpen={sidebarOpen}
-      />
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar */}
+      <ComptabiliteSidebar />
       
       {/* Contenu principal */}
-      <div className="flex-1 flex flex-col md:ml-64">
-        {/* Header GÉNÉRAL - VOTRE composant Header */}
-        <Header />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="h-16 flex-shrink-0">
+          <Header />
+        </div>
         
-        {/* Pages enfants */}
-        <main className="flex-1 overflow-y-auto p-4">
-          {children}
+        {/* Page content via Outlet */}
+        <main className="flex-1 overflow-auto p-6">
+          <Outlet />
         </main>
       </div>
     </div>

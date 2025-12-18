@@ -20,44 +20,42 @@ import LanguagesPage from "../pages/Languages/LanguagesPage";
 import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
 import StatesPage from "../pages/States/StatesPage";
 import AchatPage from "../features/achat/AchatPage";
-
-// 🆕 IMPORT DES NOUVELLES PAGES D'AUTH
 import ActivationPage from "../pages/Auth/ActivationPage";
 import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
 import ConfirmResetPage from "../pages/Auth/ConfirmResetPage";
-
 import ProtectedLayout from "../components/Layout/ProtectedLayout";
-import StandardsPage from "../features/comptabilité/pages/StandardsPage.jsx";
+
+// CORRIGEZ LES IMPORTS - TOUS AVEC LE MÊME NOM
+// OPTION 1 : Si votre dossier s'appelle "comptabilité" (avec accent)
+import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout";
+import StandardsPage from "../features/comptabilité/pages/DashboardPage";
+
+// OPTION 2 : Si vous renommez en "comptabilite" (sans accent)
+// import ComptabiliteLayout from "../features/comptabilite/layouts/ComptabiliteLayout";
+// import StandardsPage from "../features/comptabilite/pages/StandardsPage";
 
 export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* 🆕 ROUTES PUBLIQUES D'AUTHENTIFICATION */}
+        {/* ROUTES PUBLIQUES */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/activate/:uid/:token" element={<ActivationPage />} />
         <Route path="/auth/password/reset/:uid/:token" element={<ResetPasswordPage />} />
         <Route path="/auth/reset-confirm/success" element={<ConfirmResetPage />} />
         
-        {/* Routes protégées */}
+        {/* ROUTES PROTÉGÉES PRINCIPALES */}
         <Route element={<ProtectedLayout />}>
-          {/* Pages principales */}
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/entities" element={<EntitiesPage />} />
           <Route path="/partners" element={<PartnersPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/userentities" element={<UserEntitiesPage />} />
-          
-          {/* Gestion des accès */}
           <Route path="/groupes" element={<GroupesPage />} />
           <Route path="/permissions" element={<PermissionsPage />} />
-          
-          {/* Configuration */}
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/modules" element={<ModulesPage />} />
-          
-          {/* Référentiels */}
           <Route path="/countries" element={<CountriesPage />} />
           <Route path="/currencies" element={<CurrenciesPage />} />
           <Route path="/banks" element={<BanksPage />} />
@@ -70,18 +68,28 @@ export default function AppRouter() {
           <Route path="/system" element={<SystemPage />} />
         </Route>
 
-        {/*  Comptabilité */}
-        <Route path="/comptabilite/standards" element={<StandardsPage />} />
+        {/* ROUTES COMPTABILITÉ AVEC SON PROPRE LAYOUT */}
+        <Route path="/comptabilite" element={<ComptabiliteLayout />}>
+          <Route index element={<Navigate to="Dashboard" replace />} />
+          <Route path="Dashboard" element={<StandardsPage />} />
+          {/* Ajoutez d'autres routes comptabilité ici plus tard */}
+        </Route>
 
-
-        {/* Redirection par défaut */}
+        {/* REDIRECTIONS */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         
-        {/* Page 404 */}
-        <Route path="*" element={<div className="p-8 text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-4">Page non trouvée</h1>
-          <p className="text-gray-600">La page que vous recherchez n'existe pas.</p>
-        </div>} />
+        {/* 404 */}
+        <Route path="*" element={
+          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-gray-800 mb-4">404 - Page non trouvée</h1>
+              <p className="text-gray-600 mb-6">La page que vous recherchez n'existe pas.</p>
+              <a href="/dashboard" className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700">
+                Retour au tableau de bord
+              </a>
+            </div>
+          </div>
+        } />
       </Routes>
     </BrowserRouter>
   );

@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   FiHome, 
   FiPieChart,
@@ -35,6 +35,7 @@ import { useState, useEffect } from "react";
 
 export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
   const location = useLocation();
+  const navigate = useNavigate();
   
   const [openCategories, setOpenCategories] = useState({
     dashboard: true,
@@ -54,7 +55,6 @@ export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
       if (!mobile) {
-        // Sur desktop, fermer le menu mobile
         if (typeof onMobileToggle === 'function') {
           onMobileToggle(false);
         }
@@ -81,6 +81,31 @@ export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
   const handleMobileClick = () => {
     if (isMobile && typeof onMobileToggle === 'function') {
       onMobileToggle(false);
+    }
+  };
+
+  const handleMainMenuClick = (e) => {
+    e.preventDefault();
+    console.log("🔄 Navigation vers le menu principal...");
+    
+    // OPTION 1: Utiliser window.location.href pour FORCER le rechargement
+    window.location.href = "/dashboard"; // Changez "/" si nécessaire
+    
+    // OPTION 2: Si /dashboard ne fonctionne pas, essayez /
+    // window.location.href = "/";
+    
+    // OPTION 3: Naviguer + recharger après un délai
+    // navigate("/dashboard");
+    // setTimeout(() => window.location.reload(), 100);
+    
+    handleMobileClick();
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("Êtes-vous sûr de vouloir vous déconnecter ?")) {
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
     }
   };
 
@@ -244,7 +269,6 @@ export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
           
           {/* Boutons de contrôle */}
           <div className="flex items-center gap-1">
-            {/* Bouton réduire/développer (desktop seulement) */}
             {!isMobile && (
               <button
                 onClick={toggleCollapse}
@@ -259,7 +283,6 @@ export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
               </button>
             )}
             
-            {/* Bouton fermer pour mobile */}
             {isMobile && (
               <button
                 onClick={() => typeof onMobileToggle === 'function' && onMobileToggle(false)}
@@ -277,7 +300,6 @@ export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
             {menuCategories.map((category) => (
               <div key={category.id} className="mb-0.5">
                 {category.isSimpleLink ? (
-                  // Lien simple
                   <Link
                     to={category.path}
                     onClick={handleMobileClick}
@@ -297,9 +319,7 @@ export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
                     )}
                   </Link>
                 ) : (
-                  // Catégorie avec sous-menu
                   <>
-                    {/* En-tête de catégorie */}
                     <button
                       onClick={() => toggleCategory(category.id)}
                       className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-2.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -323,7 +343,6 @@ export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
                         )}
                       </div>
                       
-                      {/* Flèche (seulement quand déplié) */}
                       {!isCollapsed && (
                         <span className="text-violet-500 text-xs flex-shrink-0">
                           {openCategories[category.id] ? <FiChevronDown /> : <FiChevronRight />}
@@ -331,7 +350,6 @@ export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
                       )}
                     </button>
 
-                    {/* Sous-items (seulement quand déplié et catégorie ouverte) */}
                     {!isCollapsed && openCategories[category.id] && (
                       <div className="ml-8 mt-0.5 space-y-0.5">
                         {category.items.map((item) => (
@@ -364,25 +382,20 @@ export default function ComptabiliteSidebar({ onMobileToggle, isMobileOpen }) {
 
         {/* Pied de page */}
         <div className="p-2 border-t border-gray-200">
-          {/* Retour au menu principal */}
-          <Link
-            to="/"
-            onClick={handleMobileClick}
-            className={`flex items-center ${isCollapsed ? "justify-center" : "justify-center gap-2.5"} mb-2 px-2.5 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all text-gray-700 hover:text-violet-700 text-sm font-medium`}
+          {/* Retour au menu principal - VERSION CORRIGÉE */}
+          <button
+            onClick={handleMainMenuClick}
+            className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-center gap-2.5"} mb-2 px-2.5 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all text-gray-700 hover:text-violet-700 text-sm font-medium`}
           >
             <FiHome className="text-gray-500 text-base" />
             {!isCollapsed && (
               <span className="whitespace-nowrap">Menu Principal</span>
             )}
-          </Link>
+          </button>
           
           {/* Déconnexion */}
           <button
-            onClick={() => {
-              localStorage.removeItem("authToken");
-              localStorage.removeItem("user");
-              window.location.href = "/login";
-            }}
+            onClick={handleLogout}
             className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-center gap-2.5"} py-2 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-all duration-200 font-medium text-sm`}
           >
             <FiLogOut className="text-violet-600 text-base" />

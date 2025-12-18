@@ -11,7 +11,7 @@ export default function Header() {
     { id: 'dashboard', name: 'Noyau', path: '/dashboard' },
     { id: 'sales', name: 'Ventes', path: '/sales' },
     { id: 'purchase', name: 'Achats', path: '/purchase' },
-    { id: 'accounting', name: 'Comptabilité', path: '/comptabilite/standards' },
+    { id: 'accounting', name: 'Comptabilité', path: '/comptabilite/Dashboard' },
     { id: 'inventory', name: 'Stock', path: '/inventory' },
     { id: 'hr', name: 'RH', path: '/hr' },
     { id: 'manufacturing', name: 'Production', path: '/manufacturing' },
