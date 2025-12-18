@@ -26,6 +26,7 @@ import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
 import ConfirmResetPage from "../pages/Auth/ConfirmResetPage";
 
 import ProtectedLayout from "../components/Layout/ProtectedLayout";
+import StandardsPage from "../features/comptabilité/pages/StandardsPage.jsx";
 
 export default function AppRouter() {
   return (
@@ -68,6 +69,10 @@ export default function AppRouter() {
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/system" element={<SystemPage />} />
         </Route>
+
+        {/*  Comptabilité */}
+        <Route path="/comptabilite/standards" element={<StandardsPage />} />
+
 
         {/* Redirection par défaut */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
