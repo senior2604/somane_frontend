@@ -25,14 +25,13 @@ import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
 import ConfirmResetPage from "../pages/Auth/ConfirmResetPage";
 import ProtectedLayout from "../components/Layout/ProtectedLayout";
 
-// CORRIGEZ LES IMPORTS - TOUS AVEC LE MÊME NOM
-// OPTION 1 : Si votre dossier s'appelle "comptabilité" (avec accent)
+// IMPORTS DU MODULE COMPTABILITÉ
 import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout";
-import StandardsPage from "../features/comptabilité/pages/DashboardPage";
-
-// OPTION 2 : Si vous renommez en "comptabilite" (sans accent)
-// import ComptabiliteLayout from "../features/comptabilite/layouts/ComptabiliteLayout";
-// import StandardsPage from "../features/comptabilite/pages/StandardsPage";
+// Import des pages comptabilité
+import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
+import PlanComptablePage from "../features/comptabilité/pages/plan-comptable";
+import PositionsFiscalesPage from "../features/comptabilité/pages/positions-fiscales";
+import TauxFiscauxPage from "../features/comptabilité/pages/taux-fiscaux";
 
 export default function AppRouter() {
   return (
@@ -70,9 +69,16 @@ export default function AppRouter() {
 
         {/* ROUTES COMPTABILITÉ AVEC SON PROPRE LAYOUT */}
         <Route path="/comptabilite" element={<ComptabiliteLayout />}>
-          <Route index element={<Navigate to="Dashboard" replace />} />
-          <Route path="Dashboard" element={<StandardsPage />} />
-          {/* Ajoutez d'autres routes comptabilité ici plus tard */}
+          {/* Redirection par défaut */}
+          <Route index element={<Navigate to="dashboard" replace />} />
+          
+          {/* Pages du module comptabilité */}
+          <Route path="dashboard" element={<DashboardComptabilitePage />} />
+          <Route path="plan-comptable" element={<PlanComptablePage />} />
+          <Route path="positions-fiscales" element={<PositionsFiscalesPage />} />
+          <Route path="taux-fiscaux" element={<TauxFiscauxPage />} />
+          
+          {/* Vous pouvez ajouter d'autres routes ici plus tard */}
         </Route>
 
         {/* REDIRECTIONS */}
