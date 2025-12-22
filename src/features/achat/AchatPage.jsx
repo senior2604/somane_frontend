@@ -25,19 +25,28 @@ import {
 } from "react-icons/fi";
 
 export default function AchatPage() {
-  const [achats, setAchats] = useState([]);
-  const [fournisseurs, setFournisseurs] = useState([]);
+  const [activeTab, setActiveTab] = useState('bons-commande');
+  
+  // États pour chaque table
+  const [bonsCommande, setBonsCommande] = useState([]);
+  const [lignesBonCommande, setLignesBonCommande] = useState([]);
+  const [demandesAchat, setDemandesAchat] = useState([]);
+  const [lignesDemandeAchat, setLignesDemandeAchat] = useState([]);
+  const [prixFournisseurs, setPrixFournisseurs] = useState([]);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // États pour formulaires et modals
   const [showForm, setShowForm] = useState(false);
-  const [editingAchat, setEditingAchat] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [selectedAchat, setSelectedAchat] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null);
 
+  // États pour pagination et recherche
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterFournisseur, setFilterFournisseur] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
 
   // Chargement initial
@@ -50,10 +59,17 @@ export default function AchatPage() {
       setLoading(true);
       setError(null);
 
-      const [achatsRes, fournisseursRes] = await Promise.all([
-        apiClient.get('/achats/'),
-        apiClient.get('/partenaires/?type_partenaire=fournisseur')
-      ]);
+      const endpoints = [
+        '/achats/bons-commande/',
+        '/achats/lignes-bon-commande/',
+        '/achats/demandes-achat/',
+        '/achats/lignes-demande-achat/',
+        '/achats/prix-fournisseurs/'
+      ];
+
+      const responses = await Promise.all(
+        endpoints.map(endpoint => apiClient.get(endpoint).catch(() => []))
+      );
 
       const extractData = (response) => {
         if (Array.isArray(response)) return response;
@@ -62,61 +78,101 @@ export default function AchatPage() {
         return [];
       };
 
-      setAchats(extractData(achatsRes));
-      setFournisseurs(extractData(fournisseursRes));
+      setBonsCommande(extractData(responses[0]));
+      setLignesBonCommande(extractData(responses[1]));
+      setDemandesAchat(extractData(responses[2]));
+      setLignesDemandeAchat(extractData(responses[3]));
+      setPrixFournisseurs(extractData(responses[4]));
 
     } catch (err) {
       console.error('Erreur lors du chargement des données:', err);
       setError('Erreur lors du chargement des données');
-      setAchats([]);
-      setFournisseurs([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filtrage et recherche
-  const filteredAchats = useMemo(() => {
-    return achats.filter(achat => {
-      const matchesSearch =
-        (achat.numero_commande || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (achat.fournisseur?.nom || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (achat.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+  // Filtrage et recherche selon l'onglet actif
+  const getFilteredData = () => {
+    let data = [];
+    switch (activeTab) {
+      case 'bons-commande':
+        data = bonsCommande;
+        break;
+      case 'lignes-bon-commande':
+        data = lignesBonCommande;
+        break;
+      case 'demandes-achat':
+        data = demandesAchat;
+        break;
+      case 'lignes-demande-achat':
+        data = lignesDemandeAchat;
+        break;
+      case 'prix-fournisseurs':
+        data = prixFournisseurs;
+        break;
+      default:
+        data = [];
+    }
 
-      const matchesFournisseur = !filterFournisseur ||
-        (achat.fournisseur && achat.fournisseur.id && achat.fournisseur.id.toString() === filterFournisseur);
-
-      return matchesSearch && matchesFournisseur;
+    return data.filter(item => {
+      // Recherche simple sur tous les champs texte
+      const itemString = JSON.stringify(item).toLowerCase();
+      return itemString.includes(searchTerm.toLowerCase());
     });
-  }, [achats, searchTerm, filterFournisseur]);
+  };
+
+  const filteredData = useMemo(() => getFilteredData(), [
+    activeTab, bonsCommande, lignesBonCommande, demandesAchat, lignesDemandeAchat, prixFournisseurs, searchTerm
+  ]);
 
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentAchats = Array.isArray(filteredAchats) ? filteredAchats.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredAchats) ? filteredAchats.length : 0) / itemsPerPage);
+  const currentItems = Array.isArray(filteredData) ? filteredData.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const totalPages = Math.ceil((Array.isArray(filteredData) ? filteredData.length : 0) / itemsPerPage);
 
   // Gestion des formulaires
+  const getEndpoint = () => {
+    switch (activeTab) {
+      case 'bons-commande': return '/achats/bons-commande/';
+      case 'lignes-bon-commande': return '/achats/lignes-bon-commande/';
+      case 'demandes-achat': return '/achats/demandes-achat/';
+      case 'lignes-demande-achat': return '/achats/lignes-demande-achat/';
+      case 'prix-fournisseurs': return '/achats/prix-fournisseurs/';
+      default: return '/achats/';
+    }
+  };
+
   const handleSubmit = async (formData) => {
     try {
-      if (editingAchat) {
-        await apiClient.put(`/achats/${editingAchat.id}/`, formData);
+      const endpoint = getEndpoint();
+      if (editingItem) {
+        await apiClient.put(`${endpoint}${editingItem.id}/`, formData);
       } else {
-        await apiClient.post('/achats/', formData);
+        await apiClient.post(endpoint, formData);
       }
       fetchAllData();
       setShowForm(false);
-      setEditingAchat(null);
+      setEditingItem(null);
     } catch (err) {
       console.error('Erreur lors de la sauvegarde:', err);
       setError('Erreur lors de la sauvegarde');
     }
   };
 
-  const handleDelete = async (achat) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette commande d\'achat ?')) {
+  const handleDelete = async (item) => {
+    const tabNames = {
+      'bons-commande': 'bon de commande',
+      'lignes-bon-commande': 'ligne de bon de commande',
+      'demandes-achat': 'demande d\'achat',
+      'lignes-demande-achat': 'ligne de demande d\'achat',
+      'prix-fournisseurs': 'prix fournisseur'
+    };
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer ce ${tabNames[activeTab]} ?`)) {
       try {
-        await apiClient.delete(`/achats/${achat.id}/`);
+        const endpoint = getEndpoint();
+        await apiClient.delete(`${endpoint}${item.id}/`);
         fetchAllData();
       } catch (err) {
         console.error('Erreur lors de la suppression:', err);
@@ -125,13 +181,13 @@ export default function AchatPage() {
     }
   };
 
-  const handleEdit = (achat) => {
-    setEditingAchat(achat);
+  const handleEdit = (item) => {
+    setEditingItem(item);
     setShowForm(true);
   };
 
-  const handleViewDetails = (achat) => {
-    setSelectedAchat(achat);
+  const handleViewDetails = (item) => {
+    setSelectedItem(item);
     setShowDetailModal(true);
   };
 
@@ -145,17 +201,90 @@ export default function AchatPage() {
   };
 
   const handleSelectAll = () => {
-    if (selectedRows.length === currentAchats.length) {
+    if (selectedRows.length === currentItems.length) {
       setSelectedRows([]);
     } else {
-      setSelectedRows(currentAchats.map(achat => achat.id));
+      setSelectedRows(currentItems.map(item => item.id));
     }
   };
 
   // Export
   const handleExport = () => {
-    // Logique d'export
-    console.log('Export des achats sélectionnés');
+    // Logique d'export des éléments sélectionnés
+    console.log('Export des éléments sélectionnés:', selectedRows);
+    // Ici vous pouvez implémenter l'export vers CSV/Excel
+  };
+
+  // Fonctions pour les en-têtes et lignes de table dynamiques
+  const getTableHeaders = () => {
+    switch (activeTab) {
+      case 'bons-commande':
+        return ['N° Commande', 'Fournisseur', 'Date', 'Devise', 'Société', 'Statut', 'Montant Total', 'HT', 'TVA', 'Acheteur'];
+      case 'lignes-bon-commande':
+        return ['Bon Commande', 'Article', 'Description', 'Quantité', 'Prix Unit.', 'Taxes', 'Date Prévue', 'Sous-total'];
+      case 'demandes-achat':
+        return ['N° Demande', 'Demandeur', 'Département', 'Société', 'Date Début', 'Statut'];
+      case 'lignes-demande-achat':
+        return ['Demande', 'Article', 'Quantité Demandée', 'Description'];
+      case 'prix-fournisseurs':
+        return ['Fournisseur', 'Produit', 'Prix', 'Devise'];
+      default:
+        return [];
+    }
+  };
+
+  const getTableRow = (item) => {
+    switch (activeTab) {
+      case 'bons-commande':
+        return [
+          item.name || 'N/A',
+          item.partner_id?.name || 'N/A',
+          item.date_order ? new Date(item.date_order).toLocaleDateString() : 'N/A',
+          item.currency_id?.name || 'N/A',
+          item.company_id?.name || 'N/A',
+          item.state || 'N/A',
+          item.amount_total || '0',
+          item.amount_untaxed || '0',
+          item.amount_tax || '0',
+          item.user_id?.name || 'N/A'
+        ];
+      case 'lignes-bon-commande':
+        return [
+          item.order_id?.name || 'N/A',
+          item.product_id?.name || 'N/A',
+          item.name || 'N/A',
+          item.product_qty || '0',
+          item.price_unit || '0',
+          item.taxes_id?.map(t => t.name).join(', ') || 'N/A',
+          item.date_planned ? new Date(item.date_planned).toLocaleDateString() : 'N/A',
+          item.price_subtotal || '0'
+        ];
+      case 'demandes-achat':
+        return [
+          item.name || 'N/A',
+          item.user_id?.name || 'N/A',
+          item.department_id?.name || 'N/A',
+          item.company_id?.name || 'N/A',
+          item.date_start ? new Date(item.date_start).toLocaleDateString() : 'N/A',
+          item.state || 'N/A'
+        ];
+      case 'lignes-demande-achat':
+        return [
+          item.requisition_id?.name || 'N/A',
+          item.product_id?.name || 'N/A',
+          item.product_qty || '0',
+          item.description || 'N/A'
+        ];
+      case 'prix-fournisseurs':
+        return [
+          item.partner_id?.name || 'N/A',
+          item.product_id?.name || 'N/A',
+          item.price || '0',
+          item.currency_id?.name || 'N/A'
+        ];
+      default:
+        return [];
+    }
   };
 
   if (loading) {
@@ -174,9 +303,9 @@ export default function AchatPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center">
               <FiShoppingCart className="mr-3 text-blue-600" />
-              Commandes d'Achat
+              Module Achat
             </h1>
-            <p className="text-gray-600 mt-1">Gestion des commandes d'achat et fournisseurs</p>
+            <p className="text-gray-600 mt-1">Gestion complète des achats et fournisseurs</p>
           </div>
           <div className="flex space-x-3">
             <button
@@ -189,16 +318,47 @@ export default function AchatPage() {
             <button
               onClick={() => setShowForm(true)}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+              disabled={activeTab !== 'bons-commande'}
             >
               <FiPlus className="mr-2" />
-              Nouvelle Commande
+              Nouveau
             </button>
           </div>
         </div>
 
+        {/* Onglets */}
+        <div className="mb-6">
+          <nav className="flex space-x-1 bg-white p-1 rounded-lg shadow-sm">
+            {[
+              { id: 'bons-commande', label: 'Bons de Commande', count: bonsCommande.length },
+              { id: 'lignes-bon-commande', label: 'Lignes Bon Commande', count: lignesBonCommande.length },
+              { id: 'demandes-achat', label: 'Demandes d\'Achat', count: demandesAchat.length },
+              { id: 'lignes-demande-achat', label: 'Lignes Demande Achat', count: lignesDemandeAchat.length },
+              { id: 'prix-fournisseurs', label: 'Prix Fournisseurs', count: prixFournisseurs.length }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setCurrentPage(1);
+                  setSelectedRows([]);
+                  setSearchTerm('');
+                }}
+                className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                {tab.label} ({tab.count})
+              </button>
+            ))}
+          </nav>
+        </div>
+
         {/* Filtres et recherche */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="relative">
               <FiSearch className="absolute left-3 top-3 text-gray-400" />
               <input
@@ -208,21 +368,6 @@ export default function AchatPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-            </div>
-            <div className="relative">
-              <FiFilter className="absolute left-3 top-3 text-gray-400" />
-              <select
-                value={filterFournisseur}
-                onChange={(e) => setFilterFournisseur(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Tous les fournisseurs</option>
-                {fournisseurs.map(fournisseur => (
-                  <option key={fournisseur.id} value={fournisseur.id}>
-                    {fournisseur.nom}
-                  </option>
-                ))}
-              </select>
             </div>
             <div className="flex items-center space-x-2">
               <label className="text-sm text-gray-600">Éléments par page:</label>
@@ -244,7 +389,7 @@ export default function AchatPage() {
         {selectedRows.length > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 flex items-center justify-between">
             <span className="text-blue-800">
-              {selectedRows.length} commande(s) sélectionnée(s)
+              {selectedRows.length} élément(s) sélectionné(s)
             </span>
             <div className="flex space-x-2">
               <button
@@ -258,7 +403,7 @@ export default function AchatPage() {
           </div>
         )}
 
-        {/* Table */}
+        {/* Table dynamique */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -267,86 +412,59 @@ export default function AchatPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <input
                       type="checkbox"
-                      checked={selectedRows.length === currentAchats.length && currentAchats.length > 0}
+                      checked={selectedRows.length === currentItems.length && currentItems.length > 0}
                       onChange={handleSelectAll}
                       className="rounded border-gray-300"
                     />
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    N° Commande
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fournisseur
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Montant
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Statut
-                  </th>
+                  {getTableHeaders().map((header, index) => (
+                    <th key={index} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {header}
+                    </th>
+                  ))}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {currentAchats.map((achat) => (
-                  <tr key={achat.id} className="hover:bg-gray-50">
+                {currentItems.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <input
                         type="checkbox"
-                        checked={selectedRows.includes(achat.id)}
-                        onChange={() => handleSelectRow(achat.id)}
+                        checked={selectedRows.includes(item.id)}
+                        onChange={() => handleSelectRow(item.id)}
                         className="rounded border-gray-300"
                       />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {achat.numero_commande}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {achat.fournisseur?.nom || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(achat.date_commande).toLocaleDateString('fr-FR')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {achat.montant_total?.toLocaleString('fr-FR', { style: 'currency', currency: 'XOF' }) || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        achat.statut === 'valide' ? 'bg-green-100 text-green-800' :
-                        achat.statut === 'brouillon' ? 'bg-yellow-100 text-yellow-800' :
-                        achat.statut === 'annule' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {achat.statut || 'N/A'}
-                      </span>
-                    </td>
+                    {getTableRow(item).map((cell, index) => (
+                      <td key={index} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {cell}
+                      </td>
+                    ))}
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => handleViewDetails(achat)}
+                          onClick={() => handleViewDetails(item)}
                           className="text-blue-600 hover:text-blue-900"
                           title="Voir détails"
                         >
-                          <FiEye />
+                          <FiEye size={16} />
                         </button>
                         <button
-                          onClick={() => handleEdit(achat)}
-                          className="text-indigo-600 hover:text-indigo-900"
+                          onClick={() => handleEdit(item)}
+                          className="text-yellow-600 hover:text-yellow-900"
                           title="Modifier"
                         >
-                          <FiEdit2 />
+                          <FiEdit2 size={16} />
                         </button>
                         <button
-                          onClick={() => handleDelete(achat)}
+                          onClick={() => handleDelete(item)}
                           className="text-red-600 hover:text-red-900"
                           title="Supprimer"
                         >
-                          <FiTrash2 />
+                          <FiTrash2 size={16} />
                         </button>
                       </div>
                     </td>
@@ -361,14 +479,14 @@ export default function AchatPage() {
             <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
               <div className="flex-1 flex justify-between sm:hidden">
                 <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
                   className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                 >
                   Précédent
                 </button>
                 <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                   disabled={currentPage === totalPages}
                   className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                 >
@@ -381,40 +499,44 @@ export default function AchatPage() {
                     Affichage de{' '}
                     <span className="font-medium">{indexOfFirstItem + 1}</span>
                     {' '}à{' '}
-                    <span className="font-medium">{Math.min(indexOfLastItem, filteredAchats.length)}</span>
+                    <span className="font-medium">{Math.min(indexOfLastItem, filteredData.length)}</span>
                     {' '}sur{' '}
-                    <span className="font-medium">{filteredAchats.length}</span>
+                    <span className="font-medium">{filteredData.length}</span>
                     {' '}résultats
                   </p>
                 </div>
                 <div>
                   <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                     <button
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
                       className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                     >
-                      <FiChevronLeft />
+                      <FiChevronLeft className="h-5 w-5" />
                     </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                          page === currentPage
-                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    ))}
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
+                      if (pageNum > totalPages) return null;
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                            pageNum === currentPage
+                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
                     <button
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
                       className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                     >
-                      <FiChevronRight />
+                      <FiChevronRight className="h-5 w-5" />
                     </button>
                   </nav>
                 </div>
@@ -424,22 +546,24 @@ export default function AchatPage() {
         </div>
 
         {/* Modals */}
-        {showForm && (
+        {showForm && activeTab === 'bons-commande' && (
           <AchatFormModal
-            achat={editingAchat}
-            fournisseurs={fournisseurs}
+            item={editingItem}
             onSubmit={handleSubmit}
             onClose={() => {
               setShowForm(false);
-              setEditingAchat(null);
+              setEditingItem(null);
             }}
           />
         )}
 
-        {showDetailModal && selectedAchat && (
+        {showDetailModal && selectedItem && (
           <AchatDetailModal
-            achat={selectedAchat}
-            onClose={() => setShowDetailModal(false)}
+            item={selectedItem}
+            onClose={() => {
+              setShowDetailModal(false);
+              setSelectedItem(null);
+            }}
           />
         )}
 
