@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiClient } from '../../../services/apiClient';
 import { authService } from '../../../services/authService';
 import { 
@@ -34,30 +34,40 @@ import {
   FiToggleLeft,
   FiToggleRight,
   FiLink,
-  FiCopy
+  FiCopy,
+  FiBook,
+  FiFileText,
+  FiCalendar,
+  FiLayers,
+  FiActivity,
+  FiBarChart2,
+  FiArchive,
+  FiGrid,
+  FiType
 } from "react-icons/fi";
 
-export default function PositionsFiscalesPage() {
-  // MÊME STRUCTURE D'ÉTATS QUE TauxFiscauxPage
-  const [positions, setPositions] = useState([]);
+export default function JournauxComptablesPage() {
+  // ÉTATS PRINCIPAUX - MÊME STRUCTURE
+  const [journaux, setJournaux] = useState([]);
   const [companies, setCompanies] = useState([]);
-  const [pays, setPays] = useState([]);
-  const [taxes, setTaxes] = useState([]);
+  const [journalTypes, setJournalTypes] = useState([]);
+  const [comptes, setComptes] = useState([]);
+  const [banques, setBanques] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingPosition, setEditingPosition] = useState(null);
+  const [editingJournal, setEditingJournal] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [selectedPosition, setSelectedPosition] = useState(null);
-  const [showTaxesModal, setShowTaxesModal] = useState(false);
+  const [selectedJournal, setSelectedJournal] = useState(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
   
-  // MÊME PAGINATION ET FILTRES
+  // PAGINATION ET FILTRES - MÊME STRUCTURE
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterCountry, setFilterCountry] = useState('');
   const [filterCompany, setFilterCompany] = useState('');
-  const [filterAutoApply, setFilterAutoApply] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterActive, setFilterActive] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
   const [authStatus, setAuthStatus] = useState({
     isAuthenticated: false,
@@ -85,7 +95,7 @@ export default function PositionsFiscalesPage() {
     const isAuthenticated = authService.isAuthenticated();
     const token = authService.getToken();
     
-    console.log('🔐 Statut auth positions fiscales:', {
+    console.log('🔐 Statut auth journaux comptables:', {
       isAuthenticated,
       hasToken: !!token,
       tokenLength: token ? token.length : 0
@@ -100,33 +110,33 @@ export default function PositionsFiscalesPage() {
     return isAuthenticated;
   }, []);
 
-  // MÊME FETCH PUBLIC DATA
+  // FETCH PUBLIC DATA - ADAPTÉ POUR LES JOURNAUX
   const fetchPublicData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
       // Charger les données publiques
-      const [positionsRes, paysRes, taxesRes] = await Promise.all([
-        apiClient.get('/compta/fiscal-positions/').catch(err => {
-          console.warn('⚠️ Erreur positions:', err.message);
+      const [journauxRes, typesRes, comptesRes] = await Promise.all([
+        apiClient.get('/compta/journals/').catch(err => {
+          console.warn('⚠️ Erreur journaux:', err.message);
           return { data: [] };
         }),
-        apiClient.get('/pays/').catch(err => {
-          console.warn('⚠️ Erreur pays:', err.message);
+        apiClient.get('/compta/journal-types/').catch(err => {
+          console.warn('⚠️ Erreur types de journal:', err.message);
           return { data: [] };
         }),
-        apiClient.get('/compta/taxes/').catch(err => {
-          console.warn('⚠️ Erreur taxes:', err.message);
+        apiClient.get('/compta/accounts/').catch(err => {
+          console.warn('⚠️ Erreur comptes:', err.message);
           return { data: [] };
         })
       ]);
 
-      setPositions(extractData(positionsRes));
-      setPays(extractData(paysRes));
-      setTaxes(extractData(taxesRes));
+      setJournaux(extractData(journauxRes));
+      setJournalTypes(extractData(typesRes));
+      setComptes(extractData(comptesRes));
 
-      // Si l'utilisateur est authentifié, charger les entreprises
+      // Si l'utilisateur est authentifié, charger les entreprises et banques
       if (authService.isAuthenticated()) {
         await fetchCompanies();
       } else {
@@ -134,11 +144,10 @@ export default function PositionsFiscalesPage() {
         setAuthStatus(prev => ({ ...prev, hasCompaniesAccess: false }));
       }
       
-      console.log('✅ Données publiques positions chargées:', {
-        positions: extractData(positionsRes).length,
-        pays: extractData(paysRes).length,
-        taxes: extractData(taxesRes).length,
-        companies: companies.length
+      console.log('✅ Données publiques journaux chargées:', {
+        journaux: extractData(journauxRes).length,
+        types: extractData(typesRes).length,
+        comptes: extractData(comptesRes).length
       });
 
     } catch (err) {
@@ -168,17 +177,13 @@ export default function PositionsFiscalesPage() {
       
       try {
         const companiesRes = await apiClient.get('/entites/');
+        const banquesRes = await apiClient.get('/core/banques/').catch(() => ({ data: [] }));
         
         const companiesData = extractData(companiesRes);
-        setCompanies(companiesData);
+        const banquesData = extractData(banquesRes);
         
-        // Debug
-        if (companiesData.length > 0) {
-          console.log('📊 Données entreprises reçues:', {
-            count: companiesData.length,
-            sample: companiesData[0]
-          });
-        }
+        setCompanies(companiesData);
+        setBanques(banquesData);
         
         setAuthStatus(prev => ({ 
           ...prev, 
@@ -186,7 +191,7 @@ export default function PositionsFiscalesPage() {
           showLoginPrompt: false 
         }));
         
-        console.log(`✅ ${companiesData.length} entreprise(s) chargée(s)`);
+        console.log(`✅ ${companiesData.length} entreprise(s) chargée(s), ${banquesData.length} banque(s)`);
         
       } catch (apiError) {
         console.error('❌ Erreur API entreprises:', apiError);
@@ -261,38 +266,38 @@ export default function PositionsFiscalesPage() {
     await fetchAllData();
   }, [fetchAllData]);
 
-  // MÊME FILTERED DATA
-  const filteredPositions = useMemo(() => {
-    if (!Array.isArray(positions)) return [];
+  // FILTERED DATA - ADAPTÉ POUR LES JOURNAUX
+  const filteredJournaux = useMemo(() => {
+    if (!Array.isArray(journaux)) return [];
     
-    return positions.filter(position => {
+    return journaux.filter(journal => {
       const searchTermLower = searchTerm.toLowerCase();
-      const positionName = position.name || '';
-      const positionDescription = position.description || '';
+      const journalName = journal.name || '';
+      const journalCode = journal.code || '';
       
       const matchesSearch = 
-        positionName.toLowerCase().includes(searchTermLower) ||
-        positionDescription.toLowerCase().includes(searchTermLower);
-      
-      const matchesCountry = !filterCountry || 
-        (position.country?.id && position.country.id.toString() === filterCountry);
+        journalName.toLowerCase().includes(searchTermLower) ||
+        journalCode.toLowerCase().includes(searchTermLower);
       
       const matchesCompany = !filterCompany || 
-        (position.company?.id && position.company.id.toString() === filterCompany);
+        (journal.company?.id && journal.company.id.toString() === filterCompany);
       
-      const matchesAutoApply = filterAutoApply === '' || 
-        (filterAutoApply === 'true' ? position.auto_apply : !position.auto_apply);
+      const matchesType = !filterType || 
+        (journal.type?.id && journal.type.id.toString() === filterType);
       
-      return matchesSearch && matchesCountry && matchesCompany && matchesAutoApply;
+      const matchesActive = filterActive === '' || 
+        (filterActive === 'true' ? journal.active : !journal.active);
+      
+      return matchesSearch && matchesCompany && matchesType && matchesActive;
     });
-  }, [positions, searchTerm, filterCountry, filterCompany, filterAutoApply]);
+  }, [journaux, searchTerm, filterCompany, filterType, filterActive]);
 
   // MÊME PAGINATION CALCULS
-  const totalItems = filteredPositions.length;
+  const totalItems = filteredJournaux.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const indexOfLastItem = Math.min(currentPage * itemsPerPage, totalItems);
   const indexOfFirstItem = Math.max(0, indexOfLastItem - itemsPerPage);
-  const currentPositions = filteredPositions.slice(indexOfFirstItem, indexOfLastItem);
+  const currentJournaux = filteredJournaux.slice(indexOfFirstItem, indexOfLastItem);
 
   // MÊME PAGINATION FUNCTIONS
   const paginate = useCallback((pageNumber) => {
@@ -322,59 +327,59 @@ export default function PositionsFiscalesPage() {
   }, []);
 
   const selectAllRows = useCallback(() => {
-    if (selectedRows.length === currentPositions.length && currentPositions.length > 0) {
+    if (selectedRows.length === currentJournaux.length && currentJournaux.length > 0) {
       setSelectedRows([]);
     } else {
-      setSelectedRows(currentPositions.map(pos => pos.id).filter(id => id != null));
+      setSelectedRows(currentJournaux.map(journal => journal.id).filter(id => id != null));
     }
-  }, [currentPositions, selectedRows.length]);
+  }, [currentJournaux, selectedRows.length]);
 
-  // MÊME ACTIONS
-  const handleNewPosition = useCallback(() => {
+  // ACTIONS - ADAPTÉES POUR LES JOURNAUX
+  const handleNewJournal = useCallback(() => {
     if (!authStatus.hasCompaniesAccess && companies.length === 0) {
       setAuthStatus(prev => ({ ...prev, showLoginPrompt: true }));
       return;
     }
     
-    setEditingPosition(null);
+    setEditingJournal(null);
     setShowForm(true);
   }, [authStatus.hasCompaniesAccess, companies.length]);
 
-  const handleEdit = useCallback((position) => {
-    setEditingPosition(position);
+  const handleEdit = useCallback((journal) => {
+    setEditingJournal(journal);
     setShowForm(true);
   }, []);
 
-  const handleDelete = useCallback(async (position) => {
-    if (!position || !position.id) return;
+  const handleDelete = useCallback(async (journal) => {
+    if (!journal || !journal.id) return;
     
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la position "${position.name || 'sans nom'}" ? Cette action est irréversible.`)) {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le journal "${journal.name || 'sans nom'}" ? Cette action est irréversible.`)) {
       try {
-        await apiClient.delete(`/compta/fiscal-positions/${position.id}/`);
+        await apiClient.delete(`/compta/journals/${journal.id}/`);
         fetchAllData();
       } catch (err) {
-        console.error('Error deleting position:', err);
-        setError('Erreur lors de la suppression de la position');
+        console.error('Error deleting journal:', err);
+        setError('Erreur lors de la suppression du journal');
       }
     }
   }, [fetchAllData]);
 
-  const handleViewDetails = useCallback((position) => {
-    if (!position) return;
-    setSelectedPosition(position);
+  const handleViewDetails = useCallback((journal) => {
+    if (!journal) return;
+    setSelectedJournal(journal);
     setShowDetailModal(true);
   }, []);
 
-  const handleViewTaxes = useCallback((position) => {
-    if (!position) return;
-    setSelectedPosition(position);
-    setShowTaxesModal(true);
+  const handleViewConfig = useCallback((journal) => {
+    if (!journal) return;
+    setSelectedJournal(journal);
+    setShowConfigModal(true);
   }, []);
 
-  const handleToggleActive = useCallback(async (position) => {
+  const handleToggleActive = useCallback(async (journal) => {
     try {
-      await apiClient.patch(`/compta/fiscal-positions/${position.id}/`, {
-        active: !position.active
+      await apiClient.patch(`/compta/journals/${journal.id}/`, {
+        active: !journal.active
       });
       fetchAllData();
     } catch (err) {
@@ -383,34 +388,23 @@ export default function PositionsFiscalesPage() {
     }
   }, [fetchAllData]);
 
-  const handleToggleAutoApply = useCallback(async (position) => {
+  const handleDuplicate = useCallback(async (journal) => {
     try {
-      await apiClient.patch(`/compta/fiscal-positions/${position.id}/`, {
-        auto_apply: !position.auto_apply
-      });
-      fetchAllData();
-    } catch (err) {
-      console.error('Error toggling auto-apply:', err);
-      setError('Erreur lors de la modification de l\'auto-application');
-    }
-  }, [fetchAllData]);
-
-  const handleDuplicate = useCallback(async (position) => {
-    try {
-      const { id, ...positionData } = position;
-      positionData.name = `${positionData.name} (Copie)`;
+      const { id, ...journalData } = journal;
+      journalData.name = `${journalData.name} (Copie)`;
+      journalData.code = `${journalData.code}_COPY`;
       
-      await apiClient.post('/compta/fiscal-positions/', positionData);
+      await apiClient.post('/compta/journals/', journalData);
       fetchAllData();
     } catch (err) {
-      console.error('Error duplicating position:', err);
+      console.error('Error duplicating journal:', err);
       setError('Erreur lors de la duplication');
     }
   }, [fetchAllData]);
 
   const handleFormSuccess = useCallback(() => {
     setShowForm(false);
-    setEditingPosition(null);
+    setEditingJournal(null);
     fetchAllData();
   }, [fetchAllData]);
 
@@ -420,20 +414,21 @@ export default function PositionsFiscalesPage() {
 
   const resetFilters = useCallback(() => {
     setSearchTerm('');
-    setFilterCountry('');
     setFilterCompany('');
-    setFilterAutoApply('');
+    setFilterType('');
+    setFilterActive('');
     setCurrentPage(1);
   }, []);
 
-  // MÊME STATISTICS
+  // STATISTICS - ADAPTÉES POUR LES JOURNAUX
   const stats = useMemo(() => ({
-    total: positions.length,
-    active: positions.filter(p => p.active !== false).length,
-    autoApply: positions.filter(p => p.auto_apply).length,
-    vatRequired: positions.filter(p => p.vat_required).length,
+    total: journaux.length,
+    active: journaux.filter(j => j.active !== false).length,
+    bank: journaux.filter(j => j.type?.code === 'BAN' || j.type?.name?.toLowerCase().includes('banque')).length,
+    sale: journaux.filter(j => j.type?.code === 'VEN' || j.type?.name?.toLowerCase().includes('vente')).length,
+    purchase: journaux.filter(j => j.type?.code === 'ACH' || j.type?.name?.toLowerCase().includes('achat')).length,
     companies: companies.length
-  }), [positions, companies]);
+  }), [journaux, companies]);
 
   // MÊME LOADING COMPONENT
   if (loading) {
@@ -456,54 +451,53 @@ export default function PositionsFiscalesPage() {
         setSearchTerm={setSearchTerm}
         loading={loading}
         handleRetry={handleRetry}
-        handleNewPosition={handleNewPosition}
+        handleNewJournal={handleNewJournal}
         handleLogin={handleLogin}
         stats={stats}
-        filterCountry={filterCountry}
-        setFilterCountry={setFilterCountry}
         filterCompany={filterCompany}
         setFilterCompany={setFilterCompany}
-        filterAutoApply={filterAutoApply}
-        setFilterAutoApply={setFilterAutoApply}
+        filterType={filterType}
+        setFilterType={setFilterType}
+        filterActive={filterActive}
+        setFilterActive={setFilterActive}
         setCurrentPage={setCurrentPage}
         resetFilters={resetFilters}
         selectedRows={selectedRows}
         authStatus={authStatus}
         companiesCount={companies.length}
-        pays={pays}
         companies={companies}
+        journalTypes={journalTypes}
       />
 
       {/* Message d'erreur */}
       {error && <ErrorMessage error={error} handleRetry={handleRetry} />}
 
       {/* Message d'avertissement pour les entreprises */}
-      {!authStatus.hasCompaniesAccess && companies.length === 0 && positions.length > 0 && (
+      {!authStatus.hasCompaniesAccess && companies.length === 0 && journaux.length > 0 && (
         <CompaniesWarning onLogin={handleLogin} />
       )}
 
       {/* Tableau principal */}
       <MainTable 
-        currentPositions={currentPositions}
-        positions={positions}
+        currentJournaux={currentJournaux}
+        journaux={journaux}
         selectedRows={selectedRows}
         selectAllRows={selectAllRows}
         toggleRowSelection={toggleRowSelection}
         handleViewDetails={handleViewDetails}
-        handleViewTaxes={handleViewTaxes}
+        handleViewConfig={handleViewConfig}
         handleToggleActive={handleToggleActive}
-        handleToggleAutoApply={handleToggleAutoApply}
         handleDuplicate={handleDuplicate}
         handleEdit={handleEdit}
         handleDelete={handleDelete}
-        handleNewPosition={handleNewPosition}
+        handleNewJournal={handleNewJournal}
         itemsPerPage={itemsPerPage}
         setItemsPerPage={setItemsPerPage}
         setCurrentPage={setCurrentPage}
       />
 
       {/* Pagination */}
-      {currentPositions.length > 0 && (
+      {currentJournaux.length > 0 && (
         <Pagination 
           currentPage={currentPage}
           totalPages={totalPages}
@@ -518,37 +512,38 @@ export default function PositionsFiscalesPage() {
 
       {/* Modaux */}
       {showForm && (
-        <PositionFormModal
-          position={editingPosition}
+        <JournalFormModal
+          journal={editingJournal}
           companies={companies}
-          pays={pays}
+          journalTypes={journalTypes}
+          comptes={comptes}
+          banques={banques}
           authStatus={authStatus}
           onClose={() => {
             setShowForm(false);
-            setEditingPosition(null);
+            setEditingJournal(null);
           }}
           onSuccess={handleFormSuccess}
           onLogin={handleLogin}
         />
       )}
 
-      {showDetailModal && selectedPosition && (
-        <PositionDetailModal
-          position={selectedPosition}
+      {showDetailModal && selectedJournal && (
+        <JournalDetailModal
+          journal={selectedJournal}
           onClose={() => {
             setShowDetailModal(false);
-            setSelectedPosition(null);
+            setSelectedJournal(null);
           }}
         />
       )}
 
-      {showTaxesModal && selectedPosition && (
-        <PositionTaxesModal
-          position={selectedPosition}
-          taxes={taxes}
+      {showConfigModal && selectedJournal && (
+        <JournalConfigModal
+          journal={selectedJournal}
           onClose={() => {
-            setShowTaxesModal(false);
-            setSelectedPosition(null);
+            setShowConfigModal(false);
+            setSelectedJournal(null);
           }}
         />
       )}
@@ -569,7 +564,7 @@ function LoadingSpinner() {
         <div className="mt-4">
           <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 animate-pulse"></div>
           <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-24 mt-2 animate-pulse mx-auto"></div>
-          <p className="text-gray-500 text-sm mt-4">Chargement des positions fiscales...</p>
+          <p className="text-gray-500 text-sm mt-4">Chargement des journaux comptables...</p>
         </div>
       </div>
     </div>
@@ -626,7 +621,7 @@ function CompaniesWarning({ onLogin }) {
               Connectez-vous pour accéder à la liste complète des entreprises
             </p>
             <p className="text-amber-700 text-xs mt-0.5">
-              Vous pouvez toujours créer des positions avec une entreprise manuelle
+              Vous pouvez toujours créer des journaux avec une entreprise manuelle
             </p>
           </div>
         </div>
@@ -647,22 +642,22 @@ function Header({
   setSearchTerm, 
   loading, 
   handleRetry, 
-  handleNewPosition, 
+  handleNewJournal, 
   handleLogin,
   stats, 
-  filterCountry, 
-  setFilterCountry,
-  filterCompany,
+  filterCompany, 
   setFilterCompany,
-  filterAutoApply,
-  setFilterAutoApply,
+  filterType,
+  setFilterType,
+  filterActive,
+  setFilterActive,
   setCurrentPage,
   resetFilters,
   selectedRows,
   authStatus,
   companiesCount,
-  pays,
-  companies
+  companies,
+  journalTypes
 }) {
   return (
     <div className="mb-6">
@@ -676,7 +671,7 @@ function Header({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 pr-24 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm w-80"
-              placeholder="Rechercher une position..."
+              placeholder="Rechercher un journal..."
             />
             {searchTerm && (
               <button
@@ -717,7 +712,7 @@ function Header({
           )}
           
           <button 
-            onClick={handleNewPosition}
+            onClick={handleNewJournal}
             disabled={!authStatus.hasCompaniesAccess && companiesCount === 0}
             className={`ml-2 px-3 py-2 rounded-lg transition-all duration-300 flex items-center gap-1.5 text-sm shadow ${
               (!authStatus.hasCompaniesAccess && companiesCount === 0)
@@ -726,7 +721,7 @@ function Header({
             }`}
           >
             <FiPlus size={14} />
-            <span>Nouvelle Position</span>
+            <span>Nouveau Journal</span>
           </button>
         </div>
       </div>
@@ -734,56 +729,39 @@ function Header({
       {/* Statistiques - MÊME GRID */}
       <div className="grid grid-cols-5 gap-2 mb-3">
         <StatCard 
-          label="Positions" 
+          label="Journaux" 
           value={stats.total} 
           color="violet" 
-          icon={FiShield} 
+          icon={FiBook} 
         />
         <StatCard 
-          label="Actives" 
+          label="Actifs" 
           value={stats.active} 
           color="green" 
           icon={FiCheck} 
         />
         <StatCard 
-          label="Auto-appl." 
-          value={stats.autoApply} 
-          color="amber" 
-          icon={FiToggleRight} 
-        />
-        <StatCard 
-          label="Entreprises" 
-          value={stats.companies} 
+          label="Banques" 
+          value={stats.bank} 
           color="blue" 
-          icon={FiUsers} 
-          sublabel={authStatus.hasCompaniesAccess ? "Accès complet" : "Limité"}
+          icon={FiCreditCard} 
         />
         <StatCard 
-          label="TVA requise" 
-          value={stats.vatRequired} 
+          label="Ventes" 
+          value={stats.sale} 
+          color="amber" 
+          icon={FiShoppingCart} 
+        />
+        <StatCard 
+          label="Achats" 
+          value={stats.purchase} 
           color="cyan" 
-          icon={FiPercent} 
+          icon={FiTrendingUp} 
         />
       </div>
 
       {/* Filtres rapides - MÊME DESIGN */}
       <div className="flex items-center gap-3 mb-3">
-        <select
-          value={filterCountry}
-          onChange={(e) => {
-            setCurrentPage(1);
-            setFilterCountry(e.target.value);
-          }}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 text-sm bg-white"
-        >
-          <option value="">Tous les pays</option>
-          {pays.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.emoji || '🌍'} {p.nom_fr || p.name}
-            </option>
-          ))}
-        </select>
-
         <select
           value={filterCompany}
           onChange={(e) => {
@@ -801,16 +779,32 @@ function Header({
         </select>
 
         <select
-          value={filterAutoApply}
+          value={filterType}
           onChange={(e) => {
             setCurrentPage(1);
-            setFilterAutoApply(e.target.value);
+            setFilterType(e.target.value);
           }}
           className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 text-sm bg-white"
         >
-          <option value="">Toutes</option>
-          <option value="true">Auto-appliquées</option>
-          <option value="false">Manuelles</option>
+          <option value="">Tous types</option>
+          {journalTypes.map(t => (
+            <option key={t.id} value={t.id}>
+              {t.name} ({t.code})
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={filterActive}
+          onChange={(e) => {
+            setCurrentPage(1);
+            setFilterActive(e.target.value);
+          }}
+          className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 text-sm bg-white"
+        >
+          <option value="">Tous</option>
+          <option value="true">Actifs</option>
+          <option value="false">Inactifs</option>
         </select>
 
         <button
@@ -882,19 +876,18 @@ function ErrorMessage({ error, handleRetry }) {
 }
 
 function MainTable({ 
-  currentPositions, 
-  positions, 
+  currentJournaux, 
+  journaux, 
   selectedRows, 
   selectAllRows, 
   toggleRowSelection, 
   handleViewDetails, 
-  handleViewTaxes,
+  handleViewConfig,
   handleToggleActive,
-  handleToggleAutoApply,
   handleDuplicate,
   handleEdit, 
   handleDelete, 
-  handleNewPosition,
+  handleNewJournal,
   itemsPerPage,
   setItemsPerPage,
   setCurrentPage
@@ -908,7 +901,7 @@ function MainTable({
             <div className="flex items-center gap-1.5">
               <input
                 type="checkbox"
-                checked={selectedRows.length === currentPositions.length && currentPositions.length > 0}
+                checked={selectedRows.length === currentJournaux.length && currentJournaux.length > 0}
                 onChange={selectAllRows}
                 className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
               />
@@ -950,21 +943,21 @@ function MainTable({
                 <div className="flex items-center gap-1">
                   <input
                     type="checkbox"
-                    checked={selectedRows.length === currentPositions.length && currentPositions.length > 0}
+                    checked={selectedRows.length === currentJournaux.length && currentJournaux.length > 0}
                     onChange={selectAllRows}
                     className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
                   />
-                  Position
+                  Journal
                 </div>
               </th>
               <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                Pays
+                Type
               </th>
               <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                 Entreprise
               </th>
               <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                Configuration
+                Compte
               </th>
               <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
                 Statut
@@ -976,29 +969,28 @@ function MainTable({
           </thead>
           
           <tbody className="divide-y divide-gray-200">
-            {currentPositions.length === 0 ? (
+            {currentJournaux.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-3 py-4 text-center">
                   <EmptyState 
-                    hasData={positions.length > 0} 
-                    onNewPosition={handleNewPosition} 
+                    hasData={journaux.length > 0} 
+                    onNewJournal={handleNewJournal} 
                   />
                 </td>
               </tr>
             ) : (
-              currentPositions.map((position) => (
-                <PositionRow 
-                  key={position.id}
-                  position={position}
-                  isSelected={selectedRows.includes(position.id)}
-                  onToggleSelect={() => toggleRowSelection(position.id)}
-                  onViewDetails={() => handleViewDetails(position)}
-                  onViewTaxes={() => handleViewTaxes(position)}
-                  onToggleActive={() => handleToggleActive(position)}
-                  onToggleAutoApply={() => handleToggleAutoApply(position)}
-                  onDuplicate={() => handleDuplicate(position)}
-                  onEdit={() => handleEdit(position)}
-                  onDelete={() => handleDelete(position)}
+              currentJournaux.map((journal) => (
+                <JournalRow 
+                  key={journal.id}
+                  journal={journal}
+                  isSelected={selectedRows.includes(journal.id)}
+                  onToggleSelect={() => toggleRowSelection(journal.id)}
+                  onViewDetails={() => handleViewDetails(journal)}
+                  onViewConfig={() => handleViewConfig(journal)}
+                  onToggleActive={() => handleToggleActive(journal)}
+                  onDuplicate={() => handleDuplicate(journal)}
+                  onEdit={() => handleEdit(journal)}
+                  onDelete={() => handleDelete(journal)}
                 />
               ))
             )}
@@ -1009,60 +1001,79 @@ function MainTable({
   );
 }
 
-function EmptyState({ hasData, onNewPosition }) {
+function EmptyState({ hasData, onNewJournal }) {
   return (
     <div className="flex flex-col items-center justify-center">
       <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
-        <FiShield className="w-6 h-6 text-gray-400" />
+        <FiBook className="w-6 h-6 text-gray-400" />
       </div>
       <h3 className="text-sm font-semibold text-gray-900 mb-1">
-        {hasData ? 'Aucun résultat' : 'Aucune position fiscale trouvée'}
+        {hasData ? 'Aucun résultat' : 'Aucun journal comptable trouvé'}
       </h3>
       <p className="text-gray-600 text-xs mb-3 max-w-md">
         {hasData 
           ? 'Essayez de modifier vos critères de recherche'
-          : 'Commencez par créer votre première position fiscale'
+          : 'Commencez par créer votre premier journal comptable'
         }
       </p>
       {!hasData && (
         <button 
-          onClick={onNewPosition}
+          onClick={onNewJournal}
           className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
         >
           <FiPlus size={12} />
-          Créer position
+          Créer journal
         </button>
       )}
     </div>
   );
 }
 
-function PositionRow({ position, isSelected, onToggleSelect, onViewDetails, onViewTaxes, onToggleActive, onToggleAutoApply, onDuplicate, onEdit, onDelete }) {
+function JournalRow({ journal, isSelected, onToggleSelect, onViewDetails, onViewConfig, onToggleActive, onDuplicate, onEdit, onDelete }) {
+  const getTypeBadge = (type) => {
+    const typeMap = {
+      'ACH': { bg: 'from-amber-50 to-amber-100', text: 'text-amber-800', icon: FiTrendingUp, label: 'Achat' },
+      'VEN': { bg: 'from-green-50 to-green-100', text: 'text-green-800', icon: FiShoppingCart, label: 'Vente' },
+      'BAN': { bg: 'from-blue-50 to-blue-100', text: 'text-blue-800', icon: FiCreditCard, label: 'Banque' },
+      'CAI': { bg: 'from-violet-50 to-violet-100', text: 'text-violet-800', icon: FiDollarSign, label: 'Caisse' },
+      'OD': { bg: 'from-gray-50 to-gray-100', text: 'text-gray-800', icon: FiFileText, label: 'Divers' }
+    };
+    
+    const code = type?.code || '';
+    return typeMap[code] || { 
+      bg: 'from-gray-50 to-gray-100', 
+      text: 'text-gray-800', 
+      icon: FiFileText, 
+      label: type?.name || 'Autre' 
+    };
+  };
+
   const getStatusBadge = (active) => {
     if (active === false) {
       return {
         bg: 'bg-gradient-to-r from-gray-50 to-gray-100',
         text: 'text-gray-800',
         icon: FiX,
-        label: 'Inactive'
+        label: 'Inactif'
       };
     }
     return {
       bg: 'bg-gradient-to-r from-green-50 to-green-100',
       text: 'text-green-800',
       icon: FiCheck,
-      label: 'Active'
+      label: 'Actif'
     };
   };
 
-  const statusBadge = getStatusBadge(position.active);
+  const typeBadge = getTypeBadge(journal.type);
+  const statusBadge = getStatusBadge(journal.active);
   const StatusIcon = statusBadge.icon;
 
   return (
     <tr className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
       isSelected ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
     }`}>
-      {/* Position avec checkbox */}
+      {/* Journal avec checkbox */}
       <td className="px-3 py-2 whitespace-nowrap border-r border-gray-200">
         <div className="flex items-center gap-1.5">
           <input
@@ -1072,53 +1083,57 @@ function PositionRow({ position, isSelected, onToggleSelect, onViewDetails, onVi
             className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
           />
           <div>
-            <div className="text-xs font-semibold text-gray-900 truncate max-w-[150px]">{position.name}</div>
-            {position.description && (
-              <div className="text-xs text-gray-500 truncate max-w-[150px]">
-                {position.description.substring(0, 60)}...
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border">
+                {journal.code || '---'}
+              </span>
+              <div className="text-xs font-semibold text-gray-900 truncate max-w-[120px]">
+                {journal.name}
+              </div>
+            </div>
+            {journal.note && (
+              <div className="text-xs text-gray-500 truncate max-w-[150px] mt-0.5">
+                {journal.note.substring(0, 50)}...
               </div>
             )}
           </div>
         </div>
       </td>
       
-      {/* Pays */}
+      {/* Type */}
       <td className="px-3 py-2 border-r border-gray-200">
-        <div className="flex items-center gap-1">
-          <span className="text-base">{position.country?.emoji || '🌍'}</span>
-          <div className="text-xs text-gray-900 truncate max-w-[80px]">
-            {position.country?.nom_fr || position.country?.nom || position.country?.name || '-'}
-          </div>
+        <div className={`inline-flex items-center px-2 py-1 ${typeBadge.bg} ${typeBadge.text} rounded-full text-xs font-medium`}>
+          <span className="text-xs font-medium">{typeBadge.label}</span>
         </div>
       </td>
       
       {/* Entreprise */}
       <td className="px-3 py-2 border-r border-gray-200">
         <div className="text-xs text-gray-900 truncate max-w-[100px]">
-          {position.company?.nom || 
-           position.company?.raison_sociale || 
-           position.company?.name || 
-           position.company?.raisonSociale || 
-           position.company?.display_name || 
-           position.company?.company_name ||
+          {journal.company?.nom || 
+           journal.company?.raison_sociale || 
+           journal.company?.name || 
+           journal.company?.raisonSociale || 
+           journal.company?.display_name || 
+           journal.company?.company_name ||
            'Toutes'}
         </div>
       </td>
       
-      {/* Configuration */}
+      {/* Compte par défaut */}
       <td className="px-3 py-2 border-r border-gray-200">
-        <div className="flex flex-wrap gap-1">
-          {position.auto_apply && (
-            <span className="inline-flex items-center px-1.5 py-0.5 bg-gradient-to-r from-amber-50 to-amber-100 text-amber-800 rounded-full text-[10px] font-medium">
-              <FiToggleRight className="w-2 h-2 mr-0.5" />
-              Auto
-            </span>
-          )}
-          {position.vat_required && (
-            <span className="inline-flex items-center px-1.5 py-0.5 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded-full text-[10px] font-medium">
-              <FiPercent className="w-2 h-2 mr-0.5" />
-              TVA
-            </span>
+        <div className="text-xs truncate max-w-[120px]">
+          {journal.default_account ? (
+            <div className="flex items-center gap-1">
+              <span className="font-mono text-violet-600 font-medium">
+                {journal.default_account.code || '---'}
+              </span>
+              <span className="text-gray-700">
+                {journal.default_account.name?.substring(0, 15)}...
+              </span>
+            </div>
+          ) : (
+            <span className="text-gray-400 italic">Non défini</span>
           )}
         </div>
       </td>
@@ -1137,10 +1152,10 @@ function PositionRow({ position, isSelected, onToggleSelect, onViewDetails, onVi
       <td className="px-3 py-2 whitespace-nowrap">
         <div className="flex items-center gap-1">
           <ActionButton 
-            onClick={onViewTaxes}
+            onClick={onViewConfig}
             color="gray"
-            icon={FiLink}
-            title="Voir taxes"
+            icon={FiSettings}
+            title="Configuration"
           />
           <ActionButton 
             onClick={onViewDetails}
@@ -1150,15 +1165,9 @@ function PositionRow({ position, isSelected, onToggleSelect, onViewDetails, onVi
           />
           <ActionButton 
             onClick={onToggleActive}
-            color={position.active === false ? "green" : "gray"}
-            icon={position.active === false ? FiCheck : FiX}
-            title={position.active === false ? "Activer" : "Désactiver"}
-          />
-          <ActionButton 
-            onClick={onToggleAutoApply}
-            color={position.auto_apply ? "violet" : "gray"}
-            icon={FiToggleRight}
-            title={position.auto_apply ? "Désactiver auto" : "Activer auto"}
+            color={journal.active === false ? "green" : "gray"}
+            icon={journal.active === false ? FiCheck : FiX}
+            title={journal.active === false ? "Activer" : "Désactiver"}
           />
           <ActionButton 
             onClick={onDuplicate}
@@ -1181,6 +1190,15 @@ function PositionRow({ position, isSelected, onToggleSelect, onViewDetails, onVi
         </div>
       </td>
     </tr>
+  );
+}
+
+function FiSettings(props) {
+  return (
+    <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
   );
 }
 
@@ -1246,7 +1264,7 @@ function Pagination({
             </span>
             <span className="text-gray-300">•</span>
             <span className="text-xs text-gray-700">
-              {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, totalItems)} sur {totalItems} positions
+              {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, totalItems)} sur {totalItems} journaux
             </span>
           </div>
         </div>
@@ -1306,26 +1324,31 @@ function PaginationButton({ onClick, disabled, icon: Icon, title }) {
 }
 
 // MODAL DE DÉTAILS
-function PositionDetailModal({ position, onClose }) {
-  const getPositionColor = (type) => {
-    if (position.auto_apply) return 'from-amber-600 to-amber-500';
-    if (position.vat_required) return 'from-blue-600 to-blue-500';
-    return 'from-violet-600 to-violet-500';
+function JournalDetailModal({ journal, onClose }) {
+  const getJournalColor = (typeCode) => {
+    const colorMap = {
+      'ACH': 'from-amber-600 to-amber-500',
+      'VEN': 'from-green-600 to-green-500',
+      'BAN': 'from-blue-600 to-blue-500',
+      'CAI': 'from-violet-600 to-violet-500',
+      'OD': 'from-gray-600 to-gray-500'
+    };
+    return colorMap[typeCode] || 'from-violet-600 to-violet-500';
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
       <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
         {/* Header */}
-        <div className={`sticky top-0 bg-gradient-to-r ${getPositionColor(position)} text-white rounded-t-lg p-3`}>
+        <div className={`sticky top-0 bg-gradient-to-r ${getJournalColor(journal.type?.code)} text-white rounded-t-lg p-3`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
-                <FiShield className="w-4 h-4" />
+                <FiBook className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-base font-bold">Détails de la Position Fiscale</h2>
-                <p className="text-white/90 text-xs mt-0.5">{position.name}</p>
+                <h2 className="text-base font-bold">Détails du Journal Comptable</h2>
+                <p className="text-white/90 text-xs mt-0.5">{journal.code} - {journal.name}</p>
               </div>
             </div>
             <button
@@ -1341,36 +1364,26 @@ function PositionDetailModal({ position, onClose }) {
           {/* En-tête avec badges */}
           <div className="flex flex-col md:flex-row items-center md:items-start gap-4 mb-6">
             <div className="w-32 h-32 bg-gradient-to-br from-violet-100 to-violet-200 rounded-lg flex items-center justify-center overflow-hidden border-2 border-violet-300">
-              <FiShield className="w-16 h-16 text-violet-600" />
+              <FiBook className="w-16 h-16 text-violet-600" />
             </div>
             <div className="flex-1 text-center md:text-left">
-              <h1 className="text-xl font-bold text-gray-900">{position.name}</h1>
+              <h1 className="text-xl font-bold text-gray-900">{journal.name}</h1>
               <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
-                {position.active === false ? (
+                <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-gray-800 to-gray-700 text-white rounded-full text-xs font-medium">
+                  Code: {journal.code || '---'}
+                </span>
+                {journal.active === false ? (
                   <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded-full text-xs font-medium">
-                    Inactive
+                    Inactif
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-full text-xs font-medium">
-                    Active
+                    Actif
                   </span>
                 )}
-                {position.auto_apply && (
-                  <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-amber-50 to-amber-100 text-amber-700 rounded-full text-xs font-medium border border-amber-200">
-                    <FiToggleRight className="w-3 h-3 mr-1" />
-                    Auto-appliquée
-                  </span>
-                )}
-                {position.vat_required && (
-                  <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded-full text-xs font-medium border border-blue-200">
-                    <FiPercent className="w-3 h-3 mr-1" />
-                    TVA requise
-                  </span>
-                )}
-                {position.country && (
-                  <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded-full text-xs font-medium border border-gray-200">
-                    <FiGlobe className="w-3 h-3 mr-1" />
-                    {position.country.nom_fr || position.country.nom}
+                {journal.type && (
+                  <span className={`inline-flex items-center px-3 py-1 ${getJournalColor(journal.type.code).replace('600', '50').replace('500', '100')} text-gray-700 rounded-full text-xs font-medium border border-gray-200`}>
+                    {journal.type.name} ({journal.type.code})
                   </span>
                 )}
               </div>
@@ -1382,60 +1395,70 @@ function PositionDetailModal({ position, onClose }) {
             title="Informations Générales"
             color="violet"
             items={[
-              { label: 'Identifiant', value: `#${position.id}`, isCode: true },
-              { label: 'Nom', value: position.name, isBold: true },
-              { label: 'Description', value: position.description || 'Aucune description' },
-              { label: 'Pays', value: position.country ? `${position.country.emoji || '🌍'} ${position.country.nom_fr || position.country.nom}` : 'Global' }
+              { label: 'Identifiant', value: `#${journal.id}`, isCode: true },
+              { label: 'Code', value: journal.code || 'Non défini', isBold: true },
+              { label: 'Nom', value: journal.name, isBold: true },
+              { label: 'Description', value: journal.note || 'Aucune note' }
             ]}
           />
 
-          {/* Configuration */}
+          {/* Type et Configuration */}
           <InfoSection 
-            title="Configuration"
+            title="Type et Configuration"
             color="blue"
             items={[
               { 
-                label: 'Auto-application', 
-                value: (
-                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                    position.auto_apply 
-                      ? 'bg-gradient-to-r from-amber-50 to-amber-100 text-amber-700 border border-amber-200'
-                      : 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border border-gray-200'
-                  }`}>
-                    {position.auto_apply ? 'Activée' : 'Désactivée'}
-                  </span>
-                ) 
+                label: 'Type de journal', 
+                value: journal.type ? (
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getJournalColor(journal.type.code).replace('600', '50').replace('500', '100')}`}>
+                      {journal.type.name} ({journal.type.code})
+                    </span>
+                  </div>
+                ) : 'Non spécifié'
               },
               { 
-                label: 'TVA requise', 
-                value: (
-                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                    position.vat_required 
-                      ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border border-blue-200'
-                      : 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border border-gray-200'
-                  }`}>
-                    {position.vat_required ? 'Oui' : 'Non'}
-                  </span>
-                ) 
+                label: 'Entreprise', 
+                value: journal.company ? (
+                  <div>
+                    <div className="font-medium">{journal.company.raison_sociale || journal.company.nom}</div>
+                    <div className="text-sm text-gray-600">
+                      {journal.company.email || journal.company.telephone || ''}
+                    </div>
+                  </div>
+                ) : 'Toutes les entreprises'
               }
             ]}
           />
 
-          {/* Entreprise */}
+          {/* Comptes Associés */}
           <InfoSection 
-            title="Entreprise"
+            title="Comptes Associés"
             color="green"
             items={[
               { 
-                label: 'Entreprise associée', 
-                value: position.company ? (
+                label: 'Compte par défaut', 
+                value: journal.default_account ? (
                   <div>
-                    <div className="font-medium">{position.company.raison_sociale || position.company.nom}</div>
-                    <div className="text-sm text-gray-600">
-                      {position.company.email || position.company.telephone || ''}
+                    <div className="font-mono text-violet-600 font-medium">
+                      {journal.default_account.code || '---'}
+                    </div>
+                    <div className="text-sm text-gray-700">
+                      {journal.default_account.name}
                     </div>
                   </div>
-                ) : 'Toutes les entreprises'
+                ) : <span className="text-gray-400 italic">Non défini</span>
+              },
+              { 
+                label: 'Compte bancaire', 
+                value: journal.bank_account ? (
+                  <div>
+                    <div className="font-medium">{journal.bank_account.banque?.nom}</div>
+                    <div className="text-sm text-gray-600">
+                      {journal.bank_account.numero_compte}
+                    </div>
+                  </div>
+                ) : <span className="text-gray-400 italic">Non associé</span>
               }
             ]}
           />
@@ -1457,20 +1480,20 @@ function PositionDetailModal({ position, onClose }) {
   );
 }
 
-// MODAL DES TAXES
-function PositionTaxesModal({ position, taxes, onClose }) {
+// MODAL DE CONFIGURATION
+function JournalConfigModal({ journal, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
-        <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-t-lg p-3">
+      <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
-                <FiPercent className="w-4 h-4" />
+                <FiSettings className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-base font-bold">Taxes associées</h2>
-                <p className="text-white/90 text-xs mt-0.5">{position.name}</p>
+                <h2 className="text-base font-bold">Configuration du Journal</h2>
+                <p className="text-white/90 text-xs mt-0.5">{journal.name}</p>
               </div>
             </div>
             <button
@@ -1484,9 +1507,9 @@ function PositionTaxesModal({ position, taxes, onClose }) {
         
         <div className="p-4">
           <p className="text-gray-600 mb-4">
-            Liste des taxes associées à cette position fiscale
+            Configuration avancée du journal comptable
           </p>
-          {/* À implémenter avec les taxes réelles */}
+          {/* À implémenter avec la configuration réelle */}
         </div>
       </div>
     </div>
@@ -1540,24 +1563,30 @@ function InfoSection({ title, color, items }) {
 }
 
 // MODAL DE FORMULAIRE
-function PositionFormModal({ position, companies, pays, authStatus, onClose, onSuccess, onLogin }) {
+function JournalFormModal({ journal, companies, journalTypes, comptes, banques, authStatus, onClose, onSuccess, onLogin }) {
   const [formData, setFormData] = useState({
-    name: position?.name || '',
-    country: position?.country?.id || position?.country || '',
-    company: position?.company?.id || position?.company || '',
-    auto_apply: position?.auto_apply || false,
-    vat_required: position?.vat_required || false,
-    description: position?.description || ''
+    code: journal?.code || '',
+    name: journal?.name || '',
+    type: journal?.type?.id || journal?.type || '',
+    company: journal?.company?.id || journal?.company || '',
+    default_account: journal?.default_account?.id || journal?.default_account || '',
+    bank_account: journal?.bank_account?.id || journal?.bank_account || '',
+    note: journal?.note || '',
+    active: journal?.active !== false
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchCompany, setSearchCompany] = useState('');
-  const [searchCountry, setSearchCountry] = useState('');
+  const [searchType, setSearchType] = useState('');
+  const [searchCompte, setSearchCompte] = useState('');
+  const [searchBanque, setSearchBanque] = useState('');
   const [manualCompany, setManualCompany] = useState('');
 
   const companiesArray = Array.isArray(companies) ? companies : [];
-  const paysArray = Array.isArray(pays) ? pays : [];
+  const typesArray = Array.isArray(journalTypes) ? journalTypes : [];
+  const comptesArray = Array.isArray(comptes) ? comptes : [];
+  const banquesArray = Array.isArray(banques) ? banques : [];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1565,15 +1594,27 @@ function PositionFormModal({ position, companies, pays, authStatus, onClose, onS
     setError(null);
 
     // Validation
+    if (!formData.code.trim()) {
+      setError('Le code du journal est obligatoire');
+      setLoading(false);
+      return;
+    }
+
     if (!formData.name.trim()) {
-      setError('Le nom de la position est obligatoire');
+      setError('Le nom du journal est obligatoire');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.type) {
+      setError('Le type de journal est obligatoire');
       setLoading(false);
       return;
     }
 
     try {
-      const url = position ? `/compta/fiscal-positions/${position.id}/` : `/compta/fiscal-positions/`;
-      const method = position ? 'PUT' : 'POST';
+      const url = journal ? `/compta/journals/${journal.id}/` : `/compta/journals/`;
+      const method = journal ? 'PUT' : 'POST';
 
       // Préparer les données
       const submitData = { ...formData };
@@ -1591,10 +1632,10 @@ function PositionFormModal({ position, companies, pays, authStatus, onClose, onS
         }
       });
       
-      console.log('✅ Position sauvegardée:', response);
+      console.log('✅ Journal sauvegardé:', response);
       onSuccess();
     } catch (err) {
-      console.error('❌ Erreur sauvegarde position:', err);
+      console.error('❌ Erreur sauvegarde journal:', err);
       setError(err.message || 'Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);
@@ -1606,9 +1647,18 @@ function PositionFormModal({ position, companies, pays, authStatus, onClose, onS
   };
 
   const getHeaderColor = () => {
-    if (formData.auto_apply) return 'from-amber-600 to-amber-500';
-    if (formData.vat_required) return 'from-blue-600 to-blue-500';
-    return 'from-violet-600 to-violet-500';
+    const type = typesArray.find(t => t.id === formData.type);
+    if (!type) return 'from-violet-600 to-violet-500';
+    
+    const colorMap = {
+      'ACH': 'from-amber-600 to-amber-500',
+      'VEN': 'from-green-600 to-green-500',
+      'BAN': 'from-blue-600 to-blue-500',
+      'CAI': 'from-violet-600 to-violet-500',
+      'OD': 'from-gray-600 to-gray-500'
+    };
+    
+    return colorMap[type.code] || 'from-violet-600 to-violet-500';
   };
 
   return (
@@ -1619,15 +1669,15 @@ function PositionFormModal({ position, companies, pays, authStatus, onClose, onS
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
-                <FiShield className="w-4 h-4" />
+                <FiBook className="w-4 h-4" />
               </div>
               <div>
                 <h2 className="text-base font-bold">
-                  {position ? 'Modifier la position fiscale' : 'Nouvelle Position Fiscale'}
+                  {journal ? 'Modifier le journal comptable' : 'Nouveau Journal Comptable'}
                 </h2>
-                {!position && (
+                {!journal && (
                   <p className="text-white/90 text-xs mt-0.5">
-                    Créez une nouvelle position fiscale (Exonération, Export, TVA normale, etc.)
+                    Créez un nouveau journal comptable (Achat, Vente, Banque, Caisse, etc.)
                   </p>
                 )}
               </div>
@@ -1688,10 +1738,26 @@ function PositionFormModal({ position, companies, pays, authStatus, onClose, onS
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {/* Nom */}
-              <div className="lg:col-span-2">
+              {/* Code */}
+              <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Nom de la Position <span className="text-red-500">*</span>
+                  Code du Journal <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.code}
+                  onChange={(e) => handleChange('code', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
+                  placeholder="Ex: VEN, ACH, BAN, CAI..."
+                  maxLength={8}
+                />
+              </div>
+              
+              {/* Nom */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Nom du Journal <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1699,55 +1765,55 @@ function PositionFormModal({ position, companies, pays, authStatus, onClose, onS
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                  placeholder="Ex: Exonération TVA, Export, TVA normale..."
+                  placeholder="Ex: Journal des ventes..."
                 />
               </div>
               
-              {/* Description */}
+              {/* Type */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Description
+                  Type de Journal <span className="text-red-500">*</span>
+                </label>
+                <SearchableDropdown
+                  value={formData.type}
+                  onChange={(value) => handleChange('type', value)}
+                  options={typesArray}
+                  searchValue={searchType}
+                  onSearchChange={setSearchType}
+                  placeholder="Sélectionnez un type..."
+                  icon={FiType}
+                  getOptionLabel={(type) => `${type.name} (${type.code})`}
+                  getOptionValue={(type) => type.id}
+                  required={true}
+                />
+              </div>
+              
+              {/* Note */}
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Notes
                 </label>
                 <textarea
-                  value={formData.description}
-                  onChange={(e) => handleChange('description', e.target.value)}
+                  value={formData.note}
+                  onChange={(e) => handleChange('note', e.target.value)}
                   rows={2}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                  placeholder="Description de la position fiscale..."
+                  placeholder="Notes additionnelles..."
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 2: Localisation */}
+          {/* Section 2: Entreprise */}
           <div className="bg-gradient-to-br from-green-50 to-white rounded-lg p-3 border border-green-100">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-green-600 to-green-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Localisation</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Entreprise</h3>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {/* Pays */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Pays
-                </label>
-                <select
-                  value={formData.country}
-                  onChange={(e) => handleChange('country', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                >
-                  <option value="">Global (Tous les pays)</option>
-                  {paysArray.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.emoji || '🌍'} {p.nom_fr || p.nom} ({p.code_iso})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
               {/* Entreprise */}
-              <div>
+              <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Entreprise
                 </label>
@@ -1761,7 +1827,7 @@ function PositionFormModal({ position, companies, pays, authStatus, onClose, onS
                     onSearchChange={setSearchCompany}
                     placeholder="Sélectionnez une entreprise"
                     icon={FiBriefcase}
-                    getOptionLabel={(company) => company.raison_sociale || company.nom || company.name || 'Sans nom'}
+                    getOptionLabel={(company) => company.raison_sociale || company.nom}
                     getOptionValue={(company) => company.id}
                   />
                 ) : (
@@ -1783,49 +1849,79 @@ function PositionFormModal({ position, companies, pays, authStatus, onClose, onS
             </div>
           </div>
 
-          {/* Section 3: Configuration */}
+          {/* Section 3: Configuration des Comptes */}
           <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Configuration</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Configuration des Comptes</h3>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="auto_apply"
-                    checked={formData.auto_apply}
-                    onChange={(e) => handleChange('auto_apply', e.target.checked)}
-                    className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500"
-                  />
-                  <label htmlFor="auto_apply" className="text-xs font-medium text-gray-700">
-                    Auto-application
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500">
-                  La position sera appliquée automatiquement selon les règles
-                </p>
+              {/* Compte par défaut */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Compte par défaut
+                </label>
+                <SearchableDropdown
+                  value={formData.default_account}
+                  onChange={(value) => handleChange('default_account', value)}
+                  options={comptesArray}
+                  searchValue={searchCompte}
+                  onSearchChange={setSearchCompte}
+                  placeholder="Sélectionnez un compte..."
+                  icon={FiCreditCard}
+                  getOptionLabel={(compte) => `${compte.code} - ${compte.name}`}
+                  getOptionValue={(compte) => compte.id}
+                />
               </div>
               
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="vat_required"
-                    checked={formData.vat_required}
-                    onChange={(e) => handleChange('vat_required', e.target.checked)}
-                    className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500"
-                  />
-                  <label htmlFor="vat_required" className="text-xs font-medium text-gray-700">
-                    TVA requise
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500">
-                  La TVA doit être calculée pour cette position
-                </p>
+              {/* Compte bancaire */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Compte bancaire (optionnel)
+                </label>
+                <SearchableDropdown
+                  value={formData.bank_account}
+                  onChange={(value) => handleChange('bank_account', value)}
+                  options={banquesArray}
+                  searchValue={searchBanque}
+                  onSearchChange={setSearchBanque}
+                  placeholder="Sélectionnez un compte bancaire..."
+                  icon={FiDatabase}
+                  getOptionLabel={(banque) => 
+                    banque.numero_compte 
+                      ? `${banque.banque?.nom} - ${banque.numero_compte}`
+                      : banque.banque?.nom || banque.nom || 'Banque'
+                  }
+                  getOptionValue={(banque) => banque.id}
+                />
               </div>
+            </div>
+          </div>
+
+          {/* Section 4: Statut */}
+          <div className="bg-gradient-to-br from-amber-50 to-white rounded-lg p-3 border border-amber-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-amber-600 to-amber-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Statut</h3>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="active"
+                  checked={formData.active}
+                  onChange={(e) => handleChange('active', e.target.checked)}
+                  className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500"
+                />
+                <label htmlFor="active" className="text-xs font-medium text-gray-700">
+                  Journal actif
+                </label>
+              </div>
+              <p className="text-xs text-gray-500">
+                Un journal inactif ne pourra pas être utilisé pour les écritures comptables
+              </p>
             </div>
           </div>
           
@@ -1852,7 +1948,7 @@ function PositionFormModal({ position, companies, pays, authStatus, onClose, onS
               ) : (
                 <>
                   <FiCheck size={14} />
-                  <span>{position ? 'Mettre à jour' : 'Créer la position'}</span>
+                  <span>{journal ? 'Mettre à jour' : 'Créer le journal'}</span>
                 </>
               )}
             </button>

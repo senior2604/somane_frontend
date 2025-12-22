@@ -32,6 +32,7 @@ import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLa
 import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
 import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage";
 import PositionsFiscalesPage from "../features/comptabilité/pages/PositionsFiscalesPage";
+import JournauxPage from "../features/comptabilité/pages/JournauxPage";
 
 // SOLUTION POUR TAUX FISCAUX : Import dynamique avec gestion d'erreur
 const TauxFiscauxPage = React.lazy(() => 
@@ -143,7 +144,7 @@ export default function AppRouter() {
           <Route path="dashboard" element={<DashboardComptabilitePage />} />
           <Route path="plan-comptable" element={<PlanComptablePage />} />
           <Route path="positions-fiscales" element={<PositionsFiscalesPage />} />
-          
+          <Route path="journaux" element={<JournauxPage />} />
           {/* Taux Fiscaux avec Suspense */}
           <Route path="taux-fiscaux" element={
             <React.Suspense fallback={
