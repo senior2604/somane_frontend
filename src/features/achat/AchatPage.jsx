@@ -290,7 +290,7 @@ export default function AchatPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600"></div>
       </div>
     );
   }
@@ -302,7 +302,7 @@ export default function AchatPage() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-              <FiShoppingCart className="mr-3 text-blue-600" />
+              <FiShoppingCart className="mr-3 text-violet-600" />
               Module Achat
             </h1>
             <p className="text-gray-600 mt-1">Gestion complète des achats et fournisseurs</p>
@@ -310,14 +310,14 @@ export default function AchatPage() {
           <div className="flex space-x-3">
             <button
               onClick={fetchAllData}
-              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center"
+              className="text-violet-600 hover:text-violet-800 mx-1 px-2 py-1 rounded-lg hover:bg-gray-50 transition-colors flex items-center"
             >
               <FiRefreshCw className="mr-2" />
               Actualiser
             </button>
             <button
               onClick={() => setShowForm(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+              className="bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700 transition-colors flex items-center"
               disabled={activeTab !== 'bons-commande'}
             >
               <FiPlus className="mr-2" />
@@ -346,7 +346,7 @@ export default function AchatPage() {
                 }}
                 className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
                   activeTab === tab.id
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-violet-600 text-white'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
@@ -366,7 +366,7 @@ export default function AchatPage() {
                 placeholder="Rechercher..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -387,14 +387,14 @@ export default function AchatPage() {
 
         {/* Actions groupées */}
         {selectedRows.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 flex items-center justify-between">
-            <span className="text-blue-800">
+          <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 mb-4 flex items-center justify-between">
+            <span className="text-violet-800">
               {selectedRows.length} élément(s) sélectionné(s)
             </span>
             <div className="flex space-x-2">
               <button
                 onClick={handleExport}
-                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                className="bg-violet-600 text-white px-3 py-1 rounded text-sm hover:bg-violet-700"
               >
                 <FiDownload className="inline mr-1" />
                 Exporter
@@ -447,21 +447,21 @@ export default function AchatPage() {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleViewDetails(item)}
-                          className="text-blue-600 hover:text-blue-900"
-                          title="Voir détails"
+                          className="text-violet-600 hover:text-violet-800"
+                          title="Voir les détails"
                         >
                           <FiEye size={16} />
                         </button>
                         <button
                           onClick={() => handleEdit(item)}
-                          className="text-yellow-600 hover:text-yellow-900"
+                          className="text-violet-600 hover:text-violet-800"
                           title="Modifier"
                         >
                           <FiEdit2 size={16} />
                         </button>
                         <button
                           onClick={() => handleDelete(item)}
-                          className="text-red-600 hover:text-red-900"
+                          className="text-red-600 hover:text-red-800"
                           title="Supprimer"
                         >
                           <FiTrash2 size={16} />
@@ -523,7 +523,7 @@ export default function AchatPage() {
                           onClick={() => setCurrentPage(pageNum)}
                           className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                             pageNum === currentPage
-                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                              ? 'z-10 bg-violet-600 text-white'
                               : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                           }`}
                         >
@@ -546,14 +546,18 @@ export default function AchatPage() {
         </div>
 
         {/* Modals */}
-        {showForm && activeTab === 'bons-commande' && (
+        {showForm && (
           <AchatFormModal
-            item={editingItem}
+            achat={editingItem}
+            fournisseurs={[]} // Remplacez par votre liste de fournisseurs
             onSubmit={handleSubmit}
             onClose={() => {
               setShowForm(false);
               setEditingItem(null);
             }}
+            editingItem={editingItem}
+            setShowForm={setShowForm}
+            setEditingItem={setEditingItem}
           />
         )}
 
@@ -586,7 +590,7 @@ export default function AchatPage() {
 }
 
 // Composant pour le formulaire modal
-function AchatFormModal({ achat, fournisseurs, onSubmit, onClose }) {
+const AchatFormModal = ({ achat, fournisseurs, onSubmit, onClose, editingItem, setShowForm, setEditingItem }) => {
   const [formData, setFormData] = useState({
     numero_commande: achat?.numero_commande || '',
     fournisseur: achat?.fournisseur?.id || '',
@@ -603,13 +607,19 @@ function AchatFormModal({ achat, fournisseurs, onSubmit, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">
-            {achat ? 'Modifier la commande' : 'Nouvelle commande d\'achat'}
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <FiX />
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center bg-violet-600 text-white p-4 rounded-t-lg">
+          <h3 className="text-lg font-semibold">
+            {editingItem ? 'Modifier' : 'Nouvel'} Élément
+          </h3>
+          <button
+            onClick={() => {
+              setShowForm(false);
+              setEditingItem(null);
+            }}
+            className="text-white hover:text-gray-200"
+          >
+            <FiX size={24} />
           </button>
         </div>
 
@@ -622,7 +632,7 @@ function AchatFormModal({ achat, fournisseurs, onSubmit, onClose }) {
               type="text"
               value={formData.numero_commande}
               onChange={(e) => setFormData({ ...formData, numero_commande: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               required
             />
           </div>
@@ -634,7 +644,7 @@ function AchatFormModal({ achat, fournisseurs, onSubmit, onClose }) {
             <select
               value={formData.fournisseur}
               onChange={(e) => setFormData({ ...formData, fournisseur: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               required
             >
               <option value="">Sélectionner un fournisseur</option>
@@ -654,7 +664,7 @@ function AchatFormModal({ achat, fournisseurs, onSubmit, onClose }) {
               type="date"
               value={formData.date_commande}
               onChange={(e) => setFormData({ ...formData, date_commande: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               required
             />
           </div>
@@ -668,7 +678,7 @@ function AchatFormModal({ achat, fournisseurs, onSubmit, onClose }) {
               step="0.01"
               value={formData.montant_total}
               onChange={(e) => setFormData({ ...formData, montant_total: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               required
             />
           </div>
@@ -680,7 +690,7 @@ function AchatFormModal({ achat, fournisseurs, onSubmit, onClose }) {
             <select
               value={formData.statut}
               onChange={(e) => setFormData({ ...formData, statut: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
             >
               <option value="brouillon">Brouillon</option>
               <option value="valide">Validé</option>
@@ -696,7 +706,7 @@ function AchatFormModal({ achat, fournisseurs, onSubmit, onClose }) {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
             />
           </div>
 
@@ -704,13 +714,13 @@ function AchatFormModal({ achat, fournisseurs, onSubmit, onClose }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="w-4 h-4 text-violet-600 rounded border-gray-300 focus:ring-violet-500"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700"
             >
               {achat ? 'Modifier' : 'Créer'}
             </button>
