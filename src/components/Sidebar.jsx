@@ -160,14 +160,6 @@ export default function Sidebar() {
       ]
     },
     {
-      id: "achats",
-      name: "Achats",
-      icon: <FiShoppingCart />,
-      items: [
-        { name: "Commandes d'Achat", path: "/achats", icon: <FiShoppingCart /> },
-      ]
-    },
-    {
       id: "systeme",
       name: "Système",
       icon: <FiSettings />,
