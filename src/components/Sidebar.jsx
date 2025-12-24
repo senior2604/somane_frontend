@@ -159,6 +159,9 @@ export default function Sidebar() {
         { name: "Comptes Partenaires", path: "/PartnerBanks", icon: <FiList /> },
       ]
     },
+
+    
+
     {
       id: "systeme",
       name: "Système",

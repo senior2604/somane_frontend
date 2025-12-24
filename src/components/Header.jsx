@@ -10,7 +10,11 @@ export default function Header() {
   const modules = [
     { id: 'dashboard', name: 'Noyau', path: '/dashboard' },
     { id: 'sales', name: 'Ventes', path: '/sales' },
-    { id: 'purchase', name: 'Achats', path: '/achats' },
+
+
+
+    { id: 'achats', name: 'Achats', path: '/achats' },
+
     { id: 'accounting', name: 'Comptabilité', path: '/comptabilite/Dashboard' },
     { id: 'inventory', name: 'Stock', path: '/inventory' },
     { id: 'hr', name: 'RH', path: '/hr' },

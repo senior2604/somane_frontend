@@ -28,11 +28,18 @@ import ProtectedLayout from "../components/Layout/ProtectedLayout";
 
 // IMPORTS DU MODULE COMPTABILITÉ
 import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout";
+
 // Import des pages comptabilité
 import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
 import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage";
 import PositionsFiscalesPage from "../features/comptabilité/pages/PositionsFiscalesPage";
-import JournauxPage from "../features/comptabilité/pages/JournauxPage";
+import PiecesComptablesPage from '../features/comptabilité/pages/PiecesComptablesPage';
+
+// IMPORTS DES PAGES JOURNAUX - CORRIGÉS
+import JournauxIndex from "../features/comptabilité/pages/Journaux/Index.jsx";
+import JournauxCreate from "../features/comptabilité/pages/Journaux/Create.jsx"; // <-- Correction: .jsx
+import JournauxShow from "../features/comptabilité/pages/Journaux/Show.jsx";
+import JournauxEdit from "../features/comptabilité/pages/Journaux/Edit.jsx";
 
 // SOLUTION POUR TAUX FISCAUX : Import dynamique avec gestion d'erreur
 const TauxFiscauxPage = React.lazy(() => 
@@ -140,11 +147,20 @@ export default function AppRouter() {
           {/* Redirection par défaut */}
           <Route index element={<Navigate to="dashboard" replace />} />
           
-          {/* PAGES DU MODULE COMPTABILITÉ - SANS / AU DÉBUT */}
+          {/* PAGES DU MODULE COMPTABILITÉ */}
           <Route path="dashboard" element={<DashboardComptabilitePage />} />
           <Route path="plan-comptable" element={<PlanComptablePage />} />
           <Route path="positions-fiscales" element={<PositionsFiscalesPage />} />
-          <Route path="journaux" element={<JournauxPage />} />
+          <Route path="pieces" element={<PiecesComptablesPage />} />
+          
+          {/* ROUTES DES JOURNAUX (NOUVELLE STRUCTURE) - CORRIGÉES */}
+          <Route path="journaux">
+            <Route index element={<JournauxIndex />} />
+            <Route path="create" element={<JournauxCreate />} />
+            <Route path=":id" element={<JournauxShow />} />
+            <Route path=":id/edit" element={<JournauxEdit />} />
+          </Route>
+          
           {/* Taux Fiscaux avec Suspense */}
           <Route path="taux-fiscaux" element={
             <React.Suspense fallback={
@@ -165,8 +181,6 @@ export default function AppRouter() {
               <TauxFiscauxPage />
             </React.Suspense>
           } />
-          
-          {/* Vous pouvez ajouter d'autres routes ici plus tard */}
         </Route>
 
         {/* REDIRECTIONS */}
