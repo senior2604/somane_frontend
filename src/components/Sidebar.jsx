@@ -26,7 +26,8 @@ import {
   FiX,
   FiChevronLeft,
   FiChevronRight as FiChevronRightIcon,
-  FiShoppingCart
+  FiShoppingCart,
+  FiZap
 } from "react-icons/fi";
 import { useState, useEffect, useRef } from "react";
 
@@ -125,6 +126,13 @@ export default function Sidebar() {
       name: "Tableau de Bord",
       icon: <FiHome />,
       path: "/dashboard",
+      isSimpleLink: true
+    },
+    {
+      id: "somane-ai",
+      name: "SomaneAI",
+      icon: <FiZap />,
+      path: "/somane-ai",
       isSimpleLink: true
     },
     {
