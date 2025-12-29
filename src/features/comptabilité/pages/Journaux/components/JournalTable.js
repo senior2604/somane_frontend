@@ -1,5 +1,5 @@
 import React from 'react';
-import JournalRow from './JournalRow';
+import JournalRow from './JournalRow'; // IMPORT CORRECT
 
 export default function JournalTable({ 
   journaux, 
@@ -20,6 +20,15 @@ export default function JournalTable({
       onSelectionChange(journaux.map(j => j.id));
     }
   };
+
+  if (!Array.isArray(journaux)) {
+    console.error('journaux is not an array:', journaux);
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <p className="text-red-600">Erreur: Les données ne sont pas valides</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -62,29 +71,37 @@ export default function JournalTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {journaux.map(journal => (
-            <JournalRow
-              key={journal.id}
-              journal={journal}
-              selected={selectedRows.includes(journal.id)}
-              onSelect={(selected) => {
-                if (selected) {
-                  onSelectionChange([...selectedRows, journal.id]);
-                } else {
-                  onSelectionChange(selectedRows.filter(id => id !== journal.id));
-                }
-              }}
-            />
-          ))}
+          {journaux.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                Aucun journal trouvé
+              </td>
+            </tr>
+          ) : (
+            journaux.map(journal => {
+              if (!journal || !journal.id) {
+                console.warn('Journal invalide:', journal);
+                return null;
+              }
+              
+              return (
+                <JournalRow
+                  key={journal.id}
+                  journal={journal}
+                  selected={selectedRows.includes(journal.id)}
+                  onSelect={(selected) => {
+                    if (selected) {
+                      onSelectionChange([...selectedRows, journal.id]);
+                    } else {
+                      onSelectionChange(selectedRows.filter(id => id !== journal.id));
+                    }
+                  }}
+                />
+              );
+            })
+          )}
         </tbody>
       </table>
-
-      {/* Message si vide */}
-      {journaux.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          Aucun journal trouvé
-        </div>
-      )}
     </div>
   );
 }

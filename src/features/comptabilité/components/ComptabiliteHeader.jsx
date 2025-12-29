@@ -13,18 +13,13 @@ export default function ComptabiliteHeader() {
   const modules = [
     { id: 'dashboard', name: 'Noyau', path: '/dashboard' },
     { id: 'sales', name: 'Ventes', path: '/sales' },
-<<<<<<< HEAD
     { id: 'purchase', name: 'Achats', path: '/achats' },
     { id: 'accounting', name: 'Comptabilité', path: '/comptabilite/standards' },
-=======
-    { id: 'achats', name: 'Achats', path: '/achats' },
-    { id: 'accounting', name: 'Comptabilité', path: '/comptabilite/dashboard' },
->>>>>>> 4465291 (24/12/2025)
     { id: 'inventory', name: 'Stock', path: '/inventory' },
     { id: 'hr', name: 'RH', path: '/hr' }
   ];
 
-  // Titres des pages
+  // Titres des pages (garder les vôtres)
   const pageTitles = {
     '/comptabilite/dashboard': 'Tableau de Bord',
     '/comptabilite/plan-comptable': 'Plan Comptable',
@@ -42,49 +37,59 @@ export default function ComptabiliteHeader() {
     '/comptabilite/parametres': 'Paramètres'
   };
 
-  // Navigation AVEC Tableau de Bord AJOUTÉ
+  // MODIFICATION : Navigation selon l'image
   const navigationItems = [
     {
-      name: "Tableau de Bord",  // AJOUTÉ ICI
+      name: "Tableau de bord",
       path: "/comptabilite/dashboard",
       isDirectLink: true
     },
     {
-      name: "Référentiels",
+      name: "Structure",
       items: [
-        { label: "Plan comptable", path: "/comptabilite/plan-comptable" },
-        { label: "Taux fiscaux", path: "/comptabilite/taux-fiscaux" },
-        { label: "Positions fiscales", path: "/comptabilite/positions-fiscales" }
-      ]
-    },
-    {
-      name: "Opérations",
-      items: [
+        { label: "Partenaires", path: "/comptabilite/partenaires" },
+        { label: "Plans comptables", path: "/comptabilite/plan-comptable" },
         { label: "Journaux", path: "/comptabilite/journaux" },
-        { label: "Pièces", path: "/comptabilite/pieces" },
-        { label: "Lignes", path: "/comptabilite/lignes" }
+        { label: "Devises", path: "/comptabilite/devises" },
+        { label: "Taxes", path: "/comptabilite/taux-fiscaux" },
+        { label: "Positions fiscales", path: "/comptabilite/positions-fiscales" },
+        { label: "Réimputations", path: "/comptabilite/reimputations" },
+        { label: "Vétrouillage des journaux", path: "/comptabilite/vetrouillage" },
+        { label: "Relèves bancaires", path: "/comptabilite/releves-bancaires" },
+        { label: "Exercices", path: "/comptabilite/exercices" }
       ]
     },
     {
-      name: "Trésorerie",
+      name: "Traitements",
       items: [
-        { label: "Relevés", path: "/comptabilite/releves" },
-        { label: "Lettrage", path: "/comptabilite/lettrage" }
+        { label: "Pièces comptables", path: "/comptabilite/pieces" },
+        { label: "Lettrage des comptes", path: "/comptabilite/lettrage" },
+        { label: "Immobilisation", path: "/comptabilite/immobilisation" },
+        { label: "Emprunts", path: "/comptabilite/emprunts" },
+        { label: "Etat de rapprochement", path: "/comptabilite/rapprochement" }
       ]
     },
     {
-      name: "États",
+      name: "Analyse & Etat",
       items: [
-        { label: "Grand Livre", path: "/comptabilite/grand-livre" },
-        { label: "Balance", path: "/comptabilite/balance" },
-        { label: "Bilan", path: "/comptabilite/bilan" }
+        { label: "Grand-Livre", path: "/comptabilite/grand-livre" },
+        { label: "Grand-Livre partenaires", path: "/comptabilite/grand-livre-partenaires" },
+        { label: "Balance générale", path: "/comptabilite/balance" },
+        { label: "Balance des partenaires", path: "/comptabilite/balance-partenaires" },
+        { label: "Balance agée", path: "/comptabilite/balance-agee" },
+        { label: "Analyse des emprunts", path: "/comptabilite/analyse-emprunts" },
+        { label: "Analyse déclaration TVA", path: "/comptabilite/analyse-tva" },
+        { label: "Tableaux des amortissements", path: "/comptabilite/amortissements" },
+        { label: "Bilan", path: "/comptabilite/bilan" },
+        { label: "Compte de résultat", path: "/comptabilite/compte-resultat" },
+        { label: "Flux de trésorerie", path: "/comptabilite/flux-tresorerie" }
       ]
     },
     {
-      name: "Admin",
+      name: "Paramètres",
       items: [
-        { label: "Exercices", path: "/comptabilite/exercices" },
-        { label: "Paramètres", path: "/comptabilite/parametres" }
+        { label: "Paramètres généraux", path: "/comptabilite/parametres" },
+        { label: "Configuration", path: "/comptabilite/configuration" }
       ]
     }
   ];
@@ -108,7 +113,7 @@ export default function ComptabiliteHeader() {
         <div className="flex items-center justify-between">
           {/* PARTIE GAUCHE : Module dropdown + Titre */}
           <div className="flex items-center gap-4">
-            {/* Dropdown Module - SANS "C" */}
+            {/* Dropdown Module */}
             <div className="relative">
               <button
                 onClick={() => setShowModuleDropdown(!showModuleDropdown)}
@@ -118,7 +123,7 @@ export default function ComptabiliteHeader() {
                 <FiChevronDown className={`w-3 h-3 transition-transform ${showModuleDropdown ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* DROPDOWN MODULES - PLUS FIN ET JOLI */}
+              {/* DROPDOWN MODULES */}
               {showModuleDropdown && (
                 <>
                   <div 
@@ -126,12 +131,10 @@ export default function ComptabiliteHeader() {
                     onClick={() => setShowModuleDropdown(false)}
                   />
                   <div className="absolute top-full left-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 z-40">
-                    {/* En-tête simple */}
                     <div className="px-4 py-2 border-b border-gray-100">
                       <p className="text-xs text-gray-500 font-medium">Modules ERP</p>
                     </div>
                     
-                    {/* Liste fine */}
                     <div className="py-1">
                       {modules.map((module) => (
                         <button
@@ -158,7 +161,7 @@ export default function ComptabiliteHeader() {
             {/* Séparateur */}
             <div className="h-6 w-px bg-gray-300"></div>
 
-            {/* Bouton Retour (seulement si pas sur dashboard) */}
+            {/* Bouton Retour */}
             {canGoBack && (
               <button
                 onClick={handleGoBack}
@@ -169,7 +172,7 @@ export default function ComptabiliteHeader() {
               </button>
             )}
 
-            {/* Titre de la page - PLUS PETIT */}
+            {/* Titre de la page */}
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-violet-500"></div>
               <h1 className="text-base font-medium text-gray-800">
@@ -178,10 +181,10 @@ export default function ComptabiliteHeader() {
             </div>
           </div>
 
-          {/* PARTIE CENTRE : Navigation */}
+          {/* PARTIE CENTRE : Navigation MODIFIÉE */}
           <nav className="flex items-center gap-6">
             {navigationItems.map((item) => {
-              // Tableau de Bord - Lien direct
+              // Tableau de bord - Lien direct
               if (item.isDirectLink) {
                 return (
                   <button
@@ -199,7 +202,7 @@ export default function ComptabiliteHeader() {
               }
 
               // Catégories avec dropdown
-              const hasActiveItem = item.items.some(sub => isActive(sub.path));
+              const hasActiveItem = item.items?.some(sub => isActive(sub.path)) || false;
               
               return (
                 <div
@@ -225,7 +228,7 @@ export default function ComptabiliteHeader() {
 
                   {hoveredCategory === item.name && (
                     <div 
-                      className="absolute top-full left-0 mt-0 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50"
+                      className="absolute top-full left-0 mt-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 min-w-[220px] max-h-[400px] overflow-y-auto"
                       onMouseEnter={() => setHoveredCategory(item.name)}
                       onMouseLeave={() => setHoveredCategory(null)}
                     >
@@ -252,7 +255,7 @@ export default function ComptabiliteHeader() {
             })}
           </nav>
 
-          {/* PARTIE DROITE : Actions */}
+          {/* PARTIE DROITE : Actions (inchangé) */}
           <div className="flex items-center gap-3">
             <button className="p-2 text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors relative">
               <FiBell size={18} />
