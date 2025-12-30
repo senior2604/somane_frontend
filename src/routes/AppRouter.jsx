@@ -16,7 +16,6 @@ import BanksPage from "../pages/Banks/BanksPage";
 import TasksPage from "../pages/Tasks/TasksPage";
 import SystemPage from "../pages/System/SystemPage";
 import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage";
-import SomaneAIPage from "../pages/SomaneAI/SomaneAIPage";
 import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
 import LanguagesPage from "../pages/Languages/LanguagesPage";
 import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
@@ -43,6 +42,15 @@ import PiecesComptablesList from "../features/comptabilité/pages/PiecesComptabl
 import PiecesComptablesCreate from "../features/comptabilité/pages/PiecesComptables/Create.jsx";
 import PiecesComptablesShow from "../features/comptabilité/pages/PiecesComptables/Show.jsx";
 import PiecesComptablesEdit from "../features/comptabilité/pages/PiecesComptables/Edit.jsx";
+
+// IMPORTS DU MODULE ACHATS
+import AchatLayout from "../features/achat/layouts/AchatLayout";
+import AchatDashboard from "../features/achat/pages/AchatDashboard";
+import DemandesAchatPage from "../features/achat/pages/DemandesAchatPage";
+import LignesDemandeAchatPage from "../features/achat/pages/LignesDemandeAchatPage";
+import BonsCommandePage from "../features/achat/pages/BonsCommandePage";
+import LignesBonCommandePage from "../features/achat/pages/LignesBonCommandePage";
+import PrixFournisseursPage from "../features/achat/pages/PrixFournisseursPage";
 
 // COMPOSANT DE CHARGEMENT POUR SUSPENSE
 const LoadingFallback = () => (
@@ -121,14 +129,31 @@ const TauxFiscauxPage = React.lazy(() =>
     })
 );
 
-// IMPORTS DU MODULE ACHATS
-import AchatLayout from "../features/achat/layouts/AchatLayout";
-import AchatDashboard from "../features/achat/pages/AchatDashboard";
-import DemandesAchatPage from "../features/achat/pages/DemandesAchatPage";
-import LignesDemandeAchatPage from "../features/achat/pages/LignesDemandeAchatPage";
-import BonsCommandePage from "../features/achat/pages/BonsCommandePage";
-import LignesBonCommandePage from "../features/achat/pages/LignesBonCommandePage";
-import PrixFournisseursPage from "../features/achat/pages/PrixFournisseursPage";
+// Créer un composant de secours pour SomaneAIPage
+const SomaneAIPage = () => (
+  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="bg-white rounded-xl shadow-lg p-8">
+        <div className="text-center">
+          <div className="w-24 h-24 bg-gradient-to-r from-purple-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-12 h-12 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">Somane AI</h1>
+          <p className="text-gray-600 mb-6">
+            Intelligence Artificielle pour la gestion d'entreprise
+          </p>
+          <div className="bg-gray-50 rounded-lg p-6 mb-8">
+            <p className="text-gray-700">
+              Cette fonctionnalité est actuellement en cours de développement.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 export default function AppRouter() {
   return (
@@ -157,9 +182,9 @@ export default function AppRouter() {
           <Route path="/banks" element={<BanksPage />} />
           <Route path="/PartnerBanks" element={<PartnerBanksPage />} />
           <Route path="/somane-ai" element={<SomaneAIPage />} />
-          <Route path="/ExchangeRates" element={<ExchangeRatesPage/>}/>
-          <Route path="/Languages" element={<LanguagesPage/>}/>
-          <Route path="/States" element={<StatesPage/>}/>
+          <Route path="/ExchangeRates" element={<ExchangeRatesPage />} />
+          <Route path="/Languages" element={<LanguagesPage />} />
+          <Route path="/States" element={<StatesPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/system" element={<SystemPage />} />
         </Route>
