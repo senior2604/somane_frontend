@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "../pages/Login/LoginPage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
@@ -31,11 +31,95 @@ import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLa
 import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
 import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage";
 import PositionsFiscalesPage from "../features/comptabilité/pages/PositionsFiscalesPage";
-import PiecesComptablesPage from '../features/comptabilité/pages/PiecesComptablesPage';
+
+// IMPORTS DES PAGES JOURNAUX
 import JournauxIndex from "../features/comptabilité/pages/Journaux/Index.jsx";
 import JournauxCreate from "../features/comptabilité/pages/Journaux/Create.jsx";
 import JournauxShow from "../features/comptabilité/pages/Journaux/Show.jsx";
 import JournauxEdit from "../features/comptabilité/pages/Journaux/Edit.jsx";
+
+// IMPORTS DES PAGES PIÈCES COMPTABLES
+import PiecesComptablesList from "../features/comptabilité/pages/PiecesComptables/List.jsx";
+import PiecesComptablesCreate from "../features/comptabilité/pages/PiecesComptables/Create.jsx";
+import PiecesComptablesShow from "../features/comptabilité/pages/PiecesComptables/Show.jsx";
+import PiecesComptablesEdit from "../features/comptabilité/pages/PiecesComptables/Edit.jsx";
+
+// COMPOSANT DE CHARGEMENT POUR SUSPENSE
+const LoadingFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600 mx-auto mb-4"></div>
+      <p className="text-gray-600">Chargement...</p>
+    </div>
+  </div>
+);
+
+// SOLUTION POUR TAUX FISCAUX : Import dynamique avec gestion d'erreur
+const TauxFiscauxPage = React.lazy(() => 
+  import("../features/comptabilité/pages/TauxFiscauxPage")
+    .then(module => {
+      console.log("✅ TauxFiscauxPage chargé avec succès");
+      
+      // Vérifier que le module a un export par défaut
+      if (module && module.default && typeof module.default === 'function') {
+        return { default: module.default };
+      }
+      
+      // Si pas d'export par défaut, chercher un export nommé
+      const exportNames = Object.keys(module).filter(key => typeof module[key] === 'function');
+      if (exportNames.length > 0) {
+        console.log(`✅ Utilisation de l'export: ${exportNames[0]}`);
+        return { default: module[exportNames[0]] };
+      }
+      
+      throw new Error("Aucun composant trouvé dans TauxFiscauxPage");
+    })
+    .catch(error => {
+      console.error("❌ Erreur chargement TauxFiscauxPage:", error);
+      
+      // Retourner un composant de secours
+      return { 
+        default: () => (
+          <div className="p-8 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+            <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
+              <div className="text-center">
+                <div className="w-20 h-20 bg-gradient-to-r from-red-100 to-red-200 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.282 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-3">Erreur de chargement</h2>
+                <p className="text-gray-600 mb-4">
+                  Impossible de charger la page "Taux Fiscaux".
+                </p>
+                <div className="bg-gray-50 rounded-lg p-4 text-left mb-6">
+                  <p className="text-sm font-medium text-gray-800 mb-1">Détails :</p>
+                  <p className="text-sm text-gray-600">{error.message}</p>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Fichier: <code className="bg-gray-100 px-2 py-1 rounded">TauxFiscauxPage.jsx</code>
+                  </p>
+                </div>
+                <div className="flex gap-3 justify-center">
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 transition-all duration-200 font-medium shadow hover:shadow-md"
+                  >
+                    Recharger la page
+                  </button>
+                  <a 
+                    href="/comptabilite/dashboard"
+                    className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium"
+                  >
+                    Retour au tableau de bord
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      };
+    })
+);
 
 // IMPORTS DU MODULE ACHATS
 import AchatLayout from "../features/achat/layouts/AchatLayout";
@@ -45,32 +129,6 @@ import LignesDemandeAchatPage from "../features/achat/pages/LignesDemandeAchatPa
 import BonsCommandePage from "../features/achat/pages/BonsCommandePage";
 import LignesBonCommandePage from "../features/achat/pages/LignesBonCommandePage";
 import PrixFournisseursPage from "../features/achat/pages/PrixFournisseursPage";
-
-// COMPOSANTS TEMPORAIRES (pour les pages non encore créées)
-//const BonsCommandePage = () => (
-  //<div>
-    //<h2 className="text-xl font-semibold mb-4">Bons de Commande</h2>
-    //<p className="text-gray-600">Page en cours de développement.</p>
-  //</div>
-//);
-
-//const LignesBonCommandePage = () => (
-  //<div>
-    //<h2 className="text-xl font-semibold mb-4">Lignes Bon Commande</h2>
-    //<p className="text-gray-600">Page en cours de développement.</p>
-  //</div>
-//);
-
-//const PrixFournisseursPage = () => (
-  //<div>
-    //<h2 className="text-xl font-semibold mb-4">Prix Fournisseurs</h2>
-    //<p className="text-gray-600">Page en cours de développement.</p>
-  //</div>
-//);
-
-
-// TAUX FISCAUX SIMPLIFIÉ
-const TauxFiscauxPage = () => <div className="p-8">Taux Fiscaux</div>;
 
 export default function AppRouter() {
   return (
@@ -107,22 +165,47 @@ export default function AppRouter() {
         </Route>
 
         {/* ROUTES COMPTABILITÉ */}
-        <Route path="/comptabilite" element={<ComptabiliteLayout />}>
+        <Route 
+          path="/comptabilite" 
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <ComptabiliteLayout />
+            </Suspense>
+          }
+        >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardComptabilitePage />} />
           <Route path="plan-comptable" element={<PlanComptablePage />} />
           <Route path="positions-fiscales" element={<PositionsFiscalesPage />} />
-          <Route path="pieces" element={<PiecesComptablesPage />} />
+          
+          {/* ROUTES PIÈCES COMPTABLES */}
+          <Route path="pieces">
+            <Route index element={<PiecesComptablesList />} />
+            <Route path="create" element={<PiecesComptablesCreate />} />
+            <Route path=":id" element={<PiecesComptablesShow />} />
+            <Route path=":id/edit" element={<PiecesComptablesEdit />} />
+          </Route>
+          
+          {/* ROUTES JOURNAUX */}
           <Route path="journaux">
             <Route index element={<JournauxIndex />} />
             <Route path="create" element={<JournauxCreate />} />
             <Route path=":id" element={<JournauxShow />} />
             <Route path=":id/edit" element={<JournauxEdit />} />
           </Route>
-          <Route path="taux-fiscaux" element={<TauxFiscauxPage />} />
+          
+          {/* ROUTE TAUX FISCAUX */}
+          <Route 
+            path="taux-fiscaux" 
+            element={
+              <Suspense fallback={<LoadingFallback />}>
+                <TauxFiscauxPage />
+              </Suspense>
+            } 
+          />
         </Route>
 
-        {/* ROUTES ACHATS (NOUVELLE STRUCTURE) */}
+        {/* ROUTES ACHATS */}
         <Route path="/achats" element={<AchatLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<AchatDashboard />} />
@@ -142,7 +225,7 @@ export default function AppRouter() {
             <div className="text-center">
               <h1 className="text-2xl font-bold text-gray-800 mb-4">404 - Page non trouvée</h1>
               <p className="text-gray-600 mb-6">La page que vous recherchez n'existe pas.</p>
-              <a href="/dashboard" className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700">
+              <a href="/dashboard" className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors">
                 Retour au tableau de bord
               </a>
             </div>

@@ -4,8 +4,29 @@ import { authService } from './authService';
 
 class ApiClient {
   constructor() {
-    this.baseURL = API_CONFIG.BASE_URL;
+    // Normaliser l'URL de base
+    this.baseURL = this.normalizeBaseURL(API_CONFIG.BASE_URL);
+    console.log('📡 API Client initialisé avec URL:', this.baseURL); // Pour débogage
     this.refreshPromise = null;
+  }
+
+  /**
+   * Normalise l'URL de base pour qu'elle se termine par un slash
+   */
+  normalizeBaseURL(url) {
+    let normalized = url;
+    
+    // Ajouter le protocole si manquant
+    if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+      normalized = 'http://' + normalized;
+    }
+    
+    // Assurer qu'elle se termine par un slash
+    if (!normalized.endsWith('/')) {
+      normalized = normalized + '/';
+    }
+    
+    return normalized;
   }
 
   /**
@@ -13,7 +34,18 @@ class ApiClient {
    * Gère automatiquement l'authentification et le rafraîchissement des tokens
    */
   async request(endpoint, options = {}) {
+    // Normaliser l'endpoint (supprimer le slash de début si présent)
+    if (endpoint.startsWith('/')) {
+      endpoint = endpoint.substring(1);
+      console.warn(`⚠️ Endpoint corrigé: supprimé le slash de début. Nouvel endpoint: ${endpoint}`);
+    }
+    
     const url = `${this.baseURL}${endpoint}`;
+    console.log('📤 API Request:', {
+      url,
+      method: options.method || 'GET',
+      endpoint: endpoint
+    });
     
     // Récupérer le token actuel
     let token = authService.getToken();
@@ -31,11 +63,11 @@ class ApiClient {
     // Ajouter le token d'authentification s'il existe
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
+      console.log('🔑 Token JWT ajouté à la requête');
     } else {
       console.warn(`⚠️ Aucun token JWT trouvé pour l'endpoint: ${endpoint}`);
       
       // Pour les endpoints publics, on continue sans token
-      // Pour les endpoints privés, on peut décider de bloquer ou continuer
       if (this.isPublicEndpoint(endpoint)) {
         console.log(`✅ Endpoint public ${endpoint} - requête sans token`);
       }
@@ -43,6 +75,7 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
+      console.log(`📥 API Response: ${response.status} ${response.statusText} pour ${endpoint}`);
       
       // Gestion spécifique des codes d'erreur
       switch (response.status) {
@@ -51,6 +84,7 @@ class ApiClient {
           
           // Essayer de rafraîchir le token si possible
           if (token && await this.tryRefreshToken()) {
+            console.log('🔄 Token rafraîchi, réessai de la requête...');
             // Réessayer la requête avec le nouveau token
             return await this.request(endpoint, options);
           }
@@ -68,7 +102,8 @@ class ApiClient {
           throw {
             status: 401,
             message: 'Session expirée ou non authentifiée',
-            endpoint: endpoint
+            endpoint: endpoint,
+            url: url
           };
           
         case 403: // Forbidden
@@ -76,15 +111,18 @@ class ApiClient {
           throw {
             status: 403,
             message: 'Accès refusé - Permissions insuffisantes',
-            endpoint: endpoint
+            endpoint: endpoint,
+            url: url
           };
           
         case 404: // Not Found
           console.warn(`🔍 404 Not Found sur ${endpoint}`);
+          console.log(`URL complète: ${url}`);
           throw {
             status: 404,
-            message: 'Ressource non trouvée',
-            endpoint: endpoint
+            message: `Ressource non trouvée: ${endpoint}`,
+            endpoint: endpoint,
+            url: url
           };
           
         case 500: // Internal Server Error
@@ -92,7 +130,8 @@ class ApiClient {
           throw {
             status: 500,
             message: 'Erreur serveur interne',
-            endpoint: endpoint
+            endpoint: endpoint,
+            url: url
           };
       }
 
@@ -103,6 +142,7 @@ class ApiClient {
         try {
           const errorData = await response.json();
           errorMessage = errorData.detail || errorData.message || errorMessage;
+          console.log('📄 Détails erreur serveur:', errorData);
         } catch (e) {
           // Si pas de JSON, utiliser le texte brut
           const text = await response.text();
@@ -112,29 +152,35 @@ class ApiClient {
         throw {
           status: response.status,
           message: errorMessage,
-          endpoint: endpoint
+          endpoint: endpoint,
+          url: url
         };
       }
 
       // Gestion des réponses vides (204 No Content)
       if (response.status === 204) {
+        console.log(`✅ 204 No Content pour ${endpoint}`);
         return null;
       }
 
       // Parser la réponse JSON
       try {
-        return await response.json();
+        const data = await response.json();
+        console.log(`✅ Réponse JSON reçue pour ${endpoint}:`, 
+          Array.isArray(data) ? `${data.length} items` : 'Object reçu');
+        return data;
       } catch (e) {
         console.error(`❌ Erreur parsing JSON sur ${endpoint}:`, e);
         throw {
           status: response.status,
           message: 'Réponse serveur invalide (JSON mal formé)',
-          endpoint: endpoint
+          endpoint: endpoint,
+          url: url
         };
       }
       
     } catch (error) {
-      console.error(`API Request failed ${endpoint}:`, error);
+      console.error(`❌ API Request failed ${endpoint}:`, error);
       
       // Si l'erreur est déjà formatée, la renvoyer telle quelle
       if (error.status && error.message) {
@@ -146,6 +192,7 @@ class ApiClient {
         status: 0,
         message: error.message || 'Erreur réseau ou serveur indisponible',
         endpoint: endpoint,
+        url: url,
         originalError: error
       };
     }
@@ -170,8 +217,12 @@ class ApiClient {
           return false;
         }
         
+        // IMPORTANT: Corrigez l'URL - enlever le double slash
+        const refreshUrl = `${this.baseURL.replace(/\/$/, '')}/auth/jwt/refresh/`;
+        console.log('URL de rafraîchissement:', refreshUrl);
+        
         // Appel au endpoint de rafraîchissement
-        const response = await fetch(`${this.baseURL}/auth/jwt/refresh/`, {
+        const response = await fetch(refreshUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -185,7 +236,7 @@ class ApiClient {
           console.log('✅ Token rafraîchi avec succès');
           return true;
         } else {
-          console.warn('❌ Échec du rafraîchissement du token');
+          console.warn('❌ Échec du rafraîchissement du token', response.status);
           return false;
         }
       } catch (error) {
@@ -204,15 +255,15 @@ class ApiClient {
    */
   isPublicEndpoint(endpoint) {
     const publicEndpoints = [
-      '/auth/',
-      '/login/',
-      '/register/',
-      '/pays/',
-      '/compta/taxes/',
-      '/compta/accounts/',
-      '/api/schema/',
-      '/swagger/',
-      '/redoc/'
+      'auth/',
+      'login/',
+      'register/',
+      'pays/',
+      'compta/taxes/',
+      'compta/accounts/',
+      'api/schema/',
+      'swagger/',
+      'redoc/'
     ];
     
     return publicEndpoints.some(publicEndpoint => 
@@ -293,7 +344,44 @@ class ApiClient {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     
+    // Normaliser l'endpoint
+    if (endpoint.startsWith('/')) {
+      endpoint = endpoint.substring(1);
+    }
+    
     return fetch(`${this.baseURL}${endpoint}`, config);
+  }
+  
+  /**
+   * Méthode pour tester la connexion
+   */
+  async testConnection() {
+    console.log('🔧 Test de connexion API...');
+    console.log('Base URL:', this.baseURL);
+    
+    try {
+      const response = await fetch(this.baseURL);
+      console.log('Status racine:', response.status, response.statusText);
+      return response.ok;
+    } catch (error) {
+      console.error('❌ Erreur connexion:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Méthode pour obtenir la configuration actuelle
+   */
+  getConfig() {
+    return {
+      baseURL: this.baseURL,
+      hasToken: !!authService.getToken(),
+      endpoints: {
+        journals: `${this.baseURL}compta/journals/`,
+        accounts: `${this.baseURL}compta/accounts/`,
+        moves: `${this.baseURL}compta/moves/`
+      }
+    };
   }
 }
 
@@ -312,5 +400,7 @@ export const useApiClient = () => {
     delete: apiClient.delete.bind(apiClient),
     upload: apiClient.upload.bind(apiClient),
     download: apiClient.download.bind(apiClient),
+    testConnection: apiClient.testConnection.bind(apiClient),
+    getConfig: apiClient.getConfig.bind(apiClient),
   };
 };

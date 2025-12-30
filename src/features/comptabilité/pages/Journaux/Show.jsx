@@ -15,7 +15,7 @@ import {
   FiFileText
 } from "react-icons/fi";
 import { useParams, useNavigate } from 'react-router-dom';
-import { apiClient } from './services';
+import { journauxService, apiClient } from "../../services";
 
 export default function Show() {
   const { id } = useParams();
@@ -33,7 +33,7 @@ export default function Show() {
     try {
       setLoading(true);
       setError(null);
-      const journalData = await apiClient.get(`/compta/journals/${id}/`);
+      const journalData = await journauxService.getById(id);
       setJournal(journalData);
     } catch (err) {
       if (err.status === 404) {
@@ -60,7 +60,7 @@ export default function Show() {
     
     setDeleting(true);
     try {
-      await apiClient.delete(`/compta/journals/${id}/`);
+      await journauxService.delete(id);
       navigate('/comptabilite/journaux');
     } catch (err) {
       setError('Erreur lors de la suppression: ' + (err.message || 'Inconnue'));

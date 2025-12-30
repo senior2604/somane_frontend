@@ -1,10 +1,13 @@
+// features/comptabilité/pages/Journaux/Edit.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   FiArrowLeft, FiX, FiCheck, FiAlertCircle, FiType, 
   FiBriefcase, FiCreditCard, FiDatabase, FiBook, FiSearch 
 } from "react-icons/fi";
 import { useParams, useNavigate } from 'react-router-dom';
-import { apiClient } from "./services";
+
+// IMPORT CORRIGÉ : depuis le service unifié de comptabilité
+import { journauxService, apiClient } from "../../services";
 
 export default function Edit() {
   const { id } = useParams();
@@ -40,44 +43,44 @@ export default function Edit() {
       setLoading(true);
       setError(null);
       
-      // Charger le journal à éditer
-      const journal = await apiClient.get(`/compta/journals/${id}/`);
+      // Charger le journal à éditer AVEC LE SERVICE UNIFIÉ
+      const journal = await journauxService.getById(id);  // ← Utilisez le service
       
       // Pré-remplir le formulaire
       setFormData({
-        code: journal.code || '',
-        name: journal.name || '',
-        type: journal.type?.id || journal.type || '',
-        company: journal.company?.id || journal.company || '',
-        default_account: journal.default_account?.id || journal.default_account || '',
-        note: journal.note || '',
-        active: journal.active !== false
+        code: journal.data?.code || journal.code || '',
+        name: journal.data?.name || journal.name || '',
+        type: journal.data?.type?.id || journal.data?.type || journal.type?.id || journal.type || '',
+        company: journal.data?.company?.id || journal.data?.company || journal.company?.id || journal.company || '',
+        default_account: journal.data?.default_account?.id || journal.data?.default_account || journal.default_account?.id || journal.default_account || '',
+        note: journal.data?.note || journal.note || '',
+        active: journal.data?.active !== false && journal.active !== false
       });
 
       // Charger les options disponibles
       try {
-        const typesRes = await apiClient.get('/compta/journal-types/');
-        setJournalTypes(typesRes || []);
+        const typesRes = await journauxService.getTypes();  // ← Utilisez le service
+        setJournalTypes(typesRes.data || []);
       } catch (err) {
         setJournalTypes([]);
       }
 
       try {
         const companiesRes = await apiClient.get('/entites/');
-        setCompanies(companiesRes || []);
+        setCompanies(companiesRes.data || []);
       } catch (err) {
         setCompanies([]);
       }
 
       try {
         const comptesRes = await apiClient.get('/compta/comptes/');
-        setComptes(comptesRes || []);
+        setComptes(comptesRes.data || []);
       } catch (err) {
         setComptes([]);
       }
 
     } catch (err) {
-      if (err.status === 404) {
+      if (err.response?.status === 404) {
         setError('Journal non trouvé');
       } else {
         setError(`Erreur de chargement: ${err.message || 'Inconnue'}`);
@@ -163,11 +166,13 @@ export default function Edit() {
         submitData.company_name = manualCompany.trim();
       }
 
-      await apiClient.put(`/compta/journals/${id}/`, submitData);
+      // Mettre à jour AVEC LE SERVICE UNIFIÉ
+      await journauxService.update(id, submitData);  // ← Utilisez le service
+      
       navigate(`/comptabilite/journaux/${id}`);
       
     } catch (err) {
-      setError(err.message || 'Erreur lors de la mise à jour');
+      setError(err.response?.data?.detail || err.message || 'Erreur lors de la mise à jour');
     } finally {
       setSubmitLoading(false);
     }
@@ -247,7 +252,7 @@ export default function Edit() {
           </div>
         </div>
 
-        {/* Carte principale avec le style JournalForm */}
+        {/* Carte principale */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
           <form onSubmit={handleSubmit} className="space-y-3">
             
@@ -496,7 +501,7 @@ export default function Edit() {
   );
 }
 
-// COMPOSANT SEARCHABLE DROPDOWN (identique à celui de JournalForm)
+// COMPOSANT SEARCHABLE DROPDOWN (reste identique)
 function SearchableDropdown({ 
   label, 
   value, 
