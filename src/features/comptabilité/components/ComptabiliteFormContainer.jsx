@@ -174,39 +174,6 @@ export default function ComptabiliteFormContainer({
           )}
         </div>
 
-        {/* Totaux */}
-        {totals && (
-          <div className="mb-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white border border-gray-200 rounded p-2">
-                <div>
-                  <div className="text-xs text-gray-500">Débit</div>
-                  <div className="text-sm font-medium text-gray-900">
-                    {totals.debit.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white border border-gray-200 rounded p-2">
-                <div>
-                  <div className="text-xs text-gray-500">Crédit</div>
-                  <div className="text-sm font-medium text-gray-900">
-                    {totals.credit.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {!totals.balanced && (
-              <div className="mt-1.5 bg-yellow-50 border border-yellow-200 rounded p-1.5">
-                <p className="text-xs text-yellow-700">
-                  Diff: {Math.abs(totals.debit - totals.credit).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Formulaire */}
         <div className="bg-white border border-gray-200 rounded shadow-sm overflow-hidden">
           <div className="p-3">
