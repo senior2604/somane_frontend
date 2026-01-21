@@ -1,29 +1,29 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import LoginPage from "../pages/Login/LoginPage";
-import DashboardPage from "../pages/Dashboard/DashboardPage";
-import UsersPage from "../pages/Users/UsersPage";
-import EntitiesPage from "../pages/Entities/EntitiesPage";
-import PartnersPage from "../pages/Partners/PartnersPage";
-import GroupesPage from "../pages/Groupes/GroupesPage";
-import PermissionsPage from "../pages/Permissions/PermissionsPage";
-import SettingsPage from "../pages/Settings/SettingsPage";
-import JournalPage from "../pages/Journal/JournalPage";
-import ModulesPage from "../pages/Modules/ModulesPage";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import ProtectedLayout from "../components/Layout/ProtectedLayout";
+import ActivationPage from "../pages/Auth/ActivationPage";
+import ConfirmResetPage from "../pages/Auth/ConfirmResetPage";
+import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
+import BanksPage from "../pages/Banks/BanksPage";
 import CountriesPage from "../pages/Countries/CountriesPage";
 import CurrenciesPage from "../pages/Currencies/CurrenciesPage";
-import BanksPage from "../pages/Banks/BanksPage";
-import TasksPage from "../pages/Tasks/TasksPage";
-import SystemPage from "../pages/System/SystemPage";
-import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage";
+import DashboardPage from "../pages/Dashboard/DashboardPage";
+import EntitiesPage from "../pages/Entities/EntitiesPage";
 import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
+import GroupesPage from "../pages/Groupes/GroupesPage";
+import JournalPage from "../pages/Journal/JournalPage";
 import LanguagesPage from "../pages/Languages/LanguagesPage";
-import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
+import LoginPage from "../pages/Login/LoginPage";
+import ModulesPage from "../pages/Modules/ModulesPage";
+import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage";
+import PartnersPage from "../pages/Partners/PartnersPage";
+import PermissionsPage from "../pages/Permissions/PermissionsPage";
+import SettingsPage from "../pages/Settings/SettingsPage";
 import StatesPage from "../pages/States/StatesPage";
-import ActivationPage from "../pages/Auth/ActivationPage";
-import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
-import ConfirmResetPage from "../pages/Auth/ConfirmResetPage";
-import ProtectedLayout from "../components/Layout/ProtectedLayout";
+import SystemPage from "../pages/System/SystemPage";
+import TasksPage from "../pages/Tasks/TasksPage";
+import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
+import UsersPage from "../pages/Users/UsersPage";
 
 // IMPORTS DU MODULE COMPTABILITÉ
 import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout";
@@ -32,25 +32,35 @@ import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage
 import PositionsFiscalesPage from "../features/comptabilité/pages/PositionsFiscalesPage";
 
 // IMPORTS DES PAGES JOURNAUX
-import JournauxIndex from "../features/comptabilité/pages/Journaux/Index.jsx";
 import JournauxCreate from "../features/comptabilité/pages/Journaux/Create.jsx";
-import JournauxShow from "../features/comptabilité/pages/Journaux/Show.jsx";
 import JournauxEdit from "../features/comptabilité/pages/Journaux/Edit.jsx";
+import JournauxIndex from "../features/comptabilité/pages/Journaux/Index.jsx";
+import JournauxShow from "../features/comptabilité/pages/Journaux/Show.jsx";
 
 // IMPORTS DES PAGES PIÈCES COMPTABLES
-import PiecesComptablesList from "../features/comptabilité/pages/PiecesComptables/List.jsx";
 import PiecesComptablesCreate from "../features/comptabilité/pages/PiecesComptables/Create.jsx";
-import PiecesComptablesShow from "../features/comptabilité/pages/PiecesComptables/Show.jsx";
 import PiecesComptablesEdit from "../features/comptabilité/pages/PiecesComptables/Edit.jsx";
+import PiecesComptablesList from "../features/comptabilité/pages/PiecesComptables/List.jsx";
+import PiecesComptablesShow from "../features/comptabilité/pages/PiecesComptables/Show.jsx";
 
 // IMPORTS DU MODULE ACHATS
 import AchatLayout from "../features/achat/layouts/AchatLayout";
 import AchatDashboard from "../features/achat/pages/AchatDashboard";
-import DemandesAchatPage from "../features/achat/pages/DemandesAchatPage";
-import LignesDemandeAchatPage from "../features/achat/pages/LignesDemandeAchatPage";
 import BonsCommandePage from "../features/achat/pages/BonsCommandePage";
+import DemandesAchatPage from "../features/achat/pages/DemandesAchatPage";
 import LignesBonCommandePage from "../features/achat/pages/LignesBonCommandePage";
+import LignesDemandeAchatPage from "../features/achat/pages/LignesDemandeAchatPage";
 import PrixFournisseursPage from "../features/achat/pages/PrixFournisseursPage";
+// on ne parle pas beaucoup
+import FinancialReportsLayout from "../features/financial-reports/layouts/FinancialReportsHeader.jsx";
+import ReportDetail from "../features/financial-reports/pages/[id]/page.jsx"; // crée ce fichier si pas déjà fait
+import FinancialReportsDashboard from "../features/financial-reports/pages/dashboard.jsx";
+import FinancialReportsList from "../features/financial-reports/pages/index.jsx";
+import NewReportPage from "../features/financial-reports/pages/new/page.jsx";
+import ImportPage from "../features/financial-reports/pages/ImportData.jsx";
+import SettingPage from "../features/financial-reports/pages/SettingsPage.jsx";
+import PeriodSelectorPage from "../features/financial-reports/components/PeriodSelector.jsx";
+import Indexpages from "../features/financial-reports/pages/[id]/lines/index.jsx"
 
 // COMPOSANT DE CHARGEMENT POUR SUSPENSE
 const LoadingFallback = () => (
@@ -229,6 +239,7 @@ export default function AppRouter() {
             } 
           />
         </Route>
+        
 
         {/* ROUTES ACHATS */}
         <Route path="/achats" element={<AchatLayout />}>
@@ -243,6 +254,23 @@ export default function AppRouter() {
 
         {/* REDIRECTIONS */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        
+         {/* ROUTES ÉTATS FINANCIERS */}
+        <Route element={<FinancialReportsLayout />}>
+        <Route path="/financial-reports" element={<FinancialReportsList />} />
+        <Route path="/financial-reports/:id" element={<ReportDetail />} />
+        <Route path="/financial-reports/dashboard" element={<FinancialReportsDashboard />} />
+
+         {/* Optionnel : si tu veux une sous-route pour la création */}
+        <Route path="/financial-reports/new" element={<NewReportPage />} />   crée NewReportPage plus tard
+        <Route path="/financial-reports/new" element={<NewReportPage />} />
+        <Route path="/financial-reports/import" element={<ImportPage />} />
+        <Route path="/financial-reports/settings" element={<SettingPage />} />
+        <Route path="/financial-reports/Periods" element={<PeriodSelectorPage />} />
+        <Route path="/financial-reports/lignes" element={<Indexpages />} />
+
+        </Route>
+
         
         {/* 404 */}
         <Route path="*" element={

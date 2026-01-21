@@ -71,7 +71,7 @@ export default function DashboardPage() {
       manufacturing: '/manufacturing',
       projects: '/projects',
       crm: '/crm',
-      reports: '/reports',
+      reports: '/financial-reports',
       catalogue: '/catalogue',
       documents: '/documents',
       administration: '/admin',
