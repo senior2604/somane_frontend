@@ -9,13 +9,11 @@ export default function Header() {
 
   const modules = [
     { id: 'dashboard', name: 'Noyau', path: '/dashboard' },
-    { id: 'sales', name: 'Ventes', path: '/sales' },
-
-
-
-    { id: 'achats', name: 'Achats', path: '/achats' },
-
-    { id: 'accounting', name: 'Comptabilité', path: '/comptabilite/Dashboard' },
+    { id: 'sales', name: 'Ventes', path: '/vente/dashboard' }, // ← CORRIGÉ ICI
+    
+    { id: 'achats', name: 'Achats', path: '/achats/dashboard' }, // ← DOIT ÊTRE '/achats/dashboard' aussi
+    
+    { id: 'accounting', name: 'Comptabilité', path: '/comptabilite/dashboard' },
     { id: 'inventory', name: 'Stock', path: '/inventory' },
     { id: 'hr', name: 'RH', path: '/hr' },
     { id: 'manufacturing', name: 'Production', path: '/manufacturing' },
