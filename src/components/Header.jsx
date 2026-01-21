@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { FiBell, FiChevronDown, FiLogOut, FiUser } from "react-icons/fi";
-import { useLocation, useNavigate } from "react-router-dom";
+// features/layout/components/Header.jsx
+import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useMemo } from "react";
+import { FiBell, FiPower, FiChevronDown, FiUser, FiGrid } from "react-icons/fi";
 
 export default function Header() {
   const navigate = useNavigate();
@@ -13,7 +14,6 @@ export default function Header() {
     { id: 'achats', name: 'Achats', path: '/achats/dashboard' },
     { id: 'accounting', name: 'Comptabilité', path: '/comptabilite/dashboard' },
     { id: 'inventory', name: 'Stock', path: '/inventory' },
-    { id: 'reports', name: 'États Financiers', path: '/financial-reports/dashboard' }, // ← AJOUTÉ ICI
     { id: 'hr', name: 'RH', path: '/hr' },
     { id: 'manufacturing', name: 'Production', path: '/manufacturing' },
     { id: 'projects', name: 'Projets', path: '/projects' },
