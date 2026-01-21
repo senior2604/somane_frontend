@@ -13,6 +13,7 @@ export default function Header() {
     { id: 'sales', name: 'Ventes', path: '/vente/dashboard' },
     { id: 'achats', name: 'Achats', path: '/achats/dashboard' },
     { id: 'accounting', name: 'Comptabilité', path: '/comptabilite/dashboard' },
+    { id: 'reports', name: 'États Financiers', path: '/financial-reports/dashboard' }, // ← AJOUTÉ ICI
     { id: 'inventory', name: 'Stock', path: '/inventory' },
     { id: 'hr', name: 'RH', path: '/hr' },
     { id: 'manufacturing', name: 'Production', path: '/manufacturing' },
