@@ -78,7 +78,8 @@ export default function ComptabiliteFormContainer({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-3 py-2">
+      {/* 👇 CHANGEMENT ICI : pt-0 au lieu de py-2 */}
+      <div className="max-w-5xl mx-auto px-3 pt-0 pb-2">
         {/* En-tête minimaliste */}
         <div className="mb-1">
           <div className="flex items-center justify-between">

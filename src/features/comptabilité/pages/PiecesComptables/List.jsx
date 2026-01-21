@@ -1,186 +1,76 @@
 // features/comptabilité/pages/PiecesComptables/List.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiEye, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import {
+  FiEye,
+  FiEdit2,
+  FiTrash2,
+  FiCheckCircle,
+  FiXCircle,
+  FiRotateCcw
+} from 'react-icons/fi';
 
-import { piecesService, apiClient } from "../../services";
+import { piecesService } from "../../services";
 import ComptabiliteTableContainer from "../../components/ComptabiliteTableContainer";
 
-export default function PiecesPage() {
+export default function PiecesComptablesList() {
   const navigate = useNavigate();
   
   const [pieces, setPieces] = useState([]);
   const [filteredPieces, setFilteredPieces] = useState([]);
-  const [companies, setCompanies] = useState([]);
-  const [journaux, setJournaux] = useState([]);
-  const [devises, setDevises] = useState([]);
-  const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilters, setActiveFilters] = useState([]);
-  
-  // Fonction pour enrichir les données avec les relations
-  const enrichirPieces = (piecesData, journauxData, devisesData, partnersData) => {
-    console.log('🔄 Enrichissement des données...');
-    
-    return piecesData.map(piece => {
-      // 1. Trouver le journal (ID → Objet)
-      const journal = journauxData.find(j => j.id === piece.journal);
-      
-      // 2. Trouver la devise (ID → Objet)
-      const devise = devisesData.find(d => d.id === piece.currency);
-      
-      // 3. Trouver le partenaire (ID → Objet)
-      const partenaire = partnersData.find(p => p.id === piece.partner);
-      
-      // 4. Calculer les totaux depuis les lignes
-      let totalDebit = 0;
-      let totalCredit = 0;
-      
-      if (piece.lines && Array.isArray(piece.lines)) {
-        piece.lines.forEach(line => {
-          totalDebit += parseFloat(line.debit) || 0;
-          totalCredit += parseFloat(line.credit) || 0;
-        });
-      }
-      
-      return {
-        ...piece,
-        // Ajouter les champs compatibles frontend
-        label: piece.name,  // Alias pour compatibilité
-        libelle: piece.name, // Alias français
-        number: piece.name,  // Alias pour le numéro
-        status: piece.state, // Alias pour le statut
-        
-        // Ajouter les objets enrichis
-        journal: journal || { id: piece.journal, code: `ID:${piece.journal}`, name: 'Inconnu' },
-        currency: devise || { id: piece.currency, code: `ID:${piece.currency}`, symbol: '' },
-        partner: partenaire || { id: piece.partner, name: 'Inconnu' },
-        
-        // Ajouter les totaux calculés
-        total_debit: totalDebit,
-        total_credit: totalCredit,
-        debit: totalDebit, // Alias
-        credit: totalCredit, // Alias
-      };
-    });
-  };
+  const [selectedPieceIds, setSelectedPieceIds] = useState([]);
+  const [activeRowId, setActiveRowId] = useState(null);
 
-  // Gestion de la recherche
-  const handleSearch = useCallback((term) => {
-    setSearchTerm(term);
-    // Appliquer les filtres
-    if (term.trim() === '') {
-      setFilteredPieces(pieces);
-    } else {
-      const filtered = pieces.filter(piece =>
-        (piece.name || '').toLowerCase().includes(term.toLowerCase()) ||
-        (piece.ref || '').toLowerCase().includes(term.toLowerCase()) ||
-        (piece.journal?.code || '').toLowerCase().includes(term.toLowerCase()) ||
-        (piece.journal?.name || '').toLowerCase().includes(term.toLowerCase())
-      );
-      setFilteredPieces(filtered);
-    }
-  }, [pieces]);
-
-  // Gestion de la suppression
-  const handleDelete = useCallback(async (piece) => {
-    const pieceName = piece.name || piece.number || 'cette pièce';
-    
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer "${pieceName}" ?`)) {
-      try {
-        await piecesService.delete(piece.id);
-        loadData(); // Recharger les données
-      } catch (err) {
-        console.error('❌ Erreur suppression:', err);
-        setError('Erreur lors de la suppression: ' + (err.message || 'Erreur inconnue'));
-      }
-    }
-  }, []);
-
-  // Gestion des filtres
-  const handleFilterChange = useCallback((filters) => {
-    setActiveFilters(filters);
-    // Pour l'instant, on ne fait rien avec les filtres
-    console.log('Filtres appliqués:', filters);
-  }, []);
-
-  // Gestion de l'export
-  const handleExport = useCallback(() => {
-    const dataToExport = filteredPieces.length > 0 ? filteredPieces : pieces;
-    
-    if (dataToExport.length === 0) {
-      alert('Aucune donnée à exporter');
-      return;
-    }
-    
-    console.log('Export des données:', dataToExport.length, 'pièces');
-    alert(`${dataToExport.length} pièces prêtes à être exportées`);
-  }, [filteredPieces, pieces]);
-
-  // Charger toutes les données nécessaires
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 Chargement des données...');
       
-      // Charger toutes les données en parallèle
       const [piecesRes, journauxRes, devisesRes, partnersRes] = await Promise.all([
         piecesService.getAll(),
         piecesService.getJournals(),
-        piecesService.getDevises ? piecesService.getDevises() : Promise.resolve([]),
-        piecesService.getPartners ? piecesService.getPartners() : Promise.resolve([])
+        piecesService.getDevises(),
+        piecesService.getPartners()
       ]);
       
-      console.log('📦 Données brutes récupérées:');
-      console.log('   - Pièces:', piecesRes?.length || 0);
-      console.log('   - Journaux:', journauxRes?.length || 0);
-      console.log('   - Devises:', devisesRes?.length || 0);
-      console.log('   - Partenaires:', partnersRes?.length || 0);
-      
-      if (piecesRes && piecesRes.length > 0) {
-        console.log('📋 Exemple de pièce brute:');
-        const pieceExemple = piecesRes[0];
-        console.log('   ID:', pieceExemple.id);
-        console.log('   Name (backend):', pieceExemple.name);
-        console.log('   Journal (backend):', pieceExemple.journal); // C'est un ID!
-        console.log('   Currency (backend):', pieceExemple.currency); // C'est un ID!
-        console.log('   State (backend):', pieceExemple.state);
-        console.log('   Lines:', pieceExemple.lines);
-      }
-      
-      // Enrichir les pièces avec les relations
-      const piecesEnrichies = enrichirPieces(
-        piecesRes || [],
-        journauxRes || [],
-        devisesRes || [],
-        partnersRes || []
-      );
-      
-      setPieces(piecesEnrichies);
-      setFilteredPieces(piecesEnrichies);
-      setJournaux(journauxRes || []);
-      setDevises(devisesRes || []);
-      setPartners(partnersRes || []);
-      
-      // Charger les entreprises
-      try {
-        const companiesRes = await apiClient.get('entites/');
-        setCompanies(companiesRes || []);
-      } catch (err) {
-        console.log('⚠️ Erreur chargement entreprises:', err);
-        setCompanies([]);
-      }
+      const enrichedPieces = piecesRes.map(piece => {
+        const journal = journauxRes.find(j => j.id === piece.journal) || 
+                       { id: piece.journal, code: '??', name: 'Inconnu' };
+        const currency = devisesRes.find(d => d.id === piece.currency) || 
+                         { id: piece.currency, code: '??', symbol: '' };
+        const partner = partnersRes.find(p => p.id === piece.partner) || 
+                        { id: piece.partner, name: 'Inconnu' };
+        
+        let totalDebit = 0;
+        let totalCredit = 0;
+        if (Array.isArray(piece.lines)) {
+          piece.lines.forEach(line => {
+            totalDebit += parseFloat(line.debit) || 0;
+            totalCredit += parseFloat(line.credit) || 0;
+          });
+        }
+        const isPaid = Math.abs(totalDebit - totalCredit) < 0.01;
+        
+        return {
+          ...piece,
+          journal,
+          currency,
+          partner,
+          total_debit: totalDebit,
+          total_credit: totalCredit,
+          is_paid: isPaid
+        };
+      });
 
-      console.log('✅ Chargement terminé - Pièces enrichies:', piecesEnrichies.length);
-      
+      setPieces(enrichedPieces);
+      setFilteredPieces(enrichedPieces);
+      setActiveRowId(null);
     } catch (err) {
-      console.error('❌ Erreur chargement:', err);
-      setError(err.message || 'Erreur de chargement des données');
-      setPieces([]);
-      setFilteredPieces([]);
+      console.error('❌ Erreur chargement pièces:', err);
+      setError('Impossible de charger les pièces comptables.');
     } finally {
       setLoading(false);
     }
@@ -190,222 +80,207 @@ export default function PiecesPage() {
     loadData();
   }, [loadData]);
 
-  // Configuration des colonnes - CORRIGÉE POUR LE BACKEND
-  const columns = [
-    { 
-      id: 'numero', 
-      label: 'Numéro',
-      width: '120px',
-      render: (piece) => {
-        // Le backend utilise 'name', pas 'number'
-        return (
-          <div className="text-sm font-semibold text-gray-900">
-            {piece.name || '—'}
-          </div>
-        );
-      }
-    },
-    { 
-      id: 'date', 
-      label: 'Date',
-      width: '100px',
-      render: (piece) => (
-        <div className="text-sm text-gray-700">
-          {piece.date ? new Date(piece.date).toLocaleDateString('fr-FR') : '—'}
-        </div>
-      )
-    },
-    { 
-      id: 'journal', 
-      label: 'Journal',
-      width: '150px',
-      render: (piece) => {
-        // piece.journal est maintenant un objet enrichi
-        return (
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            <div className="min-w-0">
-              <div className="text-xs font-medium text-gray-900 truncate">
-                {piece.journal?.code || '—'}
-              </div>
-              <div className="text-xs text-gray-500 truncate">
-                {piece.journal?.name || ''}
-              </div>
-            </div>
-          </div>
-        );
-      }
-    },
-    { 
-      id: 'libelle', 
-      label: 'Libellé',
-      width: '200px',
-      render: (piece) => (
-        <div className="text-sm text-gray-700 truncate" title={piece.name}>
-          {piece.name || '—'}
-        </div>
-      )
-    },
-    { 
-      id: 'devise', 
-      label: 'Devise',
-      width: '100px',
-      render: (piece) => {
-        // piece.currency est maintenant un objet enrichi
-        if (piece.currency?.code) {
-          return (
-            <div className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
-              <span className="font-semibold mr-1">{piece.currency?.symbol || ''}</span>
-              <span className="text-gray-600">({piece.currency?.code})</span>
-            </div>
-          );
-        }
-        return <span className="text-gray-400 text-xs italic">—</span>;
-      }
-    },
-    { 
-      id: 'debit', 
-      label: 'Débit',
-      width: '120px',
-      render: (piece) => (
-        <div className="text-sm font-medium text-green-600 text-right">
-          {piece.total_debit?.toLocaleString('fr-FR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          }) || '0,00'}
-        </div>
-      )
-    },
-    { 
-      id: 'credit', 
-      label: 'Crédit',
-      width: '120px',
-      render: (piece) => (
-        <div className="text-sm font-medium text-red-600 text-right">
-          {piece.total_credit?.toLocaleString('fr-FR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          }) || '0,00'}
-        </div>
-      )
-    },
-    { 
-      id: 'statut', 
-      label: 'Statut',
-      width: '120px',
-      render: (piece) => {
-        // Le backend utilise 'state', pas 'status'
-        const status = piece.state;
-        
-        let statusText = 'Inconnu';
-        let statusClass = 'bg-gray-100 text-gray-800';
-        
-        if (status === 'posted') {
-          statusText = 'Comptabilisé';
-          statusClass = 'bg-green-100 text-green-800';
-        } else if (status === 'draft') {
-          statusText = 'Brouillon';
-          statusClass = 'bg-amber-100 text-amber-800';
-        } else if (status === 'cancel') { // Note: c'est 'cancel' dans votre modèle
-          statusText = 'Annulé';
-          statusClass = 'bg-red-100 text-red-800';
-        }
-        
-        return (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusClass}`}>
-            {statusText}
-          </span>
-        );
-      }
-    },
-    { 
-      id: 'actions', 
-      label: 'Actions',
-      width: '140px',
-      render: (piece) => (
-        <div className="flex items-center gap-1">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/comptabilite/pieces/${piece.id}`);
-            }}
-            className="p-1.5 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 hover:from-gray-100 hover:to-gray-200 rounded transition-all duration-200 shadow-sm hover:shadow"
-            title="Voir détails"
-          >
-            <FiEye size={14} />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/comptabilite/pieces/${piece.id}/edit`);
-            }}
-            className="p-1.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 hover:from-violet-100 hover:to-violet-200 rounded transition-all duration-200 shadow-sm hover:shadow"
-            title="Modifier"
-          >
-            <FiEdit2 size={14} />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(piece);
-            }}
-            className="p-1.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 hover:from-red-100 hover:to-red-200 rounded transition-all duration-200 shadow-sm hover:shadow"
-            title="Supprimer"
-          >
-            <FiTrash2 size={14} />
-          </button>
-        </div>
-      )
+  const handleDelete = async (piece) => {
+    if (!window.confirm(`Supprimer "${piece.name}" ?`)) return;
+    try {
+      await piecesService.delete(piece.id);
+      loadData();
+    } catch (err) {
+      alert('Erreur suppression: ' + (err.response?.data?.detail || err.message));
     }
+  };
+
+  const handleValidate = async (piece) => {
+    try {
+      await piecesService.validate(piece.id);
+      loadData();
+    } catch (err) {
+      alert('Erreur validation: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handleCancel = async (piece) => {
+    try {
+      await piecesService.cancel(piece.id);
+      loadData();
+    } catch (err) {
+      alert('Erreur annulation: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handleReverse = async (piece) => {
+    try {
+      await piecesService.reverse(piece.id);
+      loadData();
+    } catch (err) {
+      alert('Erreur extournement: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handleBulkAction = async (actionFn) => {
+    if (selectedPieceIds.length === 0) {
+      alert('Aucune pièce sélectionnée');
+      return;
+    }
+    if (!window.confirm(`Appliquer l'action sur ${selectedPieceIds.length} pièce(s) ?`)) return;
+    try {
+      for (const id of selectedPieceIds) {
+        await actionFn(id);
+      }
+      setSelectedPieceIds([]);
+      loadData();
+    } catch (err) {
+      alert('Erreur action groupée: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handleSearch = useCallback((term) => {
+    setSearchTerm(term);
+    if (!term.trim()) {
+      setFilteredPieces(pieces);
+    } else {
+      const filtered = pieces.filter(p =>
+        (p.name || '').toLowerCase().includes(term.toLowerCase()) ||
+        (p.ref || '').toLowerCase().includes(term.toLowerCase()) ||
+        (p.journal?.code || '').toLowerCase().includes(term.toLowerCase()) ||
+        (p.journal?.name || '').toLowerCase().includes(term.toLowerCase()) ||
+        (p.partner?.name || '').toLowerCase().includes(term.toLowerCase())
+      );
+      setFilteredPieces(filtered);
+    }
+  }, [pieces]);
+
+  const columns = [
+    { id: 'date_facturation', label: 'Date facturation', width: '120px', render: p => p.date ? new Date(p.date).toLocaleDateString('fr-FR') : '—' },
+    { id: 'numero', label: 'Numéro', width: '120px', render: p => <div className="font-semibold text-sm">{p.name || '—'}</div> },
+    { id: 'compte_general', label: 'Compte général', width: '150px', render: p => {
+      const firstLine = p.lines?.[0];
+      const account = firstLine ? (typeof firstLine.account === 'object' ? firstLine.account : { code: '??', name: 'Inconnu' }) : { code: '??', name: 'Inconnu' };
+      return (
+        <div>
+          <div className="font-medium text-sm">{account.code || '—'}</div>
+          <div className="text-xs text-gray-500 truncate">{account.name || ''}</div>
+        </div>
+      );
+    }},
+    { id: 'partenaire', label: 'Partenaire', width: '160px', render: p => p.partner ? (
+      <div>
+        <div className="font-medium text-sm">{p.partner.name || '—'}</div>
+        <div className="text-xs text-gray-500">{p.partner.email || p.partner.phone || ''}</div>
+      </div>
+    ) : '—' },
+    { id: 'reference', label: 'Référence', width: '130px', render: p => <span className="text-sm">{p.ref || '—'}</span> },
+    { id: 'journal', label: 'Journal', width: '140px', render: p => (
+      <div>
+        <div className="font-medium text-sm">{p.journal?.code || '—'}</div>
+        <div className="text-xs text-gray-500">{p.journal?.name || ''}</div>
+      </div>
+    )},
+    { id: 'montant_ht', label: 'Montant HT', width: '110px', render: p => (
+      <div className="text-right font-medium text-sm">
+        {(p.total_debit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+      </div>
+    )},
+    { id: 'taxes', label: 'Taxes', width: '100px', render: p => {
+      const ht = p.total_debit || 0;
+      const ttc = p.total_credit || 0;
+      const taxes = Math.abs(ttc - ht);
+      return (
+        <div className="text-right font-medium text-blue-600 text-sm">
+          {taxes.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+        </div>
+      );
+    }},
+    { id: 'montant_ttc', label: 'Montant TTC', width: '110px', render: p => (
+      <div className="text-right font-medium text-red-600 text-sm">
+        {(p.total_credit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+      </div>
+    )},
+    { id: 'etat_piece', label: 'Etat pièce', width: '120px', render: p => {
+      const config = {
+        posted: { text: 'Comptabilisé', cls: 'bg-green-100 text-green-800' },
+        draft: { text: 'Brouillon', cls: 'bg-amber-100 text-amber-800' },
+        cancel: { text: 'Annulé', cls: 'bg-red-100 text-red-800' }
+      }[p.state] || { text: 'Inconnu', cls: 'bg-gray-100 text-gray-800' };
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.cls}`}>
+          {config.text}
+        </span>
+      );
+    }},
+    { id: 'etat_paiement', label: 'Etat paiement', width: '120px', render: p => (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+        p.is_paid ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+      }`}>
+        {p.is_paid ? 'Payé' : 'Non payé'}
+      </span>
+    )},
+    { id: 'actions', label: 'Actions', width: '170px', render: p => (
+      <div className="flex gap-1">
+        <button onClick={e => { e.stopPropagation(); navigate(`/comptabilite/pieces/${p.id}`); }} className="p-1.5 bg-gray-100 rounded"><FiEye size={14} /></button>
+        {p.state === 'draft' && (
+          <>
+            <button onClick={e => { e.stopPropagation(); navigate(`/comptabilite/pieces/${p.id}/edit`); }} className="p-1.5 bg-violet-100 rounded"><FiEdit2 size={14} /></button>
+            <button onClick={e => { e.stopPropagation(); handleValidate(p); }} className="p-1.5 bg-green-100 rounded"><FiCheckCircle size={14} /></button>
+          </>
+        )}
+        {p.state === 'posted' && (
+          <>
+            <button onClick={e => { e.stopPropagation(); handleCancel(p); }} className="p-1.5 bg-amber-100 rounded"><FiXCircle size={14} /></button>
+            <button onClick={e => { e.stopPropagation(); handleReverse(p); }} className="p-1.5 bg-purple-100 rounded"><FiRotateCcw size={14} /></button>
+          </>
+        )}
+        <button onClick={e => { e.stopPropagation(); handleDelete(p); }} className="p-1.5 bg-red-100 rounded"><FiTrash2 size={14} /></button>
+      </div>
+    )}
   ];
 
   return (
     <ComptabiliteTableContainer
-      // Données
       data={filteredPieces}
       loading={loading}
       error={error}
-      
-      // Configuration
       title="Pièces Comptables"
       moduleType="pieces"
-      
-      // Colonnes
       columns={columns}
-      defaultVisibleColumns={['numero', 'date', 'journal', 'libelle', 'debit', 'credit', 'statut', 'actions']}
-      
-      // Filtres (simplifiés pour l'instant)
-      filterConfigs={[]}
-      onFilterChange={handleFilterChange}
-      
-      // Actions
+      defaultVisibleColumns={[
+        'date_facturation',
+        'numero',
+        'compte_general',
+        'partenaire',
+        'reference',
+        'journal',
+        'montant_ht',
+        'taxes',
+        'montant_ttc',
+        'etat_piece',
+        'etat_paiement',
+        'actions'
+      ]}
+      onSelectionChange={setSelectedPieceIds}
       onRefresh={loadData}
-      onExport={handleExport}
+      onExport={(format) => alert(`Export en ${format} non implémenté`)}
       onCreate={() => navigate('/comptabilite/pieces/create')}
       onSearch={handleSearch}
-      
-      // Pagination
+      onConfirm={() => handleBulkAction(piecesService.validate)}
+      onCancel={() => handleBulkAction(piecesService.cancel)}
+      onReverse={() => handleBulkAction(piecesService.reverse)}
+      onDelete={() => handleBulkAction(piecesService.delete)}
+      activeRowId={activeRowId}
+      onRowClick={(p) => {
+        setActiveRowId(p.id);
+        navigate(`/comptabilite/pieces/${p.id}/edit`);
+      }}
+      onView={(p) => navigate(`/comptabilite/pieces/${p.id}`)}
       itemsPerPage={10}
-      
-      // Actions sur les lignes
-      onView={(piece) => navigate(`/comptabilite/pieces/${piece.id}`)}
-      onEdit={(piece) => navigate(`/comptabilite/pieces/${piece.id}/edit`)}
-      onDelete={handleDelete}
-      onRowClick={(piece) => navigate(`/comptabilite/pieces/${piece.id}`)}
-      
-      // Personnalisation
       emptyState={pieces.length === 0 ? {
         title: 'Aucune pièce comptable',
-        description: 'Commencez par créer votre première pièce comptable',
-        action: {
-          label: 'Créer une pièce',
-          onClick: () => navigate('/comptabilite/pieces/create')
+        description: 'Créez votre première pièce.',
+        action: { 
+          label: 'Créer une pièce', 
+          onClick: () => navigate('/comptabilite/pieces/create') 
         }
       } : null}
-      
-      // Informations
-      totalItems={pieces.length}
-      subtitle={`${pieces.length} pièce${pieces.length !== 1 ? 's' : ''} comptable${pieces.length !== 1 ? 's' : ''}`}
     />
   );
 }
