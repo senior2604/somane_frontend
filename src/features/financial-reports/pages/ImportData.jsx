@@ -1,14 +1,19 @@
 // src/features/financial-reports/pages/ImportData.jsx
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';  // ← LIGNE 2 : IMPORT OBLIGATOIRE
 import { FiUpload, FiFile, FiCheckCircle, FiAlertCircle, FiX } from 'react-icons/fi';
 import { apiClient } from '../../../services/apiClient';
 
 export default function ImportData() {
+  const navigate = useNavigate();  // ← LIGNE 7 : DÉCLARATION
+
   const [dataSources, setDataSources] = useState([]);
   const [periods, setPeriods] = useState([]);
   const [imports, setImports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);  // ← LIGNE 13 : NOUVEAU pour le bouton
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const [uploadData, setUploadData] = useState({
     name: '',
@@ -35,7 +40,8 @@ export default function ImportData() {
       setPeriods(periodsRes.results || periodsRes || []);
       setImports(importsRes.results || importsRes || []);
     } catch (err) {
-      console.error('Erreur chargement données:', err);
+      setErrorMessage('Erreur lors du chargement des données');
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -45,16 +51,21 @@ export default function ImportData() {
     const file = e.target.files[0];
     if (file) {
       setUploadData({ ...uploadData, file });
+      setErrorMessage('');
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
 
-    if (!uploadData.file) {
-      alert('Veuillez sélectionner un fichier');
-      return;
-    }
+    if (!uploadData.name.trim()) return setErrorMessage('Le nom est obligatoire');
+    if (!uploadData.data_source) return setErrorMessage('Choisissez une source');
+    if (!uploadData.period) return setErrorMessage('Choisissez une période');
+    if (!uploadData.file) return setErrorMessage('Sélectionnez un fichier');
+
+    setSubmitting(true);
 
     const formData = new FormData();
     formData.append('name', uploadData.name);
@@ -63,13 +74,21 @@ export default function ImportData() {
     formData.append('file', uploadData.file);
 
     try {
-      await apiClient.upload('financial-reports/raw-imports/', formData);
+      const response = await apiClient.upload('financial-reports/raw-imports/', formData);
       setSuccessMessage('Import créé avec succès !');
       setTimeout(() => setSuccessMessage(''), 5000);
-      setUploadData({ name: '', data_source: '', period: '', file: null });
+
+      // Optionnel : redirection vers le détail du nouvel import
+      // Si ton API renvoie l’ID créé dans response, utilise-le :
+      // if (response?.id) navigate(`/financial-reports/import/${response.id}`);
+      // Sinon recharge simplement
       loadData();
+      setUploadData({ name: '', data_source: '', period: '', file: null });
     } catch (err) {
-      alert('Erreur lors de l\'import : ' + (err.message || 'Vérifiez les données'));
+      const msg = err.response?.data?.detail || err.message || 'Erreur inconnue';
+      setErrorMessage(`Erreur lors de l’import : ${msg}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -89,11 +108,18 @@ export default function ImportData() {
         <p className="text-gray-600 mt-2">Chargez vos écritures comptables depuis Excel ou CSV</p>
       </div>
 
-      {/* Message succès */}
+      {/* Messages */}
       {successMessage && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-700 flex items-center gap-3">
           <FiCheckCircle size={20} />
           {successMessage}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 flex items-center gap-3">
+          <FiAlertCircle size={20} />
+          {errorMessage}
         </div>
       )}
 
@@ -179,10 +205,11 @@ export default function ImportData() {
           <div className="flex justify-end pt-4">
             <button
               type="submit"
-              className="flex items-center gap-2 px-8 py-3 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors shadow-sm"
+              disabled={submitting || loading}
+              className="flex items-center gap-2 px-8 py-3 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors shadow-sm"
             >
               <FiUpload size={18} />
-              Lancer l'import
+              {submitting ? 'Import en cours...' : 'Lancer l’import'}
             </button>
           </div>
         </form>
@@ -226,7 +253,10 @@ export default function ImportData() {
                      imp.state === 'validated' ? 'Validé' :
                      imp.state === 'processed' ? 'Traité' : 'Erreur'}
                   </span>
-                  <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                  <button 
+                    onClick={() => navigate(`/financial-reports/import/${imp.id}`)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
                     Voir détails
                   </button>
                 </div>

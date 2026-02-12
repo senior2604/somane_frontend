@@ -1,4 +1,4 @@
-// components/ComptabiliteHeader.jsx
+// C:\python\django\somane_frontend\src\features\comptabilité\components\ComptabiliteHeader.jsx
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { FiChevronDown, FiPower, FiUser, FiBell, FiArrowLeft, FiGrid } from "react-icons/fi";
@@ -30,7 +30,7 @@ export default function ComptabiliteHeader() {
       name: "Structure",
       items: [
         { label: "Partenaires", path: "/comptabilite/partenaires" },
-        { label: "Plans comptables", path: "/comptabilite/plan-comptable" },
+        { label: "Plans comptable", path: "/comptabilite/plans-comptable" }, // ← NOUVEAU LIEN VERS TA PAGE
         { label: "Journaux", path: "/comptabilite/journaux" },
         { label: "Devises", path: "/comptabilite/devises" },
         { label: "Taxes", path: "/comptabilite/taux-fiscaux" },
@@ -41,6 +41,20 @@ export default function ComptabiliteHeader() {
         { label: "Exercices", path: "/comptabilite/exercices" }
       ]
     },
+
+    {
+      name: "Plans comptable",
+      items: [
+        { label: "compte ", path: "/comptabilite/accounts/" },
+        { label: "plans comptable", path: "/comptabilite/accounts/new" },
+        { label: "compte ", path: "/comptabilite/accounts/" },
+        { label: "framework ", path: "/comptabilite/frameworks/" },
+        { label: "groupe ", path: "/comptabilite/groups/" },
+
+        { label: "Plans comptable", path: "/comptabilite/plans" }, // ← NOUVEAU LIEN VERS TA PAGE
+      ]
+    },
+
     {
       name: "Traitements",
       items: [
@@ -51,6 +65,8 @@ export default function ComptabiliteHeader() {
         { label: "Etat de rapprochement", path: "/comptabilite/rapprochement" }
       ]
     },
+    
+    
     {
       name: "Analyse & Etat",
       items: [

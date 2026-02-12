@@ -10,7 +10,7 @@ export default function VenteHeader() {
   const [hoveredCategory, setHoveredCategory] = useState(null);
 
   // Modules ERP
-  const modules = [
+  const modules = [ 
     { id: 'dashboard', name: 'Noyau', path: '/dashboard' },
     { id: 'sales', name: 'Ventes', path: '/sales/dashboard' },
     { id: 'achats', name: 'Achats', path: '/achats/dashboard' },
