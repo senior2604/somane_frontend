@@ -18,9 +18,8 @@ export default function LoginPage() {
     try {
       const API_URL = "http://localhost:8000/api/auth/jwt/create/";
       
-      // Djoser JWT avec votre configuration (LOGIN_FIELD = 'email')
       const credentials = {
-        email: email,      // ← Djoser configuré pour accepter "email" comme identifiant
+        email: email,
         password: password
       };
 
@@ -31,7 +30,6 @@ export default function LoginPage() {
         timeout: 10000,
       });
 
-      // Gestion de la réponse JWT
       if (resp.data?.access) {
         // Stockage des tokens JWT
         localStorage.setItem("accessToken", resp.data.access);
@@ -44,12 +42,14 @@ export default function LoginPage() {
         }
         
         console.log("✅ Connexion réussie avec JWT");
-        navigate("/dashboard");
+        
+        // Récupérer les entités accessibles par l'utilisateur
+        await fetchUserEntites(resp.data.access);
+        
       } else {
         setError("Connexion réussie mais aucun token JWT reçu.");
       }
     } catch (err) {
-      // Gestion d'erreur améliorée pour JWT
       let errorMessage = "Identifiants incorrects ou erreur serveur.";
       
       if (err.response) {
@@ -80,6 +80,61 @@ export default function LoginPage() {
     }
   };
 
+  const fetchUserEntites = async (accessToken) => {
+    try {
+      // ✅ Endpoint correct selon vos logs : /api/entites/
+      const response = await axios.get("http://localhost:8000/api/entites/", {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      });
+
+      // ✅ Gestion flexible du format de réponse
+      let userEntites = [];
+      if (Array.isArray(response.data)) {
+        userEntites = response.data;
+      } else if (response.data && Array.isArray(response.data.results)) {
+        userEntites = response.data.results;
+      } else if (response.data && Array.isArray(response.data.data)) {
+        userEntites = response.data.data;
+      }
+
+      // ✅ Ne garder que les entités actives
+      const activeEntites = userEntites.filter(e => e.statut);
+
+      // Stocker dans localStorage
+      localStorage.setItem("userEntites", JSON.stringify(activeEntites));
+      
+      // Démarrer le workflow de sélection
+      handleEntiteWorkflow(activeEntites);
+      
+    } catch (err) {
+      console.error("Erreur lors de la récupération des entités:", err);
+      
+      // En cas d'erreur API, aller au dashboard
+      // (ProtectedLayout redirigera si nécessaire)
+      navigate("/dashboard");
+    }
+  };
+
+  const handleEntiteWorkflow = (entites) => {
+    if (!entites || entites.length === 0) {
+      // Aucune entité → rediriger vers création
+      navigate("/no-entite");
+    } else if (entites.length === 1) {
+      // Une seule entité → sélection automatique
+      const entite = entites[0];
+      localStorage.setItem("currentEntite", JSON.stringify(entite));
+      localStorage.setItem("entiteActive", entite.id.toString());
+      navigate("/dashboard");
+    } else {
+      // Plusieurs entités → page de sélection
+      navigate("/select-entite");
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#e8efff] p-6">
       <div className="w-full max-w-6xl bg-white shadow-xl rounded-3xl overflow-hidden flex flex-col md:flex-row">
@@ -106,6 +161,7 @@ export default function LoginPage() {
             <button
               type="button"
               className="px-5 py-2 bg-white bg-opacity-20 border border-white border-opacity-30 rounded-full text-sm font-medium hover:bg-opacity-30 transition"
+              onClick={() => navigate("/about")}
             >
               En savoir plus
             </button>
@@ -258,7 +314,7 @@ export default function LoginPage() {
               <div className="text-center">
                 <button
                   type="button"
-                  onClick={() => alert("Flow mot de passe oublié à implémenter")}
+                  onClick={() => navigate("/reset-password")}
                   className="text-xs text-gray-400 hover:underline disabled:opacity-50"
                   disabled={loading}
                 >

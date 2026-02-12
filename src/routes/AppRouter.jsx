@@ -25,6 +25,10 @@ import TasksPage from "../pages/Tasks/TasksPage";
 import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
 import UsersPage from "../pages/Users/UsersPage";
 
+// NOUVELLES PAGES D'ENTITÉ
+import NoEntitePage from "../pages/Entities/NoEntitePage";
+import SelectEntitePage from "../pages/Entities/SelectEntitePage";
+
 // IMPORTS DU MODULE COMPTABILITÉ
 import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout";
 import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
@@ -51,9 +55,10 @@ import DemandesAchatPage from "../features/achat/pages/DemandesAchatPage";
 import LignesBonCommandePage from "../features/achat/pages/LignesBonCommandePage";
 import LignesDemandeAchatPage from "../features/achat/pages/LignesDemandeAchatPage";
 import PrixFournisseursPage from "../features/achat/pages/PrixFournisseursPage";
-// on ne parle pas beaucoup
-import FinancialReportsLayout from "../features/financial-reports/layouts/FinancialReportsHeader.jsx";
-import ReportDetail from "../features/financial-reports/pages/[id]/page.jsx"; // crée ce fichier si pas déjà fait
+
+// IMPORTS DU MODULE FINANCIAL REPORTS
+import FinancialReportsLayout from "../features/financial-reports/layouts/FinancialReportsLayout";
+import ReportDetail from "../features/financial-reports/pages/[id]/page.jsx";
 import FinancialReportsDashboard from "../features/financial-reports/pages/dashboard.jsx";
 import FinancialReportsList from "../features/financial-reports/pages/index.jsx";
 import NewReportPage from "../features/financial-reports/pages/new/page.jsx";
@@ -175,6 +180,10 @@ export default function AppRouter() {
         <Route path="/auth/password/reset/:uid/:token" element={<ResetPasswordPage />} />
         <Route path="/auth/reset-confirm/success" element={<ConfirmResetPage />} />
         
+        {/* ROUTES DE SÉLECTION D'ENTITÉ (Après login) */}
+        <Route path="/select-entite" element={<SelectEntitePage />} />
+        <Route path="/no-entite" element={<NoEntitePage />} />
+        
         {/* ROUTES PROTÉGÉES PRINCIPALES */}
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -252,25 +261,20 @@ export default function AppRouter() {
           <Route path="prix-fournisseurs" element={<PrixFournisseursPage />} />
         </Route>
 
-        {/* REDIRECTIONS */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        
-         {/* ROUTES ÉTATS FINANCIERS */}
+        {/* ROUTES ÉTATS FINANCIERS */}
         <Route element={<FinancialReportsLayout />}>
-        <Route path="/financial-reports" element={<FinancialReportsList />} />
-        <Route path="/financial-reports/:id" element={<ReportDetail />} />
-        <Route path="/financial-reports/dashboard" element={<FinancialReportsDashboard />} />
-
-         {/* Optionnel : si tu veux une sous-route pour la création */}
-        <Route path="/financial-reports/new" element={<NewReportPage />} />   crée NewReportPage plus tard
-        <Route path="/financial-reports/new" element={<NewReportPage />} />
-        <Route path="/financial-reports/import" element={<ImportPage />} />
-        <Route path="/financial-reports/settings" element={<SettingPage />} />
-        <Route path="/financial-reports/Periods" element={<PeriodSelectorPage />} />
-        <Route path="/financial-reports/lignes" element={<Indexpages />} />
-
+          <Route path="/financial-reports" element={<FinancialReportsList />} />
+          <Route path="/financial-reports/:id" element={<ReportDetail />} />
+          <Route path="/financial-reports/dashboard" element={<FinancialReportsDashboard />} />
+          <Route path="/financial-reports/new" element={<NewReportPage />} />
+          <Route path="/financial-reports/import" element={<ImportPage />} />
+          <Route path="/financial-reports/settings" element={<SettingPage />} />
+          <Route path="/financial-reports/Periods" element={<PeriodSelectorPage />} />
+          <Route path="/financial-reports/lignes" element={<Indexpages />} />
         </Route>
 
+        {/* REDIRECTIONS */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
         
         {/* 404 */}
         <Route path="*" element={
