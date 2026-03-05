@@ -1,52 +1,142 @@
+// features/comptabilité/pages/PiecesComptables/Show.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
-  FiArrowLeft, FiEdit, FiTrash2, FiCheck, FiX, FiCalendar,
-  FiType, FiBriefcase, FiFileText, FiDollarSign, FiCreditCard,
-  FiRefreshCw, FiPrinter, FiCopy
+  FiEdit, FiTrash2, FiCheck, FiX, FiFileText,
+  FiRefreshCw, FiPrinter, FiCopy, FiMoreVertical,
+  FiAlertCircle, FiRotateCcw, FiPlus
 } from 'react-icons/fi';
+import { useEntity } from '../../../../context/EntityContext';
 import { piecesService } from "../../services";
 
 export default function Show() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { activeEntity } = useEntity();
+  
   const [piece, setPiece] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [activeTab, setActiveTab] = useState('ecritures');
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState(false);
+  
+  // États pour les référentiels
+  const [partnersMap, setPartnersMap] = useState({});
+  const [journalsMap, setJournalsMap] = useState({});
+  const [devisesMap, setDevisesMap] = useState({});
+  const [accountsMap, setAccountsMap] = useState({});
 
   useEffect(() => {
-    loadPiece();
-  }, [id]);
+    if (!activeEntity) {
+      setError('Veuillez sélectionner une entité pour voir la pièce comptable');
+      setLoading(false);
+    }
+  }, [activeEntity]);
 
-  const loadPiece = async () => {
+  useEffect(() => {
+    if (id && activeEntity) {
+      loadReferentials();
+    }
+  }, [id, activeEntity]);
+
+  // Charger les référentiels d'abord
+  const loadReferentials = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await piecesService.getById(id);
-      setPiece(data);
+      
+      console.log('📥 Chargement des référentiels...');
+      
+      const [
+        journalsData,
+        accountsData,
+        partnersData,
+        devisesData
+      ] = await Promise.all([
+        piecesService.getJournals(activeEntity.id),
+        piecesService.getAccounts(activeEntity.id),
+        piecesService.getPartners(activeEntity.id),
+        piecesService.getDevises(activeEntity.id)
+      ]);
+
+      const normalizeData = (data) => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (Array.isArray(data.results)) return data.results;
+        if (Array.isArray(data.data)) return data.data;
+        return [];
+      };
+
+      const normalizedJournals = normalizeData(journalsData);
+      const normalizedAccounts = normalizeData(accountsData);
+      const normalizedPartners = normalizeData(partnersData);
+      const normalizedDevises = normalizeData(devisesData);
+
+      // Créer les maps
+      const journalsObj = {};
+      normalizedJournals.forEach(j => { journalsObj[j.id] = j; });
+      setJournalsMap(journalsObj);
+
+      const accountsObj = {};
+      normalizedAccounts.forEach(a => { accountsObj[a.id] = a; });
+      setAccountsMap(accountsObj);
+
+      const partnersObj = {};
+      normalizedPartners.forEach(p => {
+        partnersObj[p.id] = {
+          ...p,
+          displayName: p.raison_sociale || 
+                      (p.nom && p.prenom ? `${p.prenom} ${p.nom}` : p.nom) ||
+                      p.name ||
+                      'Partenaire sans nom'
+        };
+      });
+      setPartnersMap(partnersObj);
+
+      const devisesObj = {};
+      normalizedDevises.forEach(d => { devisesObj[d.id] = d; });
+      setDevisesMap(devisesObj);
+
+      // Maintenant charger la pièce
+      await loadPiece();
+      
     } catch (err) {
-      console.error('Erreur chargement pièce:', err);
-      if (err.status === 404) {
-        setError('Pièce comptable non trouvée');
-      } else {
-        setError(`Erreur: ${err.message || 'Inconnue'}`);
-      }
+      console.error('❌ Erreur chargement référentiels:', err);
+      setError('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
     }
   };
 
+  const loadPiece = async () => {
+    try {
+      console.log('📥 Chargement pièce:', id);
+      const data = await piecesService.getById(id, activeEntity.id);
+      console.log('✅ Pièce chargée:', data);
+      setPiece(data);
+    } catch (err) {
+      console.error('❌ Erreur chargement pièce:', err);
+      if (err.status === 404) {
+        setError('Pièce comptable non trouvée');
+      } else {
+        setError(`Erreur: ${err.message || 'Inconnue'}`);
+      }
+    }
+  };
+
   const handleDelete = async () => {
     if (!piece) return;
-    
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer la pièce "${piece.number || piece.label}" ?`)) {
-      return;
-    }
-    
+    setShowConfirmDialog(true);
+  };
+
+  const confirmDelete = async () => {
     setDeleting(true);
+    setShowConfirmDialog(false);
     try {
-      await piecesService.delete(id);
+      await piecesService.delete(id, activeEntity.id);
       navigate('/comptabilite/pieces');
     } catch (err) {
       setError('Erreur lors de la suppression: ' + (err.message || 'Inconnue'));
@@ -57,32 +147,134 @@ export default function Show() {
 
   const handleValidate = async () => {
     if (!piece) return;
-    
+    setActionInProgress(true);
     try {
-      await piecesService.validate(id);
-      loadPiece(); // Recharger pour mettre à jour le statut
+      await piecesService.validate(id, activeEntity.id);
+      await loadPiece();
     } catch (err) {
       setError('Erreur lors de la validation: ' + err.message);
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!piece) return;
+    setActionInProgress(true);
+    try {
+      await piecesService.cancel(id, activeEntity.id);
+      await loadPiece();
+    } catch (err) {
+      setError('Erreur lors de l\'annulation: ' + err.message);
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleReverse = async () => {
+    if (!piece) return;
+    setActionInProgress(true);
+    try {
+      const newPiece = await piecesService.reverse(id, activeEntity.id);
+      navigate(`/comptabilite/pieces/${newPiece.id}/edit`);
+    } catch (err) {
+      setError('Erreur lors de l\'extourne: ' + err.message);
+    } finally {
+      setActionInProgress(false);
     }
   };
 
   const handleDuplicate = async () => {
     if (!piece) return;
-    
+    setActionInProgress(true);
     try {
-      const newPiece = await piecesService.duplicate(id);
+      const newPiece = await piecesService.duplicate(id, activeEntity.id);
       navigate(`/comptabilite/pieces/${newPiece.id}/edit`);
     } catch (err) {
       setError('Erreur lors de la duplication: ' + err.message);
+    } finally {
+      setActionInProgress(false);
     }
   };
 
+  const handleNewPiece = () => {
+    navigate('/comptabilite/pieces/create');
+  };
+
+  const handleGoToList = () => {
+    navigate('/comptabilite/pieces');
+  };
+
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      day: 'numeric', month: 'long', year: 'numeric'
+    });
+  };
+
+  // Composant pour afficher une cellule avec contenu centré
+  const Cell = ({ children, className = "", align = "left" }) => {
+    const alignClass = align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
+    
+    if (!children || children === '—' || children === '') {
+      return (
+        <div className={`px-2 py-1 text-xs text-gray-400 text-center w-full ${className}`}>
+          —
+        </div>
+      );
+    }
+    
+    return (
+      <div className={`px-2 py-1 text-xs ${alignClass} ${className}`}>
+        {children}
+      </div>
+    );
+  };
+
+  const getStatusConfig = (status) => {
+    const config = {
+      draft: { text: 'Brouillon', cls: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+      posted: { text: 'Comptabilisé', cls: 'bg-green-100 text-green-800 border-green-200' },
+      cancel: { text: 'Annulé', cls: 'bg-red-100 text-red-800 border-red-200' },
+      canceled: { text: 'Annulé', cls: 'bg-red-100 text-red-800 border-red-200' }
+    };
+    return config[status] || { text: status || 'Inconnu', cls: 'bg-gray-100 text-gray-800 border-gray-200' };
+  };
+
+  if (!activeEntity) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Détail de la pièce comptable</div>
+          </div>
+          <div className="p-8">
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-6 text-center">
+              <FiAlertCircle className="text-yellow-600 mx-auto mb-3" size={32} />
+              <p className="text-yellow-800 font-medium text-lg mb-3">Aucune entité sélectionnée</p>
+              <p className="text-sm text-gray-600 mb-4">
+                Veuillez sélectionner une entité pour voir la pièce comptable.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
-      <div className="p-8 min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white">
-        <div className="text-center">
-          <div className="w-12 h-12 border-3 border-violet-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement de la pièce...</p>
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Détail de la pièce comptable</div>
+          </div>
+          <div className="p-8 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <p className="mt-4 text-gray-600 text-sm">Chargement de la pièce...</p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -90,381 +282,413 @@ export default function Show() {
 
   if (error || !piece) {
     return (
-      <div className="p-8 min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white">
-        <div className="max-w-md text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-red-100 to-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FiX className="w-8 h-8 text-red-600" />
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Détail de la pièce comptable</div>
           </div>
-          <h2 className="text-lg font-bold text-gray-900 mb-2">Erreur</h2>
-          <p className="text-gray-600 mb-4">{error || 'Pièce non trouvée'}</p>
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={loadPiece}
-              className="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-100 text-gray-800 rounded-lg hover:from-gray-300 hover:to-gray-200 font-medium"
-            >
-              Réessayer
-            </button>
-            <button
-              onClick={() => navigate('/comptabilite/pieces')}
-              className="px-4 py-2 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 font-medium"
-            >
-              Retour à la liste
-            </button>
+          <div className="p-8">
+            <div className="bg-red-50 border border-red-200 rounded p-6 text-center">
+              <FiX className="text-red-600 mx-auto mb-3" size={32} />
+              <p className="text-red-800 font-medium text-lg mb-2">Erreur</p>
+              <p className="text-sm text-gray-600 mb-4">{error || 'Pièce non trouvée'}</p>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={loadReferentials}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 text-sm hover:bg-gray-300"
+                >
+                  Réessayer
+                </button>
+                <Link
+                  to="/comptabilite/pieces"
+                  className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700"
+                >
+                  Retour à la liste
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'draft': return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'posted': return 'bg-green-100 text-green-800 border-green-200';
-      case 'canceled': return 'bg-red-100 text-red-800 border-red-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const totals = piece.lines?.reduce((acc, line) => ({
-    debit: acc.debit + (line.debit || 0),
-    credit: acc.credit + (line.credit || 0)
+  const statusConfig = getStatusConfig(piece.state || piece.status);
+  const totals = piece?.lines?.reduce((acc, line) => ({
+    debit: acc.debit + (parseFloat(line.debit) || 0),
+    credit: acc.credit + (parseFloat(line.credit) || 0)
   }), { debit: 0, credit: 0 }) || { debit: 0, credit: 0 };
+  const isBalanced = Math.abs(totals.debit - totals.credit) < 0.01;
+
+  // Enrichir les données avec les maps
+  const journal = piece.journal ? journalsMap[piece.journal] || journalsMap[piece.journal?.id] : null;
+  const devise = piece.currency ? devisesMap[piece.currency] || devisesMap[piece.currency?.id] : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
-      <div className="max-w-6xl mx-auto p-4">
-        {/* En-tête */}
-        <div className="mb-6">
-          <Link
-            to="/comptabilite/pieces"
-            className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-900 mb-3 text-sm hover:bg-gray-100 px-2 py-1 rounded transition-colors"
-          >
-            <FiArrowLeft size={14} />
-            Retour à la liste
-          </Link>
-          
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+
+        {/* ── En-tête ligne 1 (comme dans Create) ── */}
+        <div className="border-b border-gray-300 px-4 py-3">
+          <div className="flex items-start justify-between mb-2">
             <div className="flex items-start gap-3">
-              <div className="p-3 bg-gradient-to-br from-violet-600 to-violet-400 rounded-lg shadow-sm">
-                <FiFileText className="w-6 h-6 text-white" />
+              {/* Bouton Nouveau (comme dans Create) */}
+              <button
+                onClick={handleNewPiece}
+                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
+              >
+                <FiPlus size={12} /><span>Nouveau</span>
+              </button>
+              <div className="flex flex-col">
+                {/* Lien vers la liste (comme dans Create) */}
+                <div
+                  onClick={handleGoToList}
+                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600"
+                >
+                  Pièces comptables
+                </div>
+                {/* État et numéro de pièce (comme dans Create) */}
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm text-gray-700 font-medium">Etat :</span>
+                  <span className={`px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
+                    {statusConfig.text}
+                  </span>
+                  <span className="text-sm text-gray-700 font-medium ml-2">N° :</span>
+                  <span className="text-sm text-gray-900 font-medium">{piece.name || `#${piece.id}`}</span>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                  Pièce #{piece.number || `ID: ${piece.id}`}
-                </h1>
-                <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <span className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(piece.status)}`}>
-                    {piece.status === 'draft' ? 'Brouillon' : 
-                     piece.status === 'posted' ? 'Comptabilisé' : 
-                     piece.status === 'canceled' ? 'Annulé' : 'Inconnu'}
-                  </span>
-                  <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs font-mono rounded border border-gray-200">
-                    {piece.journal?.code || '---'}
-                  </span>
-                  {piece.date && (
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded border border-blue-200">
-                      {new Date(piece.date).toLocaleDateString('fr-FR')}
-                    </span>
-                  )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loadReferentials}
+                disabled={loading}
+                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1 disabled:opacity-50"
+                title="Actualiser"
+              >
+                <FiRefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                <span>Actualiser</span>
+              </button>
+              
+              <div className="relative">
+                <button
+                  onClick={() => setShowActionsMenu(!showActionsMenu)}
+                  className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
+                >
+                  <FiMoreVertical size={12} />
+                  <span>Actions</span>
+                </button>
+                
+                {showActionsMenu && (
+                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg z-50">
+                    <button
+                      onClick={() => { handleDuplicate(); setShowActionsMenu(false); }}
+                      disabled={actionInProgress}
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100 disabled:opacity-50"
+                    >
+                      <FiCopy size={12} />
+                      <span>Dupliquer</span>
+                    </button>
+                    
+                    {piece.state === 'posted' && (
+                      <button
+                        onClick={() => { handleReverse(); setShowActionsMenu(false); }}
+                        disabled={actionInProgress}
+                        className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100 disabled:opacity-50"
+                      >
+                        <FiRotateCcw size={12} />
+                        <span>Extourner</span>
+                      </button>
+                    )}
+                    
+                    <button
+                      onClick={() => window.print()}
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"
+                    >
+                      <FiPrinter size={12} />
+                      <span>Imprimer</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => { handleDelete(); setShowActionsMenu(false); }}
+                      disabled={deleting}
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 flex items-center gap-2 text-red-600 disabled:opacity-50"
+                    >
+                      <FiTrash2 size={12} />
+                      <span>Supprimer</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <Link
+                to={`/comptabilite/pieces/${id}/edit`}
+                className="px-3 py-1.5 bg-purple-600 text-white text-xs flex items-center gap-1 hover:bg-purple-700"
+              >
+                <FiEdit size={12} />
+                <span>Modifier</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* ── En-tête ligne 2 (comme dans Create) ── */}
+        <div className="border-b border-gray-300 px-4 py-3 flex items-center justify-between">
+          <button
+            onClick={piece.state === 'draft' ? handleValidate : handleCancel}
+            disabled={actionInProgress}
+            className={`px-4 py-2 font-medium text-xs flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed ${
+              piece.state === 'draft' 
+                ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            {piece.state === 'draft' ? <FiCheck size={12} /> : <FiX size={12} />}
+            <span>{piece.state === 'draft' ? 'Comptabiliser (Valider)' : 'Remettre en brouillon'}</span>
+          </button>
+          
+          <div className="flex items-center gap-2">
+            <div className={`px-3 py-1.5 text-xs font-medium border ${piece.state === 'draft' ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>
+              Brouillon
+            </div>
+            <div className={`px-3 py-1.5 text-xs font-medium border ${piece.state === 'posted' ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>
+              Comptabilisé
+            </div>
+          </div>
+        </div>
+
+        {/* ── Erreur ── */}
+        {error && (
+          <div className="px-4 py-2 bg-red-50 text-red-700 text-xs border-b border-red-200">
+            {error}
+          </div>
+        )}
+
+        {/* ── Informations pièce (comme dans Create) ── */}
+        <div className="px-4 py-3 border-b border-gray-300">
+          <div className="grid grid-cols-2 gap-4">
+            {/* Colonne gauche */}
+            <div className="space-y-2">
+              <div className="flex items-center" style={{ height: '26px' }}>
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Date comptable</label>
+                <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center justify-center" style={{ height: '26px' }}>
+                  <Cell>{formatDateForDisplay(piece.date)}</Cell>
+                </div>
+              </div>
+              <div className="flex items-center" style={{ height: '26px' }}>
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Référence</label>
+                <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center justify-center" style={{ height: '26px' }}>
+                  <Cell>{piece.ref}</Cell>
+                </div>
+              </div>
+              <div className="flex items-center" style={{ height: '26px' }}>
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Journal</label>
+                <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center justify-center" style={{ height: '26px' }}>
+                  <Cell>
+                    {journal ? `${journal.code} - ${journal.name}` : piece.journal}
+                  </Cell>
                 </div>
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
+            {/* Colonne droite */}
+            <div className="space-y-2">
+              <div className="flex items-center" style={{ height: '26px' }}>
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Date enregistrement</label>
+                <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center justify-center" style={{ height: '26px' }}>
+                  <Cell>{formatDateForDisplay(piece.created_at)}</Cell>
+                </div>
+              </div>
+              <div className="flex items-center" style={{ height: '26px' }}>
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Devise</label>
+                <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center justify-center" style={{ height: '26px' }}>
+                  <Cell>
+                    {devise ? `${devise.code}${devise.symbole ? ` (${devise.symbole})` : ''}` : piece.currency}
+                  </Cell>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Onglets ── */}
+        <div className="border-b border-gray-300">
+          <div className="px-4 flex">
+            {['ecritures', 'notes', 'pieces-jointes'].map(tab => (
               <button
-                onClick={loadPiece}
-                disabled={loading}
-                className="p-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                title="Actualiser"
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+                  activeTab === tab 
+                    ? 'border-purple-600 text-purple-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
               >
-                <FiRefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                {tab === 'ecritures' ? 'Écritures comptables' : 
+                 tab === 'notes' ? 'Notes' : 'Pièces jointes'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Contenu onglets ── */}
+        <div className="p-4">
+          {activeTab === 'ecritures' ? (
+            <>
+              {/* Lignes d'écriture */}
+              <div className="border border-gray-300 mb-3 overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Compte Général</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Partenaire</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Libellé</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Taxes</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Débit</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Crédit</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Date escompte</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Montant escompte</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {piece.lines && piece.lines.length > 0 ? (
+                      piece.lines.map((line, lineIndex) => {
+                        // Enrichir la ligne avec les données des maps
+                        const account = line.account ? accountsMap[line.account] || accountsMap[line.account?.id] : null;
+                        const linePartner = line.partner ? partnersMap[line.partner] || partnersMap[line.partner?.id] : null;
+                        
+                        return (
+                          <tr key={line.id || lineIndex} className="hover:bg-gray-50">
+                            <td className="border border-gray-300 p-1">
+                              <Cell>
+                                {account ? (
+                                  <>
+                                    <span className="font-medium">{account.code}</span>
+                                    {account.name && (
+                                      <span className="text-gray-500 ml-1">({account.name})</span>
+                                    )}
+                                  </>
+                                ) : null}
+                              </Cell>
+                            </td>
+                            <td className="border border-gray-300 p-1">
+                              <Cell>{linePartner?.displayName}</Cell>
+                            </td>
+                            <td className="border border-gray-300 p-1">
+                              <Cell>{line.name}</Cell>
+                            </td>
+                            <td className="border border-gray-300 p-1">
+                              <Cell>{line.tax_line?.name || line.taxes}</Cell>
+                            </td>
+                            <td className="border border-gray-300 p-1">
+                              <Cell align="right">
+                                {line.debit ? parseFloat(line.debit).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : null}
+                              </Cell>
+                            </td>
+                            <td className="border border-gray-300 p-1">
+                              <Cell align="right">
+                                {line.credit ? parseFloat(line.credit).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : null}
+                              </Cell>
+                            </td>
+                            <td className="border border-gray-300 p-1">
+                              <Cell align="center">{line.discount_date ? formatDateForDisplay(line.discount_date) : null}</Cell>
+                            </td>
+                            <td className="border border-gray-300 p-1">
+                              <Cell align="right">
+                                {line.discount_amount ? parseFloat(line.discount_amount).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : null}
+                              </Cell>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan="8" className="border border-gray-300 p-4">
+                          <Cell align="center">Aucune ligne d'écriture</Cell>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totaux */}
+              <div className={`px-4 py-2 flex justify-end gap-8 ${isBalanced ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                <div>
+                  <span className="text-xs text-gray-600 mr-2">Total Débit:</span>
+                  <span className="text-sm font-bold text-green-700">
+                    {totals.debit.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} XOF
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-600 mr-2">Total Crédit:</span>
+                  <span className="text-sm font-bold text-red-700">
+                    {totals.credit.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} XOF
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-600 mr-2">Solde:</span>
+                  <span className={`text-sm font-bold ${isBalanced ? 'text-green-700' : 'text-red-700'}`}>
+                    {Math.abs(totals.debit - totals.credit).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} XOF
+                    {isBalanced ? ' (Équilibré)' : ' (Non équilibré)'}
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : activeTab === 'notes' ? (
+            <div className="border border-gray-300 p-3">
+              <Cell align="left">{piece.notes}</Cell>
+            </div>
+          ) : (
+            <div className="border border-gray-300 p-6">
+              <div className="text-center py-8">
+                <FiFileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                <Cell align="center">Aucune pièce jointe</Cell>
+                <Cell align="center" className="text-gray-400">Cette pièce comptable n'a pas de documents joints</Cell>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Pied de page avec métadonnées ── */}
+        <div className="border-t border-gray-300 px-4 py-2 bg-gray-50 text-xs text-gray-500 flex justify-between">
+          <div>
+            Créé le {piece.created_at ? new Date(piece.created_at).toLocaleString('fr-FR') : '—'}
+            {piece.created_by && ` par ${piece.created_by.username || piece.created_by}`}
+          </div>
+          <div>
+            Modifié le {piece.updated_at ? new Date(piece.updated_at).toLocaleString('fr-FR') : '—'}
+            {piece.updated_by && ` par ${piece.updated_by.username || piece.updated_by}`}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Dialogue confirmation suppression ── */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Confirmer la suppression</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Êtes-vous sûr de vouloir supprimer la pièce "{piece.name || piece.id}" ? 
+              Cette action est irréversible.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowConfirmDialog(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50"
+              >
+                Annuler
               </button>
               <button
-                onClick={handleDuplicate}
-                className="p-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors"
-                title="Dupliquer"
-              >
-                <FiCopy size={16} />
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="p-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors"
-                title="Imprimer"
-              >
-                <FiPrinter size={16} />
-              </button>
-              {piece.status === 'draft' && (
-                <button
-                  onClick={handleValidate}
-                  className="px-3 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded hover:from-green-700 hover:to-green-600 text-sm font-medium flex items-center gap-1"
-                >
-                  <FiCheck size={14} />
-                  Valider
-                </button>
-              )}
-              <Link
-                to={`/comptabilite/pieces/${id}/edit`}
-                className="px-3 py-2 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 text-sm font-medium flex items-center gap-1"
-              >
-                <FiEdit size={14} />
-                Modifier
-              </Link>
-              <button
-                onClick={handleDelete}
+                onClick={confirmDelete}
                 disabled={deleting}
-                className="px-3 py-2 border border-red-300 bg-gradient-to-r from-red-50 to-white text-red-700 rounded hover:from-red-100 hover:to-red-50 text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+                className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-50"
               >
-                <FiTrash2 size={14} />
                 {deleting ? 'Suppression...' : 'Supprimer'}
               </button>
             </div>
           </div>
         </div>
-
-        {/* Erreur */}
-        {error && (
-          <div className="mb-4 p-3 bg-gradient-to-r from-red-50 to-red-100 border-l-2 border-red-500 rounded-r">
-            <div className="flex items-center gap-2">
-              <div className="p-1 bg-red-100 rounded">
-                <FiX className="text-red-600" size={12} />
-              </div>
-              <span className="text-red-800 text-sm font-medium">{error}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Totaux */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-gradient-to-r from-green-50 to-green-100/30 rounded-lg border border-green-200 p-3">
-            <div className="text-sm text-gray-600 mb-1">Total Débit</div>
-            <div className="text-xl font-bold text-green-700">
-              {totals.debit.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-            </div>
-          </div>
-          <div className="bg-gradient-to-r from-red-50 to-red-100/30 rounded-lg border border-red-200 p-3">
-            <div className="text-sm text-gray-600 mb-1">Total Crédit</div>
-            <div className="text-xl font-bold text-red-700">
-              {totals.credit.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-            </div>
-          </div>
-        </div>
-
-        {/* Informations principales */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Section principale */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Informations de la pièce */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 p-3">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-                  <h2 className="text-sm font-semibold text-gray-900">Informations de la pièce</h2>
-                </div>
-              </div>
-              
-              <div className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500">Journal</div>
-                    <div className="font-medium text-gray-900">
-                      {piece.journal?.code} - {piece.journal?.name}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500">Date</div>
-                    <div className="font-medium text-gray-900">
-                      {piece.date ? new Date(piece.date).toLocaleDateString('fr-FR') : '—'}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-1 md:col-span-2">
-                    <div className="text-xs font-medium text-gray-500">Libellé</div>
-                    <div className="font-medium text-gray-900 bg-gradient-to-r from-gray-50 to-white p-2 rounded border border-gray-200">
-                      {piece.label || '—'}
-                    </div>
-                  </div>
-                  
-                  {piece.reference && (
-                    <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500">Référence</div>
-                      <div className="font-medium text-gray-900">{piece.reference}</div>
-                    </div>
-                  )}
-                  
-                  {piece.partner && (
-                    <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500">Partenaire</div>
-                      <div className="font-medium text-gray-900">{piece.partner.name}</div>
-                    </div>
-                  )}
-                  
-                  <div className="space-y-1 md:col-span-2">
-                    <div className="text-xs font-medium text-gray-500">Statut</div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(piece.status)}`}>
-                        {piece.status === 'draft' ? 'Brouillon' : 
-                         piece.status === 'posted' ? 'Comptabilisé' : 
-                         piece.status === 'canceled' ? 'Annulé' : 'Inconnu'}
-                      </span>
-                      {piece.user_created && (
-                        <span className="text-xs text-gray-500">
-                          Créé par: {piece.user_created}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Lignes d'écriture */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-50 to-blue-100/30 border-b border-blue-200 p-3">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
-                  <h2 className="text-sm font-semibold text-gray-900">Lignes d'écriture</h2>
-                </div>
-              </div>
-              
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="p-3 text-left text-xs font-medium text-gray-500 uppercase">Compte</th>
-                      <th className="p-3 text-left text-xs font-medium text-gray-500 uppercase">Libellé</th>
-                      <th className="p-3 text-left text-xs font-medium text-gray-500 uppercase text-green-600">Débit</th>
-                      <th className="p-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">Crédit</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {piece.lines?.map((line, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="p-3">
-                          <div className="font-medium text-gray-900">{line.account?.code}</div>
-                          <div className="text-xs text-gray-500">{line.account?.name}</div>
-                        </td>
-                        <td className="p-3 text-sm text-gray-700">{line.label || '—'}</td>
-                        <td className="p-3 text-sm font-medium text-green-600">
-                          {line.debit ? line.debit.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : '—'}
-                        </td>
-                        <td className="p-3 text-sm font-medium text-red-600">
-                          {line.credit ? line.credit.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-gray-50">
-                    <tr>
-                      <td colSpan="2" className="p-3 text-right font-medium">Totaux :</td>
-                      <td className="p-3 font-bold text-green-700 border-t">
-                        {totals.debit.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                      </td>
-                      <td className="p-3 font-bold text-red-700 border-t">
-                        {totals.credit.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                      </td>
-                    </tr>
-                    <tr>
-                      <td colSpan="2" className="p-3 text-right font-medium">Différence :</td>
-                      <td colSpan="2" className={`p-3 font-bold ${Math.abs(totals.debit - totals.credit) < 0.01 ? 'text-green-700' : 'text-red-700'}`}>
-                        {Math.abs(totals.debit - totals.credit).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                        {Math.abs(totals.debit - totals.credit) < 0.01 ? ' (Équilibré)' : ' (Non équilibré)'}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Section latérale */}
-          <div className="space-y-4">
-            {/* Actions */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-r from-violet-50 to-violet-100/30 border-b border-violet-200 p-3">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-                  <h2 className="text-sm font-semibold text-gray-900">Actions</h2>
-                </div>
-              </div>
-              
-              <div className="p-3">
-                <div className="space-y-2">
-                  <Link
-                    to={`/comptabilite/pieces/${id}/edit`}
-                    className="w-full px-3 py-2 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 text-sm font-medium text-center block"
-                  >
-                    Modifier
-                  </Link>
-                  <button
-                    onClick={handleDuplicate}
-                    className="w-full px-3 py-2 border border-gray-300 bg-gradient-to-r from-gray-50 to-white text-gray-700 rounded hover:from-gray-100 hover:to-gray-50 text-sm font-medium"
-                  >
-                    Dupliquer
-                  </button>
-                  {piece.status === 'draft' && (
-                    <button
-                      onClick={handleValidate}
-                      className="w-full px-3 py-2 border border-green-300 bg-gradient-to-r from-green-50 to-white text-green-700 rounded hover:from-green-100 hover:to-green-50 text-sm font-medium"
-                    >
-                      Valider
-                    </button>
-                  )}
-                  <button
-                    onClick={() => window.print()}
-                    className="w-full px-3 py-2 border border-gray-300 bg-gradient-to-r from-gray-50 to-white text-gray-700 rounded hover:from-gray-100 hover:to-gray-50 text-sm font-medium"
-                  >
-                    Imprimer
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="w-full px-3 py-2 border border-red-300 bg-gradient-to-r from-red-50 to-white text-red-700 rounded hover:from-red-100 hover:to-red-50 text-sm font-medium disabled:opacity-50"
-                  >
-                    {deleting ? 'Suppression...' : 'Supprimer'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Métadonnées */}
-            <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg border border-gray-200 shadow-sm p-3">
-              <div className="flex items-center gap-1.5 mb-2">
-                <FiFileText className="text-gray-400" size={14} />
-                <h3 className="text-sm font-semibold text-gray-900">Métadonnées</h3>
-              </div>
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">ID :</span>
-                  <span className="font-medium">{piece.id}</span>
-                </div>
-                {piece.created_at && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Créé le :</span>
-                    <span className="font-medium">
-                      {new Date(piece.created_at).toLocaleDateString('fr-FR')}
-                    </span>
-                  </div>
-                )}
-                {piece.updated_at && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Modifié le :</span>
-                    <span className="font-medium">
-                      {new Date(piece.updated_at).toLocaleDateString('fr-FR')}
-                    </span>
-                  </div>
-                )}
-                <div className="mt-2 pt-2 border-t border-gray-200">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Affiché à</span>
-                    <span className="font-medium">{new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

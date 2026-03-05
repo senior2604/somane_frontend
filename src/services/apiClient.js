@@ -1,7 +1,7 @@
 // src/services/apiClient.js
 import { API_CONFIG } from '../config/api';
 import { authService } from './authService';
-import { getActiveEntity } from './entityUtils'; // ← AJOUTÉ
+import { getActiveEntity } from './entityUtils';
 
 class ApiClient {
   constructor() {
@@ -9,6 +9,59 @@ class ApiClient {
     this.baseURL = this.normalizeBaseURL(API_CONFIG.BASE_URL);
     console.log('📡 API Client initialisé avec URL:', this.baseURL);
     this.refreshPromise = null;
+    
+    // Endpoints qui ne nécessitent PAS d'entité
+    this.nonEntityEndpoints = [
+      'auth/',
+      'login/',
+      'register/',
+      'pays/',
+      'devises/',
+      'subdivisions/',
+      'villes/',
+      'langues/',
+      'banques/',
+      'banques-partenaires/',      // ✅ Maintenant sans core/
+      'taux-change/',
+      'groupes/',
+      'modules/',
+      'permissions/',
+      'api/schema/',
+      'swagger/',
+      'redoc/'
+    ];
+    
+    // Endpoints publics (sans authentification)
+    this.publicEndpoints = [
+      'auth/',
+      'login/',
+      'register/',
+      'pays/',
+      'api/schema/',
+      'swagger/',
+      'redoc/'
+    ];
+    
+    // Mapping des corrections d'endpoints courants
+    this.endpointCorrections = {
+      'core/banque-partenaires/': 'core/banques-partenaires/',
+      'core/banque/': 'core/banques/',
+      'compta/journal/': 'compta/journals/',
+      'banque-partenaires/': 'banques-partenaires/',     // ✅ Corrigé : sans core/
+      // 'banques-partenaires/': 'core/banques-partenaires/',  // ❌ SUPPRIMÉ
+    };
+    
+    // Liste des endpoints qui nécessitent le préfixe 'core/'
+    this.coreEndpoints = [
+      'utilisateurentites/',
+      'parametres/',
+      'journals/',
+      'taches/',
+      'informations/',
+      'modules/',
+      'permissions/',
+      'groupes/',
+    ];
   }
 
   /**
@@ -17,12 +70,10 @@ class ApiClient {
   normalizeBaseURL(url) {
     let normalized = url;
     
-    // Ajouter le protocole si manquant
     if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
       normalized = 'http://' + normalized;
     }
     
-    // Assurer qu'elle se termine par un slash
     if (!normalized.endsWith('/')) {
       normalized = normalized + '/';
     }
@@ -31,21 +82,74 @@ class ApiClient {
   }
 
   /**
+   * Vérifie si un endpoint nécessite une entité
+   */
+  requiresEntity(endpoint) {
+    return !this.nonEntityEndpoints.some(nonEntityEndpoint => 
+      endpoint.startsWith(nonEntityEndpoint)
+    );
+  }
+
+  /**
+   * Corrige automatiquement les endpoints mal écrits
+   */
+  correctEndpoint(endpoint) {
+    let corrected = endpoint;
+    
+    // Nettoyer d'abord les slashes superflus
+    if (corrected.startsWith('/')) {
+      corrected = corrected.substring(1);
+    }
+    
+    // Appliquer les corrections connues
+    Object.entries(this.endpointCorrections).forEach(([wrong, correct]) => {
+      if (corrected === wrong || corrected === wrong.replace(/\/$/, '')) {
+        console.warn(`🔄 Correction automatique: "${wrong}" → "${correct}"`);
+        corrected = correct;
+      }
+    });
+    
+    // ✅ NOUVEAU : Ajouter automatiquement 'core/' pour certains endpoints
+    const needsCore = this.coreEndpoints.some(prefix => 
+      corrected.startsWith(prefix) && !corrected.startsWith('core/')
+    );
+    
+    if (needsCore) {
+      corrected = 'core/' + corrected;
+      console.warn(`🔄 Ajout automatique du préfixe core/: "${endpoint}" → "${corrected}"`);
+    }
+    
+    // Correction générique: remplacer les underscores par des tirets
+    if (corrected.includes('banque_')) {
+      corrected = corrected.replace(/banque_/g, 'banques-');
+      console.warn(`🔄 Correction auto (underscore → tiret): "${endpoint}" → "${corrected}"`);
+    }
+    
+    return corrected;
+  }
+
+  /**
    * Méthode générique pour effectuer des requêtes HTTP
-   * Gère automatiquement l'authentification et le rafraîchissement des tokens
    */
   async request(endpoint, options = {}) {
-    // Normaliser l'endpoint (supprimer le slash de début si présent)
+    // Sauvegarder l'original pour les logs
+    const originalEndpoint = endpoint;
+    
+    // Corriger l'endpoint si nécessaire
+    endpoint = this.correctEndpoint(endpoint);
+    
+    // Supprimer le slash de début si présent
     if (endpoint.startsWith('/')) {
       endpoint = endpoint.substring(1);
-      console.warn(`⚠️ Endpoint corrigé: supprimé le slash de début. Nouvel endpoint: ${endpoint}`);
+      console.warn(`⚠️ Slash de début supprimé. Nouvel endpoint: ${endpoint}`);
     }
     
     const url = `${this.baseURL}${endpoint}`;
     console.log('📤 API Request:', {
       url,
       method: options.method || 'GET',
-      endpoint: endpoint
+      endpoint: endpoint,
+      originalEndpoint: originalEndpoint !== endpoint ? originalEndpoint : undefined
     });
     
     // Récupérer le token actuel
@@ -65,20 +169,19 @@ class ApiClient {
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
       console.log('🔑 Token JWT ajouté à la requête');
-    } else {
-      console.warn(`⚠️ Aucun token JWT trouvé pour l'endpoint: ${endpoint}`);
-      
-      // Pour les endpoints publics, on continue sans token
-      if (this.isPublicEndpoint(endpoint)) {
-        console.log(`✅ Endpoint public ${endpoint} - requête sans token`);
-      }
     }
 
-    // 🔑 AJOUT : Injecter l'entité active
-    const activeEntity = getActiveEntity();
-    if (activeEntity) {
-      config.headers['X-Entity-ID'] = activeEntity.id;
-      console.log(`🏢 Entité active injectée: ${activeEntity.id} (${activeEntity.raison_sociale})`);
+    // N'injecter l'entité QUE pour les endpoints qui en ont besoin
+    if (this.requiresEntity(endpoint)) {
+      const activeEntity = getActiveEntity();
+      if (activeEntity) {
+        config.headers['X-Entity-ID'] = activeEntity.id;
+        console.log(`🏢 Entité active injectée: ${activeEntity.id} (${activeEntity.raison_sociale})`);
+      } else {
+        console.log(`⚠️ Endpoint ${endpoint} nécessite une entité mais aucune n'est active`);
+      }
+    } else {
+      console.log(`⏭️ Endpoint ${endpoint} ne nécessite pas d'entité`);
     }
 
     try {
@@ -87,50 +190,49 @@ class ApiClient {
       
       // Gestion spécifique des codes d'erreur
       switch (response.status) {
-        case 401: // Unauthorized
+        case 401:
           console.warn(`🔐 401 Unauthorized sur ${endpoint}`);
-          
-          // Essayer de rafraîchir le token si possible
           if (token && await this.tryRefreshToken()) {
-            console.log('🔄 Token rafraîchi, réessai de la requête...');
+            console.log('🔄 Token rafraîchi, réessai...');
             return await this.request(endpoint, options);
           }
-          
-          // Si le refresh échoue ou si pas de token initial
           authService.logout();
-          
-          // Ne rediriger que si ce n'est pas une page publique
           if (!this.isPublicEndpoint(endpoint)) {
             setTimeout(() => {
               window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
             }, 1000);
           }
-          
           throw {
             status: 401,
-            message: 'Session expirée ou non authentifiée',
+            message: 'Session expirée',
             endpoint: endpoint,
             url: url
           };
           
-        case 403: // Forbidden
+        case 403:
           console.warn(`🚫 403 Forbidden sur ${endpoint}`);
-          // Vérifier si c'est lié à l'entité
-          if (activeEntity) {
-            console.error(`❌ Accès refusé à l'entité ID: ${activeEntity.id}`);
-            // Optionnel : déconnecter l'entité
-            localStorage.removeItem('currentEntite');
-          }
           throw {
             status: 403,
-            message: 'Accès refusé - Permissions insuffisantes',
+            message: 'Accès refusé',
             endpoint: endpoint,
             url: url
           };
           
-        case 404: // Not Found
+        case 404:
           console.warn(`🔍 404 Not Found sur ${endpoint}`);
           console.log(`URL complète: ${url}`);
+          
+          // ✅ CORRIGÉ : Vérifier si c'est un module optionnel
+          const isOptionalModule = 
+            endpoint.includes('banques-partenaires') || 
+            endpoint.includes('taux-change') ||
+            endpoint.includes('banques');
+            
+          if (isOptionalModule) {
+            console.warn(`ℹ️ Module optionnel non disponible: ${endpoint} (retourne tableau vide)`);
+            return [];
+          }
+          
           throw {
             status: 404,
             message: `Ressource non trouvée: ${endpoint}`,
@@ -138,7 +240,7 @@ class ApiClient {
             url: url
           };
           
-        case 500: // Internal Server Error
+        case 500:
           console.error(`🔥 500 Server Error sur ${endpoint}`);
           throw {
             status: 500,
@@ -148,16 +250,13 @@ class ApiClient {
           };
       }
 
-      // Si la réponse n'est pas OK (autres erreurs)
       if (!response.ok) {
-        // Essayer de récupérer le message d'erreur du serveur
         let errorMessage = `HTTP error! status: ${response.status}`;
         try {
           const errorData = await response.json();
           errorMessage = errorData.detail || errorData.message || errorMessage;
-          console.log('📄 Détails erreur serveur:', errorData);
+          console.error('📄 Détails erreur serveur:', errorData);
         } catch (e) {
-          // Si pas de JSON, utiliser le texte brut
           const text = await response.text();
           if (text) errorMessage = text;
         }
@@ -170,40 +269,45 @@ class ApiClient {
         };
       }
 
-      // Gestion des réponses vides (204 No Content)
       if (response.status === 204) {
         console.log(`✅ 204 No Content pour ${endpoint}`);
         return null;
       }
 
-      // Parser la réponse JSON
       try {
         const data = await response.json();
         console.log(`✅ Réponse JSON reçue pour ${endpoint}:`, 
-          Array.isArray(data) ? `${data.length} items` : 'Object reçu');
+          Array.isArray(data) ? `${data.length} items` : 'Objet reçu');
         return data;
       } catch (e) {
         console.error(`❌ Erreur parsing JSON sur ${endpoint}:`, e);
         throw {
           status: response.status,
-          message: 'Réponse serveur invalide (JSON mal formé)',
+          message: 'JSON invalide',
           endpoint: endpoint,
           url: url
         };
       }
       
     } catch (error) {
+      // ✅ CORRIGÉ : Gestion des erreurs pour modules optionnels
+      if (error.status === 404 && 
+          (endpoint.includes('banques-partenaires') || 
+           endpoint.includes('taux-change') ||
+           endpoint.includes('banques'))) {
+        console.warn(`ℹ️ Module optionnel non disponible: ${endpoint} (retourne tableau vide)`);
+        return [];
+      }
+      
       console.error(`❌ API Request failed ${endpoint}:`, error);
       
-      // Si l'erreur est déjà formatée, la renvoyer telle quelle
       if (error.status && error.message) {
         throw error;
       }
       
-      // Sinon, formater l'erreur
       throw {
         status: 0,
-        message: error.message || 'Erreur réseau ou serveur indisponible',
+        message: error.message || 'Erreur réseau',
         endpoint: endpoint,
         url: url,
         originalError: error
@@ -211,11 +315,7 @@ class ApiClient {
     }
   }
 
-  /**
-   * Tente de rafraîchir le token JWT
-   */
   async tryRefreshToken() {
-    // Éviter plusieurs tentatives de rafraîchissement simultanées
     if (this.refreshPromise) {
       return await this.refreshPromise;
     }
@@ -230,11 +330,9 @@ class ApiClient {
           return false;
         }
         
-        // IMPORTANT: Corrigez l'URL - enlever le double slash
         const refreshUrl = `${this.baseURL.replace(/\/$/, '')}/auth/jwt/refresh/`;
         console.log('URL de rafraîchissement:', refreshUrl);
         
-        // Appel au endpoint de rafraîchissement
         const response = await fetch(refreshUrl, {
           method: 'POST',
           headers: {
@@ -249,11 +347,11 @@ class ApiClient {
           console.log('✅ Token rafraîchi avec succès');
           return true;
         } else {
-          console.warn('❌ Échec du rafraîchissement du token', response.status);
+          console.warn('❌ Échec du rafraîchissement', response.status);
           return false;
         }
       } catch (error) {
-        console.error('❌ Erreur lors du rafraîchissement du token:', error);
+        console.error('❌ Erreur refresh token:', error);
         return false;
       } finally {
         this.refreshPromise = null;
@@ -263,31 +361,13 @@ class ApiClient {
     return await this.refreshPromise;
   }
 
-  /**
-   * Vérifie si un endpoint est public (ne nécessite pas d'authentification)
-   */
   isPublicEndpoint(endpoint) {
-    const publicEndpoints = [
-      'auth/',
-      'login/',
-      'register/',
-      'pays/',
-      'compta/taxes/',
-      'compta/accounts/',
-      'api/schema/',
-      'swagger/',
-      'redoc/'
-    ];
-    
-    return publicEndpoints.some(publicEndpoint => 
+    return this.publicEndpoints.some(publicEndpoint => 
       endpoint.startsWith(publicEndpoint)
     );
   }
 
-  /**
-   * Méthodes raccourcies pour les verbes HTTP
-   */
-  
+  // Méthodes raccourcies
   get(endpoint, options = {}) {
     return this.request(endpoint, { ...options, method: 'GET' });
   }
@@ -320,9 +400,6 @@ class ApiClient {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
 
-  /**
-   * Méthode pour uploader des fichiers
-   */
   upload(endpoint, formData, options = {}) {
     const config = {
       ...options,
@@ -333,15 +410,10 @@ class ApiClient {
       body: formData,
     };
     
-    // Supprimer Content-Type pour que le navigateur le définisse avec le boundary
     delete config.headers['Content-Type'];
-    
     return this.request(endpoint, config);
   }
 
-  /**
-   * Méthode pour télécharger des fichiers
-   */
   download(endpoint, options = {}) {
     const config = {
       ...options,
@@ -351,13 +423,11 @@ class ApiClient {
       },
     };
     
-    // Récupérer le token
     const token = authService.getToken();
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // Normaliser l'endpoint
     if (endpoint.startsWith('/')) {
       endpoint = endpoint.substring(1);
     }
@@ -365,16 +435,11 @@ class ApiClient {
     return fetch(`${this.baseURL}${endpoint}`, config);
   }
   
-  /**
-   * Méthode pour tester la connexion
-   */
   async testConnection() {
     console.log('🔧 Test de connexion API...');
-    console.log('Base URL:', this.baseURL);
-    
     try {
       const response = await fetch(this.baseURL);
-      console.log('Status racine:', response.status, response.statusText);
+      console.log('Status racine:', response.status);
       return response.ok;
     } catch (error) {
       console.error('❌ Erreur connexion:', error);
@@ -382,28 +447,16 @@ class ApiClient {
     }
   }
   
-  /**
-   * Méthode pour obtenir la configuration actuelle
-   */
   getConfig() {
     return {
       baseURL: this.baseURL,
       hasToken: !!authService.getToken(),
-      endpoints: {
-        journals: `${this.baseURL}compta/journals/`,
-        accounts: `${this.baseURL}compta/accounts/`,
-        moves: `${this.baseURL}compta/moves/`
-      }
     };
   }
 }
 
-// Créer une instance unique (Singleton)
 export const apiClient = new ApiClient();
 
-/**
- * Hook personnalisé pour utiliser l'apiClient dans les composants React
- */
 export const useApiClient = () => {
   return {
     get: apiClient.get.bind(apiClient),

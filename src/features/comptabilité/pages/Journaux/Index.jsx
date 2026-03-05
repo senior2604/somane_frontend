@@ -20,6 +20,7 @@ export default function JournauxPage() {
   const [journalTypes, setJournalTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedJournalIds, setSelectedJournalIds] = useState([]);
   const [activeRowId, setActiveRowId] = useState(null);
   const [entityFilter, setEntityFilter] = useState(activeEntity?.id || '');
   const [showEntityFilter, setShowEntityFilter] = useState(false);
@@ -56,16 +57,34 @@ export default function JournauxPage() {
       const journauxData = journauxRes || [];
       const typesData = typesRes || [];
 
-      const enrichedJournaux = journauxData.map(journal => ({
-        ...journal,
-        type: typesData.find(t => t.id === journal.type) || 
-              { id: journal.type, name: 'Inconnu', code: '??' }
-      }));
+      // 🔥 CORRECTION : Gestion robuste du champ type (objet ou ID)
+      const enrichedJournaux = journauxData.map(journal => {
+        // Extraire l'ID du type intelligemment
+        let typeId = null;
+        
+        if (journal.type && typeof journal.type === 'object') {
+          // Cas où type est un objet complet
+          typeId = journal.type.id;
+        } else {
+          // Cas où type est directement l'ID
+          typeId = journal.type;
+        }
+        
+        // Trouver le type correspondant
+        const foundType = typesData.find(t => t.id === typeId);
+        
+        return {
+          ...journal,
+          type: foundType || { id: typeId, name: 'Inconnu', code: '??' }
+        };
+      });
 
+      console.log('✅ Journaux enrichis:', enrichedJournaux.length, 'items');
       setJournaux(enrichedJournaux);
       setFilteredJournaux(enrichedJournaux);
       setJournalTypes(typesData);
       setActiveRowId(null);
+      setSelectedJournalIds([]);
     } catch (err) {
       console.error('Erreur chargement journaux:', err);
       setError(err.message || 'Impossible de charger les journaux.');
@@ -86,7 +105,7 @@ export default function JournauxPage() {
     loadData(entityId);
   };
 
-  // Gestion de la suppression
+  // Gestion de la suppression individuelle
   const handleDelete = async (journal) => {
     if (!window.confirm(`Supprimer le journal "${journal.name}" ?`)) return;
     
@@ -95,6 +114,60 @@ export default function JournauxPage() {
       loadData(entityFilter);
     } catch (err) {
       alert('Erreur suppression: ' + (err.message || 'Erreur inconnue'));
+    }
+  };
+
+  // Gestion des actions groupées
+  const handleBulkDelete = async () => {
+    if (selectedJournalIds.length === 0) {
+      alert('Aucun journal sélectionné');
+      return;
+    }
+    
+    if (!window.confirm(`Supprimer ${selectedJournalIds.length} journal/aux ?`)) return;
+    
+    try {
+      for (const id of selectedJournalIds) {
+        await apiClient.delete(`/compta/journals/${id}/`);
+      }
+      setSelectedJournalIds([]);
+      loadData(entityFilter);
+    } catch (err) {
+      alert('Erreur suppression groupée: ' + (err.message || 'Erreur inconnue'));
+    }
+  };
+
+  const handleBulkActivate = async () => {
+    if (selectedJournalIds.length === 0) {
+      alert('Aucun journal sélectionné');
+      return;
+    }
+    
+    try {
+      for (const id of selectedJournalIds) {
+        await apiClient.patch(`/compta/journals/${id}/`, { active: true });
+      }
+      setSelectedJournalIds([]);
+      loadData(entityFilter);
+    } catch (err) {
+      alert('Erreur activation groupée: ' + (err.message || 'Erreur inconnue'));
+    }
+  };
+
+  const handleBulkDeactivate = async () => {
+    if (selectedJournalIds.length === 0) {
+      alert('Aucun journal sélectionné');
+      return;
+    }
+    
+    try {
+      for (const id of selectedJournalIds) {
+        await apiClient.patch(`/compta/journals/${id}/`, { active: false });
+      }
+      setSelectedJournalIds([]);
+      loadData(entityFilter);
+    } catch (err) {
+      alert('Erreur désactivation groupée: ' + (err.message || 'Erreur inconnue'));
     }
   };
 
@@ -196,47 +269,9 @@ export default function JournauxPage() {
           {journal.active ? 'Actif' : 'Inactif'}
         </span>
       )
-    },
-    { 
-      id: 'actions', 
-      label: 'Actions',
-      width: '140px',
-      render: (journal) => (
-        <div className="flex gap-1">
-          <button 
-            onClick={e => { 
-              e.stopPropagation(); 
-              navigate(`/comptabilite/journaux/${journal.id}`); 
-            }} 
-            className="p-1.5 bg-gray-100 rounded hover:bg-gray-200 transition"
-            title="Voir le détail"
-          >
-            <FiEye size={14} />
-          </button>
-          <button 
-            onClick={e => { 
-              e.stopPropagation(); 
-              navigate(`/comptabilite/journaux/${journal.id}/edit`); 
-            }} 
-            className="p-1.5 bg-violet-100 rounded hover:bg-violet-200 transition"
-            title="Modifier"
-          >
-            <FiEdit2 size={14} />
-          </button>
-          <button 
-            onClick={e => { 
-              e.stopPropagation(); 
-              handleDelete(journal); 
-            }} 
-            className="p-1.5 bg-red-100 rounded hover:bg-red-200 transition"
-            title="Supprimer"
-          >
-            <FiTrash2 size={14} />
-          </button>
-        </div>
-      )
     }
-  ], [navigate, handleDelete]);
+    // Colonne ACTIONS SUPPRIMÉE
+  ], []);
 
   // Export
   const handleExport = (format) => {
@@ -261,8 +296,8 @@ export default function JournauxPage() {
     navigate('/comptabilite/journaux/create');
   };
 
-  // Bouton de filtre d'entité (seulement si plusieurs entités)
-  const renderEntityFilter = () => {
+  // Composant de filtre d'entité à intégrer dans le header du tableau
+  const EntityFilterButton = () => {
     if (!Array.isArray(entities) || entities.length <= 1) return null;
 
     return (
@@ -315,7 +350,7 @@ export default function JournauxPage() {
         <div className="max-w-7xl mx-auto">
           <div className="bg-white border border-gray-300 rounded-sm">
             <div className="border-b border-gray-300 px-4 py-3">
-              <div className="text-lg font-bold text-gray-900"></div>
+              <div className="text-lg font-bold text-gray-900">Journaux Comptables</div>
             </div>
             <div className="p-8">
               <div className="bg-yellow-50 border border-yellow-200 rounded p-6 text-center">
@@ -337,28 +372,42 @@ export default function JournauxPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto p-4">
-        <div className="mb-4 flex justify-end">
-          {renderEntityFilter()}
-        </div>
-
         <ComptabiliteTableContainer
           data={filteredJournaux}
           loading={loading}
           error={error}
-          title=""
+          title="Journaux Comptables"
           moduleType="journaux"
           columns={columns}
-          defaultVisibleColumns={['code', 'nom', 'type', 'compte', 'banque', 'statut', 'actions']}
+          defaultVisibleColumns={['code', 'nom', 'type', 'compte', 'banque', 'statut']}
+          onSelectionChange={setSelectedJournalIds}
           onRefresh={() => loadData(entityFilter)}
           onExport={handleExport}
           onCreate={handleCreate}
           onSearch={handleSearch}
-          activeRowId={activeRowId}
-          onRowClick={(journal) => {
-            setActiveRowId(journal.id);
-            navigate(`/comptabilite/journaux/${journal.id}/edit`);
+          // Actions groupées
+          onDelete={handleBulkDelete}
+          onModify={() => {
+            if (selectedJournalIds.length === 1) {
+              navigate(`/comptabilite/journaux/${selectedJournalIds[0]}/edit`);
+            } else {
+              alert('Veuillez sélectionner un seul journal à modifier');
+            }
           }}
-          onView={(journal) => navigate(`/comptabilite/journaux/${journal.id}`)}
+          // Actions personnalisées via le menu
+          onConfirm={handleBulkActivate}
+          onCancel={handleBulkDeactivate}
+          activeRowId={activeRowId}
+          onRowClick={(journal, event) => {
+            // Clic simple : met à jour la ligne active
+            setActiveRowId(journal.id);
+            // La sélection multiple est gérée dans le conteneur avec Ctrl/Shift
+          }}
+          onRowDoubleClick={(journal) => {
+            // Double-clic : navigation vers la vue détail
+            navigate(`/comptabilite/journaux/${journal.id}`);
+          }}
+          // onView supprimé (remplacé par double-clic)
           itemsPerPage={10}
           emptyState={journaux.length === 0 ? {
             title: 'Aucun journal comptable',
@@ -368,6 +417,8 @@ export default function JournauxPage() {
               onClick: handleCreate
             }
           } : null}
+          // Ajout du bouton de filtre d'entité dans le header
+          headerExtra={<EntityFilterButton />}
         />
       </div>
     </div>

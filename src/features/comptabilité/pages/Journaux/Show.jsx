@@ -1,40 +1,85 @@
-import React, { useState, useEffect } from 'react';
+// C:\Users\IBM\Documents\somane_frontend\src\features\comptabilité\pages\Journaux\Show.jsx
+
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
-  FiArrowLeft, 
+  FiPlus,
   FiEdit, 
   FiTrash2, 
-  FiCheck, 
   FiX,
-  FiDollarSign,
   FiBriefcase,
-  FiShoppingCart,
-  FiTrendingUp,
-  FiBook,
+  FiMail,
   FiInfo,
-  FiRefreshCw,
-  FiFileText,
-  FiPlus
+  FiAlertCircle,
+  FiCopy,
+  FiRotateCcw,
+  FiSettings
 } from "react-icons/fi";
 import { useParams, useNavigate } from 'react-router-dom';
-import { journauxService } from "../../services";
+import { journauxService, comptesService } from "../../services";
+import { useEntity } from '../../../../context/EntityContext';
+
+// ==========================================
+// COMPOSANT TOOLTIP
+// ==========================================
+const Tooltip = ({ children, text, position = 'top' }) => {
+  const [show, setShow] = useState(false);
+  
+  return (
+    <div className="relative inline-block">
+      <div
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        {children}
+      </div>
+      {show && (
+        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
+          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
+          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
+          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
+          'left-full top-1/2 transform -translate-y-1/2 ml-1'
+        }`}>
+          {text}
+          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
+            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
+            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
+            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
+            'right-full top-1/2 -translate-y-1/2 -mr-1'
+          }`} />
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function Show() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { activeEntity } = useEntity();
+  
   const [journal, setJournal] = useState(null);
+  const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [activeTab, setActiveTab] = useState('comptable');
+  const actionsMenuRef = useRef(null);
+  
+  const initialLoadDone = useRef(false);
 
-  useEffect(() => {
-    loadJournal();
-  }, [id]);
-
-  const loadJournal = async () => {
+  // Chargement du journal (prioritaire)
+  const loadJournal = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      console.log('📦 Chargement du journal ID:', id);
+      
       const journalData = await journauxService.getById(id);
+      
+      console.log('📦 Données brutes reçues de l\'API:', journalData);
       setJournal(journalData);
     } catch (err) {
       if (err.status === 404) {
@@ -49,15 +94,125 @@ export default function Show() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  // Chargement des comptes en arrière-plan
+  const loadAccounts = useCallback(async () => {
+    if (accounts.length > 0) return; // Déjà chargés
+    
+    setLoadingAccounts(true);
+    try {
+      console.log('📊 Début chargement des comptes...');
+      const response = await comptesService.getAll();
+      setAccounts(response || []);
+      console.log('📊 Comptes chargés avec succès:', response?.length || 0);
+    } catch (err) {
+      console.warn('⚠️ Erreur chargement comptes:', err);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  }, [accounts.length]);
+
+  // Chargement initial
+  useEffect(() => {
+    if (initialLoadDone.current) {
+      console.log('⏭️ Chargement déjà effectué, ignoré');
+      return;
+    }
+    
+    initialLoadDone.current = true;
+    console.log('🚀 Chargement initial des données');
+    
+    // Charge d'abord le journal (prioritaire)
+    loadJournal().then(() => {
+      // Puis charge les comptes en arrière-plan
+      loadAccounts();
+    });
+    
+    return () => {
+      console.log('🧹 Nettoyage du composant');
+    };
+  }, [loadJournal, loadAccounts]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target)) {
+        setShowActionsMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Créer un Map pour une recherche plus rapide des comptes
+  const accountsMap = useMemo(() => {
+    const map = new Map();
+    accounts.forEach(account => {
+      map.set(account.id, account);
+    });
+    return map;
+  }, [accounts]);
+
+  // Fonction pour obtenir le libellé d'un compte à partir de son ID (optimisée)
+  const getAccountLabel = useCallback((accountId) => {
+    if (!accountId) return null;
+    
+    // Chercher dans le Map d'abord
+    const account = accountsMap.get(accountId);
+    if (account) {
+      return `${account.code} - ${account.name}`;
+    }
+    
+    return null;
+  }, [accountsMap]);
+
+  // Extraire les IDs des comptes une seule fois
+  const accountIds = useMemo(() => {
+    if (!journal) return {};
+    
+    return {
+      default: journal.default_account?.id || journal.default_account_id,
+      profit: journal.profit_account?.id || journal.profit_account_id || journal.profit_account,
+      loss: journal.loss_account?.id || journal.loss_account_id || journal.loss_account,
+      suspense: journal.suspense_account?.id || journal.suspense_account_id || journal.suspense_account,
+      suspenseIn: journal.suspense_in_account?.id || journal.suspense_in_account_id,
+      suspenseOut: journal.suspense_out_account?.id || journal.suspense_out_account_id
+    };
+  }, [journal]);
+
+  // Obtenir les libellés (optimisé)
+  const labels = useMemo(() => {
+    if (!journal) return {};
+    
+    return {
+      default: getAccountLabel(accountIds.default) || 
+        (journal.default_account && typeof journal.default_account === 'object' ? 
+          `${journal.default_account.code || ''} - ${journal.default_account.name || ''}`.trim() : null),
+      
+      profit: getAccountLabel(accountIds.profit) || 
+        (journal.profit_account && typeof journal.profit_account === 'object' ? 
+          `${journal.profit_account.code || ''} - ${journal.profit_account.name || ''}`.trim() : null),
+      
+      loss: getAccountLabel(accountIds.loss) || 
+        (journal.loss_account && typeof journal.loss_account === 'object' ? 
+          `${journal.loss_account.code || ''} - ${journal.loss_account.name || ''}`.trim() : null),
+      
+      suspense: getAccountLabel(accountIds.suspense) || 
+        (journal.suspense_account && typeof journal.suspense_account === 'object' ? 
+          `${journal.suspense_account.code || ''} - ${journal.suspense_account.name || ''}`.trim() : null),
+      
+      suspenseIn: getAccountLabel(accountIds.suspenseIn) || 
+        (journal.suspense_in_account && typeof journal.suspense_in_account === 'object' ? 
+          `${journal.suspense_in_account.code || ''} - ${journal.suspense_in_account.name || ''}`.trim() : null),
+      
+      suspenseOut: getAccountLabel(accountIds.suspenseOut) || 
+        (journal.suspense_out_account && typeof journal.suspense_out_account === 'object' ? 
+          `${journal.suspense_out_account.code || ''} - ${journal.suspense_out_account.name || ''}`.trim() : null)
+    };
+  }, [journal, accountIds, getAccountLabel]);
 
   const handleDelete = async () => {
     if (!journal) return;
-    
-    const journalName = journal.name || journal.code || 'ce journal';
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer "${journalName}" ?`)) {
-      return;
-    }
     
     setDeleting(true);
     try {
@@ -65,6 +220,7 @@ export default function Show() {
       navigate('/comptabilite/journaux');
     } catch (err) {
       setError('Erreur lors de la suppression: ' + (err.message || 'Inconnue'));
+      setShowConfirmDialog(false);
     } finally {
       setDeleting(false);
     }
@@ -86,7 +242,25 @@ export default function Show() {
     navigate('/comptabilite/journaux');
   };
 
-  if (loading) {
+  const handleDuplicate = () => {
+    setShowActionsMenu(false);
+  };
+
+  const handleExtourner = () => {
+    setShowActionsMenu(false);
+  };
+
+  // Vérifier si le type est Banque ou Caisse
+  const isBankOrCashType = useCallback(() => {
+    if (!journal) return false;
+    const typeCode = journal.type?.code || journal.type_code || '';
+    const bankCashCodes = ['BQ', 'CA', 'BN', 'CS'];
+    return bankCashCodes.includes(typeCode) || 
+           typeCode?.startsWith('B') || 
+           typeCode?.startsWith('C');
+  }, [journal]);
+
+  if (loading && !journal) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-7xl mx-auto bg-white border border-gray-300">
@@ -117,13 +291,13 @@ export default function Show() {
               </p>
               <button
                 onClick={loadJournal}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 mr-2"
+                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 mr-2"
               >
                 Réessayer
               </button>
               <button
                 onClick={handleCancel}
-                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+                className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700"
               >
                 Retour aux journaux
               </button>
@@ -134,102 +308,121 @@ export default function Show() {
     );
   }
 
-  const journalName = journal.name || 'Sans nom';
-  const journalCode = journal.code || '---';
-  const typeName = journal.type?.name || journal.type_name || 'Non spécifié';
-  const typeCode = journal.type?.code || journal.type_code || '';
-  const accountCode = journal.default_account?.code || '';
-  const accountName = journal.default_account?.name || '';
-  const bankAccountName = journal.bank_account?.banque?.nom || journal.bank_account?.nom || '';
-  const bankAccountNumber = journal.bank_account?.numero_compte || '';
+  const showFullAccounting = isBankOrCashType();
+
+  // Banque
+  const bankAccountName = journal.bank_account?.banque?.nom || 
+                        journal.bank_account?.nom || 
+                        journal.bank_account_name || 
+                        '';
+  const bankAccountNumber = journal.bank_account?.numero_compte || 
+                         journal.bank_account_number || 
+                         '';
+
+  // Méthodes de paiement
+  const inboundMethods = journal.inbound_payment_methods_names || 
+                      journal.inbound_payment_methods?.map(m => m.name) || 
+                      [];
+  const outboundMethods = journal.outbound_payment_methods_names || 
+                       journal.outbound_payment_methods?.map(m => m.name) || 
+                       [];
+
+  // Email
+  const email = journal.email || '';
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-        {/* Barre d'en-tête - Ligne 1 */}
+
+        {/* En-tête ligne 1 */}
         <div className="border-b border-gray-300 px-4 py-3">
-          {/* Première ligne : Titre et boutons */}
-          <div className="flex items-center justify-between mb-2">
-            {/* Partie gauche */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleNewJournal}
-                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
-              >
-                <FiPlus size={12} />
-                <span>Nouveau</span>
-              </button>
-              <div 
-                className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600"
-                onClick={handleGoToList}
-              >
-                Journaux comptables
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-start gap-3">
+              <Tooltip text="Créer un nouveau journal">
+                <button 
+                  onClick={handleNewJournal}
+                  className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                >
+                  <FiPlus size={12} /><span>Nouveau</span>
+                </button>
+              </Tooltip>
+              <div className="flex flex-col">
+                <div 
+                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
+                  onClick={handleGoToList}
+                >
+                  Journaux
+                </div>
               </div>
             </div>
-            {/* Partie droite */}
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleCancel}
-                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
-              >
-                <FiX size={12} />
-                <span>Annuler</span>
-              </button>
-              <button
-                onClick={handleEdit}
-                className="px-3 py-1.5 bg-purple-600 text-white text-xs flex items-center gap-1 hover:bg-purple-700"
-              >
-                <FiEdit size={12} />
-                <span>Modifier</span>
-              </button>
-            </div>
-          </div>
-          
-          {/* Deuxième ligne : État et Code */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">État:</span>
-              <span className={`px-2 py-0.5 text-xs font-medium ${
-                journal.active 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-gray-100 text-gray-600'
-              }`}>
-                {journal.active ? 'Actif' : 'Inactif'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">Code:</span>
-              <span className="text-sm font-mono font-bold text-purple-600">
-                {journalCode}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">Type:</span>
-              <span className="text-sm font-medium">
-                {typeName} ({typeCode})
-              </span>
+              <div className="relative" ref={actionsMenuRef}>
+                <Tooltip text="Menu des actions">
+                  <button 
+                    onClick={() => setShowActionsMenu(!showActionsMenu)}
+                    className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                  >
+                    <FiSettings size={12} /><span>Actions</span>
+                  </button>
+                </Tooltip>
+                {showActionsMenu && (
+                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
+                    <button onClick={handleDuplicate} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
+                      <FiCopy size={12} /> Dupliquer
+                    </button>
+                    <button onClick={handleExtourner} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2">
+                      <FiRotateCcw size={12} /> Extourné
+                    </button>
+                  </div>
+                )}
+              </div>
+              <Tooltip text="Modifier ce journal">
+                <button 
+                  onClick={handleEdit}
+                  className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                >
+                  <FiEdit size={12} /><span>Modifier</span>
+                </button>
+              </Tooltip>
+              <Tooltip text="Supprimer ce journal">
+                <button 
+                  onClick={() => setShowConfirmDialog(true)}
+                  disabled={deleting}
+                  className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                >
+                  <FiTrash2 size={12} /><span>Supprimer</span>
+                </button>
+              </Tooltip>
+              <Tooltip text="Annuler et retourner à la liste">
+                <button 
+                  onClick={handleCancel}
+                  className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 hover:scale-110 hover:shadow-lg active:scale-90 transition-all duration-200 flex items-center justify-center"
+                >
+                  <FiX size={16} />
+                </button>
+              </Tooltip>
             </div>
           </div>
         </div>
 
-        {/* Nouvelle ligne de boutons - Ligne 2 */}
+        {/* En-tête ligne 2 - Badges Actif/Inactif */}
         <div className="border-b border-gray-300 px-4 py-3 flex items-center justify-between">
-          {/* Partie gauche : Badge d'état */}
-          <div>
-            <span className="text-sm text-gray-700 font-medium">Statut du journal:</span>
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-medium ${journal.active ? 'text-green-600' : 'text-gray-500'}`}>
+              {journal.active ? 'Activé' : 'Désactivé'}
+            </span>
           </div>
-          {/* Partie droite : Badges d'état (non cliquables) */}
           <div className="flex items-center gap-2">
-            <div className={`px-3 py-1.5 text-xs font-medium border ${
-              journal.active
-                ? 'bg-purple-100 text-purple-700 border-purple-300'
+            <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
+              journal.active 
+                ? 'bg-green-100 text-green-700 border-green-300' 
                 : 'bg-gray-100 text-gray-500 border-gray-300'
             }`}>
               Actif
             </div>
-            <div className={`px-3 py-1.5 text-xs font-medium border ${
-              !journal.active
-                ? 'bg-purple-100 text-purple-700 border-purple-300'
+            <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
+              !journal.active 
+                ? 'bg-red-100 text-red-700 border-red-300' 
                 : 'bg-gray-100 text-gray-500 border-gray-300'
             }`}>
               Inactif
@@ -237,83 +430,263 @@ export default function Show() {
           </div>
         </div>
 
-        {/* Informations du journal */}
-        <div className="px-4 py-3">
-          <div className="text-lg font-bold text-gray-900 mb-4">Détails du journal</div>
-          
-          <div className="space-y-3">
-            {/* Ligne 1 : Code et Type côte à côte */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-              {/* Code */}
-              <div className="flex items-center min-h-[26px]">
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                  Code
-                </label>
-                <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2 font-mono font-semibold">
-                  {journalCode}
-                </div>
-              </div>
-
-              {/* Type */}
-              <div className="flex items-center min-h-[26px]">
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                  Type
-                </label>
-                <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2 font-medium">
-                  {typeName} ({typeCode})
-                </div>
-              </div>
-            </div>
-
-            {/* Ligne 2 : Nom seul sur toute la largeur */}
-            <div className="flex items-center min-h-[26px]">
-              <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                Nom
-              </label>
-              <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2 font-medium">
-                {journalName}
-              </div>
-            </div>
-
-            {/* Ligne 3 : Compte par défaut et Compte bancaire côte à côte */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-              {/* Compte par défaut */}
-              <div className="flex items-center min-h-[26px]">
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                  Compte par défaut
-                </label>
-                <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
-                  {accountCode || accountName ? (
-                    <span className="font-mono">{accountCode} - {accountName}</span>
-                  ) : (
-                    <span className="text-gray-400 italic">Non défini</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Compte bancaire */}
-              <div className="flex items-center min-h-[26px]">
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                  Compte bancaire
-                </label>
-                <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
-                  {bankAccountName || bankAccountNumber ? (
-                    <span>
-                      {bankAccountName} {bankAccountNumber && `- ${bankAccountNumber}`}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400 italic">Non défini</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Ligne 4 : Notes */}
-            <div className="flex items-start min-h-[48px]">
-              <label className="text-xs text-gray-700 min-w-[140px] font-medium pt-1">
-                Notes
-              </label>
+        {/* Informations de base */}
+        <div className="px-4 py-3 border-b border-gray-300">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center" style={{ height: '26px' }}>
+              <label className="text-xs text-gray-700 w-24 font-medium">Nom</label>
               <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                {journal.name}
+              </div>
+            </div>
+            <div className="flex items-center" style={{ height: '26px' }}>
+              <label className="text-xs text-gray-700 w-24 font-medium">Code</label>
+              <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2 font-mono font-semibold">
+                {journal.code}
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 mt-2">
+            <div className="flex items-center" style={{ height: '26px' }}>
+              <label className="text-xs text-gray-700 w-24 font-medium">Type</label>
+              <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                {journal.type?.name || journal.type_name} {journal.type?.code && `(${journal.type.code})`}
+              </div>
+            </div>
+            <div className="flex items-center" style={{ height: '26px' }}>
+              {/* Cellule vide */}
+            </div>
+          </div>
+        </div>
+
+        {/* Onglets */}
+        <div className="border-b border-gray-300">
+          <div className="px-4 flex">
+            {['comptable', 'avance', 'notes'].map(tab => (
+              <button 
+                key={tab} 
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 text-xs font-medium border-b-2 transition-all duration-200 ${
+                  activeTab === tab 
+                    ? 'border-purple-600 text-purple-600 hover:text-purple-800' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab === 'comptable' ? 'Paramètres comptables' : tab === 'avance' ? 'Paramètres avancés' : 'Notes'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Contenu onglets */}
+        <div className="p-4">
+          {activeTab === 'comptable' && (
+            <div className="space-y-3">
+              {/* Indicateur de chargement des comptes */}
+              {loadingAccounts && (
+                <div className="text-xs text-purple-600 flex items-center gap-2 mb-2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+                  Chargement des libellés des comptes...
+                </div>
+              )}
+              
+              {/* Première ligne - Compte d'achat par défaut TOUJOURS présent */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">
+                    Compte d'achat par défaut
+                    {!labels.default && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                    {labels.default ? (
+                      <span className="font-mono">{labels.default}</span>
+                    ) : (
+                      <span className="text-gray-400 italic">
+                        {loadingAccounts ? 'Chargement...' : 'Non défini'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Deuxième colonne - Affiche le compte d'attente uniquement pour Banque/Caisse */}
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  {showFullAccounting ? (
+                    <>
+                      <label className="text-xs text-gray-700 w-40 font-medium">
+                        Compte d'attente
+                        {!labels.suspense && <span className="text-red-500 ml-1">*</span>}
+                      </label>
+                      <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                        {labels.suspense ? (
+                          <span className="font-mono">{labels.suspense}</span>
+                        ) : (
+                          <span className="text-gray-400 italic">
+                            {loadingAccounts ? 'Chargement...' : 'Non défini'}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full"></div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Deuxième ligne - Comptes profit et perte (UNIQUEMENT pour Banque/Caisse) */}
+              {showFullAccounting && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center" style={{ height: '26px' }}>
+                    <label className="text-xs text-gray-700 w-40 font-medium">
+                      Compte de profit
+                      {!labels.profit && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                    <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                      {labels.profit ? (
+                        <span className="font-mono">{labels.profit}</span>
+                      ) : (
+                        <span className="text-gray-400 italic">
+                          {loadingAccounts ? 'Chargement...' : 'Non défini'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center" style={{ height: '26px' }}>
+                    <label className="text-xs text-gray-700 w-40 font-medium">
+                      Compte de perte
+                      {!labels.loss && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                    <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                      {labels.loss ? (
+                        <span className="font-mono">{labels.loss}</span>
+                      ) : (
+                        <span className="text-gray-400 italic">
+                          {loadingAccounts ? 'Chargement...' : 'Non défini'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Message d'information */}
+              <div className={`mt-2 p-2 rounded ${showFullAccounting ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-200'}`}>
+                <p className={`text-xs flex items-center gap-1 ${showFullAccounting ? 'text-blue-700' : 'text-gray-600'}`}>
+                  <FiInfo size={12} />
+                  {showFullAccounting 
+                    ? "Ce journal est de type Banque/Caisse. Tous les comptes ci-dessus sont obligatoires."
+                    : "Ce journal n'est pas de type Banque/Caisse. Seul le compte d'achat par défaut est requis."}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'avance' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Société</label>
+                  <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2 flex items-center gap-2">
+                    <FiBriefcase size={12} className="text-purple-600" />
+                    {activeEntity?.raison_sociale || activeEntity?.nom || 'Non définie'}
+                  </div>
+                </div>
+                
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Compte bancaire</label>
+                  <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                    {bankAccountName || bankAccountNumber ? (
+                      <span>{bankAccountName} {bankAccountNumber && `- ${bankAccountNumber}`}</span>
+                    ) : (
+                      <span className="text-gray-400 italic">Non défini</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">E-mail</label>
+                  <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2 flex items-center gap-2">
+                    <FiMail size={12} className="text-gray-400" />
+                    {email || <span className="text-gray-400 italic">Non défini</span>}
+                  </div>
+                </div>
+                
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Mode de paiement entrant</label>
+                  <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                    {inboundMethods.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {inboundMethods.map((method, idx) => (
+                          <span key={idx} className="px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded text-xs">
+                            {method}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 italic">Non défini</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Mode de paiement sortant</label>
+                  <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                    {outboundMethods.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {outboundMethods.map((method, idx) => (
+                          <span key={idx} className="px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded text-xs">
+                            {method}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 italic">Non défini</span>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Compte de paiement entrant en suspens</label>
+                  <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                    {labels.suspenseIn ? (
+                      <span className="font-mono">{labels.suspenseIn}</span>
+                    ) : (
+                      <span className="text-gray-400 italic">
+                        {loadingAccounts ? 'Chargement...' : 'Non défini'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Compte de paiement sortant en suspens</label>
+                  <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                    {labels.suspenseOut ? (
+                      <span className="font-mono">{labels.suspenseOut}</span>
+                    ) : (
+                      <span className="text-gray-400 italic">
+                        {loadingAccounts ? 'Chargement...' : 'Non défini'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium"> </label>
+                  <div className="flex-1 ml-2"></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'notes' && (
+            <div className="border border-gray-300 bg-gray-50">
+              <div className="px-3 py-2 text-xs min-h-[120px]">
                 {journal.note ? (
                   <p className="whitespace-pre-wrap">{journal.note}</p>
                 ) : (
@@ -321,38 +694,47 @@ export default function Show() {
                 )}
               </div>
             </div>
-
-            {/* Ligne 5 : Statut */}
-            <div className="flex items-center pt-3 border-t border-gray-200 min-h-[26px]">
-              <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                Statut
-              </label>
-              <div className="flex items-center gap-2 ml-2">
-                <input
-                  type="checkbox"
-                  id="active"
-                  checked={journal.active}
-                  disabled
-                  className="w-3.5 h-3.5 text-purple-600 rounded focus:ring-purple-500 bg-gray-100 cursor-not-allowed"
-                />
-                <label htmlFor="active" className="text-xs font-medium text-gray-700">
-                  Journal actif
-                </label>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Messages d'erreur */}
         {error && (
           <div className="px-4 py-3 text-sm border-t border-gray-300 bg-red-50 text-red-700">
             <div className="flex items-center gap-2">
-              <FiX size={14} />
+              <FiAlertCircle size={14} />
               <span>{error}</span>
             </div>
           </div>
         )}
       </div>
+
+      {/* Dialogue confirmation suppression */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Confirmer la suppression</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Êtes-vous sûr de vouloir supprimer le journal "{journal.name || journal.code}" ? Cette action est irréversible.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowConfirmDialog(false)} 
+                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 hover:scale-105 active:scale-95 transition-all duration-200"
+                disabled={deleting}
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={handleDelete} 
+                className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 hover:scale-105 active:scale-95 transition-all duration-200"
+                disabled={deleting}
+              >
+                {deleting ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

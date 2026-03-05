@@ -17,10 +17,10 @@ import { apiClient } from '../services/apiClient';
 const MODULES_CONFIG = [
   {
     id: "dashboard",
-    name: "Accueil", // ← MODIFIÉ : "Noyau" → "Accueil"
+    name: "Accueil",
     path: "/dashboard",
     color: "gray",
-    navigation: [] // ← NAVIGATION VIDÉE POUR ACCUEIL
+    navigation: []
   },
   {
     id: "sales",
@@ -90,11 +90,11 @@ const MODULES_CONFIG = [
           { label: "Plans comptables", path: "/comptabilite/plan-comptable" },
           { label: "Journaux", path: "/comptabilite/journaux" },
           { label: "Devises", path: "/comptabilite/devises" },
-          { label: "Taxes", path: "/comptabilite/taux-fiscaux" },
+          { label: "Taux Fiscaux", path: "/comptabilite/taux-fiscaux" },
           { label: "Positions fiscales", path: "/comptabilite/positions-fiscales" },
           { label: "Réimputations", path: "/comptabilite/reimputations" },
-          { label: "Vétrouillage des journaux", path: "/comptabilite/vetrouillage" },
-          { label: "Relèves bancaires", path: "/comptabilite/releves-bancaires" },
+          { label: "Verrouillage des journaux", path: "/comptabilite/verrouillage" },
+          { label: "Relevés bancaires", path: "/comptabilite/releves-bancaires" },
           { label: "Exercices", path: "/comptabilite/exercices" }
         ]
       },
@@ -105,17 +105,17 @@ const MODULES_CONFIG = [
           { label: "Lettrage des comptes", path: "/comptabilite/lettrage" },
           { label: "Immobilisation", path: "/comptabilite/immobilisation" },
           { label: "Emprunts", path: "/comptabilite/emprunts" },
-          { label: "Etat de rapprochement", path: "/comptabilite/rapprochement" }
+          { label: "État de rapprochement", path: "/comptabilite/rapprochement" }
         ]
       },
       {
-        name: "Analyse & Etat",
+        name: "Analyse & État",
         items: [
           { label: "Grand-Livre", path: "/comptabilite/grand-livre" },
           { label: "Grand-Livre partenaires", path: "/comptabilite/grand-livre-partenaires" },
           { label: "Balance générale", path: "/comptabilite/balance" },
           { label: "Balance des partenaires", path: "/comptabilite/balance-partenaires" },
-          { label: "Balance agée", path: "/comptabilite/balance-agee" },
+          { label: "Balance âgée", path: "/comptabilite/balance-agee" },
           { label: "Analyse des emprunts", path: "/comptabilite/analyse-emprunts" },
           { label: "Analyse déclaration TVA", path: "/comptabilite/analyse-tva" },
           { label: "Tableaux des amortissements", path: "/comptabilite/amortissements" },
@@ -171,14 +171,14 @@ const MODULES_CONFIG = [
     name: "Stock",
     path: "/inventory",
     color: "amber",
-    navigation: [] // ← NAVIGATION VIDÉE POUR STOCK
+    navigation: []
   },
   {
     id: "hr",
     name: "RH",
     path: "/hr",
     color: "rose",
-    navigation: [] // ← NAVIGATION VIDÉE POUR RH
+    navigation: []
   }
 ];
 

@@ -7,7 +7,7 @@ import {
   FiAlertCircle, FiRefreshCw, FiChevronLeft, FiChevronRight,
   FiUsers, FiPhone, FiX, FiCheck, FiBriefcase,
   FiSave, FiMapPin, FiGlobe, FiCreditCard, FiUser,
-  FiDownload, FiPackage
+  FiDownload, FiPackage, FiHome
 } from "react-icons/fi";
 
 // ============================================================================
@@ -28,36 +28,40 @@ const parseResponse = (response) => {
 function CreatePartnerModal({ open, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [paysList, setPaysList] = useState([]);
   const [villesList, setVillesList] = useState([]);
   const [regionsList, setRegionsList] = useState([]);
   const { activeEntity } = useEntity();
+  
   const [formData, setFormData] = useState({
     nom: '',
     type_partenaire: 'client',
     email: '',
     telephone: '',
     adresse: '',
+    complement_adresse: '',
     statut: true,
+    is_company: true,
     ville: '',
     pays: '',
     region: '',
     code_postal: '',
     site_web: '',
     notes: '',
-    limite_credit: 0,
-    delai_paiement: 30,
     numero_fiscal: '',
-    numero_registre_commerce: '',
-    numero_tva: ''
+    registre_commerce: '',
+    securite_sociale: '',
+    ville_legacy: '',
+    region_legacy: ''
   });
 
   const partnerTypes = [
     { value: 'client', label: 'Client' },
     { value: 'fournisseur', label: 'Fournisseur' },
     { value: 'employe', label: 'Employé' },
-    { value: 'debiteur', label: 'Débiteur' },
-    { value: 'crediteur', label: 'Créditeur' },
+    { value: 'debiteur', label: 'Débiteur divers' },
+    { value: 'crediteur', label: 'Créditeur divers' },
   ];
 
   const resetForm = () => {
@@ -67,20 +71,23 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
       email: '',
       telephone: '',
       adresse: '',
+      complement_adresse: '',
       statut: true,
+      is_company: true,
       ville: '',
       pays: '',
       region: '',
       code_postal: '',
       site_web: '',
       notes: '',
-      limite_credit: 0,
-      delai_paiement: 30,
       numero_fiscal: '',
-      numero_registre_commerce: '',
-      numero_tva: ''
+      registre_commerce: '',
+      securite_sociale: '',
+      ville_legacy: '',
+      region_legacy: ''
     });
     setError(null);
+    setFieldErrors({});
   };
 
   useEffect(() => {
@@ -121,83 +128,106 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setFieldErrors({});
     
     try {
-      if (!formData.nom?.trim()) throw new Error('Le nom est obligatoire');
-      if (!activeEntity?.id) throw new Error('Sélectionnez une entité');
+      if (!formData.nom?.trim()) {
+        throw new Error('Le nom est obligatoire');
+      }
+      
+      if (!activeEntity?.id) {
+        throw new Error('Sélectionnez une entité');
+      }
 
       const requestData = {
         nom: formData.nom.trim(),
         type_partenaire: formData.type_partenaire,
-        email: formData.email?.trim() || null,
-        telephone: formData.telephone?.trim() || null,
-        adresse: formData.adresse?.trim() || null,
-        statut: formData.statut,
-        entite: activeEntity.id,
-        ville: formData.ville ? parseInt(formData.ville) : null,
+        company_id: activeEntity.id,
         pays: formData.pays ? parseInt(formData.pays) : null,
         region: formData.region ? parseInt(formData.region) : null,
-        code_postal: formData.code_postal?.trim() || null,
-        site_web: formData.site_web?.trim() || null,
-        notes: formData.notes?.trim() || null,
-        limite_credit: parseFloat(formData.limite_credit) || 0,
-        delai_paiement: parseInt(formData.delai_paiement) || 30,
-        numero_fiscal: formData.numero_fiscal?.trim() || null,
-        numero_registre_commerce: formData.numero_registre_commerce?.trim() || null,
-        numero_tva: formData.numero_tva?.trim() || null
+        ville: formData.ville ? parseInt(formData.ville) : null,
+        is_company: formData.is_company,
+        statut: formData.statut,
+        email: formData.email?.trim() || '',
+        telephone: formData.telephone?.trim() || '',
+        adresse: formData.adresse?.trim() || '',
+        complement_adresse: formData.complement_adresse?.trim() || '',
+        code_postal: formData.code_postal?.trim() || '',
+        site_web: formData.site_web?.trim() || '',
+        numero_fiscal: formData.numero_fiscal?.trim() || '',
+        registre_commerce: formData.registre_commerce?.trim() || '',
+        securite_sociale: formData.securite_sociale?.trim() || '',
+        ville_legacy: formData.ville_legacy?.trim() || null,
+        region_legacy: formData.region_legacy?.trim() || null,
+        notes: formData.notes?.trim() || ''
       };
 
-      console.log('📤 Envoi données:', requestData);
+      console.log('📤 Données envoyées:', JSON.stringify(requestData, null, 2));
+      
       const response = await apiClient.post('/partenaires/', requestData);
-      console.log('✅ Réponse:', response);
+      console.log('✅ Réponse succès:', response.data);
       
       onSuccess?.();
       onClose?.();
     } catch (err) {
-      console.error('❌ Erreur création:', err);
+      console.error('❌ Erreur:', err);
       
-      let errorMsg = 'Erreur lors de la création';
       const errorData = err?.response?.data;
       
-      if (errorData) {
-        if (errorData?.nom?.[0]) errorMsg = `Nom: ${errorData.nom[0]}`;
-        else if (errorData?.email?.[0]) errorMsg = `Email: ${errorData.email[0]}`;
-        else if (errorData?.ville?.[0]) errorMsg = `Ville: ${errorData.ville[0]}`;
-        else if (errorData?.pays?.[0]) errorMsg = `Pays: ${errorData.pays[0]}`;
-        else if (errorData?.entite?.[0]) errorMsg = `Entité: ${errorData.entite[0]}`;
-        else if (errorData?.detail) errorMsg = errorData.detail;
-        else if (typeof errorData === 'string') errorMsg = errorData;
-        else if (errorData?.non_field_errors?.[0]) errorMsg = errorData.non_field_errors[0];
-        else {
-          const errors = [];
-          for (const [field, messages] of Object.entries(errorData)) {
-            if (Array.isArray(messages) && messages[0]) {
-              errors.push(`${field}: ${messages[0]}`);
-            } else if (typeof messages === 'string') {
-              errors.push(`${field}: ${messages}`);
-            }
+      if (errorData && typeof errorData === 'object') {
+        const fieldErrorMap = {};
+        const errorMessages = [];
+        
+        Object.entries(errorData).forEach(([field, messages]) => {
+          if (Array.isArray(messages)) {
+            fieldErrorMap[field] = messages[0];
+            errorMessages.push(`${field}: ${messages[0]}`);
+          } else if (typeof messages === 'string') {
+            fieldErrorMap[field] = messages;
+            errorMessages.push(`${field}: ${messages}`);
           }
-          if (errors.length > 0) errorMsg = errors.join(', ');
-        }
+        });
+        
+        setFieldErrors(fieldErrorMap);
+        setError(errorMessages.join(' | '));
+      } else if (errorData?.detail) {
+        setError(errorData.detail);
       } else if (err?.message) {
-        errorMsg = err.message;
+        setError(err.message);
+      } else {
+        setError('Erreur lors de la création du partenaire');
       }
-      
-      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
+  const getFieldErrorClass = (fieldName) => {
+    return fieldErrors[fieldName] ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-violet-500';
+  };
+
+  const renderFieldError = (fieldName) => {
+    if (fieldErrors[fieldName]) {
+      return (
+        <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+          <FiAlertCircle className="w-3 h-3" />
+          {fieldErrors[fieldName]}
+        </p>
+      );
+    }
+    return null;
+  };
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="bg-violet-600 text-white rounded-t-lg p-4 sticky top-0 z-10">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-4xl flex flex-col" style={{ maxHeight: '90vh' }}>
+        {/* Header - Fixe */}
+        <div className="bg-violet-600 text-white rounded-t-lg p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
+              <div className="p-2 bg-white bg-opacity-20 rounded-lg">
                 <FiPlus className="w-5 h-5" />
               </div>
               <div>
@@ -207,294 +237,445 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded" disabled={loading}>
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="p-2 hover:bg-white hover:bg-opacity-20 rounded transition-colors"
+              disabled={loading}
+            >
               <FiX size={20} />
             </button>
           </div>
         </div>
-        <div className="p-4">
+        
+        {/* Body - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Alertes */}
           {!activeEntity && (
-            <div className="mb-4 bg-amber-50 border-l-4 border-amber-500 rounded-r p-3">
-              <div className="flex items-start gap-2">
-                <FiAlertCircle className="text-amber-500 mt-0.5" />
-                <p className="text-amber-700 text-sm">Sélectionnez une entité</p>
+            <div className="mb-6 bg-amber-50 border-l-4 border-amber-500 rounded-r p-4">
+              <div className="flex items-start gap-3">
+                <FiAlertCircle className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-amber-700 font-medium">Entité requise</p>
+                  <p className="text-amber-600 text-sm mt-1">
+                    Veuillez sélectionner une entité avant de créer un partenaire
+                  </p>
+                </div>
               </div>
             </div>
           )}
-          {error && (
-            <div className="mb-4 bg-red-50 border-l-4 border-red-500 rounded-r p-3">
-              <div className="flex items-start gap-2">
-                <FiAlertCircle className="text-red-500 mt-0.5" />
-                <p className="text-red-700 text-sm">{error}</p>
+          
+          {error && !Object.keys(fieldErrors).length && (
+            <div className="mb-6 bg-red-50 border-l-4 border-red-500 rounded-r p-4">
+              <div className="flex items-start gap-3">
+                <FiAlertCircle className="text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-red-700 font-medium">Erreur de validation</p>
+                  <p className="text-red-600 text-sm mt-1">{error}</p>
+                </div>
               </div>
             </div>
           )}
+          
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Section Informations obligatoires */}
-            <div className="bg-violet-50 rounded-lg p-4 border border-violet-200">
-              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <FiBriefcase className="w-4 h-4 text-violet-600" />
+            {/* Section 1: Informations obligatoires */}
+            <div className="bg-violet-50 bg-opacity-50 rounded-lg p-5 border border-violet-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FiBriefcase className="w-5 h-5 text-violet-600" />
                 Informations obligatoires
+                <span className="text-sm font-normal text-gray-500 ml-2">(* Champs requis)</span>
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Nom */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nom * <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Nom / Raison sociale <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.nom}
-                    onChange={(e) => setFormData(prev => ({ ...prev, nom: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    placeholder="Nom complet ou raison sociale"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, nom: e.target.value }));
+                      if (fieldErrors.nom) {
+                        setFieldErrors(prev => ({ ...prev, nom: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('nom')}`}
+                    placeholder="Ex: ENTREPRISE SARL"
                     required
-                    disabled={!activeEntity}
+                    disabled={!activeEntity || loading}
                   />
+                  {renderFieldError('nom')}
                 </div>
+                
+                {/* Type */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Type <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.type_partenaire}
-                    onChange={(e) => setFormData(prev => ({ ...prev, type_partenaire: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, type_partenaire: e.target.value }));
+                      if (fieldErrors.type_partenaire) {
+                        setFieldErrors(prev => ({ ...prev, type_partenaire: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('type_partenaire')}`}
                     required
-                    disabled={!activeEntity}
+                    disabled={!activeEntity || loading}
                   >
                     {partnerTypes.map(type => (
-                      <option key={type.value} value={type.value}>{type.label}</option>
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
                     ))}
                   </select>
+                  {renderFieldError('type_partenaire')}
                 </div>
+                
+                {/* Type de personne */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Type de personne</label>
                   <select
-                    value={formData.statut ? 'active' : 'inactive'}
-                    onChange={(e) => setFormData(prev => ({ ...prev, statut: e.target.value === 'active' }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    disabled={!activeEntity}
+                    value={formData.is_company ? 'company' : 'person'}
+                    onChange={(e) => {
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        is_company: e.target.value === 'company' 
+                      }));
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    disabled={!activeEntity || loading}
                   >
-                    <option value="active">Actif</option>
-                    <option value="inactive">Inactif</option>
+                    <option value="company">Entreprise / Organisation</option>
+                    <option value="person">Particulier / Personne physique</option>
+                  </select>
+                </div>
+                
+                {/* Statut */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Statut</label>
+                  <select
+                    value={formData.statut ? 'actif' : 'inactif'}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, statut: e.target.value === 'actif' }));
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    disabled={!activeEntity || loading}
+                  >
+                    <option value="actif">Actif</option>
+                    <option value="inactif">Inactif</option>
                   </select>
                 </div>
               </div>
             </div>
 
-            {/* Section Contact */}
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <FiMail className="w-4 h-4" />
+            {/* Section 2: Contact */}
+            <div className="bg-gray-50 bg-opacity-50 rounded-lg p-5 border border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FiMail className="w-5 h-5" />
                 Contact
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Email */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
                   <input
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    placeholder="email@exemple.com"
-                    disabled={!activeEntity}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, email: e.target.value }));
+                      if (fieldErrors.email) {
+                        setFieldErrors(prev => ({ ...prev, email: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('email')}`}
+                    placeholder="contact@entreprise.com"
+                    disabled={!activeEntity || loading}
                   />
+                  {renderFieldError('email')}
                 </div>
+                
+                {/* Téléphone */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Téléphone</label>
                   <input
                     type="tel"
                     value={formData.telephone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, telephone: e.target.value }));
+                      if (fieldErrors.telephone) {
+                        setFieldErrors(prev => ({ ...prev, telephone: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('telephone')}`}
                     placeholder="+228 XX XX XX XX"
-                    disabled={!activeEntity}
+                    disabled={!activeEntity || loading}
                   />
+                  {renderFieldError('telephone')}
                 </div>
+                
+                {/* Site web */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Site web</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Site web</label>
                   <input
                     type="url"
                     value={formData.site_web}
-                    onChange={(e) => setFormData(prev => ({ ...prev, site_web: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    placeholder="https://www.exemple.com"
-                    disabled={!activeEntity}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, site_web: e.target.value }));
+                      if (fieldErrors.site_web) {
+                        setFieldErrors(prev => ({ ...prev, site_web: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('site_web')}`}
+                    placeholder="https://www.entreprise.com"
+                    disabled={!activeEntity || loading}
                   />
+                  {renderFieldError('site_web')}
                 </div>
               </div>
             </div>
 
-            {/* Section Localisation */}
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <FiMapPin className="w-4 h-4" />
-                Localisation <span className="text-sm text-gray-500 font-normal">(Optionnel)</span>
+            {/* Section 3: Localisation */}
+            <div className="bg-gray-50 bg-opacity-50 rounded-lg p-5 border border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FiMapPin className="w-5 h-5" />
+                Localisation
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Pays */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Pays</label>
                   <select
                     value={formData.pays}
-                    onChange={(e) => setFormData(prev => ({ ...prev, pays: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    disabled={!activeEntity}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, pays: e.target.value }));
+                      if (fieldErrors.pays) {
+                        setFieldErrors(prev => ({ ...prev, pays: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('pays')}`}
+                    disabled={!activeEntity || loading}
                   >
-                    <option value="">Sélectionnez un pays (optionnel)</option>
+                    <option value="">Sélectionnez un pays</option>
                     {paysList.map(pays => (
                       <option key={pays.id} value={pays.id}>
                         {pays.emoji} {pays.nom_fr || pays.nom} ({pays.code_iso})
                       </option>
                     ))}
                   </select>
+                  {renderFieldError('pays')}
                 </div>
+                
+                {/* Région */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
-                  <select
-                    value={formData.ville}
-                    onChange={(e) => setFormData(prev => ({ ...prev, ville: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    disabled={!activeEntity}
-                  >
-                    <option value="">Sélectionnez une ville (optionnel)</option>
-                    {villesList.map(ville => (
-                      <option key={ville.id} value={ville.id}>
-                        {ville.nom} {ville.subdivision_nom ? `(${ville.subdivision_nom})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Région</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Région</label>
                   <select
                     value={formData.region}
-                    onChange={(e) => setFormData(prev => ({ ...prev, region: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    disabled={!activeEntity}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, region: e.target.value }));
+                      if (fieldErrors.region) {
+                        setFieldErrors(prev => ({ ...prev, region: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('region')}`}
+                    disabled={!activeEntity || loading}
                   >
-                    <option value="">Sélectionnez une région (optionnel)</option>
+                    <option value="">Sélectionnez une région</option>
                     {regionsList.map(region => (
                       <option key={region.id} value={region.id}>
                         {region.nom} ({region.type_subdivision})
                       </option>
                     ))}
                   </select>
+                  {renderFieldError('region')}
                 </div>
+                
+                {/* Ville */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Code postal</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Ville</label>
+                  <select
+                    value={formData.ville}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, ville: e.target.value }));
+                      if (fieldErrors.ville) {
+                        setFieldErrors(prev => ({ ...prev, ville: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('ville')}`}
+                    disabled={!activeEntity || loading}
+                  >
+                    <option value="">Sélectionnez une ville</option>
+                    {villesList.map(ville => (
+                      <option key={ville.id} value={ville.id}>
+                        {ville.nom} {ville.subdivision_nom ? `(${ville.subdivision_nom})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {renderFieldError('ville')}
+                </div>
+                
+                {/* Code postal */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Code postal</label>
                   <input
                     type="text"
                     value={formData.code_postal}
-                    onChange={(e) => setFormData(prev => ({ ...prev, code_postal: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, code_postal: e.target.value }));
+                      if (fieldErrors.code_postal) {
+                        setFieldErrors(prev => ({ ...prev, code_postal: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('code_postal')}`}
                     placeholder="00000"
-                    disabled={!activeEntity}
+                    disabled={!activeEntity || loading}
                   />
+                  {renderFieldError('code_postal')}
                 </div>
+                
+                {/* Adresse */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Adresse</label>
                   <textarea
                     value={formData.adresse}
-                    onChange={(e) => setFormData(prev => ({ ...prev, adresse: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    placeholder="Adresse complète"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, adresse: e.target.value }));
+                      if (fieldErrors.adresse) {
+                        setFieldErrors(prev => ({ ...prev, adresse: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('adresse')}`}
+                    placeholder="Adresse principale"
                     rows="2"
-                    disabled={!activeEntity}
+                    disabled={!activeEntity || loading}
                   />
+                  {renderFieldError('adresse')}
+                </div>
+                
+                {/* Complément d'adresse */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Complément d'adresse</label>
+                  <input
+                    type="text"
+                    value={formData.complement_adresse}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, complement_adresse: e.target.value }));
+                      if (fieldErrors.complement_adresse) {
+                        setFieldErrors(prev => ({ ...prev, complement_adresse: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('complement_adresse')}`}
+                    placeholder="Bâtiment, appartement, BP..."
+                    disabled={!activeEntity || loading}
+                  />
+                  {renderFieldError('complement_adresse')}
                 </div>
               </div>
             </div>
 
-            {/* Section Informations financières */}
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <FiCreditCard className="w-4 h-4" />
-                Informations financières <span className="text-sm text-gray-500 font-normal">(Optionnel)</span>
+            {/* Section 4: Informations légales */}
+            <div className="bg-gray-50 bg-opacity-50 rounded-lg p-5 border border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FiHome className="w-5 h-5" />
+                Informations légales
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* NIF */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Numéro fiscal</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Numéro fiscal (NIF)</label>
                   <input
                     type="text"
                     value={formData.numero_fiscal}
-                    onChange={(e) => setFormData(prev => ({ ...prev, numero_fiscal: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    placeholder="NIF/TIN"
-                    disabled={!activeEntity}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, numero_fiscal: e.target.value }));
+                      if (fieldErrors.numero_fiscal) {
+                        setFieldErrors(prev => ({ ...prev, numero_fiscal: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('numero_fiscal')}`}
+                    placeholder="NIF"
+                    disabled={!activeEntity || loading}
                   />
+                  {renderFieldError('numero_fiscal')}
                 </div>
+                
+                {/* Registre commerce */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Numéro TVA</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Registre de commerce</label>
                   <input
                     type="text"
-                    value={formData.numero_tva}
-                    onChange={(e) => setFormData(prev => ({ ...prev, numero_tva: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    placeholder="TVA intracommunautaire"
-                    disabled={!activeEntity}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Registre commerce</label>
-                  <input
-                    type="text"
-                    value={formData.numero_registre_commerce}
-                    onChange={(e) => setFormData(prev => ({ ...prev, numero_registre_commerce: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    value={formData.registre_commerce}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, registre_commerce: e.target.value }));
+                      if (fieldErrors.registre_commerce) {
+                        setFieldErrors(prev => ({ ...prev, registre_commerce: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('registre_commerce')}`}
                     placeholder="RCCM"
-                    disabled={!activeEntity}
+                    disabled={!activeEntity || loading}
                   />
+                  {renderFieldError('registre_commerce')}
                 </div>
+                
+                {/* Sécurité sociale */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Limite de crédit</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Sécurité sociale</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={formData.limite_credit}
-                    onChange={(e) => setFormData(prev => ({ ...prev, limite_credit: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    placeholder="0.00"
-                    disabled={!activeEntity}
+                    type="text"
+                    value={formData.securite_sociale}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, securite_sociale: e.target.value }));
+                      if (fieldErrors.securite_sociale) {
+                        setFieldErrors(prev => ({ ...prev, securite_sociale: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('securite_sociale')}`}
+                    placeholder="N° sécurité sociale"
+                    disabled={!activeEntity || loading}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Délai paiement (jours)</label>
-                  <input
-                    type="number"
-                    value={formData.delai_paiement}
-                    onChange={(e) => setFormData(prev => ({ ...prev, delai_paiement: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    placeholder="30"
-                    disabled={!activeEntity}
-                  />
+                  {renderFieldError('securite_sociale')}
                 </div>
               </div>
             </div>
 
-            {/* Section Notes */}
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <FiBriefcase className="w-4 h-4" />
-                Notes et informations supplémentaires <span className="text-sm text-gray-500 font-normal">(Optionnel)</span>
+            {/* Section 5: Notes */}
+            <div className="bg-gray-50 bg-opacity-50 rounded-lg p-5 border border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FiBriefcase className="w-5 h-5" />
+                Notes
               </h3>
+              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                 <textarea
                   value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, notes: e.target.value }));
+                    if (fieldErrors.notes) {
+                      setFieldErrors(prev => ({ ...prev, notes: null }));
+                    }
+                  }}
+                  className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('notes')}`}
                   placeholder="Informations supplémentaires..."
                   rows="3"
-                  disabled={!activeEntity}
+                  disabled={!activeEntity || loading}
                 />
+                {renderFieldError('notes')}
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t">
+            {/* Boutons */}
+            <div className="flex justify-end gap-3 pt-6 border-t sticky bottom-0 bg-white">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
                 disabled={loading}
               >
                 Annuler
@@ -502,14 +683,16 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
               <button
                 type="submit"
                 disabled={loading || !activeEntity}
-                className={`px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 ${
-                  loading || !activeEntity ? 'bg-gray-400 cursor-not-allowed' : 'bg-violet-600 hover:bg-violet-700 text-white'
+                className={`px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors ${
+                  loading || !activeEntity 
+                    ? 'bg-gray-400 cursor-not-allowed text-white' 
+                    : 'bg-violet-600 hover:bg-violet-700 text-white'
                 }`}
               >
                 {loading ? (
                   <>
                     <FiRefreshCw className="animate-spin" />
-                    Création...
+                    Création en cours...
                   </>
                 ) : (
                   <>
@@ -532,28 +715,40 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
 function EditPartnerModal({ open, onClose, partner, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [paysList, setPaysList] = useState([]);
   const [villesList, setVillesList] = useState([]);
   const [regionsList, setRegionsList] = useState([]);
+  
   const [formData, setFormData] = useState({
     nom: '',
     type_partenaire: 'client',
     email: '',
     telephone: '',
     adresse: '',
+    complement_adresse: '',
     statut: true,
+    is_company: true,
     ville: '',
     pays: '',
     region: '',
     code_postal: '',
     site_web: '',
     notes: '',
-    limite_credit: 0,
-    delai_paiement: 30,
     numero_fiscal: '',
-    numero_registre_commerce: '',
-    numero_tva: ''
+    registre_commerce: '',
+    securite_sociale: '',
+    ville_legacy: '',
+    region_legacy: ''
   });
+
+  const partnerTypes = [
+    { value: 'client', label: 'Client' },
+    { value: 'fournisseur', label: 'Fournisseur' },
+    { value: 'employe', label: 'Employé' },
+    { value: 'debiteur', label: 'Débiteur divers' },
+    { value: 'crediteur', label: 'Créditeur divers' },
+  ];
 
   useEffect(() => {
     let isMounted = true;
@@ -583,18 +778,20 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
         email: partner.email || '',
         telephone: partner.telephone || '',
         adresse: partner.adresse || '',
+        complement_adresse: partner.complement_adresse || '',
         statut: partner.statut !== undefined ? partner.statut : true,
+        is_company: partner.is_company !== undefined ? partner.is_company : true,
         ville: partner.ville?.id || partner.ville || '',
         pays: partner.pays?.id || partner.pays || '',
         region: partner.region?.id || partner.region || '',
         code_postal: partner.code_postal || '',
         site_web: partner.site_web || '',
         notes: partner.notes || '',
-        limite_credit: partner.limite_credit || 0,
-        delai_paiement: partner.delai_paiement || 30,
         numero_fiscal: partner.numero_fiscal || '',
-        numero_registre_commerce: partner.numero_registre_commerce || '',
-        numero_tva: partner.numero_tva || ''
+        registre_commerce: partner.registre_commerce || '',
+        securite_sociale: partner.securite_sociale || '',
+        ville_legacy: partner.ville_legacy || '',
+        region_legacy: partner.region_legacy || ''
       });
       
       fetchData();
@@ -607,61 +804,103 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setFieldErrors({});
     
     try {
-      if (!formData.nom?.trim()) throw new Error('Le nom est obligatoire');
-      if (!partner?.id) throw new Error('Partenaire invalide');
+      if (!formData.nom?.trim()) {
+        throw new Error('Le nom est obligatoire');
+      }
+      
+      if (!partner?.id) {
+        throw new Error('Partenaire invalide');
+      }
 
       const requestData = {
         nom: formData.nom.trim(),
         type_partenaire: formData.type_partenaire,
-        email: formData.email?.trim() || null,
-        telephone: formData.telephone?.trim() || null,
-        adresse: formData.adresse?.trim() || null,
+        email: formData.email?.trim() || '',
+        telephone: formData.telephone?.trim() || '',
+        adresse: formData.adresse?.trim() || '',
+        complement_adresse: formData.complement_adresse?.trim() || '',
         statut: formData.statut,
-        ville: formData.ville ? parseInt(formData.ville) : null,
+        is_company: formData.is_company,
         pays: formData.pays ? parseInt(formData.pays) : null,
         region: formData.region ? parseInt(formData.region) : null,
-        code_postal: formData.code_postal?.trim() || null,
-        site_web: formData.site_web?.trim() || null,
-        notes: formData.notes?.trim() || null,
-        limite_credit: parseFloat(formData.limite_credit) || 0,
-        delai_paiement: parseInt(formData.delai_paiement) || 30,
-        numero_fiscal: formData.numero_fiscal?.trim() || null,
-        numero_registre_commerce: formData.numero_registre_commerce?.trim() || null,
-        numero_tva: formData.numero_tva?.trim() || null
+        ville: formData.ville ? parseInt(formData.ville) : null,
+        code_postal: formData.code_postal?.trim() || '',
+        site_web: formData.site_web?.trim() || '',
+        notes: formData.notes?.trim() || '',
+        numero_fiscal: formData.numero_fiscal?.trim() || '',
+        registre_commerce: formData.registre_commerce?.trim() || '',
+        securite_sociale: formData.securite_sociale?.trim() || '',
+        ville_legacy: formData.ville_legacy?.trim() || null,
+        region_legacy: formData.region_legacy?.trim() || null
       };
 
-      await apiClient.put(`/partenaires/${partner.id}/`, requestData);
+      console.log('📤 Données modification:', JSON.stringify(requestData, null, 2));
+      
+      const response = await apiClient.put(`/partenaires/${partner.id}/`, requestData);
+      console.log('✅ Modification réussie:', response.data);
+      
       onSuccess?.();
       onClose?.();
     } catch (err) {
-      let errorMsg = 'Erreur modification';
+      console.error('❌ Erreur modification:', err);
+      
       const errorData = err?.response?.data;
       
-      if (errorData) {
-        if (errorData?.nom?.[0]) errorMsg = `Nom: ${errorData.nom[0]}`;
-        else if (errorData?.detail) errorMsg = errorData.detail;
-        else if (typeof errorData === 'string') errorMsg = errorData;
+      if (errorData && typeof errorData === 'object') {
+        const fieldErrorMap = {};
+        const errorMessages = [];
+        
+        Object.entries(errorData).forEach(([field, messages]) => {
+          if (Array.isArray(messages)) {
+            fieldErrorMap[field] = messages[0];
+            errorMessages.push(`${field}: ${messages[0]}`);
+          } else if (typeof messages === 'string') {
+            fieldErrorMap[field] = messages;
+            errorMessages.push(`${field}: ${messages}`);
+          }
+        });
+        
+        setFieldErrors(fieldErrorMap);
+        setError(errorMessages.join(' | '));
+      } else if (errorData?.detail) {
+        setError(errorData.detail);
       } else if (err?.message) {
-        errorMsg = err.message;
+        setError(err.message);
       }
-      
-      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
+  const getFieldErrorClass = (fieldName) => {
+    return fieldErrors[fieldName] ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-violet-500';
+  };
+
+  const renderFieldError = (fieldName) => {
+    if (fieldErrors[fieldName]) {
+      return (
+        <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+          <FiAlertCircle className="w-3 h-3" />
+          {fieldErrors[fieldName]}
+        </p>
+      );
+    }
+    return null;
+  };
+
   if (!open || !partner) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="bg-violet-600 text-white rounded-t-lg p-4 sticky top-0 z-10">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-4xl flex flex-col" style={{ maxHeight: '90vh' }}>
+        {/* Header */}
+        <div className="bg-violet-600 text-white rounded-t-lg p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
+              <div className="p-2 bg-white bg-opacity-20 rounded-lg">
                 <FiEdit2 className="w-5 h-5" />
               </div>
               <div>
@@ -669,104 +908,152 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
                 <p className="text-violet-100 text-sm">{partner.nom}</p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded" disabled={loading}>
+            <button onClick={onClose} className="p-2 hover:bg-white hover:bg-opacity-20 rounded" disabled={loading}>
               <FiX size={20} />
             </button>
           </div>
         </div>
-        <div className="p-4">
+        
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6">
           {error && (
-            <div className="mb-4 bg-red-50 border-l-4 border-red-500 rounded-r p-3">
-              <div className="flex items-start gap-2">
-                <FiAlertCircle className="text-red-500 mt-0.5" />
-                <p className="text-red-700 text-sm">{error}</p>
+            <div className="mb-6 bg-red-50 border-l-4 border-red-500 rounded-r p-4">
+              <div className="flex items-start gap-3">
+                <FiAlertCircle className="text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-red-700 font-medium">Erreur de validation</p>
+                  <p className="text-red-600 text-sm mt-1">{error}</p>
+                </div>
               </div>
             </div>
           )}
+          
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="font-medium text-gray-900 mb-4">Informations principales</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Section 1: Informations obligatoires */}
+            <div className="bg-violet-50 bg-opacity-50 rounded-lg p-5 border border-violet-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FiBriefcase className="w-5 h-5 text-violet-600" />
+                Informations obligatoires
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Nom */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Nom <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={formData.nom}
-                    onChange={(e) => setFormData(prev => ({ ...prev, nom: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, nom: e.target.value }));
+                      if (fieldErrors.nom) setFieldErrors(prev => ({ ...prev, nom: null }));
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('nom')}`}
                     required
+                    disabled={loading}
                   />
+                  {renderFieldError('nom')}
                 </div>
+                
+                {/* Type */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
                   <select
                     value={formData.type_partenaire}
-                    onChange={(e) => setFormData(prev => ({ ...prev, type_partenaire: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, type_partenaire: e.target.value }));
+                      if (fieldErrors.type_partenaire) {
+                        setFieldErrors(prev => ({ ...prev, type_partenaire: null }));
+                      }
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('type_partenaire')}`}
+                    disabled={loading}
                   >
-                    <option value="client">Client</option>
-                    <option value="fournisseur">Fournisseur</option>
-                    <option value="employe">Employé</option>
-                    <option value="debiteur">Débiteur</option>
-                    <option value="crediteur">Créditeur</option>
+                    {partnerTypes.map(type => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
                   </select>
+                  {renderFieldError('type_partenaire')}
                 </div>
+                
+                {/* Statut */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Statut</label>
                   <select
-                    value={formData.statut ? 'active' : 'inactive'}
-                    onChange={(e) => setFormData(prev => ({ ...prev, statut: e.target.value === 'active' }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    value={formData.statut ? 'actif' : 'inactif'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, statut: e.target.value === 'actif' }))}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    disabled={loading}
                   >
-                    <option value="active">Actif</option>
-                    <option value="inactive">Inactif</option>
+                    <option value="actif">Actif</option>
+                    <option value="inactif">Inactif</option>
                   </select>
                 </div>
               </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="font-medium text-gray-900 mb-4">Contact</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Section 2: Contact */}
+            <div className="bg-gray-50 bg-opacity-50 rounded-lg p-5 border border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FiMail className="w-5 h-5" />
+                Contact
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Email */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
                   <input
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, email: e.target.value }));
+                      if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: null }));
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('email')}`}
+                    disabled={loading}
                   />
+                  {renderFieldError('email')}
                 </div>
+                
+                {/* Téléphone */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Téléphone</label>
                   <input
                     type="tel"
                     value={formData.telephone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, telephone: e.target.value }));
+                      if (fieldErrors.telephone) setFieldErrors(prev => ({ ...prev, telephone: null }));
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('telephone')}`}
+                    disabled={loading}
                   />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Site web</label>
-                  <input
-                    type="url"
-                    value={formData.site_web}
-                    onChange={(e) => setFormData(prev => ({ ...prev, site_web: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                  />
+                  {renderFieldError('telephone')}
                 </div>
               </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="font-medium text-gray-900 mb-4">Localisation (optionnel)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Section 3: Localisation */}
+            <div className="bg-gray-50 bg-opacity-50 rounded-lg p-5 border border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FiMapPin className="w-5 h-5" />
+                Localisation
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Pays */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Pays</label>
                   <select
                     value={formData.pays}
-                    onChange={(e) => setFormData(prev => ({ ...prev, pays: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, pays: e.target.value }));
+                      if (fieldErrors.pays) setFieldErrors(prev => ({ ...prev, pays: null }));
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('pays')}`}
+                    disabled={loading}
                   >
                     <option value="">Sélectionnez un pays</option>
                     {paysList.map(pays => (
@@ -775,39 +1062,37 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
                       </option>
                     ))}
                   </select>
+                  {renderFieldError('pays')}
                 </div>
+                
+                {/* Ville */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Ville</label>
                   <select
                     value={formData.ville}
-                    onChange={(e) => setFormData(prev => ({ ...prev, ville: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, ville: e.target.value }));
+                      if (fieldErrors.ville) setFieldErrors(prev => ({ ...prev, ville: null }));
+                    }}
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 transition-colors ${getFieldErrorClass('ville')}`}
+                    disabled={loading}
                   >
                     <option value="">Sélectionnez une ville</option>
                     {villesList.map(ville => (
-                      <option key={ville.id} value={ville.id}>
-                        {ville.nom}
-                      </option>
+                      <option key={ville.id} value={ville.id}>{ville.nom}</option>
                     ))}
                   </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
-                  <textarea
-                    value={formData.adresse}
-                    onChange={(e) => setFormData(prev => ({ ...prev, adresse: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
-                    rows="2"
-                  />
+                  {renderFieldError('ville')}
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t">
+            {/* Boutons */}
+            <div className="flex justify-end gap-3 pt-6 border-t sticky bottom-0 bg-white">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
                 disabled={loading}
               >
                 Annuler
@@ -815,7 +1100,7 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2.5 rounded-lg font-medium bg-violet-600 hover:bg-violet-700 text-white flex items-center gap-2"
+                className="px-6 py-2.5 rounded-lg font-medium bg-violet-600 hover:bg-violet-700 text-white flex items-center gap-2 transition-colors disabled:bg-gray-400"
               >
                 {loading ? (
                   <>
@@ -945,12 +1230,13 @@ function UserFromPartenaireModal({ open, onClose, partenaire, onSuccess }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="bg-violet-600 text-white rounded-t-lg p-4 sticky top-0 z-10">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
+        {/* Header */}
+        <div className="bg-violet-600 text-white rounded-t-lg p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
+              <div className="p-2 bg-white bg-opacity-20 rounded-lg">
                 <FiUserPlus className="w-5 h-5" />
               </div>
               <div>
@@ -960,21 +1246,24 @@ function UserFromPartenaireModal({ open, onClose, partenaire, onSuccess }) {
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded" disabled={loading && !success}>
+            <button onClick={onClose} className="p-2 hover:bg-white hover:bg-opacity-20 rounded" disabled={loading && !success}>
               <FiX size={20} />
             </button>
           </div>
         </div>
-        {error && (
-          <div className="mx-4 mt-4 bg-red-50 border-l-4 border-red-500 rounded-r p-3">
-            <div className="flex items-start gap-2">
-              <FiAlertCircle className="text-red-500 mt-0.5" />
-              <p className="text-red-700 text-sm">{error}</p>
+        
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {error && (
+            <div className="mb-4 bg-red-50 border-l-4 border-red-500 rounded-r p-3">
+              <div className="flex items-start gap-2">
+                <FiAlertCircle className="text-red-500 mt-0.5" />
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
             </div>
-          </div>
-        )}
-        {success ? (
-          <div className="p-4">
+          )}
+          
+          {success ? (
             <div className="text-center py-6">
               <FiCheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <h3 className="font-bold text-xl text-gray-900 mb-2">✅ Compte créé</h3>
@@ -988,107 +1277,110 @@ function UserFromPartenaireModal({ open, onClose, partenaire, onSuccess }) {
                 <p className="text-amber-600">Activation manuelle</p>
               )}
             </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="p-4 space-y-4">
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <h4 className="font-medium text-gray-900 mb-2">Email</h4>
-              <div className="bg-white rounded p-3">
-                <p className="font-bold text-lg text-blue-700">{partenaire?.email}</p>
-                <label className="flex items-center gap-2 mt-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.send_activation_email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, send_activation_email: e.target.checked }))}
-                    className="text-violet-600"
-                  />
-                  <span className="text-sm">Envoyer email d'activation</span>
-                </label>
-              </div>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h4 className="font-medium text-gray-900 mb-2">Informations</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Prénom *</label>
-                  <input
-                    type="text"
-                    value={formData.first_name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Nom *</label>
-                  <input
-                    type="text"
-                    value={formData.last_name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                    required
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm text-gray-700 mb-1">Téléphone</label>
-                  <input
-                    type="tel"
-                    value={formData.telephone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                  />
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <h4 className="font-medium text-gray-900 mb-2">Email</h4>
+                <div className="bg-white rounded p-3">
+                  <p className="font-bold text-lg text-blue-700">{partenaire?.email}</p>
+                  <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.send_activation_email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, send_activation_email: e.target.checked }))}
+                      className="text-violet-600"
+                    />
+                    <span className="text-sm">Envoyer email d'activation</span>
+                  </label>
                 </div>
               </div>
-            </div>
-            <div className="bg-violet-50 rounded-lg p-4 border border-violet-200">
-              <h4 className="font-medium text-gray-900 mb-2">Groupes</h4>
-              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
-                {groupesList.length === 0 ? (
-                  <p className="text-gray-500 text-sm italic">Aucun groupe</p>
-                ) : (
-                  groupesList.map(groupe => (
-                    <label key={groupe.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.groups.includes(groupe.id)}
-                        onChange={() => toggleGroup(groupe.id)}
-                        className="text-violet-600"
-                      />
-                      <span className="text-sm text-gray-700">{groupe.name}</span>
-                    </label>
-                  ))
-                )}
+              
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <h4 className="font-medium text-gray-900 mb-2">Informations</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Prénom *</label>
+                    <input
+                      type="text"
+                      value={formData.first_name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Nom *</label>
+                    <input
+                      type="text"
+                      value={formData.last_name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm text-gray-700 mb-1">Téléphone</label>
+                    <input
+                      type="tel"
+                      value={formData.telephone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
-                disabled={loading}
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <FiRefreshCw className="animate-spin" />
-                    Création...
-                  </>
-                ) : (
-                  <>
-                    <FiUserPlus />
-                    Créer
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        )}
+              
+              <div className="bg-violet-50 rounded-lg p-4 border border-violet-200">
+                <h4 className="font-medium text-gray-900 mb-2">Groupes</h4>
+                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
+                  {groupesList.length === 0 ? (
+                    <p className="text-gray-500 text-sm italic">Aucun groupe</p>
+                  ) : (
+                    groupesList.map(groupe => (
+                      <label key={groupe.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.groups.includes(groupe.id)}
+                          onChange={() => toggleGroup(groupe.id)}
+                          className="text-violet-600"
+                        />
+                        <span className="text-sm text-gray-700">{groupe.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-4 border-t sticky bottom-0 bg-white">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
+                  disabled={loading}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <FiRefreshCw className="animate-spin" />
+                      Création...
+                    </>
+                  ) : (
+                    <>
+                      <FiUserPlus />
+                      Créer
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1116,12 +1408,13 @@ function PartnerDetailModal({ partner, onClose, onCreateUser }) {
   if (!partner) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        <div className="bg-violet-600 text-white rounded-t-lg p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-3xl flex flex-col" style={{ maxHeight: '90vh' }}>
+        {/* Header */}
+        <div className="bg-violet-600 text-white rounded-t-lg p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
+              <div className="p-2 bg-white bg-opacity-20 rounded-lg">
                 <FiBriefcase className="w-5 h-5" />
               </div>
               <div>
@@ -1131,12 +1424,14 @@ function PartnerDetailModal({ partner, onClose, onCreateUser }) {
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded">
+            <button onClick={onClose} className="p-2 hover:bg-white hover:bg-opacity-20 rounded">
               <FiX size={20} />
             </button>
           </div>
         </div>
-        <div className="p-4 space-y-4">
+        
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {error && (
             <div className="bg-red-50 border-l-4 border-red-500 rounded-r p-3">
               <div className="flex items-start gap-2">
@@ -1145,6 +1440,7 @@ function PartnerDetailModal({ partner, onClose, onCreateUser }) {
               </div>
             </div>
           )}
+          
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
             <h3 className="font-medium text-gray-900 mb-3">Informations principales</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -1176,6 +1472,7 @@ function PartnerDetailModal({ partner, onClose, onCreateUser }) {
               )}
             </div>
           </div>
+          
           <div className="bg-violet-50 rounded-lg p-4 border border-violet-200">
             <h3 className="font-medium text-gray-900 mb-3">Compte utilisateur</h3>
             {partner.user ? (
@@ -1197,16 +1494,14 @@ function PartnerDetailModal({ partner, onClose, onCreateUser }) {
             ) : (
               <div className="text-center py-4">
                 {partner.email ? (
-                  <>
-                    <button
-                      onClick={handleCreateUserClick}
-                      disabled={loading}
-                      className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 font-medium flex items-center justify-center gap-2 mx-auto"
-                    >
-                      {loading ? <FiRefreshCw className="animate-spin" /> : <FiUserPlus />}
-                      Créer un compte
-                    </button>
-                  </>
+                  <button
+                    onClick={handleCreateUserClick}
+                    disabled={loading}
+                    className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 font-medium flex items-center justify-center gap-2 mx-auto"
+                  >
+                    {loading ? <FiRefreshCw className="animate-spin" /> : <FiUserPlus />}
+                    Créer un compte
+                  </button>
                 ) : (
                   <div className="bg-red-50 p-3 rounded">
                     <p className="font-medium text-red-800">Email requis</p>
@@ -1215,11 +1510,13 @@ function PartnerDetailModal({ partner, onClose, onCreateUser }) {
               </div>
             )}
           </div>
-          <div className="flex justify-end pt-4 border-t">
-            <button onClick={onClose} className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700">
-              Fermer
-            </button>
-          </div>
+        </div>
+        
+        {/* Footer */}
+        <div className="p-4 border-t flex-shrink-0">
+          <button onClick={onClose} className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700">
+            Fermer
+          </button>
         </div>
       </div>
     </div>
@@ -1250,8 +1547,8 @@ export default function PartnersPage() {
     { value: 'client', label: 'Client' },
     { value: 'fournisseur', label: 'Fournisseur' },
     { value: 'employe', label: 'Employé' },
-    { value: 'debiteur', label: 'Débiteur' },
-    { value: 'crediteur', label: 'Créditeur' },
+    { value: 'debiteur', label: 'Débiteur divers' },
+    { value: 'crediteur', label: 'Créditeur divers' },
   ];
 
   const statusOptions = [
@@ -1264,9 +1561,6 @@ export default function PartnersPage() {
     setCurrentPage(1);
   }, [activeEntity]);
 
-  // ========================================================================
-  // FONCTION POUR CHARGER LES PARTENAIRES
-  // ========================================================================
   const fetchPartners = useCallback(async () => {
     let isMounted = true;
     
@@ -1292,9 +1586,8 @@ export default function PartnersPage() {
       
       const filteredData = data.filter(partner => 
         partner && (
-          partner.entite === activeEntity.id ||
-          partner.entite?.id === activeEntity.id ||
-          partner.company_id === activeEntity.id
+          partner.company_id === activeEntity.id ||
+          partner.company_id?.id === activeEntity.id
         )
       );
       
@@ -1320,8 +1613,8 @@ export default function PartnersPage() {
           
           const filtered = fallbackData.filter(p => 
             p && (
-              p.entite === activeEntity.id || 
-              p.entite?.id === activeEntity.id
+              p.company_id === activeEntity.id || 
+              p.company_id?.id === activeEntity.id
             )
           );
           
@@ -1453,6 +1746,17 @@ export default function PartnersPage() {
     }
   };
 
+  const getTypeColor = (type) => {
+    switch(type) {
+      case 'client': return 'bg-blue-100 text-blue-800';
+      case 'fournisseur': return 'bg-orange-100 text-orange-800';
+      case 'employe': return 'bg-purple-100 text-purple-800';
+      case 'debiteur': return 'bg-red-100 text-red-800';
+      case 'crediteur': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   if (loading && partners.length === 0) {
     return (
       <div className="p-6">
@@ -1466,7 +1770,7 @@ export default function PartnersPage() {
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
-      {/* HEADER */}
+      {/* Header */}
       <div className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -1474,8 +1778,13 @@ export default function PartnersPage() {
             <p className="text-gray-600">{activeEntity?.raison_sociale || 'Sélectionnez une entité'}</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleRefresh} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-              <FiRefreshCw /> Actualiser
+            <button 
+              onClick={handleRefresh} 
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              title="Actualiser la liste"
+            >
+              <FiRefreshCw className={loading ? 'animate-spin' : ''} /> 
+              Actualiser
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
@@ -1490,6 +1799,7 @@ export default function PartnersPage() {
         </div>
       </div>
 
+      {/* Error */}
       {error && (
         <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
           <div className="flex items-center justify-between">
@@ -1504,7 +1814,7 @@ export default function PartnersPage() {
         </div>
       )}
 
-      {/* STATISTIQUES */}
+      {/* Statistiques */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <div className="bg-white p-3 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
@@ -1563,7 +1873,7 @@ export default function PartnersPage() {
         </div>
       </div>
 
-      {/* FILTRES ET RECHERCHE */}
+      {/* Filtres */}
       <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm mb-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
@@ -1610,7 +1920,7 @@ export default function PartnersPage() {
         </div>
       </div>
 
-      {/* TABLEAU DES PARTENAIRES */}
+      {/* Tableau */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -1656,13 +1966,7 @@ export default function PartnersPage() {
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         {getTypeIcon(partner.type_partenaire)}
-                        <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${
-                          partner.type_partenaire === 'client' ? 'bg-blue-100 text-blue-800' :
-                          partner.type_partenaire === 'fournisseur' ? 'bg-orange-100 text-orange-800' :
-                          partner.type_partenaire === 'employe' ? 'bg-purple-100 text-purple-800' :
-                          partner.type_partenaire === 'debiteur' ? 'bg-red-100 text-red-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
+                        <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${getTypeColor(partner.type_partenaire)}`}>
                           {partner.type_partenaire || 'Non spécifié'}
                         </span>
                       </div>
@@ -1744,7 +2048,7 @@ export default function PartnersPage() {
         </div>
       </div>
 
-      {/* PAGINATION */}
+      {/* Pagination */}
       {filteredPartners.length > 0 && (
         <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
           <div className="text-sm text-gray-600">
@@ -1780,7 +2084,7 @@ export default function PartnersPage() {
         </div>
       )}
 
-      {/* MODAUX */}
+      {/* Modaux */}
       <CreatePartnerModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}

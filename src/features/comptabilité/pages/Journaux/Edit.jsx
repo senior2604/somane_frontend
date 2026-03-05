@@ -1,428 +1,793 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// C:\Users\IBM\Documents\somane_frontend\src\features\comptabilité\pages\Journaux\Edit.jsx
+
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
-  FiArrowLeft, 
-  FiX, 
-  FiCheck, 
-  FiAlertCircle, 
   FiPlus,
-  FiSave,
-  FiEdit
+  // FiEdit,  // Commenté car non utilisé
+  FiTrash2, 
+  FiX,
+  FiBriefcase,
+  FiMail,
+  FiCreditCard,
+  FiDollarSign,
+  FiInfo,
+  // FiSave,  // Commenté car non utilisé
+  FiAlertCircle,
+  FiCheck,
+  FiUploadCloud,
+  FiCopy,
+  FiRotateCcw,
+  FiSettings
 } from "react-icons/fi";
 import { useParams, useNavigate } from 'react-router-dom';
-import { journauxService, apiClient } from "../../services";
+import { journauxService, comptesService, apiClient } from "../../services";
 import { useEntity } from '../../../../context/EntityContext';
 
-// 🔥 CACHE POUR ÉVITER LES REQUÊTES MULTIPLES
-const DATA_CACHE = {
-  journalTypes: null,
-  comptes: null,
-  banques: null,
-  lastFetch: null,
-  CACHE_DURATION: 10 * 60 * 1000 // 10 minutes
+// ==========================================
+// COMPOSANT TOOLTIP
+// ==========================================
+const Tooltip = ({ children, text, position = 'top' }) => {
+  const [show, setShow] = useState(false);
+  
+  return (
+    <div className="relative inline-block">
+      <div
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        {children}
+      </div>
+      {show && (
+        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
+          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
+          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
+          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
+          'left-full top-1/2 transform -translate-y-1/2 ml-1'
+        }`}>
+          {text}
+          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
+            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
+            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
+            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
+            'right-full top-1/2 -translate-y-1/2 -mr-1'
+          }`} />
+        </div>
+      )}
+    </div>
+  );
 };
 
-// 🔥 FONCTION D'EXTRACTION ROBUSTE DES DONNÉES API
-const extractData = (response) => {
-  if (!response) return [];
-  if (Array.isArray(response)) return response;
-  if (Array.isArray(response.results)) return response.results;
-  if (Array.isArray(response.data)) return response.data;
+// ==========================================
+// COMPOSANT AUTOCOMPLETE OPTIMISÉ
+// ==========================================
+const AutocompleteInput = ({
+  value,
+  selectedId,
+  onChange,
+  onSelect,
+  options,
+  getOptionLabel,
+  placeholder = "",
+  className = "",
+  disabled = false,
+  required = false,
+  loading = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value || '');
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
+  const [dropdownStyle, setDropdownStyle] = useState({});
+
+  useEffect(() => {
+    if (value !== undefined) {
+      setInputValue(value);
+    }
+  }, [value]);
+
+  const filteredOptions = useMemo(() => {
+    if (!inputValue) return options;
+    const search = inputValue.toLowerCase();
+    return options.filter(option => {
+      const label = getOptionLabel(option).toLowerCase();
+      return label.includes(search);
+    });
+  }, [options, inputValue, getOptionLabel]);
+
+  const updateDropdownPosition = () => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownStyle({
+        position: 'fixed',
+        top: `${rect.bottom}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        zIndex: 9999,
+        maxHeight: '200px',
+        overflowY: 'auto'
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updateDropdownPosition();
+      const handleScroll = () => updateDropdownPosition();
+      const handleResize = () => updateDropdownPosition();
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', handleResize);
+      return () => {
+        window.removeEventListener('scroll', handleScroll, true);
+        window.removeEventListener('resize', handleResize);
+      };
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleInputChange = (e) => {
+    const newValue = e.target.value;
+    setInputValue(newValue);
+    setIsOpen(true);
+    setHighlightedIndex(0);
+    onChange(newValue);
+    if (selectedId) {
+      onSelect(null, '');
+    }
+  };
+
+  const handleSelectOption = (option) => {
+    const label = getOptionLabel(option);
+    const id = option.id;
+    setInputValue(label);
+    setIsOpen(false);
+    onSelect(id, label);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIsOpen(true);
+      setHighlightedIndex(prev =>
+        prev < filteredOptions.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0);
+    } else if (e.key === 'Enter' && isOpen && filteredOptions.length > 0) {
+      e.preventDefault();
+      handleSelectOption(filteredOptions[highlightedIndex]);
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="text"
+        value={inputValue}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        onFocus={() => {
+          setIsOpen(true);
+          updateDropdownPosition();
+        }}
+        placeholder={loading ? 'Chargement...' : placeholder}
+        disabled={disabled || loading}
+        required={required}
+        className={`w-full px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none ${className} ${loading ? 'bg-gray-50' : ''}`}
+        style={{ height: '26px', border: 'none', backgroundColor: 'transparent' }}
+        autoComplete="off"
+      />
+      {isOpen && filteredOptions.length > 0 && !loading && (
+        <div
+          ref={dropdownRef}
+          className="bg-white border border-gray-300 shadow-lg"
+          style={dropdownStyle}
+        >
+          {filteredOptions.map((option, index) => (
+            <div
+              key={option.id}
+              className={`px-2 py-1 text-xs cursor-pointer ${
+                index === highlightedIndex
+                  ? 'bg-purple-100 text-purple-700'
+                  : 'hover:bg-purple-50'
+              } ${option.id === selectedId ? 'bg-purple-50' : ''}`}
+              onClick={() => handleSelectOption(option)}
+              onMouseEnter={() => setHighlightedIndex(index)}
+            >
+              {getOptionLabel(option)}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+};
+
+// ==========================================
+// COMPOSANT SELECT POUR TYPE JOURNAL OPTIMISÉ
+// ==========================================
+const JournalTypeSelect = ({
+  value,
+  onChange,
+  options,
+  placeholder = "Sélectionner",
+  disabled = false,
+  required = false,
+  loading = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const selectedOption = options.find(opt => opt.id === value);
+  
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm) return options;
+    return options.filter(option => {
+      const label = `${option.code} ${option.name}`.toLowerCase();
+      return label.includes(searchTerm.toLowerCase());
+    });
+  }, [options, searchTerm]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div
+        onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
+        className={`w-full h-[26px] px-2 border border-gray-300 text-xs flex items-center justify-between cursor-pointer hover:border-purple-400 bg-white ${disabled || loading ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+      >
+        <span className={selectedOption ? 'text-gray-900 truncate pr-1' : 'text-gray-400 truncate pr-1'}>
+          {loading ? 'Chargement...' : (selectedOption ? `${selectedOption.code} - ${selectedOption.name}` : placeholder)}
+        </span>
+        <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+
+      {isOpen && !disabled && !loading && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-300 shadow-lg">
+          <div className="p-1 border-b">
+            <input
+              ref={inputRef}
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-2 py-1 text-xs border border-gray-300 focus:ring-1 focus:ring-purple-500"
+              style={{ height: '26px' }}
+              placeholder="Rechercher..."
+              autoFocus
+            />
+          </div>
+          
+          <div className="max-h-48 overflow-y-auto">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
+                <div
+                  key={option.id}
+                  className={`px-2 py-1.5 text-xs cursor-pointer hover:bg-purple-50 ${
+                    option.id === value ? 'bg-purple-100' : ''
+                  }`}
+                  onClick={() => {
+                    onChange(option.id);
+                    setIsOpen(false);
+                    setSearchTerm('');
+                  }}
+                >
+                  <span className="font-medium">{option.code}</span> - {option.name}
+                </div>
+              ))
+            ) : (
+              <div className="px-2 py-2 text-xs text-gray-500 text-center">
+                Aucun type trouvé
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==========================================
+// NORMALISATION DES DONNÉES API
+// ==========================================
+const normalizeApiResponse = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (data.data && Array.isArray(data.data)) return data.data;
+  if (data.results && Array.isArray(data.results)) return data.results;
+  if (data.items && Array.isArray(data.items)) return data.items;
   return [];
 };
 
+// ==========================================
+// FORMATAGE LIBELLÉ BANQUE
+// ==========================================
+const getBankAccountLabel = (bankAccount) => {
+  if (!bankAccount) return '';
+  
+  let bankName = '';
+  let accountNumber = bankAccount.numero_compte || '';
+  
+  if (bankAccount.banque && typeof bankAccount.banque === 'object') {
+    bankName = bankAccount.banque.nom || 
+               bankAccount.banque.name || 
+               bankAccount.banque.raison_sociale || 
+               'Banque sans nom';
+  }
+  else if (bankAccount.banque_details) {
+    bankName = bankAccount.banque_details.nom || 
+               bankAccount.banque_details.name || 
+               bankAccount.banque_details.raison_sociale || 
+               'Banque sans nom';
+  }
+  else if (bankAccount.banque_nom) {
+    bankName = bankAccount.banque_nom;
+  }
+  else if (bankAccount.nom_banque) {
+    bankName = bankAccount.nom_banque;
+  }
+  else {
+    bankName = bankAccount.nom || 
+               bankAccount.name || 
+               bankAccount.libelle || 
+               (bankAccount.id ? `Banque #${bankAccount.id}` : 'Compte bancaire');
+  }
+  
+  let partnerInfo = '';
+  if (bankAccount.partenaire && typeof bankAccount.partenaire === 'object') {
+    partnerInfo = bankAccount.partenaire.nom || '';
+  } else if (bankAccount.partenaire_nom) {
+    partnerInfo = bankAccount.partenaire_nom;
+  }
+  
+  let label = bankName;
+  if (accountNumber) label += ` - ${accountNumber}`;
+  if (partnerInfo) label += ` (${partnerInfo})`;
+  
+  return label;
+};
+
+// ==========================================
+// COMPOSANT PRINCIPAL
+// ==========================================
 export default function Edit() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { activeEntity } = useEntity();
+
+  const [loading, setLoading] = useState(true);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [loadingTypes, setLoadingTypes] = useState(false);
+  const [loadingBanks, setLoadingBanks] = useState(false);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState('comptable');
   
+  const [accounts, setAccounts] = useState([]);
+  const [journalTypes, setJournalTypes] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  
+  // État du formulaire
   const [formData, setFormData] = useState({
-    code: '',
     name: '',
-    type: '',
-    default_account: '',
-    bank_account: '',
+    code: '',
+    type_id: '',
+    type_code: '',
+    default_account_id: '',
+    default_account_name: '',
+    profit_account_id: '',
+    profit_account_name: '',
+    loss_account_id: '',
+    loss_account_name: '',
+    suspense_account_id: '',
+    suspense_account_name: '',
+    suspense_account_in_id: '',
+    suspense_account_in_name: '',
+    suspense_account_out_id: '',
+    suspense_account_out_name: '',
+    bank_account_id: '',
+    bank_account_name: '',
+    email: '',
+    payment_method_in: [],
+    payment_method_out: [],
     note: '',
     active: true
   });
-  
-  const [journal, setJournal] = useState(null);
-  const [journalTypes, setJournalTypes] = useState([]);
-  const [comptes, setComptes] = useState([]);
-  const [banques, setBanques] = useState([]);
-  
-  const [loading, setLoading] = useState(true);
-  const [submitLoading, setSubmitLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  
-  // États de recherche
-  const [searchType, setSearchType] = useState('');
-  const [searchCompte, setSearchCompte] = useState('');
-  const [searchBanque, setSearchBanque] = useState('');
-  
-  // États pour le lazy loading
-  const [comptesLoaded, setComptesLoaded] = useState(false);
-  const [banquesLoaded, setBanquesLoaded] = useState(false);
 
-  // 🔥 FONCTION DE VALIDATION DU CACHE CENTRALISÉE
-  const isCacheValid = useCallback(() => {
-    if (!DATA_CACHE.lastFetch) return false;
-    return (Date.now() - DATA_CACHE.lastFetch) < DATA_CACHE.CACHE_DURATION;
-  }, []);
+  const actionsMenuRef = useRef(null);
+  const initialLoadDone = useRef(false);
 
   useEffect(() => {
-    if (activeEntity) {
-      loadData();
-    } else {
-      setError('Aucune entité active sélectionnée');
-      setLoading(false);
-    }
-  }, [id, activeEntity]);
+    const handleClickOutside = (e) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target)) {
+        setShowActionsMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  const loadData = async () => {
+  // ==========================================
+  // CHARGEMENT DES DONNÉES
+  // ==========================================
+  const loadAccounts = useCallback(async () => {
+    if (accounts.length > 0) return;
+    
+    setLoadingAccounts(true);
     try {
-      setLoading(true);
-      setError(null);
-      
-      console.log('🔍 [Edit] Chargement du journal ID:', id);
-      
-      // Charger le journal à éditer
+      const response = await comptesService.getAll();
+      setAccounts(normalizeApiResponse(response));
+      console.log('✅ Comptes chargés:', accounts.length);
+    } catch (err) {
+      console.warn('⚠️ Erreur chargement comptes:', err);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  }, [accounts.length]);
+
+  const loadJournalTypes = useCallback(async () => {
+    if (journalTypes.length > 0) return;
+    
+    setLoadingTypes(true);
+    try {
+      const response = await apiClient.get('/compta/journal-types/');
+      setJournalTypes(normalizeApiResponse(response));
+      console.log('✅ Types de journal chargés:', journalTypes.length);
+    } catch (err) {
+      console.warn('⚠️ Erreur chargement types:', err);
+    } finally {
+      setLoadingTypes(false);
+    }
+  }, [journalTypes.length]);
+
+  const loadBankAccounts = useCallback(async () => {
+    if (bankAccounts.length > 0) return;
+    
+    setLoadingBanks(true);
+    try {
+      const response = await apiClient.get('/banques-partenaires/');
+      setBankAccounts(normalizeApiResponse(response));
+      console.log('✅ Banques chargées:', bankAccounts.length);
+    } catch (err) {
+      console.warn('⚠️ Erreur chargement banques:', err);
+    } finally {
+      setLoadingBanks(false);
+    }
+  }, [bankAccounts.length]);
+
+  const loadPaymentMethods = useCallback(async () => {
+    if (paymentMethods.length > 0) return;
+    
+    setLoadingPayments(true);
+    try {
+      const response = await apiClient.get('/compta/payment-methods/');
+      setPaymentMethods(normalizeApiResponse(response));
+      console.log('✅ Méthodes de paiement chargées:', paymentMethods.length);
+    } catch (err) {
+      console.log('ℹ️ Méthodes de paiement non disponibles');
+    } finally {
+      setLoadingPayments(false);
+    }
+  }, [paymentMethods.length]);
+
+  // Chargement du journal
+  const loadJournal = useCallback(async () => {
+    if (!activeEntity) {
+      setError('Vous devez sélectionner une entité');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      console.log('🔍 Chargement du journal ID:', id);
       const journalData = await journauxService.getById(id);
-      console.log('📋 [Edit] Journal chargé:', JSON.stringify(journalData, null, 2));
-      setJournal(journalData);
-      
-      // 🔥 CORRECTION : Extraction robuste des IDs
-      const defaultAccountId = journalData.default_account?.id || 
-                               journalData.default_account_id || 
-                               (typeof journalData.default_account === 'object' && journalData.default_account !== null
-                                 ? journalData.default_account.id 
-                                 : journalData.default_account) || '';
-
-      const bankAccountId = journalData.bank_account?.id || 
-                            journalData.bank_account_id || 
-                            (typeof journalData.bank_account === 'object' && journalData.bank_account !== null
-                              ? journalData.bank_account.id 
-                              : journalData.bank_account) || '';
-
-      const typeId = journalData.type?.id || 
-                     journalData.type_id || 
-                     (typeof journalData.type === 'object' && journalData.type !== null
-                       ? journalData.type.id 
-                       : journalData.type) || '';
+      console.log('📋 Journal chargé:', journalData);
       
       // Pré-remplir le formulaire
       setFormData({
-        code: journalData.code || '',
         name: journalData.name || '',
-        type: typeId,
-        default_account: defaultAccountId,
-        bank_account: bankAccountId,
+        code: journalData.code || '',
+        type_id: journalData.type?.id || journalData.type_id || '',
+        type_code: journalData.type?.code || journalData.type_code || '',
+        default_account_id: journalData.default_account?.id || journalData.default_account_id || '',
+        default_account_name: journalData.default_account ? 
+          `${journalData.default_account.code || ''} - ${journalData.default_account.name || ''}`.trim() : '',
+        profit_account_id: journalData.profit_account?.id || journalData.profit_account_id || journalData.profit_account || '',
+        profit_account_name: journalData.profit_account && typeof journalData.profit_account === 'object' ? 
+          `${journalData.profit_account.code || ''} - ${journalData.profit_account.name || ''}`.trim() : '',
+        loss_account_id: journalData.loss_account?.id || journalData.loss_account_id || journalData.loss_account || '',
+        loss_account_name: journalData.loss_account && typeof journalData.loss_account === 'object' ? 
+          `${journalData.loss_account.code || ''} - ${journalData.loss_account.name || ''}`.trim() : '',
+        suspense_account_id: journalData.suspense_account?.id || journalData.suspense_account_id || journalData.suspense_account || '',
+        suspense_account_name: journalData.suspense_account && typeof journalData.suspense_account === 'object' ? 
+          `${journalData.suspense_account.code || ''} - ${journalData.suspense_account.name || ''}`.trim() : '',
+        suspense_account_in_id: journalData.suspense_in_account?.id || journalData.suspense_in_account_id || '',
+        suspense_account_in_name: journalData.suspense_in_account && typeof journalData.suspense_in_account === 'object' ? 
+          `${journalData.suspense_in_account.code || ''} - ${journalData.suspense_in_account.name || ''}`.trim() : '',
+        suspense_account_out_id: journalData.suspense_out_account?.id || journalData.suspense_out_account_id || '',
+        suspense_account_out_name: journalData.suspense_out_account && typeof journalData.suspense_out_account === 'object' ? 
+          `${journalData.suspense_out_account.code || ''} - ${journalData.suspense_out_account.name || ''}`.trim() : '',
+        bank_account_id: journalData.bank_account?.id || journalData.bank_account_id || '',
+        bank_account_name: journalData.bank_account ? getBankAccountLabel(journalData.bank_account) : '',
+        email: journalData.email || activeEntity?.email || '',
+        payment_method_in: journalData.inbound_payment_methods?.map(m => m.id) || 
+                          journalData.inbound_payment_method_ids || [],
+        payment_method_out: journalData.outbound_payment_methods?.map(m => m.id) || 
+                           journalData.outbound_payment_method_ids || [],
         note: journalData.note || '',
         active: journalData.active !== false
       });
 
-      console.log('📝 [Edit] Formulaire pré-rempli:', {
-        code: journalData.code,
-        name: journalData.name,
-        typeId: typeId,
-        defaultAccountId: defaultAccountId,
-        bankAccountId: bankAccountId,
-        active: journalData.active
-      });
-
-      // Charger les types de journal
-      if (isCacheValid() && DATA_CACHE.journalTypes) {
-        setJournalTypes(DATA_CACHE.journalTypes);
-      } else {
-        const typesRes = await journauxService.getTypes();
-        const typesData = extractData(typesRes);
-        DATA_CACHE.journalTypes = typesData;
-        DATA_CACHE.lastFetch = Date.now();
-        setJournalTypes(typesData);
-      }
-
     } catch (err) {
-      console.error('❌ [Edit] Erreur loadData:', err);
-      if (err.response?.status === 404) {
-        setError('Journal non trouvé');
-      } else {
-        setError(`Erreur de chargement: ${err.message || 'Inconnue'}`);
-      }
+      console.error('❌ Erreur chargement:', err);
+      setError(err.message || 'Erreur lors du chargement du journal');
     } finally {
       setLoading(false);
     }
+  }, [id, activeEntity]);
+
+  // Chargement initial unique
+  useEffect(() => {
+    if (!activeEntity) return;
+    
+    if (initialLoadDone.current) {
+      console.log('⏭️ Chargement déjà effectué, ignoré');
+      return;
+    }
+    
+    initialLoadDone.current = true;
+    console.log('🚀 Chargement initial des données');
+    
+    const loadData = async () => {
+      await loadJournal();
+      // Charger les autres données en parallèle
+      await Promise.all([
+        loadAccounts(),
+        loadJournalTypes(),
+        loadBankAccounts(),
+        loadPaymentMethods()
+      ]);
+    };
+    
+    loadData();
+    
+    return () => {
+      console.log('🧹 Nettoyage du composant');
+    };
+  }, [activeEntity, loadJournal, loadAccounts, loadJournalTypes, loadBankAccounts, loadPaymentMethods]);
+
+  const markAsModified = () => {
+    if (!hasUnsavedChanges) setHasUnsavedChanges(true);
   };
 
-  // 🔥 FONCTION POUR CHARGER LES COMPTES (LAZY) - CORRIGÉE AVEC activeEntity
-  const loadComptes = useCallback(async (force = false) => {
-    if (!activeEntity) {
-      console.warn('⚠️ [Edit] Tentative de chargement des comptes sans entité active');
-      return;
-    }
-
-    if (!force && (comptesLoaded || comptes.length > 0)) return;
-
-    try {
-      console.log('🔄 [Edit] Chargement des comptes pour entité:', activeEntity.id);
-      setComptesLoaded(false);
-      
-      if (isCacheValid() && DATA_CACHE.comptes?.length > 0) {
-        setComptes(DATA_CACHE.comptes);
-      } else {
-        // 🔥 UTILISER activeEntity.id DU CONTEXTE
-        const response = await apiClient.get(`compta/accounts/?entity_id=${activeEntity.id}`);
-        const comptesData = extractData(response);
-        console.log('📊 [Edit] Comptes chargés:', comptesData.length, 'items');
-        DATA_CACHE.comptes = comptesData;
-        setComptes(comptesData);
-      }
-    } catch (err) {
-      console.error('❌ [Edit] Erreur chargement comptes:', err);
-      setError(prev => prev || 'Impossible de charger la liste des comptes');
-      setComptes([]);
-    } finally {
-      setComptesLoaded(true);
-    }
-  }, [comptesLoaded, comptes.length, isCacheValid, activeEntity]);
-
-  // 🔥 FONCTION POUR CHARGER LES BANQUES (LAZY)
-  const loadBanques = useCallback(async (force = false) => {
-    if (!force && (banquesLoaded || banques.length > 0)) return;
-
-    try {
-      console.log('🔄 [Edit] Chargement des banques...');
-      setBanquesLoaded(false);
-      
-      if (isCacheValid() && DATA_CACHE.banques?.length > 0) {
-        setBanques(DATA_CACHE.banques);
-      } else {
-        const response = await apiClient.get('banques/');
-        const banquesData = extractData(response);
-        console.log('🏦 [Edit] Banques chargées:', banquesData.length, 'items');
-        DATA_CACHE.banques = banquesData;
-        setBanques(banquesData);
-      }
-    } catch (err) {
-      console.error('❌ [Edit] Erreur chargement banques:', err);
-      setError(prev => prev || 'Impossible de charger la liste des banques');
-      setBanques([]);
-    } finally {
-      setBanquesLoaded(true);
-    }
-  }, [banquesLoaded, banques.length, isCacheValid]);
-
-  // 🔥 CHARGEMENT AUTO SEULEMENT POUR BAN/CAI
-  useEffect(() => {
-    console.log('🔧 [Edit] useEffect - formData.type:', formData.type, '(type:', typeof formData.type, ')');
-    console.log('🔧 [Edit] Comptes chargés:', comptesLoaded, 'Banques chargées:', banquesLoaded);
-    
-    if (!formData.type) {
-      setComptes([]);
-      setBanques([]);
-      setComptesLoaded(false);
-      setBanquesLoaded(false);
-      return;
-    }
-
-    const selectedType = journalTypes.find(type => type.id === formData.type);
-    if (!selectedType) return;
-
-    console.log('🔧 [Edit] Type sélectionné:', selectedType.code, '-', selectedType.name);
-    const needsAccounts = selectedType.code === 'BAN' || selectedType.code === 'CAI';
-    
-    if (needsAccounts) {
-      if (!comptesLoaded) {
-        console.log('🔄 [Edit] Déclenchement loadComptes');
-        loadComptes();
-      }
-      if (!banquesLoaded) {
-        console.log('🔄 [Edit] Déclenchement loadBanques');
-        loadBanques();
-      }
-    }
-  }, [formData.type, journalTypes, comptesLoaded, banquesLoaded, loadComptes, loadBanques]);
-
-  // 🔥 CALCULS DIRECTS
-  const selectedType = journalTypes.find(type => type.id === formData.type);
-  const isBankAccountRequired = selectedType?.code === 'BAN' || selectedType?.code === 'CAI';
-  const isDefaultAccountRequired = selectedType?.code === 'BAN' || selectedType?.code === 'CAI';
-
-  // 🔥 TROUVER LE COMPTE SÉLECTIONNÉ POUR L'AFFICHAGE
-  const selectedCompte = comptes.find(c => c.id === formData.default_account || 
-                                          c.id?.toString() === formData.default_account?.toString());
-  
-  const selectedBanque = banques.find(b => b.id === formData.bank_account || 
-                                          b.id?.toString() === formData.bank_account?.toString());
-
-  console.log('🔍 [Edit] Sélections actuelles:', {
-    typeId: formData.type,
-    typeValue: typeof formData.type,
-    compteId: formData.default_account,
-    compteValue: typeof formData.default_account,
-    banqueId: formData.bank_account,
-    banqueValue: typeof formData.bank_account,
-    selectedCompte: selectedCompte?.code || 'Aucun',
-    selectedBanque: selectedBanque?.numero_compte || 'Aucun'
-  });
-
-  const handleChange = useCallback((field, value) => {
-    console.log('✏️ [Edit] Changement:', field, '=', value, '(type:', typeof value, ')');
+  const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    if (error) setError(null);
+    markAsModified();
+  };
+
+  // Vérifier si le type est Banque ou Caisse
+  const isBankOrCashType = useCallback(() => {
+    const typeCode = formData.type_code || '';
+    const bankCashCodes = ['BQ', 'CA', 'BN', 'CS'];
+    return bankCashCodes.includes(typeCode) || 
+           typeCode?.startsWith('B') || 
+           typeCode?.startsWith('C');
+  }, [formData.type_code]);
+
+  const showFullAccounting = isBankOrCashType();
+
+  // ==========================================
+  // PRÉPARATION DES DONNÉES POUR L'API
+  // ==========================================
+  const prepareDataForApi = useCallback(() => {
+    const apiData = {
+      name: formData.name,
+      code: formData.code.toUpperCase().slice(0, 8),
+      type_id: formData.type_id || null,
+      company_id: activeEntity?.id || null,
+      default_account_id: formData.default_account_id || null,
+      profit_account_id: formData.profit_account_id || null,
+      loss_account_id: formData.loss_account_id || null,
+      suspense_account_id: formData.suspense_account_id || null,
+      suspense_in_account_id: formData.suspense_account_in_id || null,
+      suspense_out_account_id: formData.suspense_account_out_id || null,
+      bank_account_id: formData.bank_account_id || null,
+      email: formData.email || null,
+      note: formData.note || '',
+      active: formData.active,
+      use_refund_sequence: false,
+      import_bank_statements: false,
+      inbound_payment_method_ids: formData.payment_method_in.length ? formData.payment_method_in : [],
+      outbound_payment_method_ids: formData.payment_method_out.length ? formData.payment_method_out : []
+    };
     
-    if (field === 'type') {
-      setFormData(prev => ({
-        ...prev,
-        default_account: '',
-        bank_account: ''
-      }));
-    }
-  }, [error]);
+    Object.keys(apiData).forEach(key => {
+      if (apiData[key] === undefined || apiData[key] === '' || 
+          (Array.isArray(apiData[key]) && apiData[key].length === 0)) {
+        delete apiData[key];
+      }
+    });
+    
+    return apiData;
+  }, [formData, activeEntity]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    console.log('📤 [Edit] Envoi des données - formData:', JSON.stringify(formData, null, 2));
-
-    // 🔥 VÉRIFICATION CRITIQUE : Entité active obligatoire
-    if (!activeEntity) {
-      const errorMsg = 'Aucune entité active sélectionnée. Veuillez choisir une entité.';
-      console.error('❌ [Edit]', errorMsg);
-      setError(errorMsg);
-      setSubmitLoading(false);
-      return;
-    }
-
-    // Validation
-    if (!formData.code.trim()) {
-      setError('Le code du journal est obligatoire');
-      setSubmitLoading(false);
-      return;
+  // ==========================================
+  // SAUVEGARDE
+  // ==========================================
+  const handleSave = async (silent = false) => {
+    if (!activeEntity) { 
+      if (!silent) setError('Vous devez sélectionner une entité'); 
+      return false; 
     }
 
     if (!formData.name.trim()) {
-      setError('Le nom du journal est obligatoire');
-      setSubmitLoading(false);
-      return;
+      if (!silent) setError('Le nom du journal est obligatoire');
+      return false;
     }
 
-    if (!formData.type) {
-      setError('Le type de journal est obligatoire');
-      setSubmitLoading(false);
-      return;
-    }
-
-    // Validation conditionnelle pour les comptes
-    if (isDefaultAccountRequired && !formData.default_account) {
-      const errorMsg = `Le compte par défaut est obligatoire pour un journal de type ${selectedType.name}`;
-      setError(errorMsg);
-      setSubmitLoading(false);
-      return;
+    if (!formData.code.trim()) {
+      if (!silent) setError('Le code du journal est obligatoire');
+      return false;
     }
     
-    if (isBankAccountRequired && !formData.bank_account) {
-      const errorMsg = `Le compte bancaire est obligatoire pour un journal de type ${selectedType.name}`;
-      setError(errorMsg);
-      setSubmitLoading(false);
-      return;
+    if (formData.code.length > 8) {
+      if (!silent) setError('Le code ne doit pas dépasser 8 caractères');
+      return false;
     }
 
+    if (!formData.type_id) {
+      if (!silent) setError('Le type de journal est obligatoire');
+      return false;
+    }
+
+    // Validation selon le type de journal
+    if (showFullAccounting) {
+      if (!formData.default_account_id) {
+        if (!silent) setError('Le compte d\'achat par défaut est obligatoire pour un journal de type Banque/Caisse');
+        return false;
+      }
+      if (!formData.suspense_account_id) {
+        if (!silent) setError('Le compte d\'attente est obligatoire pour un journal de type Banque/Caisse');
+        return false;
+      }
+      if (!formData.profit_account_id) {
+        if (!silent) setError('Le compte de profit est obligatoire pour un journal de type Banque/Caisse');
+        return false;
+      }
+      if (!formData.loss_account_id) {
+        if (!silent) setError('Le compte de perte est obligatoire pour un journal de type Banque/Caisse');
+        return false;
+      }
+    } else {
+      if (!formData.default_account_id) {
+        if (!silent) setError('Le compte d\'achat par défaut est obligatoire');
+        return false;
+      }
+    }
+
+    setIsSubmitting(true);
+    if (!silent) setError(null);
+
     try {
-      // 🔥 CORRECTION MAJEURE : Utiliser activeEntity.id du contexte + conversion en nombres
-      const submitData = { 
-        code: formData.code.trim().toUpperCase(),
-        name: formData.name.trim(),
-        type_id: formData.type ? parseInt(formData.type, 10) : null,
-        company_id: activeEntity.id,
-        default_account_id: formData.default_account ? parseInt(formData.default_account, 10) : null,
-        bank_account_id: formData.bank_account ? parseInt(formData.bank_account, 10) : null,
-        note: formData.note || '',
-        active: formData.active
-      };
+      const apiData = prepareDataForApi();
+      console.log('📤 Données envoyées:', JSON.stringify(apiData, null, 2));
       
-      console.log('📦 [Edit] Données envoyées à l\'API:', JSON.stringify(submitData, null, 2));
-      console.log('📊 [Edit] Types des données envoyées:', {
-        code: typeof submitData.code,
-        name: typeof submitData.name,
-        type_id: typeof submitData.type_id + ' (' + submitData.type_id + ')',
-        company_id: typeof submitData.company_id + ' (' + submitData.company_id + ')',
-        default_account_id: typeof submitData.default_account_id + ' (' + submitData.default_account_id + ')',
-        bank_account_id: typeof submitData.bank_account_id + ' (' + submitData.bank_account_id + ')',
-        note: typeof submitData.note,
-        active: typeof submitData.active
-      });
+      await journauxService.update(id, apiData);
+
+      if (!silent) {
+        setSuccess('Journal mis à jour avec succès !');
+      }
+      setHasUnsavedChanges(false);
       
-      await journauxService.update(id, submitData);
+      if (!silent) {
+        setTimeout(() => {
+          navigate(`/comptabilite/journaux/${id}`);
+        }, 1500);
+      }
       
-      setSuccess('Journal mis à jour avec succès !');
-      
-      // Invalider le cache
-      DATA_CACHE.lastFetch = null;
-      
-      setTimeout(() => {
-        navigate(`/comptabilite/journaux/${id}`);
-      }, 1500);
+      return true;
       
     } catch (err) {
-      console.error('❌ [Edit] Erreur soumission:', err);
-      
-      // 🔥 EXTRACTION DÉTAILLÉE DE L'ERREUR
-      let errorMessage = 'Erreur lors de la mise à jour du journal';
-      let errorDetails = null;
-      
-      if (err.response) {
-        errorDetails = err.response.data;
-        console.error('📄 [Edit] Réponse complète du serveur (400):', JSON.stringify(err.response.data, null, 2));
-        
-        // Extraire le message d'erreur spécifique
-        if (err.response.data?.detail) {
-          errorMessage = 'Erreur serveur: ' + err.response.data.detail;
-        } else if (err.response.data?.message) {
-          errorMessage = 'Erreur: ' + err.response.data.message;
-        } else if (err.response.data?.type) {
-          errorMessage = 'Type invalide: ' + (Array.isArray(err.response.data.type) ? err.response.data.type[0] : err.response.data.type);
-        } else if (err.response.data?.code) {
-          errorMessage = 'Code invalide: ' + (Array.isArray(err.response.data.code) ? err.response.data.code[0] : err.response.data.code);
-        } else if (err.response.data?.name) {
-          errorMessage = 'Nom invalide: ' + (Array.isArray(err.response.data.name) ? err.response.data.name[0] : err.response.data.name);
-        } else if (err.response.data?.company_id) {
-          errorMessage = 'Entité invalide: ' + (Array.isArray(err.response.data.company_id) ? err.response.data.company_id[0] : err.response.data.company_id);
-        } else if (err.response.data?.default_account_id) {
-          errorMessage = 'Compte par défaut invalide: ' + (Array.isArray(err.response.data.default_account_id) ? err.response.data.default_account_id[0] : err.response.data.default_account_id);
-        } else if (err.response.data?.bank_account_id) {
-          errorMessage = 'Compte bancaire invalide: ' + (Array.isArray(err.response.data.bank_account_id) ? err.response.data.bank_account_id[0] : err.response.data.bank_account_id);
-        } else {
-          errorMessage = 'Erreur ' + err.response.status + ': ' + JSON.stringify(err.response.data);
-        }
-      } else if (err.message) {
-        errorMessage = 'Erreur: ' + err.message;
-      }
-      
-      console.error('🔴 [Edit] Message d\'erreur final:', errorMessage);
-      if (errorDetails) {
-        console.error('🔴 [Edit] Détails techniques:', errorDetails);
-      }
-      
-      setError(errorMessage);
+      console.error('❌ Erreur mise à jour:', err);
+      if (!silent) setError(`Erreur: ${err.message}`);
+      return false;
     } finally {
-      setSubmitLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleCancel = () => {
+  const handleDiscardChanges = () => setShowConfirmDialog(true);
+  
+  const confirmDiscardChanges = () => {
     navigate(`/comptabilite/journaux/${id}`);
   };
 
   const handleNewJournal = () => {
+    if (hasUnsavedChanges) {
+      handleSave(true);
+    }
     navigate('/comptabilite/journaux/create');
   };
 
   const handleGoToList = () => {
+    if (hasUnsavedChanges) {
+      handleSave(true);
+    }
     navigate('/comptabilite/journaux');
   };
+
+  const handleDuplicate = () => {
+    setShowActionsMenu(false);
+  };
+
+  const handleDelete = () => {
+    setShowActionsMenu(false);
+    setShowConfirmDialog(true);
+  };
+
+  const handleExtourner = () => {
+    setShowActionsMenu(false);
+  };
+
+  if (!activeEntity) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Modifier le journal</div>
+          </div>
+          <div className="p-8">
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-6 text-center">
+              <FiAlertCircle className="text-yellow-600 mx-auto mb-3" size={32} />
+              <p className="text-yellow-800 font-medium text-lg mb-3">Aucune entité sélectionnée</p>
+              <p className="text-sm text-gray-600 mb-4">
+                Vous devez sélectionner une entité pour modifier un journal.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -440,162 +805,116 @@ export default function Edit() {
     );
   }
 
-  if (error?.includes('non trouvé') || !journal) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-          <div className="border-b border-gray-300 px-4 py-3">
-            <div className="text-lg font-bold text-gray-900">Journal non trouvé</div>
-          </div>
-          <div className="p-8">
-            <div className="bg-red-50 border border-red-200 rounded p-4 text-center">
-              <FiX className="text-red-600 mx-auto mb-2" size={24} />
-              <p className="text-red-800 font-medium mb-3">
-                {error || 'Le journal demandé n\'existe pas.'}
-              </p>
-              <button
-                onClick={loadData}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 mr-2"
-              >
-                Réessayer
-              </button>
-              <button
-                onClick={handleCancel}
-                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-              >
-                Retour au journal
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 🔥 PROTECTION : Si pas d'entité active, afficher un message clair
-  if (!activeEntity) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-          <div className="border-b border-gray-300 px-4 py-3">
-            <div className="text-lg font-bold text-gray-900">Entité requise</div>
-          </div>
-          <div className="p-8">
-            <div className="bg-yellow-50 border border-yellow-200 rounded p-4 text-center">
-              <FiAlertCircle className="text-yellow-600 mx-auto mb-2" size={24} />
-              <p className="text-yellow-800 font-medium mb-3">
-                Aucune entité sélectionnée
-              </p>
-              <p className="text-sm text-gray-600 mb-4">
-                Veuillez sélectionner une entité dans le menu principal pour pouvoir modifier ce journal.
-              </p>
-              <button
-                onClick={handleGoToList}
-                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-              >
-                Retour à la liste des journaux
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-        {/* Barre d'en-tête - Ligne 1 */}
+
+        {/* En-tête ligne 1 */}
         <div className="border-b border-gray-300 px-4 py-3">
-          {/* Première ligne : Titre et boutons */}
-          <div className="flex items-center justify-between mb-2">
-            {/* Partie gauche */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleNewJournal}
-                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
-              >
-                <FiPlus size={12} />
-                <span>Nouveau</span>
-              </button>
-              <div 
-                className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600"
-                onClick={handleGoToList}
-              >
-                Journaux comptables
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-start gap-3">
+              <Tooltip text="Créer un nouveau journal">
+                <button 
+                  onClick={handleNewJournal}
+                  className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                >
+                  <FiPlus size={12} /><span>Nouveau</span>
+                </button>
+              </Tooltip>
+              <div className="flex flex-col">
+                <div 
+                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
+                  onClick={handleGoToList}
+                >
+                  Journaux
+                </div>
               </div>
             </div>
-            {/* Partie droite */}
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleCancel}
-                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
-              >
-                <FiX size={12} />
-                <span>Annuler</span>
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={submitLoading}
-                className="px-3 py-1.5 bg-purple-600 text-white text-xs flex items-center gap-1 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FiSave size={12} />
-                <span>{submitLoading ? 'Sauvegarde...' : 'Enregistrer'}</span>
-              </button>
-            </div>
-          </div>
-          
-          {/* Deuxième ligne : État et Code */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">État:</span>
-              <span className={`px-2 py-0.5 text-xs font-medium ${
-                formData.active 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-gray-100 text-gray-600'
-              }`}>
-                {formData.active ? 'Actif' : 'Inactif'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">Code:</span>
-              <span className="text-sm font-mono font-bold text-purple-600">
-                {formData.code || '---'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">Type:</span>
-              <span className="text-sm font-medium">
-                {selectedType?.name || 'Non spécifié'} ({selectedType?.code || '???'})
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">Entité:</span>
-              <span className="text-sm font-medium text-blue-600">
-                {activeEntity.name || 'Non spécifiée'}
-              </span>
+              <div className="relative" ref={actionsMenuRef}>
+                <Tooltip text="Menu des actions">
+                  <button 
+                    onClick={() => setShowActionsMenu(!showActionsMenu)}
+                    className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                  >
+                    <FiSettings size={12} /><span>Actions</span>
+                  </button>
+                </Tooltip>
+                {showActionsMenu && (
+                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
+                    <button onClick={handleDuplicate} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
+                      <FiCopy size={12} /> Dupliquer
+                    </button>
+                    <button onClick={handleDelete} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
+                      <FiTrash2 size={12} /> Supprimer
+                    </button>
+                    <button onClick={handleExtourner} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2">
+                      <FiRotateCcw size={12} /> Extourné
+                    </button>
+                  </div>
+                )}
+              </div>
+              <Tooltip text="Annuler les modifications">
+                <button 
+                  onClick={handleDiscardChanges}
+                  className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 hover:scale-110 hover:shadow-lg active:scale-90 transition-all duration-200 flex items-center justify-center"
+                >
+                  <FiX size={16} />
+                </button>
+              </Tooltip>
+              <Tooltip text="Enregistrer les modifications">
+                <button 
+                  onClick={() => handleSave(false)} 
+                  disabled={isSubmitting}
+                  className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 hover:scale-110 hover:shadow-lg active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm"
+                >
+                  <FiUploadCloud size={16} />
+                </button>
+              </Tooltip>
             </div>
           </div>
         </div>
 
-        {/* Nouvelle ligne de boutons - Ligne 2 */}
+        {/* En-tête ligne 2 - Toggle Switch */}
         <div className="border-b border-gray-300 px-4 py-3 flex items-center justify-between">
-          {/* Partie gauche : Badge d'état */}
-          <div>
-            <span className="text-sm text-gray-700 font-medium">Statut du journal:</span>
+          <div className="flex items-center gap-3">
+            <Tooltip text={formData.active ? "Désactiver le journal" : "Activer le journal"}>
+              <button
+                type="button"
+                onClick={() => handleChange('active', !formData.active)}
+                className={`
+                  relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent 
+                  transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2
+                  ${formData.active ? 'bg-purple-600' : 'bg-gray-200'}
+                `}
+                role="switch"
+                aria-checked={formData.active}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`
+                    pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 
+                    transition duration-200 ease-in-out
+                    ${formData.active ? 'translate-x-5' : 'translate-x-0'}
+                  `}
+                />
+              </button>
+            </Tooltip>
+            <span className={`text-sm font-medium ${formData.active ? 'text-green-600' : 'text-gray-500'}`}>
+              {formData.active ? 'Activé' : 'Désactivé'}
+            </span>
           </div>
-          {/* Partie droite : Badges d'état (non cliquables) */}
           <div className="flex items-center gap-2">
-            <div className={`px-3 py-1.5 text-xs font-medium border ${
-              formData.active
-                ? 'bg-purple-100 text-purple-700 border-purple-300'
+            <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
+              formData.active 
+                ? 'bg-green-100 text-green-700 border-green-300' 
                 : 'bg-gray-100 text-gray-500 border-gray-300'
             }`}>
               Actif
             </div>
-            <div className={`px-3 py-1.5 text-xs font-medium border ${
-              !formData.active
-                ? 'bg-purple-100 text-purple-700 border-purple-300'
+            <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
+              !formData.active 
+                ? 'bg-red-100 text-red-700 border-red-300' 
                 : 'bg-gray-100 text-gray-500 border-gray-300'
             }`}>
               Inactif
@@ -603,181 +922,373 @@ export default function Edit() {
           </div>
         </div>
 
-        {/* Informations du journal */}
-        <div className="px-4 py-3">
-          <div className="text-lg font-bold text-gray-900 mb-4">Modifier le journal</div>
-          
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Ligne 1 : Code et Type côte à côte */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-              {/* Code */}
-              <div className="flex items-center min-h-[26px]">
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                  Code <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.code}
-                  onChange={(e) => handleChange('code', e.target.value)}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
-                  style={{ height: '26px' }}
-                  placeholder="Ex: VEN, ACH, BAN, CAI..."
-                  maxLength={8}
-                />
-              </div>
+        {/* Indicateur modifications */}
+        {hasUnsavedChanges && (
+          <div className="px-4 py-1 bg-blue-50 text-blue-700 text-xs border-b border-blue-200 flex items-center justify-between">
+            <span>Modifications non sauvegardées</span>
+          </div>
+        )}
 
-              {/* Type */}
-              <div className="flex items-center min-h-[26px]">
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                  Type <span className="text-red-500">*</span>
-                </label>
-                <div className="flex-1 ml-2">
-                  <SearchableDropdown
-                    value={formData.type}
-                    onChange={(value) => handleChange('type', value)}
-                    options={journalTypes}
-                    searchValue={searchType}
-                    onSearchChange={setSearchType}
-                    placeholder="Sélectionnez un type..."
-                    getOptionLabel={(type) => `${type.name || 'Sans nom'} (${type.code || 'Sans code'})`}
-                    getOptionValue={(type) => type.id?.toString()}
-                    required={true}
-                    size="xs"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Ligne 2 : Nom seul sur toute la largeur */}
-            <div className="flex items-center min-h-[26px]">
-              <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                Nom <span className="text-red-500">*</span>
-              </label>
+        {/* Informations de base */}
+        <div className="px-4 py-3 border-b border-gray-300">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center" style={{ height: '26px' }}>
+              <label className="text-xs text-gray-700 w-24 font-medium">Nom</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
-                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
+                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2 hover:border-purple-400 focus:border-purple-600 transition-colors"
                 style={{ height: '26px' }}
-                placeholder="Ex: Journal des ventes..."
+                placeholder="Journal des achats"
+                maxLength="64"
               />
             </div>
+            <div className="flex items-center" style={{ height: '26px' }}>
+              <label className="text-xs text-gray-700 w-24 font-medium">Code</label>
+              <input
+                type="text"
+                value={formData.code}
+                onChange={(e) => handleChange('code', e.target.value.toUpperCase().slice(0, 8))}
+                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2 hover:border-purple-400 focus:border-purple-600 transition-colors"
+                style={{ height: '26px' }}
+                placeholder="ACH"
+                maxLength="8"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 mt-2">
+            <div className="flex items-center" style={{ height: '26px' }}>
+              <label className="text-xs text-gray-700 w-24 font-medium">Type</label>
+              <div className="flex-1 ml-2" style={{ height: '26px' }}>
+                <JournalTypeSelect
+                  value={formData.type_id}
+                  onChange={(id) => {
+                    const selectedType = journalTypes.find(t => t.id === id);
+                    handleChange('type_id', id);
+                    handleChange('type_code', selectedType?.code || '');
+                  }}
+                  options={journalTypes}
+                  placeholder="Type de journal"
+                  loading={loadingTypes}
+                />
+              </div>
+            </div>
+            <div className="flex items-center" style={{ height: '26px' }}>
+              {/* Cellule vide */}
+            </div>
+          </div>
+        </div>
 
-            {/* Ligne 3 : Compte par défaut et Compte bancaire côte à côte */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-              {/* Compte par défaut */}
-              <div className="flex items-center min-h-[26px]">
-                <label className={`text-xs text-gray-700 min-w-[140px] font-medium`}>
-                  Compte par défaut
-                  {isDefaultAccountRequired && <span className="text-red-500">*</span>}
-                </label>
-                <div className="flex-1 ml-2">
-                  <SearchableDropdown
-                    value={formData.default_account}
-                    onChange={(value) => handleChange('default_account', value)}
-                    options={comptes}
-                    searchValue={searchCompte}
-                    onSearchChange={setSearchCompte}
-                    placeholder={
-                      !formData.type 
-                        ? "Sélectionnez d'abord un type" 
-                        : isDefaultAccountRequired
-                          ? "Sélectionnez un compte (obligatoire)" 
-                          : "Optionnel - Cliquez pour choisir"
-                    }
-                    getOptionLabel={(compte) => `${compte.code || ''} - ${compte.name || compte.nom || 'Sans nom'}`}
-                    getOptionValue={(compte) => compte.id?.toString()}
-                    required={isDefaultAccountRequired}
-                    size="xs"
-                    disabled={!formData.type}
-                    isLoading={isDefaultAccountRequired && !comptesLoaded && !!formData.type}
-                    onOpen={() => {
-                      if (!comptesLoaded && formData.type) {
-                        loadComptes();
-                      }
-                    }}
-                  />
+        {/* Onglets */}
+        <div className="border-b border-gray-300">
+          <div className="px-4 flex">
+            {['comptable', 'avance', 'notes'].map(tab => (
+              <button 
+                key={tab} 
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 text-xs font-medium border-b-2 transition-all duration-200 ${
+                  activeTab === tab 
+                    ? 'border-purple-600 text-purple-600 hover:text-purple-800' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab === 'comptable' ? 'Paramètres comptables' : tab === 'avance' ? 'Paramètres avancés' : 'Notes'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Contenu onglets avec affichage conditionnel */}
+        <div className="p-4">
+          {activeTab === 'comptable' && (
+            <div className="space-y-3">
+              {/* Indicateur de chargement des comptes */}
+              {loadingAccounts && (
+                <div className="text-xs text-purple-600 flex items-center gap-2 mb-2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+                  Chargement des comptes...
+                </div>
+              )}
+
+              {/* Première ligne - Compte d'achat par défaut TOUJOURS présent */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">
+                    Compte d'achat par défaut
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                    <AutocompleteInput
+                      value={formData.default_account_name}
+                      selectedId={formData.default_account_id}
+                      onChange={(text) => handleChange('default_account_name', text)}
+                      onSelect={(id, label) => {
+                        handleChange('default_account_id', id);
+                        handleChange('default_account_name', label);
+                      }}
+                      options={accounts}
+                      getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                      placeholder="Compte d'achat par défaut"
+                      required
+                      loading={loadingAccounts}
+                    />
+                  </div>
+                </div>
+                
+                {/* Deuxième colonne - Affiche le compte d'attente uniquement pour Banque/Caisse */}
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  {formData.type_id ? (
+                    showFullAccounting ? (
+                      <>
+                        <label className="text-xs text-gray-700 w-40 font-medium">
+                          Compte d'attente
+                          <span className="text-red-500 ml-1">*</span>
+                        </label>
+                        <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                          <AutocompleteInput
+                            value={formData.suspense_account_name}
+                            selectedId={formData.suspense_account_id}
+                            onChange={(text) => handleChange('suspense_account_name', text)}
+                            onSelect={(id, label) => {
+                              handleChange('suspense_account_id', id);
+                              handleChange('suspense_account_name', label);
+                            }}
+                            options={accounts}
+                            getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                            placeholder="Compte d'attente"
+                            required
+                            loading={loadingAccounts}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="w-full"></div>
+                    )
+                  ) : (
+                    <div className="text-xs text-gray-400 italic ml-2">
+                      Sélectionnez un type pour voir les champs supplémentaires
+                    </div>
+                  )}
                 </div>
               </div>
+              
+              {/* Deuxième ligne - Comptes profit et perte (UNIQUEMENT pour Banque/Caisse) */}
+              {formData.type_id && showFullAccounting && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center" style={{ height: '26px' }}>
+                    <label className="text-xs text-gray-700 w-40 font-medium">
+                      Compte de profit
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                      <AutocompleteInput
+                        value={formData.profit_account_name}
+                        selectedId={formData.profit_account_id}
+                        onChange={(text) => handleChange('profit_account_name', text)}
+                        onSelect={(id, label) => {
+                          handleChange('profit_account_id', id);
+                          handleChange('profit_account_name', label);
+                        }}
+                        options={accounts}
+                        getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                        placeholder="Compte de profit"
+                        required
+                        loading={loadingAccounts}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center" style={{ height: '26px' }}>
+                    <label className="text-xs text-gray-700 w-40 font-medium">
+                      Compte de perte
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                      <AutocompleteInput
+                        value={formData.loss_account_name}
+                        selectedId={formData.loss_account_id}
+                        onChange={(text) => handleChange('loss_account_name', text)}
+                        onSelect={(id, label) => {
+                          handleChange('loss_account_id', id);
+                          handleChange('loss_account_name', label);
+                        }}
+                        options={accounts}
+                        getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                        placeholder="Compte de perte"
+                        required
+                        loading={loadingAccounts}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              {/* Compte bancaire */}
-              <div className="flex items-center min-h-[26px]">
-                <label className={`text-xs text-gray-700 min-w-[140px] font-medium`}>
-                  Compte bancaire
-                  {isBankAccountRequired && <span className="text-red-500">*</span>}
-                </label>
-                <div className="flex-1 ml-2">
-                  <SearchableDropdown
-                    value={formData.bank_account}
-                    onChange={(value) => handleChange('bank_account', value)}
-                    options={banques}
-                    searchValue={searchBanque}
-                    onSearchChange={setSearchBanque}
-                    placeholder={
-                      !formData.type 
-                        ? "Sélectionnez d'abord un type" 
-                        : isBankAccountRequired
-                          ? "Sélectionnez un compte (obligatoire)" 
-                          : "Optionnel - Cliquez pour choisir"
-                    }
-                    getOptionLabel={(banque) => 
-                      banque.numero_compte 
-                        ? `${banque.banque?.nom || 'Banque'} - ${banque.numero_compte}`
-                        : banque.banque?.nom || banque.nom || 'Banque'
-                    }
-                    getOptionValue={(banque) => banque.id?.toString()}
-                    required={isBankAccountRequired}
-                    size="xs"
-                    disabled={!formData.type}
-                    isLoading={isBankAccountRequired && !banquesLoaded && !!formData.type}
-                    onOpen={() => {
-                      if (!banquesLoaded && formData.type) {
-                        loadBanques();
-                      }
-                    }}
-                  />
+              {/* Message d'information */}
+              {formData.type_id && (
+                <div className={`mt-2 p-2 rounded ${showFullAccounting ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-200'}`}>
+                  <p className={`text-xs flex items-center gap-1 ${showFullAccounting ? 'text-blue-700' : 'text-gray-600'}`}>
+                    <FiInfo size={12} />
+                    {showFullAccounting 
+                      ? "Tous les comptes sont obligatoires pour les journaux de type Banque et Caisse."
+                      : "Seul le compte d'achat par défaut est requis pour ce type de journal."}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'avance' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Société</label>
+                  <div className="flex-1 ml-2 px-2 py-1 bg-gray-100 border border-gray-300 text-xs text-gray-700 flex items-center gap-2" style={{ height: '26px' }}>
+                    <FiBriefcase size={12} className="text-purple-600" />
+                    {activeEntity?.raison_sociale || activeEntity?.nom || 'Non définie'}
+                  </div>
+                </div>
+                
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Compte bancaire</label>
+                  <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                    <AutocompleteInput
+                      value={formData.bank_account_name}
+                      selectedId={formData.bank_account_id}
+                      onChange={(text) => handleChange('bank_account_name', text)}
+                      onSelect={(id, label) => {
+                        handleChange('bank_account_id', id);
+                        handleChange('bank_account_name', label);
+                      }}
+                      options={bankAccounts}
+                      getOptionLabel={getBankAccountLabel}
+                      placeholder="Compte bancaire (optionnel)"
+                      loading={loadingBanks}
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">E-mail</label>
+                  <div className="flex-1 ml-2 relative">
+                    <FiMail className="absolute left-2 top-1.5 text-gray-400" size={12} />
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => handleChange('email', e.target.value)}
+                      className="w-full pl-7 pr-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors"
+                      style={{ height: '26px' }}
+                      placeholder="email@exemple.com (optionnel)"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Mode de paiement entrant</label>
+                  <div className="flex-1 ml-2 relative">
+                    <FiCreditCard className="absolute left-2 top-1.5 text-gray-400" size={12} />
+                    <select
+                      value={formData.payment_method_in[0] || ''}
+                      onChange={(e) => handleChange('payment_method_in', e.target.value ? [e.target.value] : [])}
+                      className="w-full pl-7 pr-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none"
+                      style={{ height: '26px' }}
+                      disabled={loadingPayments}
+                    >
+                      <option value="">Sélectionner (optionnel)</option>
+                      {paymentMethods.map(method => (
+                        <option key={method.id} value={method.id}>{method.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Mode de paiement sortant</label>
+                  <div className="flex-1 ml-2 relative">
+                    <FiDollarSign className="absolute left-2 top-1.5 text-gray-400" size={12} />
+                    <select
+                      value={formData.payment_method_out[0] || ''}
+                      onChange={(e) => handleChange('payment_method_out', e.target.value ? [e.target.value] : [])}
+                      className="w-full pl-7 pr-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none"
+                      style={{ height: '26px' }}
+                      disabled={loadingPayments}
+                    >
+                      <option value="">Sélectionner (optionnel)</option>
+                      {paymentMethods.map(method => (
+                        <option key={method.id} value={method.id}>{method.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Compte de paiement entrant en suspens</label>
+                  <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                    <AutocompleteInput
+                      value={formData.suspense_account_in_name}
+                      selectedId={formData.suspense_account_in_id}
+                      onChange={(text) => handleChange('suspense_account_in_name', text)}
+                      onSelect={(id, label) => {
+                        handleChange('suspense_account_in_id', id);
+                        handleChange('suspense_account_in_name', label);
+                      }}
+                      options={accounts}
+                      getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                      placeholder="Compte suspens entrant (optionnel)"
+                      loading={loadingAccounts}
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Compte de paiement sortant en suspens</label>
+                  <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                    <AutocompleteInput
+                      value={formData.suspense_account_out_name}
+                      selectedId={formData.suspense_account_out_id}
+                      onChange={(text) => handleChange('suspense_account_out_name', text)}
+                      onSelect={(id, label) => {
+                        handleChange('suspense_account_out_id', id);
+                        handleChange('suspense_account_out_name', label);
+                      }}
+                      options={accounts}
+                      getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                      placeholder="Compte suspens sortant (optionnel)"
+                      loading={loadingAccounts}
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium"> </label>
+                  <div className="flex-1 ml-2"></div>
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Ligne 4 : Notes */}
-            <div className="flex items-start min-h-[48px]">
-              <label className="text-xs text-gray-700 min-w-[140px] font-medium pt-1">
-                Notes
-              </label>
+          {activeTab === 'notes' && (
+            <div className="border border-gray-300 hover:border-purple-400 transition-colors">
               <textarea
                 value={formData.note}
                 onChange={(e) => handleChange('note', e.target.value)}
-                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
-                rows={2}
-                placeholder="Notes additionnelles..."
+                rows={8}
+                className="w-full px-3 py-2 border-0 text-xs focus:ring-2 focus:ring-purple-500"
+                placeholder="Ajouter des notes… (optionnel)"
               />
             </div>
-
-            {/* Ligne 5 : Statut */}
-            <div className="flex items-center pt-3 border-t border-gray-200 min-h-[26px]">
-              <label className="text-xs text-gray-700 min-w-[140px] font-medium">
-                Statut
-              </label>
-              <div className="flex items-center gap-2 ml-2">
-                <input
-                  type="checkbox"
-                  id="active"
-                  checked={formData.active}
-                  onChange={(e) => handleChange('active', e.target.checked)}
-                  className="w-3.5 h-3.5 text-purple-600 rounded focus:ring-purple-500"
-                />
-                <label htmlFor="active" className="text-xs font-medium text-gray-700">
-                  Journal actif
-                </label>
-              </div>
-            </div>
-          </form>
+          )}
         </div>
 
-        {/* Messages d'erreur/succès */}
+        {/* Messages */}
         {(error || success) && (
-          <div className={`px-4 py-3 text-sm border-t border-gray-300 ${
+          <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
             error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
           }`}>
             <div className="flex items-center gap-2">
@@ -786,188 +1297,30 @@ export default function Edit() {
             </div>
           </div>
         )}
-
-        {/* Indicateur pour les types spéciaux */}
-        {formData.type && isBankAccountRequired && (
-          <div className="px-4 py-2 bg-yellow-50 border border-yellow-200">
-            <div className="flex items-center gap-2 text-xs text-yellow-800">
-              <FiAlertCircle size={12} />
-              <span>
-                <span className="font-medium">Note :</span> Les comptes sont obligatoires pour les journaux Banque/Caisse
-              </span>
-            </div>
-          </div>
-        )}
       </div>
-    </div>
-  );
-}
 
-// 🔥 COMPOSANT SEARCHABLE DROPDOWN IDENTIQUE À CREATE
-function SearchableDropdown({ 
-  value, 
-  onChange, 
-  options, 
-  searchValue,
-  onSearchChange,
-  placeholder,
-  required = false,
-  disabled = false,
-  isLoading = false,
-  onOpen,
-  getOptionLabel = (option) => option,
-  getOptionValue = (option) => option,
-  size = "xs",
-  className = ""
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-  const inputRef = useRef(null);
-
-  const safeOptions = Array.isArray(options) ? options : [];
-
-  const filteredOptions = safeOptions.filter(option =>
-    getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
-  );
-
-  const selectedOption = safeOptions.find(opt => getOptionValue(opt) === value);
-
-  useEffect(() => {
-    const handleMouseDown = (event) => {
-      if (!dropdownRef.current?.contains(event.target)) {
-        setIsOpen(false);
-        onSearchChange('');
-      }
-    };
-
-    document.addEventListener('mousedown', handleMouseDown, true);
-    
-    return () => {
-      document.removeEventListener('mousedown', handleMouseDown, true);
-    };
-  }, [onSearchChange]);
-
-  const handleToggle = () => {
-    if (!disabled && !isLoading) {
-      const willOpen = !isOpen;
-      setIsOpen(willOpen);
-      
-      if (willOpen && onOpen) {
-        onOpen();
-      }
-      
-      if (willOpen) {
-        setTimeout(() => {
-          inputRef.current?.focus();
-        }, 0);
-      } else {
-        onSearchChange('');
-      }
-    }
-  };
-
-  const handleOptionClick = (optionValue) => {
-    if (!disabled) {
-      onChange(optionValue);
-      setIsOpen(false);
-      onSearchChange('');
-    }
-  };
-
-  const sizeClasses = {
-    xs: {
-      button: 'px-2 py-1 text-xs',
-      input: 'px-2 py-1 text-xs',
-      option: 'px-2 py-1 text-xs',
-      icon: 'w-2.5 h-2.5'
-    }
-  };
-
-  const sizeClass = sizeClasses[size] || sizeClasses.xs;
-
-  return (
-    <div className="relative w-full" ref={dropdownRef}>
-      <button
-        type="button"
-        onClick={handleToggle}
-        onMouseDown={(e) => e.preventDefault()}
-        disabled={disabled || isLoading}
-        className={`w-full text-left border rounded focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent transition-all ${sizeClass.button} ${className} ${
-          disabled || isLoading
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-300' 
-            : 'bg-white hover:border-gray-400 border-gray-300'
-        } ${isOpen ? 'ring-1 ring-purple-500 border-purple-500' : ''}`}
-      >
-        <div className="flex items-center justify-between">
-          <span className={`truncate text-xs ${
-            disabled || isLoading 
-              ? 'text-gray-400' 
-              : selectedOption 
-                ? 'text-gray-900 font-medium' 
-                : 'text-gray-500'
-          }`}>
-            {isLoading 
-              ? 'Chargement...' 
-              : selectedOption 
-                ? getOptionLabel(selectedOption) 
-                : (placeholder || 'Sélectionnez...')}
-          </span>
-          {!isLoading && (
-            <svg className={`transition-transform ${isOpen ? 'transform rotate-180' : ''} ${sizeClass.icon} ${disabled ? 'text-gray-300' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          )}
-          {isLoading && (
-            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
-          )}
-        </div>
-      </button>
-
-      {isOpen && !disabled && !isLoading && (
-        <div className="absolute z-50 w-full mt-0.5 bg-white border border-gray-300 rounded shadow-lg overflow-hidden">
-          <div className="p-1 border-b border-gray-200 bg-gray-50">
-            <div className="relative">
-              <input
-                ref={inputRef}
-                type="text"
-                value={searchValue}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className={`w-full pl-6 pr-2 ${sizeClass.input} border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white`}
-                placeholder={`Rechercher...`}
-                autoFocus
-              />
-            </div>
-            <p className="text-xs text-gray-500 mt-0.5 px-1">
-              {filteredOptions.length} résultat(s)
+      {/* Dialogue confirmation */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Ignorer les modifications ?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Êtes-vous sûr de vouloir annuler toutes les modifications ?
             </p>
-          </div>
-          
-          <div 
-            className="overflow-y-auto"
-            style={{ 
-              maxHeight: '140px',
-              minHeight: '40px'
-            }}
-          >
-            {filteredOptions.length === 0 ? (
-              <div className="py-2 text-center">
-                <p className="text-gray-500 text-xs">Aucun résultat</p>
-              </div>
-            ) : (
-              <div>
-                {filteredOptions.map((option, index) => (
-                  <div
-                    key={getOptionValue(option)}
-                    className={`${sizeClass.option} cursor-pointer hover:bg-purple-50 transition-colors ${
-                      value === getOptionValue(option) ? 'bg-purple-100 text-purple-700 font-medium' : 'text-gray-700'
-                    } ${index < filteredOptions.length - 1 ? 'border-b border-gray-100' : ''}`}
-                    onClick={() => handleOptionClick(getOptionValue(option))}
-                  >
-                    {getOptionLabel(option)}
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowConfirmDialog(false)} 
+                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 hover:scale-105 active:scale-95 transition-all duration-200"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={confirmDiscardChanges} 
+                className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 hover:scale-105 active:scale-95 transition-all duration-200"
+              >
+                Ignorer les modifications
+              </button>
+            </div>
           </div>
         </div>
       )}

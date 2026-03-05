@@ -33,7 +33,12 @@ import SelectEntitePage from "../pages/Entities/SelectEntitePage";
 import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout";
 import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
 import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage";
-import PositionsFiscalesPage from "../features/comptabilité/pages/PositionsFiscalesPage";
+
+// ✅ IMPORTS DES PAGES POSITIONS FISCALES
+import PositionsFiscalesIndex from "../features/comptabilité/pages/PositionsFiscales/index.jsx";
+import PositionsFiscalesCreate from "../features/comptabilité/pages/PositionsFiscales/create.jsx";
+import PositionsFiscalesShow from "../features/comptabilité/pages/PositionsFiscales/show.jsx";
+import PositionsFiscalesEdit from "../features/comptabilité/pages/PositionsFiscales/edit.jsx";
 
 // IMPORTS DES PAGES JOURNAUX
 import JournauxCreate from "../features/comptabilité/pages/Journaux/Create.jsx";
@@ -46,6 +51,15 @@ import PiecesComptablesCreate from "../features/comptabilité/pages/PiecesCompta
 import PiecesComptablesEdit from "../features/comptabilité/pages/PiecesComptables/Edit.jsx";
 import PiecesComptablesList from "../features/comptabilité/pages/PiecesComptables/List.jsx";
 import PiecesComptablesShow from "../features/comptabilité/pages/PiecesComptables/Show.jsx";
+
+// ✅ IMPORTS PAGES TAUX FISCAUX
+import TauxFiscauxIndex from "../features/comptabilité/pages/TauxFiscaux/Index.jsx";
+import TauxFiscauxCreate from "../features/comptabilité/pages/TauxFiscaux/Create.jsx";
+import TauxFiscauxShow from "../features/comptabilité/pages/TauxFiscaux/Show.jsx";
+import TauxFiscauxEdit from "../features/comptabilité/pages/TauxFiscaux/Edit.jsx";
+
+// ✅ NOUVEL IMPORT : BALANCE GÉNÉRALE
+import BalanceGenerale from "../features/comptabilité/pages/Balance/Index.jsx";
 
 // IMPORTS DU MODULE ACHATS
 import AchatLayout from "../features/achat/layouts/AchatLayout";
@@ -75,73 +89,6 @@ const LoadingFallback = () => (
       <p className="text-gray-600">Chargement...</p>
     </div>
   </div>
-);
-
-// SOLUTION POUR TAUX FISCAUX : Import dynamique avec gestion d'erreur
-const TauxFiscauxPage = React.lazy(() => 
-  import("../features/comptabilité/pages/TauxFiscauxPage")
-    .then(module => {
-      console.log("✅ TauxFiscauxPage chargé avec succès");
-      
-      // Vérifier que le module a un export par défaut
-      if (module && module.default && typeof module.default === 'function') {
-        return { default: module.default };
-      }
-      
-      // Si pas d'export par défaut, chercher un export nommé
-      const exportNames = Object.keys(module).filter(key => typeof module[key] === 'function');
-      if (exportNames.length > 0) {
-        console.log(`✅ Utilisation de l'export: ${exportNames[0]}`);
-        return { default: module[exportNames[0]] };
-      }
-      
-      throw new Error("Aucun composant trouvé dans TauxFiscauxPage");
-    })
-    .catch(error => {
-      console.error("❌ Erreur chargement TauxFiscauxPage:", error);
-      
-      // Retourner un composant de secours
-      return { 
-        default: () => (
-          <div className="p-8 bg-gradient-to-br from-gray-50 to-white min-h-screen">
-            <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
-              <div className="text-center">
-                <div className="w-20 h-20 bg-gradient-to-r from-red-100 to-red-200 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.282 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-3">Erreur de chargement</h2>
-                <p className="text-gray-600 mb-4">
-                  Impossible de charger la page "Taux Fiscaux".
-                </p>
-                <div className="bg-gray-50 rounded-lg p-4 text-left mb-6">
-                  <p className="text-sm font-medium text-gray-800 mb-1">Détails :</p>
-                  <p className="text-sm text-gray-600">{error.message}</p>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Fichier: <code className="bg-gray-100 px-2 py-1 rounded">TauxFiscauxPage.jsx</code>
-                  </p>
-                </div>
-                <div className="flex gap-3 justify-center">
-                  <button 
-                    onClick={() => window.location.reload()}
-                    className="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 transition-all duration-200 font-medium shadow hover:shadow-md"
-                  >
-                    Recharger la page
-                  </button>
-                  <a 
-                    href="/comptabilite/dashboard"
-                    className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium"
-                  >
-                    Retour au tableau de bord
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      };
-    })
 );
 
 // Créer un composant de secours pour SomaneAIPage
@@ -220,7 +167,14 @@ export default function AppRouter() {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardComptabilitePage />} />
           <Route path="plan-comptable" element={<PlanComptablePage />} />
-          <Route path="positions-fiscales" element={<PositionsFiscalesPage />} />
+          
+          {/* ROUTES POSITIONS FISCALES */}
+          <Route path="positions-fiscales">
+            <Route index element={<PositionsFiscalesIndex />} />
+            <Route path="create" element={<PositionsFiscalesCreate />} />
+            <Route path=":id" element={<PositionsFiscalesShow />} />
+            <Route path=":id/edit" element={<PositionsFiscalesEdit />} />
+          </Route>
           
           {/* ROUTES PIÈCES COMPTABLES */}
           <Route path="pieces">
@@ -238,17 +192,17 @@ export default function AppRouter() {
             <Route path=":id/edit" element={<JournauxEdit />} />
           </Route>
           
-          {/* ROUTE TAUX FISCAUX */}
-          <Route 
-            path="taux-fiscaux" 
-            element={
-              <Suspense fallback={<LoadingFallback />}>
-                <TauxFiscauxPage />
-              </Suspense>
-            } 
-          />
+          {/* ROUTES TAUX FISCAUX */}
+          <Route path="taux-fiscaux">
+            <Route index element={<TauxFiscauxIndex />} />
+            <Route path="create" element={<TauxFiscauxCreate />} />
+            <Route path=":id" element={<TauxFiscauxShow />} />
+            <Route path=":id/edit" element={<TauxFiscauxEdit />} />
+          </Route>
+
+          {/* ✅ NOUVELLE ROUTE : BALANCE GÉNÉRALE */}
+          <Route path="balance" element={<BalanceGenerale />} />
         </Route>
-        
 
         {/* ROUTES ACHATS */}
         <Route path="/achats" element={<AchatLayout />}>
