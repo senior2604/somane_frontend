@@ -34,11 +34,35 @@ import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLa
 import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
 import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage";
 
-// ✅ IMPORTS DES PAGES POSITIONS FISCALES
+// IMPORTS DES PAGES POSITIONS FISCALES
 import PositionsFiscalesIndex from "../features/comptabilité/pages/PositionsFiscales/index.jsx";
 import PositionsFiscalesCreate from "../features/comptabilité/pages/PositionsFiscales/create.jsx";
 import PositionsFiscalesShow from "../features/comptabilité/pages/PositionsFiscales/show.jsx";
 import PositionsFiscalesEdit from "../features/comptabilité/pages/PositionsFiscales/edit.jsx";
+
+// Frameworks
+import FrameworkDetail from "../features/comptabilité/pages/frameworks/FrameworkDetail.jsx";
+import FrameworkForm from "../features/comptabilité/pages/frameworks/FrameworkForm.jsx";
+import FrameworkList from "../features/comptabilité/pages/frameworks/FrameworkList.jsx";
+
+// Groups
+import GroupCreate from "../features/comptabilité/pages/groups/GroupCreate.jsx";
+import GroupDetail from "../features/comptabilité/pages/groups/GroupDetail.jsx";
+import GroupEdit from "../features/comptabilité/pages/groups/GroupEdit.jsx";
+import GroupList from "../features/comptabilité/pages/groups/GroupList.jsx";
+
+// Types
+import TypeList   from "../features/comptabilité/pages/types/TypeList.jsx";
+import TypeCreate from "../features/comptabilité/pages/types/TypeCreate.jsx";
+import TypeEdit   from "../features/comptabilité/pages/types/TypeEdit.jsx";
+import TypeDetail from "../features/comptabilité/pages/types/TypeDetail.jsx";
+
+// Accounts
+import AccountList   from "../features/comptabilité/pages/accounts/AccountList.jsx";
+import AccountCreate from "../features/comptabilité/pages/accounts/AccountCreate.jsx";
+import AccountEdit   from "../features/comptabilité/pages/accounts/AccountEdit.jsx";
+import AccountDetail from "../features/comptabilité/pages/accounts/AccountDetail.jsx";
+import AccountImport from "../features/comptabilité/pages/accounts/AccountImport.jsx";
 
 // IMPORTS DES PAGES JOURNAUX
 import JournauxCreate from "../features/comptabilité/pages/Journaux/Create.jsx";
@@ -46,19 +70,24 @@ import JournauxEdit from "../features/comptabilité/pages/Journaux/Edit.jsx";
 import JournauxIndex from "../features/comptabilité/pages/Journaux/Index.jsx";
 import JournauxShow from "../features/comptabilité/pages/Journaux/Show.jsx";
 
+// Parametrage de la longueur des numeros de comptes
+import AccountCompanyConfigWizard from "../features/comptabilité/pages/parametrage/Accountcompanyconfigwizard.jsx";
+
 // IMPORTS DES PAGES PIÈCES COMPTABLES
 import PiecesComptablesCreate from "../features/comptabilité/pages/PiecesComptables/Create.jsx";
 import PiecesComptablesEdit from "../features/comptabilité/pages/PiecesComptables/Edit.jsx";
 import PiecesComptablesList from "../features/comptabilité/pages/PiecesComptables/List.jsx";
 import PiecesComptablesShow from "../features/comptabilité/pages/PiecesComptables/Show.jsx";
+import PlanForm from '../features/comptabilité/pages/plans-comptables/PlanForm.jsx';
+import PlanList from '../features/comptabilité/pages/plans-comptables/PlanList.jsx';
 
-// ✅ IMPORTS PAGES TAUX FISCAUX
+// IMPORTS PAGES TAUX FISCAUX
 import TauxFiscauxIndex from "../features/comptabilité/pages/TauxFiscaux/Index.jsx";
 import TauxFiscauxCreate from "../features/comptabilité/pages/TauxFiscaux/Create.jsx";
 import TauxFiscauxShow from "../features/comptabilité/pages/TauxFiscaux/Show.jsx";
 import TauxFiscauxEdit from "../features/comptabilité/pages/TauxFiscaux/Edit.jsx";
 
-// ✅ NOUVEL IMPORT : BALANCE GÉNÉRALE
+// NOUVEL IMPORT : BALANCE GÉNÉRALE
 import BalanceGenerale from "../features/comptabilité/pages/Balance/Index.jsx";
 
 // IMPORTS DU MODULE ACHATS
@@ -71,15 +100,16 @@ import LignesDemandeAchatPage from "../features/achat/pages/LignesDemandeAchatPa
 import PrixFournisseursPage from "../features/achat/pages/PrixFournisseursPage";
 
 // IMPORTS DU MODULE FINANCIAL REPORTS
+import PeriodSelectorPage from "../features/financial-reports/components/PeriodSelector.jsx";
 import FinancialReportsLayout from "../features/financial-reports/layouts/FinancialReportsLayout";
+import Indexpages from "../features/financial-reports/pages/[id]/lines/index.jsx";
 import ReportDetail from "../features/financial-reports/pages/[id]/page.jsx";
 import FinancialReportsDashboard from "../features/financial-reports/pages/dashboard.jsx";
+import ImportDetailPage from "../features/financial-reports/pages/import/[id].jsx";
+import ImportPage from "../features/financial-reports/pages/ImportData.jsx";
 import FinancialReportsList from "../features/financial-reports/pages/index.jsx";
 import NewReportPage from "../features/financial-reports/pages/new/page.jsx";
-import ImportPage from "../features/financial-reports/pages/ImportData.jsx";
 import SettingPage from "../features/financial-reports/pages/SettingsPage.jsx";
-import PeriodSelectorPage from "../features/financial-reports/components/PeriodSelector.jsx";
-import Indexpages from "../features/financial-reports/pages/[id]/lines/index.jsx"
 
 // COMPOSANT DE CHARGEMENT POUR SUSPENSE
 const LoadingFallback = () => (
@@ -176,6 +206,11 @@ export default function AppRouter() {
             <Route path=":id/edit" element={<PositionsFiscalesEdit />} />
           </Route>
           
+          {/* ROUTES PLANS COMPTABLES */}
+          <Route path="plans" element={<PlanList />} />
+          <Route path="plans/new" element={<PlanForm />} />
+          <Route path="plans/:id/edit" element={<PlanForm />} />
+          
           {/* ROUTES PIÈCES COMPTABLES */}
           <Route path="pieces">
             <Route index element={<PiecesComptablesList />} />
@@ -184,12 +219,50 @@ export default function AppRouter() {
             <Route path=":id/edit" element={<PiecesComptablesEdit />} />
           </Route>
           
+          {/* Frameworks - Plans comptables */}
+          <Route path="frameworks">
+            <Route index element={<FrameworkList />} />
+            <Route path="new" element={<FrameworkForm />} />
+            <Route path=":id" element={<FrameworkDetail />} />
+            <Route path=":id/edit" element={<FrameworkForm />} />
+          </Route>
+
+          {/* Groups - Classes de comptes */}
+          <Route path="groups">
+            <Route index element={<GroupList />} />
+            <Route path="new" element={<GroupCreate />} />
+            <Route path=":id" element={<GroupDetail />} />
+            <Route path=":id/edit" element={<GroupEdit />} />
+          </Route>
+
+          {/* Types - Natures de comptes */}
+          <Route path="types">
+            <Route index element={<TypeList />} />
+            <Route path="new" element={<TypeCreate />} />
+            <Route path=":id" element={<TypeDetail />} />
+            <Route path=":id/edit" element={<TypeEdit />} />
+          </Route>
+
+          {/* Accounts - Comptes comptables */}
+          <Route path="accounts">
+            <Route index element={<AccountList />} />
+            <Route path="new" element={<AccountCreate />} />
+            <Route path="import" element={<AccountImport />} />
+            <Route path=":id" element={<AccountDetail />} />
+            <Route path=":id/edit" element={<AccountEdit />} />
+          </Route>
+
           {/* ROUTES JOURNAUX */}
           <Route path="journaux">
             <Route index element={<JournauxIndex />} />
             <Route path="create" element={<JournauxCreate />} />
             <Route path=":id" element={<JournauxShow />} />
             <Route path=":id/edit" element={<JournauxEdit />} />
+          </Route>
+
+          {/* Paramétrage de la longueur */}
+          <Route path="parametrage">
+            <Route path="longueur-compte" element={<AccountCompanyConfigWizard />} />
           </Route>
           
           {/* ROUTES TAUX FISCAUX */}
@@ -200,7 +273,7 @@ export default function AppRouter() {
             <Route path=":id/edit" element={<TauxFiscauxEdit />} />
           </Route>
 
-          {/* ✅ NOUVELLE ROUTE : BALANCE GÉNÉRALE */}
+          {/* NOUVELLE ROUTE : BALANCE GÉNÉRALE */}
           <Route path="balance" element={<BalanceGenerale />} />
         </Route>
 
@@ -220,11 +293,12 @@ export default function AppRouter() {
           <Route path="/financial-reports" element={<FinancialReportsList />} />
           <Route path="/financial-reports/:id" element={<ReportDetail />} />
           <Route path="/financial-reports/dashboard" element={<FinancialReportsDashboard />} />
-          <Route path="/financial-reports/new" element={<NewReportPage />} />
+          <Route path="/financial-reports/new" element={<NewReportPage />} /> 
           <Route path="/financial-reports/import" element={<ImportPage />} />
+          <Route path="/financial-reports/import/:id" element={<ImportDetailPage />} />        
           <Route path="/financial-reports/settings" element={<SettingPage />} />
           <Route path="/financial-reports/Periods" element={<PeriodSelectorPage />} />
-          <Route path="/financial-reports/lignes" element={<Indexpages />} />
+          <Route path="/financial-reports/lignes" element={<Indexpages />} /> 
         </Route>
 
         {/* REDIRECTIONS */}

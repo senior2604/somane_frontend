@@ -98,6 +98,22 @@ const MODULES_CONFIG = [
           { label: "Exercices", path: "/comptabilite/exercices" }
         ]
       },
+      
+    {
+      name: "Plans comptable",
+      items: [
+
+        { label: "parametrage", path: "/comptabilite/parametrage/longueur-compte" },
+        { label: "plans comptable", path: "/comptabilite/accounts/new" },
+        { label: "compte ", path: "/comptabilite/accounts/" },
+        { label: "framework ", path: "/comptabilite/frameworks/" },
+        { label: "groupe ", path: "/comptabilite/groups/" },
+        { label: "types ", path: "/comptabilite/types/" },
+        { label: "Plans comptable", path: "/comptabilite/plans" }, // ← NOUVEAU LIEN VERS TA PAGE
+      ]
+    },
+
+
       {
         name: "Traitements",
         items: [
@@ -139,6 +155,12 @@ const MODULES_CONFIG = [
     path: "/financial-reports",
     color: "indigo",
     navigation: [
+            {
+        name: "dashboard",
+        items: [
+          { label: "dashboard", path: "/financial-reports/dashboard" },
+        ]
+      },
       {
         name: "Rapports",
         items: [

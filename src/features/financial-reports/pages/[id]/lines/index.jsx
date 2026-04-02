@@ -1,3 +1,5 @@
+// C:\python\django\somane_frontend\src\features\financial-reports\pages\[id]\lines\index.jsx
+
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FiSave, FiPlus, FiEdit2, FiTrash2, FiArrowUp, FiArrowDown } from 'react-icons/fi';

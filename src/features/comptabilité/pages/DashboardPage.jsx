@@ -1,3 +1,4 @@
+// C:\python\django\somane_frontend\src\features\comptabilité\pages\DashboardPage.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   FiPlus,
