@@ -1,14 +1,12 @@
-// features/achats/layouts/AchatLayout.jsx
+// src/features/achat/layouts/AchatLayout.jsx
 import { Outlet } from "react-router-dom";
-import { useState } from "react";
-import AchatHeader from "../components/AchatHeader";
+import Header from "../../../components/Header"; // ← chemin relatif, PAS @/
 
 export default function AchatLayout() {
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Contenu principal - pleine largeur sans sidebar */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <AchatHeader />
+        <Header />
         <main className="flex-1 overflow-auto p-6">
           <Outlet />
         </main>

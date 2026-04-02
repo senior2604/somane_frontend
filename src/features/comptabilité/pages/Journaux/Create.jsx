@@ -1,16 +1,45 @@
-// features/comptabilité/pages/Journaux/Create.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ComptabiliteFormContainer from "../../components/ComptabiliteFormContainer";
-import { 
-  FiAlertCircle, FiType, FiBriefcase, FiCreditCard, 
-  FiDatabase, FiSearch, FiCheck
-} from "react-icons/fi";
+import { FiPlus, FiSave, FiX, FiCheck, FiAlertCircle, FiBriefcase } from 'react-icons/fi';
+import { useEntity } from '../../../../context/EntityContext';
+import { journauxService, apiClient } from "../../services";
 
-import { journauxService, authService, apiClient } from "../../services";
+// 🔥 CACHE AMÉLIORÉ AVEC DURÉE CONFIGURABLE
+const DATA_CACHE = {
+  journalTypes: null,
+  comptes: null,
+  banques: null,
+  lastFetch: null,
+  CACHE_DURATION: 10 * 60 * 1000 // 10 minutes
+};
+
+// 🔥 FONCTION D'EXTRACTION ROBUSTE DES DONNÉES API
+const extractData = (response) => {
+  if (!response) return [];
+  
+  // Cas 1 : Réponse directe (tableau)
+  if (Array.isArray(response)) return response;
+  
+  // Cas 2 : Format paginé DRF standard (le plus courant)
+  if (response.results && Array.isArray(response.results)) return response.results;
+  
+  // Cas 3 : Format avec .data
+  if (response.data && Array.isArray(response.data)) return response.data;
+  
+  // Cas 4 : Objet avec count/next/previous mais sans results (rare)
+  if (typeof response === 'object' && !Array.isArray(response)) {
+    for (const key in response) {
+      if (Array.isArray(response[key])) return response[key];
+    }
+  }
+  
+  console.warn('⚠️ Format de réponse API non reconnu:', response);
+  return [];
+};
 
 export default function Create() {
   const navigate = useNavigate();
+  const { activeEntity } = useEntity();
   
   // États pour le formulaire
   const [loading, setLoading] = useState(false);
@@ -19,17 +48,19 @@ export default function Create() {
   
   // États pour les données
   const [dataLoading, setDataLoading] = useState(true);
-  const [companies, setCompanies] = useState([]);
   const [journalTypes, setJournalTypes] = useState([]);
   const [comptes, setComptes] = useState([]);
   const [banques, setBanques] = useState([]);
+  
+  // 🔥 NOUVEAUX ÉTATS POUR LE LAZY LOADING
+  const [comptesLoaded, setComptesLoaded] = useState(false);
+  const [banquesLoaded, setBanquesLoaded] = useState(false);
   
   // État du formulaire
   const [formData, setFormData] = useState({
     code: '',
     name: '',
     type: '',
-    company: '',
     default_account: '',
     bank_account: '',
     note: '',
@@ -37,89 +68,166 @@ export default function Create() {
   });
 
   // États de recherche
-  const [searchCompany, setSearchCompany] = useState('');
   const [searchType, setSearchType] = useState('');
   const [searchCompte, setSearchCompte] = useState('');
   const [searchBanque, setSearchBanque] = useState('');
-  const [manualCompany, setManualCompany] = useState('');
   
-  // État pour l'authentification
-  const [authStatus, setAuthStatus] = useState({
-    isAuthenticated: false,
-    hasCompaniesAccess: false,
-    showLoginPrompt: false
-  });
+  // 🔥 FONCTION DE VALIDATION DU CACHE CENTRALISÉE
+  const isCacheValid = useCallback(() => {
+    if (!DATA_CACHE.lastFetch) return false;
+    return (Date.now() - DATA_CACHE.lastFetch) < DATA_CACHE.CACHE_DURATION;
+  }, []);
 
-  // Fonction pour extraire les données
-  const extractData = (response) => {
-    if (!response) return [];
-    if (Array.isArray(response)) return response;
-    if (response.data && Array.isArray(response.data)) return response.data;
-    if (response.results && Array.isArray(response.results)) return response.results;
-    return [];
-  };
-
-  // Charger les données nécessaires
+  // 🔥 CHARGEMENT INITIAL OPTIMISÉ : SEULEMENT LES TYPES
   useEffect(() => {
-    const fetchData = async () => {
+    console.log('🔍 Entité active:', activeEntity);
+    
+    if (!activeEntity) {
+      setError('Vous devez sélectionner une entité pour créer un journal');
+      setDataLoading(false);
+      return;
+    }
+
+    const loadJournalTypes = async () => {
       try {
         setDataLoading(true);
-        setError(null);
         
-        // Vérifier l'authentification
-        const isAuthenticated = authService.isAuthenticated();
-        
-        // Charger les données de base
-        const [typesRes, comptesRes, banquesRes] = await Promise.all([
-          journauxService.getTypes(),
-          apiClient.get('/compta/accounts/').catch(() => ({ data: [] })),
-          apiClient.get('/compta/banques/').catch(() => ({ data: [] }))
-        ]);
-
-        setJournalTypes(extractData(typesRes));
-        setComptes(extractData(comptesRes));
-        setBanques(extractData(banquesRes));
-
-        // Charger les entreprises si authentifié
-        if (isAuthenticated) {
-          try {
-            const companiesRes = await apiClient.get('/entites/');
-            const companiesData = extractData(companiesRes);
-            setCompanies(companiesData);
-            
-            setAuthStatus({
-              isAuthenticated: true,
-              hasCompaniesAccess: companiesData.length > 0,
-              showLoginPrompt: false
-            });
-          } catch (companyError) {
-            console.warn('Erreur chargement entreprises:', companyError);
-            setCompanies([]);
-            setAuthStatus({
-              isAuthenticated: true,
-              hasCompaniesAccess: false,
-              showLoginPrompt: false
-            });
-          }
+        if (isCacheValid() && DATA_CACHE.journalTypes) {
+          console.log('✅ Types chargés depuis le cache:', DATA_CACHE.journalTypes.length, 'items');
+          setJournalTypes(DATA_CACHE.journalTypes);
         } else {
-          setCompanies([]);
-          setAuthStatus({
-            isAuthenticated: false,
-            hasCompaniesAccess: false,
-            showLoginPrompt: true
-          });
+          console.log('🔄 Chargement des types depuis l\'API...');
+          const response = await journauxService.getTypes();
+          const typesData = extractData(response);
+          
+          console.log('📊 Réponse brute API:', response);
+          console.log('✅ Types extraits:', typesData.length, 'items', typesData);
+          
+          if (typesData.length === 0) {
+            console.warn('⚠️ Aucun type de journal trouvé.');
+          }
+          
+          DATA_CACHE.journalTypes = typesData;
+          DATA_CACHE.lastFetch = Date.now();
+          setJournalTypes(typesData);
         }
-
       } catch (err) {
-        console.error('Erreur chargement données formulaire:', err);
-        setError('Erreur de chargement des données. Veuillez réessayer.');
+        console.error('❌ Erreur chargement types:', err);
+        console.error('❌ Détails erreur:', {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status
+        });
+        setError('Erreur de chargement des types de journal. Veuillez réessayer.');
       } finally {
         setDataLoading(false);
       }
     };
 
-    fetchData();
-  }, []);
+    loadJournalTypes();
+  }, [activeEntity, isCacheValid]);
+
+  // 🔥 FONCTION POUR CHARGER LES COMPTES (LAZY) - VERSION RETRY-SAFE
+  const loadComptes = useCallback(async (force = false) => {
+    if (!force && (comptesLoaded || comptes.length > 0)) return;
+
+    try {
+      setComptesLoaded(false);
+      
+      if (isCacheValid() && DATA_CACHE.comptes?.length > 0) {
+        console.log('✅ Comptes chargés depuis le cache:', DATA_CACHE.comptes.length);
+        setComptes(DATA_CACHE.comptes);
+      } else {
+        console.log('🔄 Chargement des comptes depuis l\'API...');
+        const response = await apiClient.get('compta/accounts/');
+        const comptesData = extractData(response);
+        
+        console.log('✅ Comptes extraits:', comptesData.length, 'items');
+        
+        if (comptesData.length === 0) {
+          console.warn('⚠️ Aucun compte trouvé dans la réponse API');
+        }
+        
+        DATA_CACHE.comptes = comptesData;
+        setComptes(comptesData);
+      }
+    } catch (err) {
+      console.error('❌ Erreur chargement comptes:', err);
+      setError(prev => prev || 'Impossible de charger la liste des comptes');
+      setComptes([]);
+    } finally {
+      setComptesLoaded(true);
+    }
+  }, [comptesLoaded, comptes.length, isCacheValid]);
+
+  // 🔥 FONCTION POUR CHARGER LES BANQUES (LAZY) - VERSION RETRY-SAFE
+  const loadBanques = useCallback(async (force = false) => {
+    if (!force && (banquesLoaded || banques.length > 0)) return;
+
+    try {
+      setBanquesLoaded(false);
+      
+      if (isCacheValid() && DATA_CACHE.banques?.length > 0) {
+        console.log('✅ Banques chargées depuis le cache:', DATA_CACHE.banques.length);
+        setBanques(DATA_CACHE.banques);
+      } else {
+        console.log('🔄 Chargement des banques depuis l\'API...');
+        const response = await apiClient.get('banques/');
+        const banquesData = extractData(response);
+        
+        console.log('✅ Banques extraites:', banquesData.length, 'items');
+        
+        if (banquesData.length === 0) {
+          console.warn('⚠️ Aucune banque trouvée dans la réponse API');
+        }
+        
+        DATA_CACHE.banques = banquesData;
+        setBanques(banquesData);
+      }
+    } catch (err) {
+      console.error('❌ Erreur chargement banques:', err);
+      setError(prev => prev || 'Impossible de charger la liste des banques');
+      setBanques([]);
+    } finally {
+      setBanquesLoaded(true);
+    }
+  }, [banquesLoaded, banques.length, isCacheValid]);
+
+  // 🔥 CHARGEMENT AUTO SEULEMENT POUR BAN/CAI
+  useEffect(() => {
+    if (!formData.type) {
+      // Réinitialiser les états quand le type est vidé
+      setComptes([]);
+      setBanques([]);
+      setComptesLoaded(false);
+      setBanquesLoaded(false);
+      return;
+    }
+
+    const selectedType = journalTypes.find(type => type.id === formData.type);
+    if (!selectedType) return;
+
+    const needsAccounts = selectedType.code === 'BAN' || selectedType.code === 'CAI';
+    
+    if (needsAccounts) {
+      // Charger automatiquement pour BAN/CAI
+      if (!comptesLoaded) loadComptes();
+      if (!banquesLoaded) loadBanques();
+    }
+  }, [formData.type, journalTypes, comptesLoaded, banquesLoaded, loadComptes, loadBanques]);
+
+  // 🔥 CALCULS DIRECTS
+  const selectedType = journalTypes.find(type => type.id === formData.type);
+  const isBankAccountRequired = selectedType?.code === 'BAN' || selectedType?.code === 'CAI';
+  const isDefaultAccountRequired = selectedType?.code === 'BAN' || selectedType?.code === 'CAI';
+
+  // 🔍 DEBUG
+  useEffect(() => {
+    console.log('🔍 Types disponibles:', journalTypes);
+    console.log('🔍 Type sélectionné:', selectedType);
+    console.log('🔍 Comptes:', comptes.length, 'items | Chargé:', comptesLoaded);
+    console.log('🔍 Banques:', banques.length, 'items | Chargé:', banquesLoaded);
+  }, [journalTypes, selectedType, comptes, banques, comptesLoaded, banquesLoaded]);
 
   // Soumettre le formulaire
   const handleSubmit = async () => {
@@ -146,19 +254,15 @@ export default function Create() {
       return;
     }
 
-    // Validation conditionnelle pour les comptes
-    const selectedType = journalTypes.find(type => type.id === formData.type);
-    
-    // Compte par défaut obligatoire seulement pour Banque et Caisse
-    if (selectedType && (selectedType.code === 'BAN' || selectedType.code === 'CAI') && !formData.default_account) {
+    // ✅ VALIDATION CONDITIONNELLE CORRECTE
+    if (isDefaultAccountRequired && !formData.default_account) {
       const errorMsg = `Le compte par défaut est obligatoire pour un journal de type ${selectedType.name}`;
       setError(errorMsg);
       setLoading(false);
       return;
     }
     
-    // Compte bancaire obligatoire seulement pour Banque et Caisse
-    if (selectedType && (selectedType.code === 'BAN' || selectedType.code === 'CAI') && !formData.bank_account) {
+    if (isBankAccountRequired && !formData.bank_account) {
       const errorMsg = `Le compte bancaire est obligatoire pour un journal de type ${selectedType.name}`;
       setError(errorMsg);
       setLoading(false);
@@ -166,361 +270,387 @@ export default function Create() {
     }
 
     try {
-      // Préparer les données
-      const submitData = { ...formData };
+      const submitData = { 
+        code: formData.code.trim().toUpperCase(),
+        name: formData.name.trim(),
+        type: formData.type,
+        default_account: formData.default_account || null,
+        bank_account: formData.bank_account || null,
+        note: formData.note || '',
+        active: formData.active
+      };
       
-      // Si entreprise manuelle
-      if (!submitData.company && manualCompany.trim()) {
-        submitData.company_name = manualCompany.trim();
-      }
-
-      // Envoyer à l'API
-      await journauxService.create(submitData);
+      console.log('📤 Envoi des données au backend:', submitData);
       
-      // Succès
+      const response = await journauxService.create(submitData);
+      
+      console.log('✅ Réponse API:', response);
+      
       setSuccess('Journal créé avec succès ! Redirection...');
       
-      // Rediriger après un délai
+      // 🔥 INVALIDER LE CACHE après création
+      DATA_CACHE.lastFetch = null;
+      
       setTimeout(() => {
         navigate('/comptabilite/journaux');
       }, 1500);
       
     } catch (err) {
-      console.error('Erreur création journal:', err);
-      const errorMessage = err.response?.data?.detail || 
-                          err.response?.data?.message || 
-                          err.message || 
-                          'Erreur lors de la création du journal';
+      console.error('❌ Erreur création journal:', err);
+      
+      let errorMessage = 'Erreur lors de la création du journal';
+      
+      if (err.response) {
+        errorMessage = 
+          err.response.data?.detail ||
+          err.response.data?.message ||
+          err.response.data?.company?.[0] || 
+          err.response.data?.type?.[0] || 
+          err.response.data?.code?.[0] || 
+          err.response.data?.name?.[0] || 
+          JSON.stringify(err.response.data) ||
+          `Erreur ${err.response.status}: ${err.response.statusText}`;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
       setLoading(false);
     }
   };
 
   // Gestion des changements de formulaire
-  const handleChange = (field, value) => {
+  const handleChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (error) setError(null);
-  };
-
-  // Vérifier si un type est sélectionné
-  const isTypeSelected = () => {
-    return !!formData.type;
-  };
-
-  // Détermine si le compte bancaire doit être obligatoire
-  const isBankAccountRequired = () => {
-    const selectedType = journalTypes.find(type => type.id === formData.type);
-    if (!selectedType) return false;
-    return selectedType.code === 'BAN' || selectedType.code === 'CAI';
-  };
-
-  // Détermine si le compte par défaut doit être obligatoire
-  const isDefaultAccountRequired = () => {
-    const selectedType = journalTypes.find(type => type.id === formData.type);
-    if (!selectedType) return false;
-    return selectedType.code === 'BAN' || selectedType.code === 'CAI';
-  };
+    
+    // 🔥 RÉINITIALISER LES CHAMPS DÉPENDANTS QUAND LE TYPE CHANGE
+    if (field === 'type') {
+      setFormData(prev => ({
+        ...prev,
+        default_account: '',
+        bank_account: ''
+      }));
+    }
+  }, [error]);
 
   // Gérer l'annulation
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     navigate('/comptabilite/journaux');
-  };
+  }, [navigate]);
 
-  // Gérer le retour
-  const handleBack = () => {
+  // Créer un nouveau journal
+  const handleNewJournal = useCallback(() => {
+    navigate('/comptabilite/journaux/create');
+  }, [navigate]);
+
+  // Aller à la liste
+  const handleGoToList = useCallback(() => {
     navigate('/comptabilite/journaux');
-  };
-
-  // Gérer la connexion
-  const handleLogin = () => {
-    navigate('/login', { 
-      state: { 
-        redirect: '/comptabilite/journaux/create' 
-      } 
-    });
-  };
-
-  // Actions supplémentaires pour l'en-tête
-  const additionalActions = authStatus.showLoginPrompt ? [
-    {
-      label: 'Se connecter',
-      onClick: handleLogin,
-      variant: 'primary'
-    }
-  ] : [];
+  }, [navigate]);
 
   // Pendant le chargement des données
   if (dataLoading) {
     return (
-      <ComptabiliteFormContainer
-        title="Créer un journal"
-        moduleType="journaux"
-        loading={true}
-        mode="create"
-        showBackButton={true}
-        onBack={handleBack}
-      />
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Chargement...</div>
+          </div>
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-sm text-gray-600">Chargement des types de journal...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Si pas d'entité active
+  if (!activeEntity) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Créer un journal</div>
+          </div>
+          <div className="p-8">
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-4 text-center">
+              <FiAlertCircle className="text-yellow-600 mx-auto mb-2" size={24} />
+              <p className="text-yellow-800 font-medium mb-3">
+                {error || 'Vous devez sélectionner une entité pour créer un journal'}
+              </p>
+              <p className="text-sm text-gray-600 mb-4">
+                Cliquez sur l'icône <FiBriefcase className="inline text-purple-600 mx-1" size={14} /> 
+                en haut à droite pour choisir une entité.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <ComptabiliteFormContainer
-      // Configuration
-      title="Créer un journal"
-      subtitle="Remplissez les informations pour créer un nouveau journal comptable"
-      moduleType="journaux"
-      
-      // Navigation
-      onBack={handleBack}
-      showBackButton={true}
-      
-      // États
-      loading={false}
-      error={error}
-      success={success}
-      
-      // Actions
-      onSubmit={handleSubmit}
-      onCancel={handleCancel}
-      
-      // Modes
-      mode="create"
-      isSubmitting={loading}
-      
-      // Personnalisation
-      submitLabel="Créer le journal"
-      cancelLabel="Annuler"
-      
-      // Actions supplémentaires
-      additionalActions={additionalActions}
-    >
-      {/* Contenu du formulaire - Version ultra compacte */}
-      <div className="space-y-3 max-w-4xl mx-auto">
-        {!authStatus?.hasCompaniesAccess && companies.length === 0 && (
-          <div className="bg-gradient-to-r from-amber-50 to-amber-100 border-l-2 border-amber-500 rounded-r p-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-1 bg-amber-100 rounded">
-                  <FiAlertCircle className="text-amber-600" size={10} />
-                </div>
-                <p className="text-amber-800 text-xs font-medium">
-                  Liste des entreprises non disponible
-                </p>
-              </div>
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+        {/* Barre d'en-tête - Ligne 1 */}
+        <div className="border-b border-gray-300 px-4 py-3">
+          {/* Première ligne : Titre et boutons */}
+          <div className="flex items-center justify-between mb-2">
+            {/* Partie gauche */}
+            <div className="flex items-center gap-3">
               <button
-                type="button"
-                onClick={handleLogin}
-                className="px-2 py-0.5 bg-amber-600 text-white rounded hover:bg-amber-700 text-xs font-medium"
+                onClick={handleNewJournal}
+                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
               >
-                Se connecter
+                <FiPlus size={12} />
+                <span>Nouveau</span>
+              </button>
+              <div 
+                className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600"
+                onClick={handleGoToList}
+              >
+                Journaux comptables
+              </div>
+            </div>
+            {/* Partie droite */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCancel}
+                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
+              >
+                <FiX size={12} />
+                <span>Annuler</span>
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="px-3 py-1.5 bg-purple-600 text-white text-xs flex items-center gap-1 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiSave size={12} />
+                <span>Créer le journal</span>
               </button>
             </div>
           </div>
-        )}
-        
-        {/* Section unique compacte */}
-        <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg border border-gray-200 p-3 shadow-sm">
-          {/* Titre compact */}
-          <div className="flex items-center gap-1.5 mb-2">
-            <div className="w-1 h-3 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-            <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide">INFORMATIONS DU JOURNAL</h3>
-          </div>
           
-          {/* Grille compacte */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {/* Code */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-0.5">
-                Code <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.code}
-                onChange={(e) => handleChange('code', e.target.value)}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-xs"
-                placeholder="Ex: VEN, ACH, BAN, CAI..."
-                maxLength={8}
-              />
+          {/* Deuxième ligne : État et Entité */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700 font-medium">État:</span>
+              <span className={`px-2 py-0.5 text-xs font-medium ${
+                formData.active 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-gray-100 text-gray-600'
+              }`}>
+                {formData.active ? 'Actif' : 'Inactif'}
+              </span>
             </div>
-            
-            {/* Type */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-0.5">
-                Type <span className="text-red-500">*</span>
-              </label>
-              <SearchableDropdown
-                value={formData.type}
-                onChange={(value) => handleChange('type', value)}
-                options={journalTypes}
-                searchValue={searchType}
-                onSearchChange={setSearchType}
-                placeholder="Sélectionnez un type..."
-                icon={FiType}
-                getOptionLabel={(type) => {
-                  return `${type.name || 'Sans nom'} (${type.code || 'Sans code'})`;
-                }}
-                getOptionValue={(type) => type.id}
-                required={true}
-                size="xs"
-              />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700 font-medium">Entité:</span>
+              <span className="text-sm font-medium text-purple-600">
+                {activeEntity.raison_sociale || activeEntity.nom || 'Entité active'}
+              </span>
             </div>
-            
-            {/* Nom */}
-            <div className="md:col-span-2">
-              <label className="block text-xs font-medium text-gray-700 mb-0.5">
+          </div>
+        </div>
+
+        {/* Nouvelle ligne de boutons - Ligne 2 */}
+        <div className="border-b border-gray-300 px-4 py-3 flex items-center justify-between">
+          {/* Partie gauche : Badge d'état */}
+          <div>
+            <span className="text-sm text-gray-700 font-medium">Statut du journal:</span>
+          </div>
+          {/* Partie droite : Badges d'état (non cliquables) */}
+          <div className="flex items-center gap-2">
+            <div className={`px-3 py-1.5 text-xs font-medium border ${
+              formData.active
+                ? 'bg-purple-100 text-purple-700 border-purple-300'
+                : 'bg-gray-100 text-gray-500 border-gray-300'
+            }`}>
+              Actif
+            </div>
+            <div className={`px-3 py-1.5 text-xs font-medium border ${
+              !formData.active
+                ? 'bg-purple-100 text-purple-700 border-purple-300'
+                : 'bg-gray-100 text-gray-500 border-gray-300'
+            }`}>
+              Inactif
+            </div>
+          </div>
+        </div>
+
+        {/* Informations du journal */}
+        <div className="px-4 py-3">
+          <div className="text-lg font-bold text-gray-900 mb-4">Nouveau journal</div>
+          
+          <div className="space-y-3">
+            {/* Ligne 1 : Code et Type côte à côte */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+              {/* Code */}
+              <div className="flex items-center min-h-[26px]">
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
+                  Code <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.code}
+                  onChange={(e) => handleChange('code', e.target.value)}
+                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
+                  style={{ height: '26px' }}
+                  placeholder="Ex: VEN, ACH, BAN, CAI..."
+                  maxLength={8}
+                />
+              </div>
+
+              {/* Type */}
+              <div className="flex items-center min-h-[26px]">
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
+                  Type <span className="text-red-500">*</span>
+                </label>
+                <div className="flex-1 ml-2">
+                  {journalTypes.length === 0 && !dataLoading ? (
+                    <div className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded border border-yellow-200">
+                      Aucun type disponible. Contactez l'administrateur.
+                    </div>
+                  ) : (
+                    <SearchableDropdown
+                      value={formData.type}
+                      onChange={(value) => handleChange('type', value)}
+                      options={journalTypes}
+                      searchValue={searchType}
+                      onSearchChange={setSearchType}
+                      placeholder={dataLoading ? "Chargement..." : "Sélectionnez un type..."}
+                      getOptionLabel={(type) => `${type.name || 'Sans nom'} (${type.code || '???'})`}
+                      getOptionValue={(type) => type.id?.toString()}
+                      required={true}
+                      size="xs"
+                      isLoading={dataLoading}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Ligne 2 : Nom seul sur toute la largeur */}
+            <div className="flex items-center min-h-[26px]">
+              <label className="text-xs text-gray-700 min-w-[140px] font-medium">
                 Nom <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                required
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-xs"
+                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
+                style={{ height: '26px' }}
                 placeholder="Ex: Journal des ventes..."
               />
             </div>
-            
-            {/* Entreprise */}
-            <div className="md:col-span-2">
-              <label className="block text-xs font-medium text-gray-700 mb-0.5">
-                Entreprise
-              </label>
-              
-              {companies.length > 0 ? (
-                <SearchableDropdown
-                  value={formData.company}
-                  onChange={(value) => handleChange('company', value)}
-                  options={companies}
-                  searchValue={searchCompany}
-                  onSearchChange={setSearchCompany}
-                  placeholder="Sélectionnez une entreprise"
-                  icon={FiBriefcase}
-                  getOptionLabel={(company) => company.raison_sociale || company.nom || 'Sans nom'}
-                  getOptionValue={(company) => company.id}
-                  size="xs"
-                />
-              ) : (
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-1 text-xs text-gray-500">
-                    <FiAlertCircle size={8} />
-                    <span>Saisie manuelle</span>
-                  </div>
-                  <input
-                    type="text"
-                    value={manualCompany}
-                    onChange={(e) => setManualCompany(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-xs"
-                    placeholder="Nom de l'entreprise..."
+
+            {/* Ligne 3 : Compte par défaut et Compte bancaire côte à côte */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+              {/* Compte par défaut - VERSION CORRIGÉE */}
+              <div className="flex items-center min-h-[26px]">
+                <label className={`text-xs text-gray-700 min-w-[140px] font-medium`}>
+                  Compte par défaut
+                  {isDefaultAccountRequired && <span className="text-red-500">*</span>}
+                </label>
+                <div className="flex-1 ml-2">
+                  <SearchableDropdown
+                    value={formData.default_account}
+                    onChange={(value) => handleChange('default_account', value)}
+                    options={comptes}
+                    searchValue={searchCompte}
+                    onSearchChange={setSearchCompte}
+                    placeholder={
+                      !formData.type 
+                        ? "Sélectionnez d'abord un type" 
+                        : isDefaultAccountRequired
+                          ? "Sélectionnez un compte (obligatoire)" 
+                          : "Optionnel - Cliquez pour choisir"
+                    }
+                    getOptionLabel={(compte) => `${compte.code || ''} - ${compte.name || compte.nom || 'Sans nom'}`}
+                    getOptionValue={(compte) => compte.id?.toString()}
+                    required={isDefaultAccountRequired}
+                    size="xs"
+                    disabled={!formData.type} // ✅ CORRIGÉ : Toujours activé si type sélectionné
+                    isLoading={isDefaultAccountRequired && !comptesLoaded && !!formData.type}
+                    onOpen={() => {
+                      // ✅ Charger à la demande si pas encore chargé
+                      if (!comptesLoaded && formData.type) {
+                        loadComptes();
+                      }
+                    }}
                   />
                 </div>
-              )}
+              </div>
+
+              {/* Compte bancaire - VERSION CORRIGÉE */}
+              <div className="flex items-center min-h-[26px]">
+                <label className={`text-xs text-gray-700 min-w-[140px] font-medium`}>
+                  Compte bancaire
+                  {isBankAccountRequired && <span className="text-red-500">*</span>}
+                </label>
+                <div className="flex-1 ml-2">
+                  <SearchableDropdown
+                    value={formData.bank_account}
+                    onChange={(value) => handleChange('bank_account', value)}
+                    options={banques}
+                    searchValue={searchBanque}
+                    onSearchChange={setSearchBanque}
+                    placeholder={
+                      !formData.type 
+                        ? "Sélectionnez d'abord un type" 
+                        : isBankAccountRequired
+                          ? "Sélectionnez un compte (obligatoire)" 
+                          : "Optionnel - Cliquez pour choisir"
+                    }
+                    getOptionLabel={(banque) => 
+                      banque.numero_compte 
+                        ? `${banque.banque?.nom || 'Banque'} - ${banque.numero_compte}`
+                        : banque.banque?.nom || banque.nom || 'Banque'
+                    }
+                    getOptionValue={(banque) => banque.id?.toString()}
+                    required={isBankAccountRequired}
+                    size="xs"
+                    disabled={!formData.type} // ✅ CORRIGÉ
+                    isLoading={isBankAccountRequired && !banquesLoaded && !!formData.type}
+                    onOpen={() => {
+                      if (!banquesLoaded && formData.type) {
+                        loadBanques();
+                      }
+                    }}
+                  />
+                </div>
+              </div>
             </div>
-            
-            {/* Comptes */}
-            <div>
-              <label className={`block text-xs font-medium mb-0.5 ${
-                !isTypeSelected() || !isDefaultAccountRequired() 
-                  ? 'text-gray-700' 
-                  : 'text-gray-700'
-              }`}>
-                Compte par défaut
-                {isDefaultAccountRequired() && (
-                  <span className="text-red-500">*</span>
-                )}
-              </label>
-              <SearchableDropdown
-                value={formData.default_account}
-                onChange={(value) => handleChange('default_account', value)}
-                options={comptes}
-                searchValue={searchCompte}
-                onSearchChange={setSearchCompte}
-                placeholder={
-                  !isTypeSelected() 
-                    ? "Sélectionnez d'abord un type" 
-                    : isDefaultAccountRequired()
-                      ? "Sélectionnez..." 
-                      : "Optionnel"
-                }
-                icon={FiCreditCard}
-                getOptionLabel={(compte) => `${compte.code || ''} - ${compte.name || 'Sans nom'}`}
-                getOptionValue={(compte) => compte.id}
-                required={isDefaultAccountRequired()}
-                size="xs"
-                disabled={!isTypeSelected()}
-                className={
-                  !isTypeSelected()
-                    ? "opacity-50 cursor-not-allowed bg-gray-100" 
-                    : ""
-                }
-              />
-            </div>
-            
-            <div>
-              <label className={`block text-xs font-medium mb-0.5 ${
-                !isTypeSelected() || !isBankAccountRequired() 
-                  ? 'text-gray-400' 
-                  : 'text-gray-700'
-              }`}>
-                Compte bancaire
-                {isBankAccountRequired() && (
-                  <span className="text-red-500">*</span>
-                )}
-              </label>
-              <SearchableDropdown
-                value={formData.bank_account}
-                onChange={(value) => handleChange('bank_account', value)}
-                options={banques}
-                searchValue={searchBanque}
-                onSearchChange={setSearchBanque}
-                placeholder={
-                  !isTypeSelected() 
-                    ? "Sélectionnez d'abord un type" 
-                    : isBankAccountRequired()
-                      ? "Sélectionnez..." 
-                      : "Optionnel"
-                }
-                icon={FiDatabase}
-                getOptionLabel={(banque) => 
-                  banque.numero_compte 
-                    ? `${banque.banque?.nom || 'Banque'} - ${banque.numero_compte}`
-                    : banque.banque?.nom || banque.nom || 'Banque'
-                }
-                getOptionValue={(banque) => banque.id}
-                required={isBankAccountRequired()}
-                size="xs"
-                disabled={!isTypeSelected()}
-                className={
-                  !isTypeSelected()
-                    ? "opacity-50 cursor-not-allowed bg-gray-100" 
-                    : ""
-                }
-              />
-            </div>
-            
-            {/* Note */}
-            <div className="md:col-span-2">
-              <label className="block text-xs font-medium text-gray-700 mb-0.5">
+
+            {/* Ligne 4 : Notes */}
+            <div className="flex items-start min-h-[48px]">
+              <label className="text-xs text-gray-700 min-w-[140px] font-medium pt-1">
                 Notes
               </label>
               <textarea
                 value={formData.note}
                 onChange={(e) => handleChange('note', e.target.value)}
-                rows={1}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-xs"
+                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
+                rows={2}
                 placeholder="Notes additionnelles..."
               />
             </div>
-            
-            {/* Statut */}
-            <div className="md:col-span-2 pt-1 border-t border-gray-100">
-              <div className="flex items-center gap-2">
+
+            {/* Ligne 5 : Statut */}
+            <div className="flex items-center pt-3 border-t border-gray-200 min-h-[26px]">
+              <label className="text-xs text-gray-700 min-w-[140px] font-medium">
+                Statut
+              </label>
+              <div className="flex items-center gap-2 ml-2">
                 <input
                   type="checkbox"
                   id="active"
                   checked={formData.active}
                   onChange={(e) => handleChange('active', e.target.checked)}
-                  className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500"
+                  className="w-3.5 h-3.5 text-purple-600 rounded focus:ring-purple-500"
                 />
                 <label htmlFor="active" className="text-xs font-medium text-gray-700">
                   Journal actif
@@ -530,25 +660,36 @@ export default function Create() {
           </div>
         </div>
 
-        {/* Indicateur pour les types spéciaux - très compact */}
-        {formData.type && isBankAccountRequired() && (
-          <div className="bg-gradient-to-r from-amber-50 to-amber-100 border border-amber-200 rounded p-2">
-            <div className="flex items-center gap-1.5">
-              <FiAlertCircle className="text-amber-600" size={10} />
-              <p className="text-amber-800 text-xs">
-                <span className="font-medium">Note :</span> Les comptes sont requis pour les journaux Banque/Caisse
-              </p>
+        {/* Messages d'erreur/succès */}
+        {(error || success) && (
+          <div className={`px-4 py-3 text-sm border-t border-gray-300 ${
+            error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+          }`}>
+            <div className="flex items-center gap-2">
+              {error ? <FiAlertCircle size={14} /> : <FiCheck size={14} />}
+              <span>{error || success}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Indicateur pour les types spéciaux */}
+        {formData.type && isBankAccountRequired && (
+          <div className="px-4 py-2 bg-yellow-50 border border-yellow-200">
+            <div className="flex items-center gap-2 text-xs text-yellow-800">
+              <FiAlertCircle size={12} />
+              <span>
+                <span className="font-medium">Note :</span> Les comptes sont obligatoires pour les journaux Banque/Caisse
+              </span>
             </div>
           </div>
         )}
       </div>
-    </ComptabiliteFormContainer>
+    </div>
   );
 }
 
-// COMPOSANT SEARCHABLE DROPDOWN (version ultra compacte)
+// 🔥 COMPOSANT SEARCHABLE DROPDOWN AMÉLIORÉ AVEC SUPPORT onOpen
 function SearchableDropdown({ 
-  label, 
   value, 
   onChange, 
   options, 
@@ -557,12 +698,11 @@ function SearchableDropdown({
   placeholder,
   required = false,
   disabled = false,
-  icon: Icon,
+  isLoading = false,
+  onOpen, // ✅ NOUVELLE PROP
   getOptionLabel = (option) => option,
   getOptionValue = (option) => option,
-  renderOption = (option) => getOptionLabel(option),
   size = "xs",
-  isError = false,
   className = ""
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -593,9 +733,16 @@ function SearchableDropdown({
   }, [onSearchChange]);
 
   const handleToggle = () => {
-    if (!disabled) {
-      setIsOpen(!isOpen);
-      if (!isOpen) {
+    if (!disabled && !isLoading) {
+      const willOpen = !isOpen;
+      setIsOpen(willOpen);
+      
+      // ✅ Appeler onOpen quand le dropdown s'ouvre
+      if (willOpen && onOpen) {
+        onOpen();
+      }
+      
+      if (willOpen) {
         setTimeout(() => {
           inputRef.current?.focus();
         }, 0);
@@ -615,70 +762,63 @@ function SearchableDropdown({
 
   const sizeClasses = {
     xs: {
-      button: 'px-2 py-1.5 text-xs',
+      button: 'px-2 py-1 text-xs',
       input: 'px-2 py-1 text-xs',
       option: 'px-2 py-1 text-xs',
       icon: 'w-2.5 h-2.5'
-    },
-    small: {
-      button: 'px-2 py-1.5 text-xs',
-      input: 'px-2 py-1 text-xs',
-      option: 'px-2 py-1 text-xs',
-      icon: 'w-3 h-3'
     }
   };
 
   const sizeClass = sizeClasses[size] || sizeClasses.xs;
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      {label && (
-        <label className="block text-xs font-medium text-gray-700 mb-0.5">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-      )}
-      
+    <div className="relative w-full" ref={dropdownRef}>
       <button
         type="button"
         onClick={handleToggle}
         onMouseDown={(e) => e.preventDefault()}
-        disabled={disabled}
-        className={`w-full text-left border rounded focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent transition-all ${sizeClass.button} ${className} ${
-          disabled 
+        disabled={disabled || isLoading}
+        className={`w-full text-left border rounded focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent transition-all ${sizeClass.button} ${className} ${
+          disabled || isLoading
             ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-300' 
-            : isError
-              ? 'border-red-500 bg-red-50 hover:border-red-600'
-              : 'bg-white hover:border-gray-400 border-gray-300'
-        } ${isOpen ? 'ring-1 ring-violet-500 border-violet-500' : ''}`}
+            : 'bg-white hover:border-gray-400 border-gray-300'
+        } ${isOpen ? 'ring-1 ring-purple-500 border-purple-500' : ''}`}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            {Icon && <Icon className={disabled ? "text-gray-300" : "text-gray-400"} size={10} />}
-            {selectedOption ? (
-              <span className={`font-medium truncate text-xs ${disabled ? 'text-gray-400' : 'text-gray-900'}`}>
-                {getOptionLabel(selectedOption)}
-              </span>
-            ) : (
-              <span className={`text-xs ${disabled ? 'text-gray-400' : 'text-gray-500'}`}>{placeholder || `Sélectionnez...`}</span>
-            )}
-          </div>
-          <svg className={`transition-transform ${isOpen ? 'transform rotate-180' : ''} ${sizeClass.icon} ${disabled ? 'text-gray-300' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          <span className={`truncate text-xs ${
+            disabled || isLoading 
+              ? 'text-gray-400' 
+              : selectedOption 
+                ? 'text-gray-900 font-medium' 
+                : 'text-gray-500'
+          }`}>
+            {isLoading 
+              ? 'Chargement...' 
+              : selectedOption 
+                ? getOptionLabel(selectedOption) 
+                : (placeholder || 'Sélectionnez...')}
+          </span>
+          {!isLoading && (
+            <svg className={`transition-transform ${isOpen ? 'transform rotate-180' : ''} ${sizeClass.icon} ${disabled ? 'text-gray-300' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
+          {isLoading && (
+            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+          )}
         </div>
       </button>
 
-      {isOpen && !disabled && (
+      {isOpen && !disabled && !isLoading && (
         <div className="absolute z-50 w-full mt-0.5 bg-white border border-gray-300 rounded shadow-lg overflow-hidden">
-          <div className="p-1 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+          <div className="p-1 border-b border-gray-200 bg-gray-50">
             <div className="relative">
-              <FiSearch className="absolute left-1.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={9} />
               <input
                 ref={inputRef}
                 type="text"
                 value={searchValue}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className={`w-full pl-6 pr-2 ${sizeClass.input} border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white`}
+                className={`w-full pl-6 pr-2 ${sizeClass.input} border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white`}
                 placeholder={`Rechercher...`}
                 autoFocus
               />
@@ -697,35 +837,25 @@ function SearchableDropdown({
           >
             {filteredOptions.length === 0 ? (
               <div className="py-2 text-center">
-                <div className="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-1">
-                  <FiSearch className="text-gray-400" size={9} />
-                </div>
                 <p className="text-gray-500 text-xs">Aucun résultat</p>
               </div>
             ) : (
               <div>
                 {filteredOptions.map((option, index) => (
                   <div
-                    key={index}
-                    className={`${sizeClass.option} cursor-pointer hover:bg-violet-50 transition-colors ${
-                      value === getOptionValue(option) ? 'bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium' : 'text-gray-700'
+                    key={getOptionValue(option)}
+                    className={`${sizeClass.option} cursor-pointer hover:bg-purple-50 transition-colors ${
+                      value === getOptionValue(option) ? 'bg-purple-100 text-purple-700 font-medium' : 'text-gray-700'
                     } ${index < filteredOptions.length - 1 ? 'border-b border-gray-100' : ''}`}
                     onClick={() => handleOptionClick(getOptionValue(option))}
                   >
-                    {renderOption(option)}
+                    {getOptionLabel(option)}
                   </div>
                 ))}
               </div>
             )}
           </div>
         </div>
-      )}
-
-      {selectedOption && !isOpen && (
-        <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-0.5">
-          <FiCheck size={7} />
-          <span className="truncate">{getOptionLabel(selectedOption)}</span>
-        </p>
       )}
     </div>
   );

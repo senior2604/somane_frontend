@@ -1,998 +1,1222 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../../services/apiClient';
-import { 
-  FiRefreshCw, 
-  FiPlus, 
-  FiEdit2, 
-  FiTrash2, 
-  FiSearch, 
-  FiFilter, 
-  FiX, 
-  FiCheck, 
-  FiGlobe, 
-  FiMapPin, 
-  FiPhone, 
-  FiMail, 
-  FiDollarSign, 
-  FiCalendar, 
-  FiUser, 
-  FiChevronLeft, 
-  FiChevronRight,
-  FiFileText,
-  FiBriefcase,
-  FiHome,
-  FiCreditCard,
-  FiActivity,
-  FiUsers,
-  FiDownload,
-  FiUpload,
-  FiEye,
-  FiMoreVertical,
-  FiChevronDown,
-  FiChevronUp,
-  FiCheckCircle,
-  FiXCircle,
-  FiUserCheck,
-  FiTruck,
-  FiPackage,
-  FiCreditCard as FiCreditCardIcon,
-  FiDollarSign as FiDollarSignIcon,
-  FiInfo,
-  FiExternalLink,
-  FiImage
+import { useEntity } from '../../context/EntityContext';
+import {
+  FiPlus, FiEdit2, FiTrash2, FiSearch, FiEye,
+  FiUserPlus, FiMail, FiCheckCircle, FiXCircle,
+  FiAlertCircle, FiRefreshCw, FiChevronLeft, FiChevronRight,
+  FiUsers, FiPhone, FiX, FiCheck, FiBriefcase,
+  FiSave, FiMapPin, FiGlobe, FiCreditCard, FiUser,
+  FiDownload, FiPackage
 } from "react-icons/fi";
-import { TbBuildingSkyscraper } from "react-icons/tb";
 
-// FONCTIONS UTILITAIRES POUR LA VALIDATION TÉLÉPHONE (IDEM ENTITÉS)
-const validatePhoneByCountry = (phone, countryData) => {
-  if (!phone || !countryData) return { valid: true, message: '' };
-  
-  const indicatif = (countryData.indicatif_tel || countryData.code_tel || '').replace('+', '');
-  let phoneNumber = phone.replace(/\s+/g, '');
-  
-  if (phoneNumber.startsWith(`+${indicatif}`) || phoneNumber.startsWith(indicatif)) {
-    phoneNumber = phoneNumber.replace(`+${indicatif}`, '').replace(indicatif, '');
-  }
-  
-  if (countryData.code_iso === 'TG') {
-    if (phoneNumber.length !== 8) {
-      return { 
-        valid: false, 
-        message: `Le numéro togolais doit avoir 8 chiffres (format: ${indicatif} XX XX XX XX)` 
-      };
-    }
-    if (!/^\d{8}$/.test(phoneNumber)) {
-      return { 
-        valid: false, 
-        message: 'Le numéro ne doit contenir que des chiffres' 
-      };
-    }
-  }
-  
-  if (countryData.code_iso === 'CI') {
-    if (phoneNumber.length !== 8) {
-      return { 
-        valid: false, 
-        message: `Le numéro ivoirien doit avoir 8 chiffres (format: ${indicatif} XX XX XX XX)` 
-      };
-    }
-  }
-  
-  if (countryData.code_iso === 'BJ') {
-    if (phoneNumber.length !== 8) {
-      return { 
-        valid: false, 
-        message: `Le numéro béninois doit avoir 8 chiffres (format: ${indicatif} XX XX XX XX)` 
-      };
-    }
-  }
-  
-  if (countryData.code_iso === 'FR') {
-    if (phoneNumber.length !== 9) {
-      return { 
-        valid: false, 
-        message: `Le numéro français doit avoir 9 chiffres (format: ${indicatif} X XX XX XX XX)` 
-      };
-    }
-  }
-  
-  if (phoneNumber.length < 4) {
-    return { valid: false, message: 'Numéro trop court (minimum 4 chiffres)' };
-  }
-  
-  if (!/^\d+$/.test(phoneNumber)) {
-    return { valid: false, message: 'Le numéro ne doit contenir que des chiffres' };
-  }
-  
-  return { valid: true, message: '' };
+// ============================================================================
+// HELPER POUR PARSING RÉPONSES API
+// ============================================================================
+const parseResponse = (response) => {
+  if (!response) return [];
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.results)) return response.results;
+  if (Array.isArray(response?.partenaires)) return response.partenaires;
+  return [];
 };
 
-const formatPhoneDisplay = (phone, countryData) => {
-  if (!phone || !countryData) return phone;
-  
-  const indicatif = (countryData.indicatif_tel || countryData.code_tel || '').replace('+', '');
-  let phoneNumber = phone.replace(/\s+/g, '');
-  
-  if (phoneNumber.startsWith(`+${indicatif}`) || phoneNumber.startsWith(indicatif)) {
-    phoneNumber = phoneNumber.replace(`+${indicatif}`, '').replace(indicatif, '');
-  }
-  
-  if (['TG', 'CI', 'BJ'].includes(countryData.code_iso)) {
-    if (phoneNumber.length === 8) {
-      return `+${indicatif} ${phoneNumber.substring(0, 2)} ${phoneNumber.substring(2, 4)} ${phoneNumber.substring(4, 6)} ${phoneNumber.substring(6, 8)}`;
-    }
-  } else if (countryData.code_iso === 'FR') {
-    if (phoneNumber.length === 9) {
-      return `+${indicatif} ${phoneNumber.charAt(0)} ${phoneNumber.substring(1, 3)} ${phoneNumber.substring(3, 5)} ${phoneNumber.substring(5, 7)} ${phoneNumber.substring(7, 9)}`;
-    }
-  }
-  
-  return `+${indicatif} ${phoneNumber}`;
-};
-
-export default function PartnersPage() {
-  const [partners, setPartners] = useState([]);
-  const [pays, setPays] = useState([]);
-  const [loading, setLoading] = useState(true);
+// ============================================================================
+// MODAL DE CRÉATION DE PARTENAIRE
+// ============================================================================
+function CreatePartnerModal({ open, onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingPartner, setEditingPartner] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [selectedPartner, setSelectedPartner] = useState(null);
-  
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [selectedRows, setSelectedRows] = useState([]);
+  const [paysList, setPaysList] = useState([]);
+  const [villesList, setVillesList] = useState([]);
+  const [regionsList, setRegionsList] = useState([]);
+  const { activeEntity } = useEntity();
+  const [formData, setFormData] = useState({
+    nom: '',
+    type_partenaire: 'client',
+    email: '',
+    telephone: '',
+    adresse: '',
+    statut: true,
+    ville: '',
+    pays: '',
+    region: '',
+    code_postal: '',
+    site_web: '',
+    notes: '',
+    limite_credit: 0,
+    delai_paiement: 30,
+    numero_fiscal: '',
+    numero_registre_commerce: '',
+    numero_tva: ''
+  });
 
-  // Chargement initial - COMME DANS ENTITÉS
+  const partnerTypes = [
+    { value: 'client', label: 'Client' },
+    { value: 'fournisseur', label: 'Fournisseur' },
+    { value: 'employe', label: 'Employé' },
+    { value: 'debiteur', label: 'Débiteur' },
+    { value: 'crediteur', label: 'Créditeur' },
+  ];
+
+  const resetForm = () => {
+    setFormData({
+      nom: '',
+      type_partenaire: 'client',
+      email: '',
+      telephone: '',
+      adresse: '',
+      statut: true,
+      ville: '',
+      pays: '',
+      region: '',
+      code_postal: '',
+      site_web: '',
+      notes: '',
+      limite_credit: 0,
+      delai_paiement: 30,
+      numero_fiscal: '',
+      numero_registre_commerce: '',
+      numero_tva: ''
+    });
+    setError(null);
+  };
+
   useEffect(() => {
-    fetchAllData();
-  }, []);
+    if (open) {
+      resetForm();
+    }
+  }, [open]);
 
-  const fetchAllData = async () => {
+  useEffect(() => {
+    let isMounted = true;
+    
+    const fetchData = async () => {
+      try {
+        const [paysRes, villesRes, regionsRes] = await Promise.all([
+          apiClient.get('/pays/'),
+          apiClient.get('/villes/'),
+          apiClient.get('/subdivisions/')
+        ]);
+        
+        if (isMounted) {
+          setPaysList(parseResponse(paysRes));
+          setVillesList(parseResponse(villesRes));
+          setRegionsList(parseResponse(regionsRes));
+        }
+      } catch (err) {
+        console.error('Erreur chargement données:', err);
+      }
+    };
+
+    if (open) {
+      fetchData();
+    }
+
+    return () => { isMounted = false; };
+  }, [open]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true);
-      setError(null);
-      
-      const [partnersRes, paysRes] = await Promise.all([
-        apiClient.get('/partenaires/'),
-        apiClient.get('/pays/')
-      ]);
-      
-      const extractData = (response) => {
-        if (Array.isArray(response)) return response;
-        if (response && Array.isArray(response.results)) return response.results;
-        if (response && Array.isArray(response.data)) return response.data;
-        return [];
+      if (!formData.nom?.trim()) throw new Error('Le nom est obligatoire');
+      if (!activeEntity?.id) throw new Error('Sélectionnez une entité');
+
+      const requestData = {
+        nom: formData.nom.trim(),
+        type_partenaire: formData.type_partenaire,
+        email: formData.email?.trim() || null,
+        telephone: formData.telephone?.trim() || null,
+        adresse: formData.adresse?.trim() || null,
+        statut: formData.statut,
+        entite: activeEntity.id,
+        ville: formData.ville ? parseInt(formData.ville) : null,
+        pays: formData.pays ? parseInt(formData.pays) : null,
+        region: formData.region ? parseInt(formData.region) : null,
+        code_postal: formData.code_postal?.trim() || null,
+        site_web: formData.site_web?.trim() || null,
+        notes: formData.notes?.trim() || null,
+        limite_credit: parseFloat(formData.limite_credit) || 0,
+        delai_paiement: parseInt(formData.delai_paiement) || 30,
+        numero_fiscal: formData.numero_fiscal?.trim() || null,
+        numero_registre_commerce: formData.numero_registre_commerce?.trim() || null,
+        numero_tva: formData.numero_tva?.trim() || null
       };
+
+      console.log('📤 Envoi données:', requestData);
+      const response = await apiClient.post('/partenaires/', requestData);
+      console.log('✅ Réponse:', response);
       
-      setPartners(extractData(partnersRes));
-      setPays(extractData(paysRes));
-      
+      onSuccess?.();
+      onClose?.();
     } catch (err) {
-      console.error('Erreur lors du chargement des données:', err);
-      setError('Erreur lors du chargement des données');
-      setPartners([]);
-      setPays([]);
+      console.error('❌ Erreur création:', err);
+      
+      let errorMsg = 'Erreur lors de la création';
+      const errorData = err?.response?.data;
+      
+      if (errorData) {
+        if (errorData?.nom?.[0]) errorMsg = `Nom: ${errorData.nom[0]}`;
+        else if (errorData?.email?.[0]) errorMsg = `Email: ${errorData.email[0]}`;
+        else if (errorData?.ville?.[0]) errorMsg = `Ville: ${errorData.ville[0]}`;
+        else if (errorData?.pays?.[0]) errorMsg = `Pays: ${errorData.pays[0]}`;
+        else if (errorData?.entite?.[0]) errorMsg = `Entité: ${errorData.entite[0]}`;
+        else if (errorData?.detail) errorMsg = errorData.detail;
+        else if (typeof errorData === 'string') errorMsg = errorData;
+        else if (errorData?.non_field_errors?.[0]) errorMsg = errorData.non_field_errors[0];
+        else {
+          const errors = [];
+          for (const [field, messages] of Object.entries(errorData)) {
+            if (Array.isArray(messages) && messages[0]) {
+              errors.push(`${field}: ${messages[0]}`);
+            } else if (typeof messages === 'string') {
+              errors.push(`${field}: ${messages}`);
+            }
+          }
+          if (errors.length > 0) errorMsg = errors.join(', ');
+        }
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const getVilleName = (ville) => {
-    if (!ville) return '';
-    if (typeof ville === 'string') return ville;
-    if (typeof ville === 'object') {
-      return ville.nom || ville.name || ville.nom_fr || '';
-    }
-    return String(ville);
-  };
-
-  // Types de partenaires avec style cohérent
-  const partnerTypes = [
-    { value: 'client', label: 'Client', icon: FiUserCheck, color: 'from-violet-600 to-violet-500', bgColor: 'bg-violet-100', textColor: 'text-violet-700' },
-    { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck, color: 'from-blue-600 to-blue-500', bgColor: 'bg-blue-100', textColor: 'text-blue-700' },
-    { value: 'employe', label: 'Employé', icon: FiUsers, color: 'from-emerald-600 to-emerald-500', bgColor: 'bg-emerald-100', textColor: 'text-emerald-700' },
-    { value: 'debiteur', label: 'Débiteur', icon: FiDollarSignIcon, color: 'from-amber-600 to-amber-500', bgColor: 'bg-amber-100', textColor: 'text-amber-700' },
-    { value: 'crediteur', label: 'Créditeur', icon: FiCreditCardIcon, color: 'from-rose-600 to-rose-500', bgColor: 'bg-rose-100', textColor: 'text-rose-700' },
-  ];
-
-  // Filtrage et recherche - COMME DANS ENTITÉS
-  const filteredPartners = partners.filter(partner => {
-    const matchesSearch = 
-      (partner.nom || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (partner.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getVilleName(partner.ville).toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesType = !filterType || partner.type_partenaire === filterType;
-    
-    return matchesSearch && matchesType;
-  });
-
-  // Calculs pour la pagination - COMME DANS ENTITÉS
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentPartners = Array.isArray(filteredPartners) ? filteredPartners.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredPartners) ? filteredPartners.length : 0) / itemsPerPage);
-
-  // Pagination - COMME DANS ENTITÉS
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-  const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
-  const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
-
-  // Gestion des sélections - COMME DANS ENTITÉS
-  const toggleRowSelection = (id) => {
-    setSelectedRows(prev => 
-      prev.includes(id) 
-        ? prev.filter(rowId => rowId !== id)
-        : [...prev, id]
-    );
-  };
-
-  const selectAllRows = () => {
-    if (selectedRows.length === currentPartners.length) {
-      setSelectedRows([]);
-    } else {
-      setSelectedRows(currentPartners.map(partner => partner.id));
-    }
-  };
-
-  // Gestion des actions - COMME DANS ENTITÉS
-  const handleNewPartner = () => {
-    setEditingPartner(null);
-    setShowForm(true);
-  };
-
-  const handleEdit = (partner) => {
-    setEditingPartner(partner);
-    setShowForm(true);
-  };
-
-  const handleDelete = async (partner) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le partenaire "${partner.nom}" ? Cette action est irréversible.`)) {
-      try {
-        await apiClient.delete(`/partenaires/${partner.id}/`);
-        fetchAllData();
-      } catch (err) {
-        setError('Erreur lors de la suppression');
-        console.error('Error deleting partner:', err);
-      }
-    }
-  };
-
-  const handleViewDetails = (partner) => {
-    setSelectedPartner(partner);
-    setShowDetailModal(true);
-  };
-
-  const handleFormSuccess = () => {
-    setShowForm(false);
-    setEditingPartner(null);
-    fetchAllData();
-  };
-
-  const handleRetry = () => {
-    fetchAllData();
-  };
-
-  const resetFilters = () => {
-    setSearchTerm('');
-    setFilterType('');
-    setCurrentPage(1);
-  };
-
-  // Statistiques - COMME DANS ENTITÉS
-  const stats = {
-    total: partners.length,
-    actifs: partners.filter(p => p.statut).length,
-    inactifs: partners.filter(p => !p.statut).length,
-  };
-
-  if (loading) {
-    return (
-      <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
-        <div className="flex flex-col items-center justify-center h-96">
-          <div className="relative">
-            <div className="w-12 h-12 border-3 border-gray-200 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-          <div className="mt-4">
-            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-32 animate-pulse"></div>
-            <div className="h-2 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-full w-24 mt-2 animate-pulse mx-auto"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (!open) return null;
 
   return (
-    <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
-      {/* HEADER COMPACT COMME DANS ENTITÉS */}
-      <div className="mb-6">
-     
-
-        {/* Barre de recherche au centre COMME DANS ENTITÉS */}
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="relative flex items-center">
-            <div className="relative flex-1">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-24 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm w-80"
-                placeholder="Rechercher un partenaire..."
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                >
-                  <FiX size={14} />
-                </button>
-              )}
-              
-              {/* Bouton de filtre avec dropdown */}
-              <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
-                <button
-                  onClick={() => {}}
-                  className="flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                >
-                  <FiChevronDown size={12} />
-                  <span>Filtre</span>
-                </button>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-violet-600 text-white rounded-t-lg p-4 sticky top-0 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg">
+                <FiPlus className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-lg">Nouveau partenaire</h2>
+                <p className="text-violet-100 text-sm">
+                  {activeEntity ? activeEntity.raison_sociale : 'Sélectionnez une entité'}
+                </p>
               </div>
             </div>
-            
-            <button 
-              onClick={handleRetry}
-              className="ml-3 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center gap-1.5 text-sm"
-            >
-              <FiRefreshCw className={`${loading ? 'animate-spin' : ''}`} size={14} />
-              <span>Actualiser</span>
-            </button>
-            
-            <button 
-              onClick={handleNewPartner}
-              className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
-            >
-              <FiPlus size={14} />
-              <span>Nouveau Partenaire</span>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded" disabled={loading}>
+              <FiX size={20} />
             </button>
           </div>
         </div>
-
-        {/* Statistiques en ligne compactes COMME DANS ENTITÉS */}
-        {/* Statistiques en ligne compactes - FORMAT IDENTIQUE AUX ENTITÉS */}
-<div className="grid grid-cols-4 gap-2 mb-3">
-  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-600">Total:</span>
-        <span className="text-sm font-bold text-violet-600">{stats.total}</span>
-      </div>
-      <div className="p-1 bg-violet-50 rounded">
-        <FiUsers className="w-3 h-3 text-violet-600" />
-      </div>
-    </div>
-  </div>
-  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-600">Actifs:</span>
-        <span className="text-sm font-bold text-green-600">{stats.actifs}</span>
-      </div>
-      <div className="p-1 bg-green-50 rounded">
-        <FiCheckCircle className="w-3 h-3 text-green-600" />
-      </div>
-    </div>
-  </div>
-  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-600">Inactifs:</span>
-        <span className="text-sm font-bold text-red-600">{stats.inactifs}</span>
-      </div>
-      <div className="p-1 bg-red-50 rounded">
-        <FiXCircle className="w-3 h-3 text-red-600" />
-      </div>
-    </div>
-  </div>
-  <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-600">Types:</span>
-        <span className="text-sm font-bold text-blue-600">
-          {[...new Set(partners.map(p => p.type_partenaire))].length}
-        </span>
-      </div>
-      <div className="p-1 bg-blue-50 rounded">
-        <FiUserCheck className="w-3 h-3 text-blue-600" />
-      </div>
-    </div>
-  </div>
-</div>
-
-        {/* Onglets (si besoin pour une future fonctionnalité) */}
-        <div className="flex border-b border-gray-200 mb-3">
-          <button
-            onClick={() => {
-              setCurrentPage(1);
-              setSelectedRows([]);
-              resetFilters();
-            }}
-            className="px-4 py-1.5 text-xs font-medium border-b-2 border-violet-600 text-violet-600 transition-colors"
-          >
-            Tous les partenaires
-          </button>
-        </div>
-      </div>
-
-      {/* Message d'erreur compact COMME DANS ENTITÉS */}
-      {error && (
-        <div className="mb-4">
-          <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-2 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-1 bg-red-100 rounded">
-                  <FiX className="w-3 h-3 text-red-600" />
+        <div className="p-4">
+          {!activeEntity && (
+            <div className="mb-4 bg-amber-50 border-l-4 border-amber-500 rounded-r p-3">
+              <div className="flex items-start gap-2">
+                <FiAlertCircle className="text-amber-500 mt-0.5" />
+                <p className="text-amber-700 text-sm">Sélectionnez une entité</p>
+              </div>
+            </div>
+          )}
+          {error && (
+            <div className="mb-4 bg-red-50 border-l-4 border-red-500 rounded-r p-3">
+              <div className="flex items-start gap-2">
+                <FiAlertCircle className="text-red-500 mt-0.5" />
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            </div>
+          )}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Section Informations obligatoires */}
+            <div className="bg-violet-50 rounded-lg p-4 border border-violet-200">
+              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <FiBriefcase className="w-4 h-4 text-violet-600" />
+                Informations obligatoires
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nom * <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nom}
+                    onChange={(e) => setFormData(prev => ({ ...prev, nom: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="Nom complet ou raison sociale"
+                    required
+                    disabled={!activeEntity}
+                  />
                 </div>
                 <div>
-                  <p className="font-medium text-red-900 text-xs">{error}</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.type_partenaire}
+                    onChange={(e) => setFormData(prev => ({ ...prev, type_partenaire: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    required
+                    disabled={!activeEntity}
+                  >
+                    {partnerTypes.map(type => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                  <select
+                    value={formData.statut ? 'active' : 'inactive'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, statut: e.target.value === 'active' }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    disabled={!activeEntity}
+                  >
+                    <option value="active">Actif</option>
+                    <option value="inactive">Inactif</option>
+                  </select>
                 </div>
               </div>
-              <button
-                onClick={handleRetry}
-                className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-xs font-medium"
-              >
-                Réessayer
-              </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Tableau Principal COMME DANS ENTITÉS */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {/* En-tête du tableau avec actions compact */}
-        <div className="px-3 py-2 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={selectedRows.length === currentPartners.length && currentPartners.length > 0}
-                  onChange={selectAllRows}
-                  className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+            {/* Section Contact */}
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <FiMail className="w-4 h-4" />
+                Contact
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="email@exemple.com"
+                    disabled={!activeEntity}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+                  <input
+                    type="tel"
+                    value={formData.telephone}
+                    onChange={(e) => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="+228 XX XX XX XX"
+                    disabled={!activeEntity}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Site web</label>
+                  <input
+                    type="url"
+                    value={formData.site_web}
+                    onChange={(e) => setFormData(prev => ({ ...prev, site_web: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="https://www.exemple.com"
+                    disabled={!activeEntity}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section Localisation */}
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <FiMapPin className="w-4 h-4" />
+                Localisation <span className="text-sm text-gray-500 font-normal">(Optionnel)</span>
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                  <select
+                    value={formData.pays}
+                    onChange={(e) => setFormData(prev => ({ ...prev, pays: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    disabled={!activeEntity}
+                  >
+                    <option value="">Sélectionnez un pays (optionnel)</option>
+                    {paysList.map(pays => (
+                      <option key={pays.id} value={pays.id}>
+                        {pays.emoji} {pays.nom_fr || pays.nom} ({pays.code_iso})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
+                  <select
+                    value={formData.ville}
+                    onChange={(e) => setFormData(prev => ({ ...prev, ville: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    disabled={!activeEntity}
+                  >
+                    <option value="">Sélectionnez une ville (optionnel)</option>
+                    {villesList.map(ville => (
+                      <option key={ville.id} value={ville.id}>
+                        {ville.nom} {ville.subdivision_nom ? `(${ville.subdivision_nom})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Région</label>
+                  <select
+                    value={formData.region}
+                    onChange={(e) => setFormData(prev => ({ ...prev, region: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    disabled={!activeEntity}
+                  >
+                    <option value="">Sélectionnez une région (optionnel)</option>
+                    {regionsList.map(region => (
+                      <option key={region.id} value={region.id}>
+                        {region.nom} ({region.type_subdivision})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Code postal</label>
+                  <input
+                    type="text"
+                    value={formData.code_postal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, code_postal: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="00000"
+                    disabled={!activeEntity}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
+                  <textarea
+                    value={formData.adresse}
+                    onChange={(e) => setFormData(prev => ({ ...prev, adresse: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="Adresse complète"
+                    rows="2"
+                    disabled={!activeEntity}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section Informations financières */}
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <FiCreditCard className="w-4 h-4" />
+                Informations financières <span className="text-sm text-gray-500 font-normal">(Optionnel)</span>
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Numéro fiscal</label>
+                  <input
+                    type="text"
+                    value={formData.numero_fiscal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, numero_fiscal: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="NIF/TIN"
+                    disabled={!activeEntity}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Numéro TVA</label>
+                  <input
+                    type="text"
+                    value={formData.numero_tva}
+                    onChange={(e) => setFormData(prev => ({ ...prev, numero_tva: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="TVA intracommunautaire"
+                    disabled={!activeEntity}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Registre commerce</label>
+                  <input
+                    type="text"
+                    value={formData.numero_registre_commerce}
+                    onChange={(e) => setFormData(prev => ({ ...prev, numero_registre_commerce: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="RCCM"
+                    disabled={!activeEntity}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Limite de crédit</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.limite_credit}
+                    onChange={(e) => setFormData(prev => ({ ...prev, limite_credit: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="0.00"
+                    disabled={!activeEntity}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Délai paiement (jours)</label>
+                  <input
+                    type="number"
+                    value={formData.delai_paiement}
+                    onChange={(e) => setFormData(prev => ({ ...prev, delai_paiement: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    placeholder="30"
+                    disabled={!activeEntity}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section Notes */}
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <FiBriefcase className="w-4 h-4" />
+                Notes et informations supplémentaires <span className="text-sm text-gray-500 font-normal">(Optionnel)</span>
+              </h3>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                  placeholder="Informations supplémentaires..."
+                  rows="3"
+                  disabled={!activeEntity}
                 />
-                <span className="text-xs text-gray-700">
-                  {selectedRows.length} sélectionné(s)
-                </span>
               </div>
             </div>
-            <div className="flex items-center gap-1">
-              <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
-                <FiDownload size={14} />
-              </button>
-              <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
-                <FiUpload size={14} />
-              </button>
-              <select
-                value={itemsPerPage}
-                onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                disabled={loading}
               >
-                <option value={5}>5 lignes</option>
-                <option value={10}>10 lignes</option>
-                <option value={20}>20 lignes</option>
-                <option value={50}>50 lignes</option>
-              </select>
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !activeEntity}
+                className={`px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 ${
+                  loading || !activeEntity ? 'bg-gray-400 cursor-not-allowed' : 'bg-violet-600 hover:bg-violet-700 text-white'
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <FiRefreshCw className="animate-spin" />
+                    Création...
+                  </>
+                ) : (
+                  <>
+                    <FiSave />
+                    Créer le partenaire
+                  </>
+                )}
+              </button>
             </div>
-          </div>
+          </form>
         </div>
-
-        {/* Tableau */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.length === currentPartners.length && currentPartners.length > 0}
-                      onChange={selectAllRows}
-                      className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
-                    />
-                    ID
-                  </div>
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Partenaire
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Type
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Contact
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Localisation
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Statut
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            
-            <tbody className="divide-y divide-gray-200">
-              {currentPartners.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-3 py-4 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
-                        <FiUsers className="w-6 h-6 text-gray-400" />
-                      </div>
-                      <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                        {partners.length === 0 ? 'Aucun partenaire trouvé' : 'Aucun résultat'}
-                      </h3>
-                      <p className="text-gray-600 text-xs mb-3 max-w-md">
-                        {partners.length === 0 
-                          ? 'Commencez par créer votre premier partenaire' 
-                          : 'Essayez de modifier vos critères de recherche'}
-                      </p>
-                      {partners.length === 0 && (
-                        <button 
-                          onClick={handleNewPartner}
-                          className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
-                        >
-                          <FiPlus size={12} />
-                          Créer partenaire
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                currentPartners.map((partner) => {
-                  const typeInfo = partnerTypes.find(t => t.value === partner.type_partenaire) || partnerTypes[0];
-                  const IconComponent = typeInfo.icon || FiUser;
-                  
-                  return (
-                    <tr 
-                      key={partner.id}
-                      className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
-                        selectedRows.includes(partner.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
-                      }`}
-                    >
-                      {/* ID avec checkbox */}
-                      <td className="px-3 py-2 whitespace-nowrap border-r border-gray-200">
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="checkbox"
-                            checked={selectedRows.includes(partner.id)}
-                            onChange={() => toggleRowSelection(partner.id)}
-                            className="w-3 h-3 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
-                          />
-                          <span className="px-1 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium font-mono">
-                            #{partner.id}
-                          </span>
-                        </div>
-                      </td>
-                      
-                      {/* Partenaire */}
-                      <td className="px-3 py-2 border-r border-gray-200">
-                        <div>
-                          <div className="text-xs font-semibold text-gray-900 truncate max-w-[150px]">{partner.nom}</div>
-                          <div className="text-xs text-gray-500 truncate max-w-[150px]">{partner.email || '-'}</div>
-                        </div>
-                      </td>
-                      
-                      {/* Type */}
-                      <td className="px-3 py-2 border-r border-gray-200">
-                        <div className="flex items-center gap-1.5">
-                          <div className={`p-1 ${typeInfo.bgColor} rounded`}>
-                            <IconComponent className={`w-3 h-3 ${typeInfo.textColor}`} />
-                          </div>
-                          <span className={`text-xs font-medium ${typeInfo.textColor}`}>
-                            {typeInfo.label}
-                          </span>
-                        </div>
-                      </td>
-                      
-                      {/* Contact */}
-                      <td className="px-3 py-2 border-r border-gray-200">
-                        <div className="flex flex-col">
-                          <div className="text-xs text-gray-900 truncate">{partner.telephone || '-'}</div>
-                          <div className="text-xs text-gray-500 truncate">{partner.email || '-'}</div>
-                        </div>
-                      </td>
-                      
-                      {/* Localisation */}
-                      <td className="px-3 py-2 border-r border-gray-200">
-                        <div className="flex flex-col">
-                          <div className="text-xs text-gray-900">
-                            {partner.ville_details?.nom || getVilleName(partner.ville) || '-'}
-                          </div>
-                          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                            {partner.pays_details?.emoji || '🌍'}
-                            <span className="truncate max-w-[80px]">{partner.pays_details?.nom || '-'}</span>
-                          </div>
-                        </div>
-                      </td>
-                      
-                      {/* Statut */}
-                      <td className="px-3 py-2 border-r border-gray-200">
-                        <div className="flex items-center">
-                          <div className={`px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                            partner.statut
-                              ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200' 
-                              : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200'
-                          }`}>
-                            {partner.statut ? (
-                              <>
-                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                                <span className="text-xs font-medium">Actif</span>
-                              </>
-                            ) : (
-                              <>
-                                <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
-                                <span className="text-xs font-medium">Inactif</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      
-                      {/* Actions */}
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleViewDetails(partner)}
-                            className="p-1 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
-                            title="Voir détails"
-                          >
-                            <FiEye size={12} />
-                          </button>
-                          <button
-                            onClick={() => handleEdit(partner)}
-                            className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
-                            title="Modifier"
-                          >
-                            <FiEdit2 size={12} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(partner)}
-                            className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
-                            title="Supprimer"
-                          >
-                            <FiTrash2 size={12} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination compact COMME DANS ENTITÉS */}
-        {currentPartners.length > 0 && (
-          <div className="px-3 py-2 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-700">
-                    Page {currentPage} sur {totalPages}
-                  </span>
-                  <span className="text-gray-300">•</span>
-                  <span className="text-xs text-gray-700">
-                    {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPartners.length)} sur {filteredPartners.length} partenaires
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={prevPage}
-                  disabled={currentPage === 1}
-                  className={`p-1 rounded border transition-all duration-200 ${
-                    currentPage === 1
-                      ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
-                  }`}
-                  title="Page précédente"
-                >
-                  <FiChevronLeft size={12} />
-                </button>
-
-                {/* Numéros de page */}
-                <div className="flex items-center gap-0.5">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNumber;
-                    if (totalPages <= 5) {
-                      pageNumber = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNumber = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNumber = totalPages - 4 + i;
-                    } else {
-                      pageNumber = currentPage - 2 + i;
-                    }
-
-                    return (
-                      <button
-                        key={pageNumber}
-                        onClick={() => paginate(pageNumber)}
-                        className={`min-w-[28px] h-7 rounded border text-xs font-medium transition-all duration-200 ${
-                          currentPage === pageNumber
-                            ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-                        }`}
-                      >
-                        {pageNumber}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <button
-                  onClick={nextPage}
-                  disabled={currentPage === totalPages}
-                  className={`p-1 rounded border transition-all duration-200 ${
-                    currentPage === totalPages
-                      ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
-                  }`}
-                  title="Page suivante"
-                >
-                  <FiChevronRight size={12} />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* Modaux */}
-      {showForm && (
-        <PartnerFormModal
-          partner={editingPartner}
-          pays={pays}
-          onClose={() => {
-            setShowForm(false);
-            setEditingPartner(null);
-          }}
-          onSuccess={handleFormSuccess}
-        />
-      )}
-
-      {showDetailModal && selectedPartner && (
-        <PartnerDetailModal
-          partner={selectedPartner}
-          onClose={() => {
-            setShowDetailModal(false);
-            setSelectedPartner(null);
-          }}
-        />
-      )}
     </div>
   );
 }
 
-// MODAL DE DÉTAILS PARTENAIRE - STYLE COMME ENTITÉS
-function PartnerDetailModal({ partner, onClose }) {
-  const partnerTypes = [
-    { value: 'client', label: 'Client', icon: FiUserCheck, color: 'from-violet-600 to-violet-500' },
-    { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck, color: 'from-blue-600 to-blue-500' },
-    { value: 'employe', label: 'Employé', icon: FiUsers, color: 'from-emerald-600 to-emerald-500' },
-    { value: 'debiteur', label: 'Débiteur', icon: FiDollarSignIcon, color: 'from-amber-600 to-amber-500' },
-    { value: 'crediteur', label: 'Créditeur', icon: FiCreditCardIcon, color: 'from-rose-600 to-rose-500' },
-  ];
+// ============================================================================
+// MODAL D'ÉDITION DE PARTENAIRE
+// ============================================================================
+function EditPartnerModal({ open, onClose, partner, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [paysList, setPaysList] = useState([]);
+  const [villesList, setVillesList] = useState([]);
+  const [regionsList, setRegionsList] = useState([]);
+  const [formData, setFormData] = useState({
+    nom: '',
+    type_partenaire: 'client',
+    email: '',
+    telephone: '',
+    adresse: '',
+    statut: true,
+    ville: '',
+    pays: '',
+    region: '',
+    code_postal: '',
+    site_web: '',
+    notes: '',
+    limite_credit: 0,
+    delai_paiement: 30,
+    numero_fiscal: '',
+    numero_registre_commerce: '',
+    numero_tva: ''
+  });
 
-  const typeInfo = partnerTypes.find(t => t.value === partner.type_partenaire) || partnerTypes[0];
-  const IconComponent = typeInfo.icon || FiUser;
+  useEffect(() => {
+    let isMounted = true;
+    
+    const fetchData = async () => {
+      try {
+        const [paysRes, villesRes, regionsRes] = await Promise.all([
+          apiClient.get('/pays/'),
+          apiClient.get('/villes/'),
+          apiClient.get('/subdivisions/')
+        ]);
+        
+        if (isMounted) {
+          setPaysList(parseResponse(paysRes));
+          setVillesList(parseResponse(villesRes));
+          setRegionsList(parseResponse(regionsRes));
+        }
+      } catch (err) {
+        console.error('Erreur chargement données:', err);
+      }
+    };
+
+    if (open && partner) {
+      setFormData({
+        nom: partner.nom || '',
+        type_partenaire: partner.type_partenaire || 'client',
+        email: partner.email || '',
+        telephone: partner.telephone || '',
+        adresse: partner.adresse || '',
+        statut: partner.statut !== undefined ? partner.statut : true,
+        ville: partner.ville?.id || partner.ville || '',
+        pays: partner.pays?.id || partner.pays || '',
+        region: partner.region?.id || partner.region || '',
+        code_postal: partner.code_postal || '',
+        site_web: partner.site_web || '',
+        notes: partner.notes || '',
+        limite_credit: partner.limite_credit || 0,
+        delai_paiement: partner.delai_paiement || 30,
+        numero_fiscal: partner.numero_fiscal || '',
+        numero_registre_commerce: partner.numero_registre_commerce || '',
+        numero_tva: partner.numero_tva || ''
+      });
+      
+      fetchData();
+    }
+
+    return () => { isMounted = false; };
+  }, [open, partner]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    
+    try {
+      if (!formData.nom?.trim()) throw new Error('Le nom est obligatoire');
+      if (!partner?.id) throw new Error('Partenaire invalide');
+
+      const requestData = {
+        nom: formData.nom.trim(),
+        type_partenaire: formData.type_partenaire,
+        email: formData.email?.trim() || null,
+        telephone: formData.telephone?.trim() || null,
+        adresse: formData.adresse?.trim() || null,
+        statut: formData.statut,
+        ville: formData.ville ? parseInt(formData.ville) : null,
+        pays: formData.pays ? parseInt(formData.pays) : null,
+        region: formData.region ? parseInt(formData.region) : null,
+        code_postal: formData.code_postal?.trim() || null,
+        site_web: formData.site_web?.trim() || null,
+        notes: formData.notes?.trim() || null,
+        limite_credit: parseFloat(formData.limite_credit) || 0,
+        delai_paiement: parseInt(formData.delai_paiement) || 30,
+        numero_fiscal: formData.numero_fiscal?.trim() || null,
+        numero_registre_commerce: formData.numero_registre_commerce?.trim() || null,
+        numero_tva: formData.numero_tva?.trim() || null
+      };
+
+      await apiClient.put(`/partenaires/${partner.id}/`, requestData);
+      onSuccess?.();
+      onClose?.();
+    } catch (err) {
+      let errorMsg = 'Erreur modification';
+      const errorData = err?.response?.data;
+      
+      if (errorData) {
+        if (errorData?.nom?.[0]) errorMsg = `Nom: ${errorData.nom[0]}`;
+        else if (errorData?.detail) errorMsg = errorData.detail;
+        else if (typeof errorData === 'string') errorMsg = errorData;
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open || !partner) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
-        {/* Header du modal */}
-        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-violet-600 text-white rounded-t-lg p-4 sticky top-0 z-10">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
-                <FiUsers className="w-4 h-4" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg">
+                <FiEdit2 className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold">Détails du Partenaire</h2>
-                <p className="text-violet-100 text-xs mt-0.5">{partner.nom}</p>
+                <h2 className="font-bold text-lg">Modifier le partenaire</h2>
+                <p className="text-violet-100 text-sm">{partner.nom}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors"
-            >
-              <FiX size={18} />
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded" disabled={loading}>
+              <FiX size={20} />
             </button>
           </div>
         </div>
-        
-        <div className="p-4 space-y-4">
-          {/* En-tête avec badge */}
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-4 mb-6">
-            <div className="w-32 h-32 bg-gradient-to-br from-violet-100 to-violet-200 rounded-lg flex items-center justify-center overflow-hidden border-2 border-violet-300">
-              <IconComponent className="w-16 h-16 text-violet-600" />
+        <div className="p-4">
+          {error && (
+            <div className="mb-4 bg-red-50 border-l-4 border-red-500 rounded-r p-3">
+              <div className="flex items-start gap-2">
+                <FiAlertCircle className="text-red-500 mt-0.5" />
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
             </div>
-            <div className="flex-1 text-center md:text-left">
-              <h1 className="text-xl font-bold text-gray-900">{partner.nom}</h1>
-              <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
-                <div className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${typeInfo.color} text-white`}>
-                  <div className="flex items-center gap-1">
-                    <IconComponent className="w-3 h-3" />
-                    {typeInfo.label}
-                  </div>
+          )}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h3 className="font-medium text-gray-900 mb-4">Informations principales</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                  <input
+                    type="text"
+                    value={formData.nom}
+                    onChange={(e) => setFormData(prev => ({ ...prev, nom: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    required
+                  />
                 </div>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                  partner.statut
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {partner.statut ? 'Actif' : 'Inactif'}
-                </span>
-                {partner.pays_details && (
-                  <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                    <FiGlobe className="w-3 h-3 mr-1" />
-                    {partner.pays_details.nom}
-                  </span>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+                  <select
+                    value={formData.type_partenaire}
+                    onChange={(e) => setFormData(prev => ({ ...prev, type_partenaire: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="client">Client</option>
+                    <option value="fournisseur">Fournisseur</option>
+                    <option value="employe">Employé</option>
+                    <option value="debiteur">Débiteur</option>
+                    <option value="crediteur">Créditeur</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                  <select
+                    value={formData.statut ? 'active' : 'inactive'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, statut: e.target.value === 'active' }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="active">Actif</option>
+                    <option value="inactive">Inactif</option>
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Informations Générales */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-              Informations Générales
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Identifiant</p>
-                <p className="text-sm text-gray-900 font-mono font-medium">#{partner.id}</p>
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h3 className="font-medium text-gray-900 mb-4">Contact</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+                  <input
+                    type="tel"
+                    value={formData.telephone}
+                    onChange={(e) => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Site web</label>
+                  <input
+                    type="url"
+                    value={formData.site_web}
+                    onChange={(e) => setFormData(prev => ({ ...prev, site_web: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h3 className="font-medium text-gray-900 mb-4">Localisation (optionnel)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                  <select
+                    value={formData.pays}
+                    onChange={(e) => setFormData(prev => ({ ...prev, pays: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="">Sélectionnez un pays</option>
+                    {paysList.map(pays => (
+                      <option key={pays.id} value={pays.id}>
+                        {pays.emoji} {pays.nom_fr || pays.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
+                  <select
+                    value={formData.ville}
+                    onChange={(e) => setFormData(prev => ({ ...prev, ville: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="">Sélectionnez une ville</option>
+                    {villesList.map(ville => (
+                      <option key={ville.id} value={ville.id}>
+                        {ville.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
+                  <textarea
+                    value={formData.adresse}
+                    onChange={(e) => setFormData(prev => ({ ...prev, adresse: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-violet-500"
+                    rows="2"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                disabled={loading}
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-6 py-2.5 rounded-lg font-medium bg-violet-600 hover:bg-violet-700 text-white flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <FiRefreshCw className="animate-spin" />
+                    Enregistrement...
+                  </>
+                ) : (
+                  <>
+                    <FiSave />
+                    Enregistrer
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// MODAL DE CRÉATION D'UTILISATEUR DEPUIS PARTENAIRE
+// ============================================================================
+function UserFromPartenaireModal({ open, onClose, partenaire, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const [groupesList, setGroupesList] = useState([]);
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    telephone: '',
+    groups: [],
+    send_activation_email: true,
+    statut: 'actif'
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    const fetchGroupes = async () => {
+      try {
+        const response = await apiClient.get('/groupes/');
+        if (isMounted) {
+          setGroupesList(parseResponse(response));
+        }
+      } catch (err) {
+        console.error('Erreur groupes:', err);
+      }
+    };
+
+    if (open && partenaire) {
+      const nomParts = partenaire?.nom?.split(' ') || [];
+      setFormData({
+        first_name: nomParts[0] || '',
+        last_name: nomParts.slice(1).join(' ') || '',
+        telephone: partenaire?.telephone || '',
+        groups: [],
+        send_activation_email: true,
+        statut: 'actif'
+      });
+      setError(null);
+      setSuccess(false);
+      fetchGroupes();
+    }
+
+    return () => { isMounted = false; };
+  }, [open, partenaire]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    
+    try {
+      if (!partenaire?.email) throw new Error('Email manquant');
+      if (partenaire?.user) throw new Error('Compte déjà existant');
+      if (!partenaire?.id) throw new Error('Partenaire invalide');
+
+      const requestData = {
+        partenaire: partenaire.id,
+        first_name: formData.first_name?.trim() || partenaire.nom?.split(' ')[0] || '',
+        last_name: formData.last_name?.trim() || partenaire.nom?.split(' ').slice(1).join(' ') || '',
+        telephone: formData.telephone?.trim() || '',
+        groups: formData.groups,
+        send_activation_email: formData.send_activation_email,
+        statut: formData.statut
+      };
+
+      const response = await apiClient.post('/users/create-from-partenaire/', requestData);
+      
+      if (response?.success === false) throw new Error(response.error);
+      
+      setSuccess(true);
+      setTimeout(() => { 
+        onSuccess?.(); 
+        onClose?.(); 
+      }, 3000);
+    } catch (err) {
+      let errorMsg = 'Erreur création';
+      const errorData = err?.response?.data;
+      
+      if (errorData) {
+        if (errorData?.email?.[0]) errorMsg = errorData.email[0];
+        else if (errorData?.detail) errorMsg = errorData.detail;
+        else if (typeof errorData === 'string') errorMsg = errorData;
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleGroup = (groupId) => {
+    setFormData(prev => ({
+      ...prev,
+      groups: prev.groups.includes(groupId)
+        ? prev.groups.filter(id => id !== groupId)
+        : [...prev.groups, groupId]
+    }));
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-violet-600 text-white rounded-t-lg p-4 sticky top-0 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg">
+                <FiUserPlus className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Date d'enregistrement</p>
-                <p className="text-sm text-gray-900">
-                  {partner.date_creation ? new Date(partner.date_creation).toLocaleDateString('fr-FR') : '-'}
+                <h2 className="font-bold text-lg">Créer compte</h2>
+                <p className="text-violet-100 text-sm">
+                  {partenaire?.nom} ({partenaire?.email})
                 </p>
               </div>
             </div>
-          </div>
-
-          {/* Informations Légales */}
-          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-4 border border-blue-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
-              Informations Légales
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {partner.registre_commerce && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1">Registre de Commerce</p>
-                  <p className="text-sm text-gray-900 font-medium">{partner.registre_commerce}</p>
-                </div>
-              )}
-              {partner.numero_fiscal && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1">Numéro Fiscal</p>
-                  <p className="text-sm text-gray-900 font-medium">{partner.numero_fiscal}</p>
-                </div>
-              )}
-              {partner.securite_sociale && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1">Sécurité Sociale</p>
-                  <p className="text-sm text-gray-900">{partner.securite_sociale}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Localisation */}
-          <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-4 border border-purple-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-purple-600 to-purple-400 rounded"></div>
-              Localisation
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <p className="text-xs font-medium text-gray-500 mb-1">Adresse</p>
-                <p className="text-sm text-gray-900 whitespace-pre-line">{partner.adresse || '-'}</p>
-                {partner.complement_adresse && (
-                  <p className="text-sm text-gray-600 mt-1">{partner.complement_adresse}</p>
-                )}
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Code Postal</p>
-                <p className="text-sm text-gray-900">{partner.code_postal || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Pays</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{partner.pays_details?.emoji || '🌍'}</span>
-                  <p className="text-sm text-gray-900 font-medium">{partner.pays_details?.nom || '-'}</p>
-                  {partner.pays_details?.indicatif_tel && (
-                    <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-                      {partner.pays_details.indicatif_tel}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Région/État</p>
-                <p className="text-sm text-gray-900">{partner.region_details?.nom || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Ville</p>
-                <p className="text-sm text-gray-900">{partner.ville_details?.nom || '-'}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Contact */}
-          <div className="bg-gradient-to-br from-cyan-50 to-white rounded-lg p-4 border border-cyan-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
-              <div className="w-1 h-4 bg-gradient-to-b from-cyan-600 to-cyan-400 rounded"></div>
-              Contact
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Téléphone</p>
-                <div className="flex items-center gap-2">
-                  <FiPhone className="w-4 h-4 text-gray-400" />
-                  <p className="text-sm text-gray-900">{partner.telephone || '-'}</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Email</p>
-                <div className="flex items-center gap-2">
-                  <FiMail className="w-4 h-4 text-gray-400" />
-                  <a href={`mailto:${partner.email}`} className="text-sm text-blue-600 hover:underline">
-                    {partner.email || '-'}
-                  </a>
-                </div>
-              </div>
-              {partner.site_web && (
-                <div className="md:col-span-2">
-                  <p className="text-xs font-medium text-gray-500 mb-1">Site Web</p>
-                  <div className="flex items-center gap-2">
-                    <FiGlobe className="w-4 h-4 text-gray-400" />
-                    <a href={partner.site_web} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">
-                      {partner.site_web}
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded" disabled={loading && !success}>
+              <FiX size={20} />
+            </button>
           </div>
         </div>
+        {error && (
+          <div className="mx-4 mt-4 bg-red-50 border-l-4 border-red-500 rounded-r p-3">
+            <div className="flex items-start gap-2">
+              <FiAlertCircle className="text-red-500 mt-0.5" />
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          </div>
+        )}
+        {success ? (
+          <div className="p-4">
+            <div className="text-center py-6">
+              <FiCheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h3 className="font-bold text-xl text-gray-900 mb-2">✅ Compte créé</h3>
+              <p className="font-bold text-lg text-violet-600 mb-4">{partenaire?.email}</p>
+              {formData.send_activation_email ? (
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <p className="font-medium text-blue-900 mb-2">Email envoyé</p>
+                  <p className="text-sm text-blue-700">Lien d'activation envoyé.</p>
+                </div>
+              ) : (
+                <p className="text-amber-600">Activation manuelle</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <h4 className="font-medium text-gray-900 mb-2">Email</h4>
+              <div className="bg-white rounded p-3">
+                <p className="font-bold text-lg text-blue-700">{partenaire?.email}</p>
+                <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.send_activation_email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, send_activation_email: e.target.checked }))}
+                    className="text-violet-600"
+                  />
+                  <span className="text-sm">Envoyer email d'activation</span>
+                </label>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-2">Informations</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Prénom *</label>
+                  <input
+                    type="text"
+                    value={formData.first_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Nom *</label>
+                  <input
+                    type="text"
+                    value={formData.last_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                    required
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1">Téléphone</label>
+                  <input
+                    type="tel"
+                    value={formData.telephone}
+                    onChange={(e) => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="bg-violet-50 rounded-lg p-4 border border-violet-200">
+              <h4 className="font-medium text-gray-900 mb-2">Groupes</h4>
+              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
+                {groupesList.length === 0 ? (
+                  <p className="text-gray-500 text-sm italic">Aucun groupe</p>
+                ) : (
+                  groupesList.map(groupe => (
+                    <label key={groupe.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.groups.includes(groupe.id)}
+                        onChange={() => toggleGroup(groupe.id)}
+                        className="text-violet-600"
+                      />
+                      <span className="text-sm text-gray-700">{groupe.name}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
+                disabled={loading}
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <FiRefreshCw className="animate-spin" />
+                    Création...
+                  </>
+                ) : (
+                  <>
+                    <FiUserPlus />
+                    Créer
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
-        {/* Bouton de fermeture */}
-        <div className="p-3 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-          <div className="flex justify-end">
-            <button
-              onClick={onClose}
-              className="px-4 py-1.5 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded hover:from-gray-700 hover:to-gray-600 transition-all duration-200 font-medium text-sm shadow-sm"
-            >
+// ============================================================================
+// MODAL DE DÉTAILS DU PARTENAIRE
+// ============================================================================
+function PartnerDetailModal({ partner, onClose, onCreateUser }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleCreateUserClick = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await onCreateUser?.(partner);
+    } catch (err) {
+      setError(err?.message || 'Erreur lors de la création');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!partner) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-violet-600 text-white rounded-t-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg">
+                <FiBriefcase className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-lg">{partner.nom}</h2>
+                <p className="text-violet-100 text-sm capitalize">
+                  {partner.type_partenaire} • {partner.statut ? 'Actif' : 'Inactif'}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded">
+              <FiX size={20} />
+            </button>
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          {error && (
+            <div className="bg-red-50 border-l-4 border-red-500 rounded-r p-3">
+              <div className="flex items-start gap-2">
+                <FiAlertCircle className="text-red-500 mt-0.5" />
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            </div>
+          )}
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <h3 className="font-medium text-gray-900 mb-3">Informations principales</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-gray-600">Type</p>
+                <p className="font-medium capitalize">{partner.type_partenaire || 'Non spécifié'}</p>
+              </div>
+              <div>
+                <p className="text-gray-600">Statut</p>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  partner.statut ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {partner.statut ? 'Actif' : 'Inactif'}
+                </span>
+              </div>
+              <div className="col-span-2">
+                <p className="text-gray-600">Email</p>
+                <p className="font-medium">{partner.email || 'Non renseigné'}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-gray-600">Téléphone</p>
+                <p className="font-medium">{partner.telephone || 'Non renseigné'}</p>
+              </div>
+              {partner.adresse && (
+                <div className="col-span-2">
+                  <p className="text-gray-600">Adresse</p>
+                  <p className="font-medium">{partner.adresse}</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="bg-violet-50 rounded-lg p-4 border border-violet-200">
+            <h3 className="font-medium text-gray-900 mb-3">Compte utilisateur</h3>
+            {partner.user ? (
+              <div className="bg-white rounded p-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-medium text-gray-900">{partner.user.email || 'Non renseigné'}</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Créé le {partner.user.date_joined ? new Date(partner.user.date_joined).toLocaleDateString('fr-FR') : 'Non spécifié'}
+                    </p>
+                  </div>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    partner.user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {partner.user.is_active ? 'Actif' : 'Inactif'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                {partner.email ? (
+                  <>
+                    <button
+                      onClick={handleCreateUserClick}
+                      disabled={loading}
+                      className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 font-medium flex items-center justify-center gap-2 mx-auto"
+                    >
+                      {loading ? <FiRefreshCw className="animate-spin" /> : <FiUserPlus />}
+                      Créer un compte
+                    </button>
+                  </>
+                ) : (
+                  <div className="bg-red-50 p-3 rounded">
+                    <p className="font-medium text-red-800">Email requis</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end pt-4 border-t">
+            <button onClick={onClose} className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700">
               Fermer
             </button>
           </div>
@@ -1002,878 +1226,583 @@ function PartnerDetailModal({ partner, onClose }) {
   );
 }
 
-// COMPOSANT MODAL AVEC DROPDOWNS AVEC RECHERCHE INTÉGRÉE - FORMULAIRE COMPLET COMME ENTITÉS
-function PartnerFormModal({ partner, pays, onClose, onSuccess }) {
-  // États pour le formulaire - STRUCTURE COMME ENTITÉS
-  const [formData, setFormData] = useState({
-    // 1. Informations de base
-    nom: partner?.nom || '',
-    type_partenaire: partner?.type_partenaire || 'client',
-    
-    // 2. Informations légales
-    registre_commerce: partner?.registre_commerce || '',
-    numero_fiscal: partner?.numero_fiscal || '',
-    securite_sociale: partner?.securite_sociale || '',
-    
-    // 3. Localisation (ordre correct comme entités)
-    pays: partner?.pays?.id || partner?.pays || '',
-    region: partner?.region?.id || partner?.region || '',
-    ville: partner?.ville?.id || partner?.ville || '',
-    
-    // 4. Adresse
-    adresse: partner?.adresse || '',
-    complement_adresse: partner?.complement_adresse || '',
-    code_postal: partner?.code_postal || '',
-    
-    // 5. Contact
-    telephone: partner?.telephone || '',
-    email: partner?.email || '',
-    site_web: partner?.site_web || '',
-    
-    // 6. Paramètres
-    statut: partner?.statut !== undefined ? partner.statut : true,
-  });
-
-  const [loading, setLoading] = useState(false);
+// ============================================================================
+// PAGE PRINCIPALE DES PARTENAIRES
+// ============================================================================
+export default function PartnersPage() {
+  const [partners, setPartners] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [phoneError, setPhoneError] = useState('');
-  
-  // ÉTATS POUR LISTES DYNAMIQUES
-  const [subdivisions, setSubdivisions] = useState([]);
-  const [villes, setVilles] = useState([]);
-  const [loadingSubdivisions, setLoadingSubdivisions] = useState(false);
-  const [loadingVilles, setLoadingVilles] = useState(false);
-  
-  // ÉTATS POUR LE PAYS SÉLECTIONNÉ ET SON INDICATIF
-  const [selectedPays, setSelectedPays] = useState(null);
-  const [indicatif, setIndicatif] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [selectedPartner, setSelectedPartner] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const { activeEntity } = useEntity();
 
-  // ÉTATS POUR RECHERCHE DANS LES DROPDOWNS
-  const [searchPays, setSearchPays] = useState('');
-  const [searchSubdivision, setSearchSubdivision] = useState('');
-  const [searchVille, setSearchVille] = useState('');
-
-  // Types de partenaires
   const partnerTypes = [
-    { value: 'client', label: 'Client', icon: FiUserCheck },
-    { value: 'fournisseur', label: 'Fournisseur', icon: FiTruck },
-    { value: 'employe', label: 'Employé', icon: FiUsers },
-    { value: 'debiteur', label: 'Débiteur', icon: FiDollarSignIcon },
-    { value: 'crediteur', label: 'Créditeur', icon: FiCreditCardIcon },
+    { value: '', label: 'Tous' },
+    { value: 'client', label: 'Client' },
+    { value: 'fournisseur', label: 'Fournisseur' },
+    { value: 'employe', label: 'Employé' },
+    { value: 'debiteur', label: 'Débiteur' },
+    { value: 'crediteur', label: 'Créditeur' },
   ];
 
-  // S'assurer que les tableaux sont toujours des tableaux
-  const paysArray = Array.isArray(pays) ? pays : [];
+  const statusOptions = [
+    { value: '', label: 'Tous' },
+    { value: 'active', label: 'Actifs' },
+    { value: 'inactive', label: 'Inactifs' },
+  ];
 
-  // Filtrer les listes avec la recherche
-  const filteredPays = paysArray.filter(paysItem =>
-    (paysItem.nom_fr || paysItem.nom).toLowerCase().includes(searchPays.toLowerCase()) ||
-    (paysItem.code_iso || '').toLowerCase().includes(searchPays.toLowerCase())
-  );
-
-  const filteredSubdivisions = subdivisions.filter(subdivision =>
-    subdivision.nom.toLowerCase().includes(searchSubdivision.toLowerCase()) ||
-    (subdivision.code || '').toLowerCase().includes(searchSubdivision.toLowerCase())
-  );
-
-  const filteredVilles = villes.filter(ville =>
-    ville.nom.toLowerCase().includes(searchVille.toLowerCase()) ||
-    (ville.code_postal && ville.code_postal.includes(searchVille))
-  );
-
-  // DÉTECTER L'INDICATIF DU PAYS - COMME DANS ENTITÉS
   useEffect(() => {
-    if (formData.pays) {
-      const paysId = typeof formData.pays === 'object' ? formData.pays.id : formData.pays;
-      const paysTrouve = paysArray.find(p => p.id === parseInt(paysId));
+    setCurrentPage(1);
+  }, [activeEntity]);
+
+  // ========================================================================
+  // FONCTION POUR CHARGER LES PARTENAIRES
+  // ========================================================================
+  const fetchPartners = useCallback(async () => {
+    let isMounted = true;
+    
+    try {
+      setLoading(true);
+      setError(null);
       
-      if (paysTrouve) {
-        setSelectedPays(paysTrouve);
-        const indicatifPays = paysTrouve.indicatif_tel || paysTrouve.code_tel || '';
-        setIndicatif(indicatifPays);
-        
-        if (formData.telephone) {
-          const validation = validatePhoneByCountry(formData.telephone, paysTrouve);
-          setPhoneError(validation.message);
+      if (!activeEntity?.id) {
+        if (isMounted) {
+          setPartners([]);
+          setLoading(false);
         }
-      }
-    } else {
-      setSelectedPays(null);
-      setIndicatif('');
-    }
-  }, [formData.pays, formData.telephone, paysArray]);
-
-  // CHARGEMENT DYNAMIQUE DES SUBDIVISIONS - COMME DANS ENTITÉS
-  useEffect(() => {
-    const fetchSubdivisions = async () => {
-      if (formData.pays) {
-        setLoadingSubdivisions(true);
-        try {
-          const response = await apiClient.get(`/subdivisions/?pays=${formData.pays}`);
-          
-          let subdivisionsData = [];
-          if (Array.isArray(response)) {
-            subdivisionsData = response;
-          } else if (response && Array.isArray(response.results)) {
-            subdivisionsData = response.results;
-          }
-          
-          setSubdivisions(subdivisionsData);
-          
-          if (formData.region) {
-            const currentSubdivisionExists = subdivisionsData.some(
-              sub => sub.id.toString() === formData.region.toString()
-            );
-            if (!currentSubdivisionExists) {
-              setFormData(prev => ({ ...prev, region: '', ville: '' }));
-            }
-          }
-        } catch (err) {
-          console.error('Erreur chargement subdivisions:', err);
-          setSubdivisions([]);
-        } finally {
-          setLoadingSubdivisions(false);
-        }
-      } else {
-        setSubdivisions([]);
-        setFormData(prev => ({ ...prev, region: '', ville: '' }));
-      }
-    };
-
-    fetchSubdivisions();
-  }, [formData.pays, formData.region]);
-
-  // CHARGEMENT DYNAMIQUE DES VILLES - COMME DANS ENTITÉS
-  useEffect(() => {
-    const fetchVilles = async () => {
-      if (formData.region) {
-        setLoadingVilles(true);
-        try {
-          const response = await apiClient.get(`/villes/?subdivision=${formData.region}`);
-          
-          let villesData = [];
-          if (Array.isArray(response)) {
-            villesData = response;
-          } else if (response && Array.isArray(response.results)) {
-            villesData = response.results;
-          }
-          
-          setVilles(villesData);
-          
-          if (formData.ville) {
-            const currentVilleExists = villesData.some(
-              ville => ville.id.toString() === formData.ville.toString()
-            );
-            if (!currentVilleExists) {
-              setFormData(prev => ({ ...prev, ville: '' }));
-            }
-          }
-        } catch (err) {
-          console.error('Erreur chargement villes:', err);
-          setVilles([]);
-        } finally {
-          setLoadingVilles(false);
-        }
-      } else {
-        setVilles([]);
-        setFormData(prev => ({ ...prev, ville: '' }));
-      }
-    };
-
-    fetchVilles();
-  }, [formData.region, formData.ville]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setPhoneError('');
-
-    // Validation - COMME DANS ENTITÉS
-    if (!formData.nom.trim()) {
-      setError('Le nom est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.pays) {
-      setError('Le pays est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.region) {
-      setError('La région/état/province est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.ville) {
-      setError('La ville est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.adresse.trim()) {
-      setError('L\'adresse est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.telephone.trim()) {
-      setError('Le téléphone est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    // Validation téléphone - COMME DANS ENTITÉS
-    if (formData.telephone && selectedPays) {
-      const validation = validatePhoneByCountry(formData.telephone, selectedPays);
-      if (!validation.valid) {
-        setError(validation.message);
-        setLoading(false);
         return;
       }
-    }
 
-    if (!formData.email.trim()) {
-      setError('L\'email est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    // Validation email - COMME DANS ENTITÉS
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setError('Veuillez entrer un email valide');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const url = partner 
-        ? `/partenaires/${partner.id}/`
-        : `/partenaires/`;
+      console.log('🔍 Fetching partners for entity:', activeEntity.id);
+      const response = await apiClient.get('/partenaires/');
+      console.log('📥 Réponse API:', response);
       
-      const method = partner ? 'PUT' : 'POST';
-
-      // Préparer les données finales
-      const submitData = {
-        ...formData,
-      };
-
-      console.log('📤 Données envoyées:', submitData);
+      if (!isMounted) return;
       
-      const response = await apiClient.request(url, {
-        method: method,
-        body: JSON.stringify(submitData),
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const data = parseResponse(response);
       
-      console.log('✅ Réponse:', response);
-      onSuccess();
+      const filteredData = data.filter(partner => 
+        partner && (
+          partner.entite === activeEntity.id ||
+          partner.entite?.id === activeEntity.id ||
+          partner.company_id === activeEntity.id
+        )
+      );
       
+      console.log('✅ Partenaires filtrés:', filteredData.length);
+      
+      if (isMounted) {
+        setPartners(filteredData);
+      }
     } catch (err) {
-      console.error('❌ Erreur sauvegarde partenaire:', err);
+      console.error('❌ Erreur fetchPartners:', err);
       
-      let errorMessage = 'Erreur lors de la sauvegarde';
-      if (err.response?.data) {
-        const errorData = err.response.data;
-        if (typeof errorData === 'object') {
-          errorMessage = Object.entries(errorData)
-            .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
-            .join('\n');
-        } else {
-          errorMessage = JSON.stringify(errorData);
+      if (!isMounted) return;
+      
+      let errorMessage = 'Impossible de charger les partenaires';
+      const errorData = err?.response?.data;
+      
+      if (err?.response?.status === 400) {
+        errorMessage = 'Paramètre incorrect. Chargement sans filtre...';
+        
+        try {
+          const fallbackResponse = await apiClient.get('/partenaires/');
+          const fallbackData = parseResponse(fallbackResponse);
+          
+          const filtered = fallbackData.filter(p => 
+            p && (
+              p.entite === activeEntity.id || 
+              p.entite?.id === activeEntity.id
+            )
+          );
+          
+          if (isMounted) {
+            setPartners(filtered);
+          }
+          return;
+        } catch (fallbackErr) {
+          console.error('Fallback aussi échoué:', fallbackErr);
         }
-      } else if (err.message) {
+      } else if (errorData?.detail) {
+        errorMessage = errorData.detail;
+      } else if (err?.message) {
         errorMessage = err.message;
       }
       
-      setError(errorMessage);
+      if (isMounted) {
+        setError(errorMessage);
+      }
     } finally {
-      setLoading(false);
+      if (isMounted) {
+        setLoading(false);
+      }
+    }
+    
+    return () => { isMounted = false; };
+  }, [activeEntity?.id]);
+
+  useEffect(() => {
+    fetchPartners();
+  }, [fetchPartners]);
+
+  const filteredPartners = partners.filter(partner => {
+    if (!partner) return false;
+    
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch =
+      (partner.nom || '').toLowerCase().includes(searchLower) ||
+      (partner.email || '').toLowerCase().includes(searchLower) ||
+      (partner.telephone || '').includes(searchTerm);
+    
+    const matchesType = !filterType || partner.type_partenaire === filterType;
+    const matchesStatus = !filterStatus ||
+      (filterStatus === 'active' && partner.statut === true) ||
+      (filterStatus === 'inactive' && partner.statut === false);
+    
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentPartners = filteredPartners.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.max(1, Math.ceil(filteredPartners.length / itemsPerPage));
+
+  const handleCreateUser = (partner) => {
+    if (!partner?.email) {
+      setError('Le partenaire doit avoir un email pour créer un compte');
+      return;
+    }
+    if (partner?.user) {
+      setError('Ce partenaire a déjà un compte utilisateur');
+      return;
+    }
+    setSelectedPartner(partner);
+    setShowUserModal(true);
+  };
+
+  const handleViewDetails = (partner) => {
+    setSelectedPartner(partner);
+    setShowDetailModal(true);
+  };
+
+  const handleEdit = (partner) => {
+    setSelectedPartner(partner);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = async (partner) => {
+    if (!window.confirm(`Supprimer "${partner?.nom}" ?`)) return;
+    
+    try {
+      await apiClient.delete(`/partenaires/${partner.id}/`);
+      await fetchPartners();
+    } catch (err) {
+      console.error('Erreur suppression:', err);
+      setError(err?.response?.data?.detail || 'Erreur lors de la suppression');
     }
   };
 
-  const handleChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleRefresh = () => {
+    fetchPartners();
+    setSearchTerm('');
+    setFilterType('');
+    setFilterStatus('');
+    setCurrentPage(1);
+    setError(null);
   };
 
-  // Composant réutilisable pour les dropdowns avec recherche - COMME DANS ENTITÉS
-  const SearchableDropdown = ({ 
-    label, 
-    value, 
-    onChange, 
-    options, 
-    searchValue,
-    onSearchChange,
-    placeholder,
-    required = false,
-    disabled = false,
-    icon: Icon,
-    getOptionLabel = (option) => option,
-    getOptionValue = (option) => option,
-    renderOption = (option) => getOptionLabel(option)
-  }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef(null);
-    const inputRef = useRef(null);
+  const handleCreateSuccess = () => {
+    fetchPartners();
+    setShowCreateModal(false);
+  };
 
-    const filteredOptions = options.filter(option =>
-      getOptionLabel(option).toLowerCase().includes(searchValue.toLowerCase())
-    );
+  const handleEditSuccess = () => {
+    fetchPartners();
+    setShowEditModal(false);
+  };
 
-    const selectedOption = options.find(opt => getOptionValue(opt) === value);
+  const handleUserCreateSuccess = () => {
+    fetchPartners();
+  };
 
-    useEffect(() => {
-      const handleMouseDown = (event) => {
-        if (!dropdownRef.current?.contains(event.target)) {
-          setIsOpen(false);
-          onSearchChange('');
-        }
-      };
+  const stats = {
+    total: partners.length,
+    actifs: partners.filter(p => p?.statut).length,
+    inactifs: partners.filter(p => !p?.statut).length,
+    avecEmail: partners.filter(p => p?.email).length,
+    avecCompte: partners.filter(p => p?.user).length,
+  };
 
-      document.addEventListener('mousedown', handleMouseDown, true);
-      
-      return () => {
-        document.removeEventListener('mousedown', handleMouseDown, true);
-      };
-    }, [onSearchChange]);
+  const getTypeIcon = (type) => {
+    switch(type) {
+      case 'client': return <FiUser className="w-4 h-4 text-blue-600" />;
+      case 'fournisseur': return <FiPackage className="w-4 h-4 text-orange-600" />;
+      case 'employe': return <FiUsers className="w-4 h-4 text-purple-600" />;
+      case 'debiteur': return <FiCreditCard className="w-4 h-4 text-red-600" />;
+      case 'crediteur': return <FiCreditCard className="w-4 h-4 text-green-600" />;
+      default: return <FiUsers className="w-4 h-4 text-gray-600" />;
+    }
+  };
 
-    const handleToggle = () => {
-      if (!disabled) {
-        setIsOpen(!isOpen);
-        if (!isOpen) {
-          setTimeout(() => {
-            inputRef.current?.focus();
-          }, 0);
-        } else {
-          onSearchChange('');
-        }
-      }
-    };
-
-    const handleInputMouseDown = (e) => {
-      e.stopPropagation();
-    };
-
-    const handleInputFocus = (e) => {
-      e.stopPropagation();
-    };
-
-    const handleInputClick = (e) => {
-      e.stopPropagation();
-    };
-
-    const handleOptionClick = (optionValue) => {
-      onChange(optionValue);
-      setIsOpen(false);
-      onSearchChange('');
-    };
-
+  if (loading && partners.length === 0) {
     return (
-      <div className="relative" ref={dropdownRef}>
-        {label && (
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            {label} {required && <span className="text-red-500">*</span>}
-          </label>
-        )}
-        
-        {/* Bouton d'ouverture du dropdown */}
-        <button
-          type="button"
-          onClick={handleToggle}
-          onMouseDown={(e) => e.preventDefault()}
-          disabled={disabled}
-          className={`w-full text-left border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent transition-all text-sm ${
-            disabled 
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-              : 'bg-white hover:border-gray-400'
-          } ${isOpen ? 'ring-1 ring-violet-500 border-violet-500' : ''}`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {Icon && <Icon className="text-gray-400" size={16} />}
-              {selectedOption ? (
-                <span className="text-gray-900 font-medium truncate">{getOptionLabel(selectedOption)}</span>
-              ) : (
-                <span className="text-gray-500 truncate">{placeholder || `Sélectionnez...`}</span>
-              )}
-            </div>
-            <svg className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </button>
-
-        {/* Dropdown avec recherche */}
-        {isOpen && (
-          <div 
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-56 overflow-hidden"
-            onMouseDown={handleInputMouseDown}
-          >
-            {/* Barre de recherche */}
-            <div className="p-2 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
-              <div className="relative">
-                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={searchValue}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  onMouseDown={handleInputMouseDown}
-                  onClick={handleInputClick}
-                  onFocus={handleInputFocus}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm bg-white"
-                  placeholder={`Rechercher...`}
-                  autoFocus
-                />
-              </div>
-              <p className="text-xs text-gray-500 mt-1 px-1">
-                {filteredOptions.length} résultat(s) trouvé(s)
-              </p>
-            </div>
-            
-            {/* Liste des options */}
-            <div className="max-h-44 overflow-y-auto">
-              {filteredOptions.length === 0 ? (
-                <div className="p-4 text-center">
-                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <FiSearch className="text-gray-400" />
-                  </div>
-                  <p className="text-gray-500 text-xs">Aucun résultat trouvé</p>
-                </div>
-              ) : (
-                filteredOptions.map((option, index) => (
-                  <div
-                    key={index}
-                    className={`px-3 py-2 cursor-pointer hover:bg-violet-50 text-sm border-b border-gray-100 last:border-b-0 transition-colors ${
-                      value === getOptionValue(option) ? 'bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium' : 'text-gray-700'
-                    }`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onClick={() => handleOptionClick(getOptionValue(option))}
-                  >
-                    {renderOption(option)}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Affichage de la valeur sélectionnée */}
-        {selectedOption && !isOpen && (
-          <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-            <FiCheck size={12} />
-            Sélectionné: <span className="font-medium truncate">{getOptionLabel(selectedOption)}</span>
-          </p>
-        )}
+      <div className="p-6">
+        <div className="flex flex-col items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600"></div>
+          <p className="mt-4 text-gray-600">Chargement des partenaires...</p>
+        </div>
       </div>
     );
-  };
+  }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl">
-        {/* Header du modal avec gradient - COMPACT COMME DANS ENTITÉS */}
-        <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded">
-                <FiUsers className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold">
-                  {partner ? 'Modifier le partenaire' : 'Nouveau Partenaire'}
-                </h2>
-                {!partner && (
-                  <p className="text-violet-100 text-xs mt-0.5">
-                    Créez un nouveau partenaire dans le système
-                  </p>
-                )}
-              </div>
-            </div>
+    <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
+      {/* HEADER */}
+      <div className="mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Partenaires</h1>
+            <p className="text-gray-600">{activeEntity?.raison_sociale || 'Sélectionnez une entité'}</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleRefresh} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+              <FiRefreshCw /> Actualiser
+            </button>
             <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors"
+              onClick={() => setShowCreateModal(true)}
+              disabled={!activeEntity}
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+                !activeEntity ? 'bg-gray-400 cursor-not-allowed' : 'bg-violet-600 hover:bg-violet-700 text-white'
+              }`}
             >
-              <FiX size={18} />
+              <FiPlus /> Nouveau partenaire
             </button>
           </div>
         </div>
-        
-        {error && (
-          <div className="mx-4 mt-3 bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-red-100 rounded">
-                <FiX className="text-red-600" size={14} />
-              </div>
-              <span className="text-red-800 text-xs font-medium whitespace-pre-line">{error}</span>
-            </div>
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Section 1: Informations de Base (ORDRE CORRECT COMME ENTITÉS) */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Informations de Base</h3>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {/* 1. Nom */}
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Nom / Raison Sociale <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.nom}
-                  onChange={(e) => handleChange('nom', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                  placeholder="Nom complet ou raison sociale"
-                />
-              </div>
-              
-              {/* 2. Type de Partenaire */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Type de Partenaire <span className="text-red-500">*</span>
-                </label>
-                <select
-                  required
-                  value={formData.type_partenaire}
-                  onChange={(e) => handleChange('type_partenaire', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                >
-                  {partnerTypes.map(type => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              {/* 3. Statut */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Statut</label>
-                <select
-                  value={formData.statut}
-                  onChange={(e) => handleChange('statut', e.target.value === 'true')}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                >
-                  <option value={true}>Actif</option>
-                  <option value={false}>Inactif</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Informations Légales - COMME DANS ENTITÉS */}
-          <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-100">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Informations Légales</h3>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Registre de Commerce</label>
-                <input
-                  type="text"
-                  value={formData.registre_commerce}
-                  onChange={(e) => handleChange('registre_commerce', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                  placeholder="Numéro RC"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Numéro Fiscal</label>
-                <input
-                  type="text"
-                  value={formData.numero_fiscal}
-                  onChange={(e) => handleChange('numero_fiscal', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                  placeholder="Numéro d'identification fiscale"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Sécurité Sociale</label>
-                <input
-                  type="text"
-                  value={formData.securite_sociale}
-                  onChange={(e) => handleChange('securite_sociale', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                  placeholder="Numéro de sécurité sociale"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: Localisation (ORDRE CORRECT COMME ENTITÉS) */}
-          <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg p-3 border border-purple-100">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 bg-gradient-to-b from-purple-600 to-purple-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Localisation</h3>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {/* Pays avec recherche */}
-              <div>
-                <SearchableDropdown
-                  label="Pays"
-                  value={formData.pays}
-                  onChange={(value) => handleChange('pays', value)}
-                  options={paysArray}
-                  searchValue={searchPays}
-                  onSearchChange={setSearchPays}
-                  placeholder="Sélectionnez un pays"
-                  required={true}
-                  icon={FiGlobe}
-                  getOptionLabel={(paysItem) => `${paysItem.emoji || '🌍'} ${paysItem.nom_fr || paysItem.nom} (${paysItem.code_iso})`}
-                  getOptionValue={(paysItem) => paysItem.id}
-                />
-              </div>
-
-              {/* Subdivision avec recherche */}
-              <div>
-                <SearchableDropdown
-                  label="État/Province/Région"
-                  value={formData.region}
-                  onChange={(value) => handleChange('region', value)}
-                  options={subdivisions}
-                  searchValue={searchSubdivision}
-                  onSearchChange={setSearchSubdivision}
-                  placeholder="Sélectionnez une subdivision"
-                  required={true}
-                  disabled={!formData.pays || loadingSubdivisions}
-                  icon={FiMapPin}
-                  getOptionLabel={(subdivision) => `${subdivision.nom} (${subdivision.type_subdivision})`}
-                  getOptionValue={(subdivision) => subdivision.id}
-                />
-                {!formData.pays && (
-                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                    <FiGlobe size={10} />
-                    Veuillez d'abord sélectionner un pays
-                  </p>
-                )}
-                {loadingSubdivisions && (
-                  <p className="text-xs text-blue-500 mt-1 flex items-center gap-1">
-                    <FiRefreshCw className="animate-spin" size={10} />
-                    Chargement des subdivisions...
-                  </p>
-                )}
-              </div>
-
-              {/* Ville avec recherche */}
-              <div>
-                <SearchableDropdown
-                  label="Ville"
-                  value={formData.ville}
-                  onChange={(value) => handleChange('ville', value)}
-                  options={villes}
-                  searchValue={searchVille}
-                  onSearchChange={setSearchVille}
-                  placeholder="Sélectionnez une ville"
-                  required={true}
-                  disabled={!formData.region || loadingVilles}
-                  icon={FiMapPin}
-                  getOptionLabel={(ville) => `${ville.nom} ${ville.code_postal ? `(${ville.code_postal})` : ''}`}
-                  getOptionValue={(ville) => ville.id}
-                />
-                {!formData.region && (
-                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                    <FiMapPin size={10} />
-                    Veuillez d'abord sélectionner une subdivision
-                  </p>
-                )}
-                {loadingVilles && (
-                  <p className="text-xs text-blue-500 mt-1 flex items-center gap-1">
-                    <FiRefreshCw className="animate-spin" size={10} />
-                    Chargement des villes...
-                  </p>
-                )}
-              </div>
-
-              {/* Code Postal */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Code Postal</label>
-                <input
-                  type="text"
-                  value={formData.code_postal}
-                  onChange={(e) => handleChange('code_postal', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
-                  placeholder="Code postal"
-                />
-              </div>
-
-              {/* Adresse complète */}
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Adresse complète <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  required
-                  value={formData.adresse}
-                  onChange={(e) => handleChange('adresse', e.target.value)}
-                  rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
-                  placeholder="Adresse complète"
-                />
-              </div>
-
-              {/* Complément d'adresse */}
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Complément d'adresse</label>
-                <input
-                  type="text"
-                  value={formData.complement_adresse}
-                  onChange={(e) => handleChange('complement_adresse', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
-                  placeholder="Bâtiment, étage, bureau, etc."
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 4: Contact - COMME DANS ENTITÉS */}
-          <div className="bg-gradient-to-br from-cyan-50 to-white rounded-lg p-3 border border-cyan-100">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 bg-gradient-to-b from-cyan-600 to-cyan-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Contact</h3>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {/* Téléphone avec indicatif - COMME DANS ENTITÉS */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Téléphone <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1.5">
-                    <FiPhone className="text-gray-400" size={16} />
-                    {indicatif && (
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-medium rounded border border-blue-200">
-                        {indicatif}
-                      </span>
-                    )}
-                  </div>
-                  
-                  <input
-                    type="tel"
-                    required
-                    value={formData.telephone}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      handleChange('telephone', value);
-                      
-                      // Validation en temps réel
-                      if (value && selectedPays) {
-                        const validation = validatePhoneByCountry(value, selectedPays);
-                        setPhoneError(validation.message);
-                      }
-                    }}
-                    className={`w-full ${indicatif ? 'pl-28' : 'pl-9'} pr-3 py-2 border ${phoneError ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-transparent text-sm`}
-                    placeholder={selectedPays ? `Ex: ${formatPhoneDisplay('12345678', selectedPays).replace(indicatif, '').trim()}` : "Numéro de téléphone"}
-                    disabled={!formData.pays}
-                  />
-                </div>
-                
-                {phoneError ? (
-                  <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                    <FiX size={12} />
-                    {phoneError}
-                  </p>
-                ) : formData.telephone && selectedPays && (
-                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                    <FiCheck size={12} />
-                    Format: {formatPhoneDisplay(formData.telephone, selectedPays)}
-                  </p>
-                )}
-                
-                {!formData.pays && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Sélectionnez d'abord un pays pour activer la validation téléphone
-                  </p>
-                )}
-              </div>
-              
-              {/* Email */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => handleChange('email', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-transparent text-sm"
-                    placeholder="contact@entreprise.tg"
-                  />
-                </div>
-              </div>
-              
-              {/* Site Web */}
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Site Web</label>
-                <div className="relative">
-                  <FiGlobe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    type="url"
-                    value={formData.site_web}
-                    onChange={(e) => handleChange('site_web', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-transparent text-sm"
-                    placeholder="https://www.example.com"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Boutons d'action - COMME DANS ENTITÉS */}
-          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium text-sm hover:shadow-sm"
-              disabled={loading}
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-medium flex items-center space-x-1.5 shadow hover:shadow-md text-sm"
-            >
-              {loading ? (
-                <>
-                  <FiRefreshCw className="animate-spin" size={14} />
-                  <span>Sauvegarde...</span>
-                </>
-              ) : (
-                <>
-                  <FiCheck size={14} />
-                  <span>{partner ? 'Mettre à jour' : 'Créer le partenaire'}</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
       </div>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FiAlertCircle className="text-red-500" />
+              <p className="text-red-700">{error}</p>
+            </div>
+            <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800 p-1">
+              <FiX />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STATISTIQUES */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="bg-white p-3 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600">Total</p>
+              <p className="text-lg font-bold text-gray-900">{stats.total}</p>
+            </div>
+            <div className="p-1.5 bg-violet-100 rounded">
+              <FiUsers className="w-4 h-4 text-violet-600" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-3 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600">Actifs</p>
+              <p className="text-lg font-bold text-green-600">{stats.actifs}</p>
+            </div>
+            <div className="p-1.5 bg-green-100 rounded">
+              <FiCheck className="w-4 h-4 text-green-600" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-3 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600">Avec compte</p>
+              <p className="text-lg font-bold text-blue-600">{stats.avecCompte}</p>
+            </div>
+            <div className="p-1.5 bg-blue-100 rounded">
+              <FiUserPlus className="w-4 h-4 text-blue-600" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-3 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600">Avec email</p>
+              <p className="text-lg font-bold text-emerald-600">{stats.avecEmail}</p>
+            </div>
+            <div className="p-1.5 bg-emerald-100 rounded">
+              <FiMail className="w-4 h-4 text-emerald-600" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-3 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600">Inactifs</p>
+              <p className="text-lg font-bold text-amber-600">{stats.inactifs}</p>
+            </div>
+            <div className="p-1.5 bg-amber-100 rounded">
+              <FiXCircle className="w-4 h-4 text-amber-600" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* FILTRES ET RECHERCHE */}
+      <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher par nom, email ou téléphone..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <select
+              value={filterType}
+              onChange={(e) => {
+                setFilterType(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="border border-gray-300 rounded-lg px-3 py-3 focus:ring-2 focus:ring-violet-500"
+            >
+              {partnerTypes.map(type => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="border border-gray-300 rounded-lg px-3 py-3 focus:ring-2 focus:ring-violet-500"
+            >
+              {statusOptions.map(status => (
+                <option key={status.value} value={status.value}>{status.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* TABLEAU DES PARTENAIRES */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Nom</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Type</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Contact</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Compte</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Statut</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {currentPartners.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                    {loading ? (
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600 mb-2"></div>
+                        <p>Chargement...</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center">
+                        <FiUsers className="w-12 h-12 text-gray-300 mb-2" />
+                        <p className="text-gray-400">Aucun partenaire trouvé</p>
+                        {!activeEntity && (
+                          <p className="text-sm text-amber-600 mt-1">Sélectionnez une entité pour commencer</p>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                currentPartners.map((partner) => (
+                  <tr key={partner.id} className="hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <div>
+                        <p className="font-medium text-gray-900">{partner.nom || 'Non spécifié'}</p>
+                        <p className="text-xs text-gray-500">ID: {partner.id}</p>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        {getTypeIcon(partner.type_partenaire)}
+                        <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${
+                          partner.type_partenaire === 'client' ? 'bg-blue-100 text-blue-800' :
+                          partner.type_partenaire === 'fournisseur' ? 'bg-orange-100 text-orange-800' :
+                          partner.type_partenaire === 'employe' ? 'bg-purple-100 text-purple-800' :
+                          partner.type_partenaire === 'debiteur' ? 'bg-red-100 text-red-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {partner.type_partenaire || 'Non spécifié'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="space-y-1">
+                        {partner.email && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <FiMail className="w-3 h-3 text-gray-400" />
+                            <span className="text-gray-700 truncate max-w-[150px]">{partner.email}</span>
+                          </div>
+                        )}
+                        {partner.telephone && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <FiPhone className="w-3 h-3 text-gray-400" />
+                            <span className="text-gray-700">{partner.telephone}</span>
+                          </div>
+                        )}
+                        {(!partner.email && !partner.telephone) && (
+                          <span className="text-xs text-gray-400 italic">Aucun contact</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      {partner.user ? (
+                        <div className="flex items-center gap-2">
+                          <FiCheckCircle className="w-4 h-4 text-green-500" />
+                          <span className="text-sm text-green-700">Compte actif</span>
+                        </div>
+                      ) : partner.email ? (
+                        <button
+                          onClick={() => handleCreateUser(partner)}
+                          className="px-3 py-1 bg-violet-100 text-violet-700 rounded text-sm hover:bg-violet-200 flex items-center gap-1"
+                        >
+                          <FiUserPlus className="w-3 h-3" />
+                          Créer compte
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">Email requis</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        partner.statut ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {partner.statut ? 'Actif' : 'Inactif'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleViewDetails(partner)}
+                          className="p-1.5 text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded"
+                          title="Voir les détails"
+                        >
+                          <FiEye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(partner)}
+                          className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded"
+                          title="Modifier"
+                        >
+                          <FiEdit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(partner)}
+                          className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded"
+                          title="Supprimer"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* PAGINATION */}
+      {filteredPartners.length > 0 && (
+        <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="text-sm text-gray-600">
+            {filteredPartners.length} partenaire{filteredPartners.length > 1 ? 's' : ''}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className={`p-2 rounded-lg border ${
+                currentPage === 1
+                  ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                  : "border-gray-300 text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <FiChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="text-sm text-gray-700">
+              Page {currentPage} sur {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className={`p-2 rounded-lg border ${
+                currentPage === totalPages
+                  ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                  : "border-gray-300 text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <FiChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAUX */}
+      <CreatePartnerModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={handleCreateSuccess}
+      />
+      <EditPartnerModal
+        open={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        partner={selectedPartner}
+        onSuccess={handleEditSuccess}
+      />
+      <PartnerDetailModal
+        partner={selectedPartner}
+        onClose={() => setShowDetailModal(false)}
+        onCreateUser={handleCreateUser}
+      />
+      <UserFromPartenaireModal
+        open={showUserModal}
+        onClose={() => setShowUserModal(false)}
+        partenaire={selectedPartner}
+        onSuccess={handleUserCreateSuccess}
+      />
     </div>
   );
 }

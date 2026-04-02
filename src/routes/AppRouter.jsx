@@ -25,6 +25,13 @@ import TasksPage from "../pages/Tasks/TasksPage";
 import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
 import UsersPage from "../pages/Users/UsersPage";
 
+
+
+
+// NOUVELLES PAGES D'ENTITÉ
+import NoEntitePage from "../pages/Entities/NoEntitePage";
+import SelectEntitePage from "../pages/Entities/SelectEntitePage";
+
 // IMPORTS DU MODULE COMPTABILITÉ
 import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout";
 import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
@@ -32,21 +39,27 @@ import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage
 import PositionsFiscalesPage from "../features/comptabilité/pages/PositionsFiscalesPage";
 
 // Frameworks
-import FrameworkList from "../features/comptabilité/pages/frameworks/FrameworkList.jsx";
-import FrameworkForm from "../features/comptabilité/pages/frameworks/FrameworkForm.jsx";
 import FrameworkDetail from "../features/comptabilité/pages/frameworks/FrameworkDetail.jsx";
+import FrameworkForm from "../features/comptabilité/pages/frameworks/FrameworkForm.jsx";
+import FrameworkList from "../features/comptabilité/pages/frameworks/FrameworkList.jsx";
 
 // Groups
+import GroupCreate from "../features/comptabilité/pages/groups/GroupCreate.jsx";
+import GroupDetail from "../features/comptabilité/pages/groups/GroupDetail.jsx";
+import GroupEdit from "../features/comptabilité/pages/groups/GroupEdit.jsx";
 import GroupList from "../features/comptabilité/pages/groups/GroupList.jsx";
-import GroupForm from "../features/comptabilité/pages/groups/GroupForm.jsx";
 
 // Types
-import TypeList from "../features/comptabilité/pages/types/TypeList.jsx";
-import TypeForm from "../features/comptabilité/pages/types/TypeForm.jsx";
+import TypeList   from "../features/comptabilité/pages/types/TypeList.jsx";
+import TypeCreate from "../features/comptabilité/pages/types/TypeCreate.jsx";
+import TypeEdit   from "../features/comptabilité/pages/types/TypeEdit.jsx";
+import TypeDetail from "../features/comptabilité/pages/types/TypeDetail.jsx";
 
 // Accounts
-import AccountList from "../features/comptabilité/pages/accounts/AccountList.jsx";
-import AccountForm from "../features/comptabilité/pages/accounts/AccountForm.jsx";
+import AccountList   from "../features/comptabilité/pages/accounts/AccountList.jsx";
+import AccountCreate from "../features/comptabilité/pages/accounts/AccountCreate.jsx";
+import AccountEdit   from "../features/comptabilité/pages/accounts/AccountEdit.jsx";
+import AccountDetail from "../features/comptabilité/pages/accounts/AccountDetail.jsx";
 import AccountImport from "../features/comptabilité/pages/accounts/AccountImport.jsx";
 
 // IMPORTS DES PAGES JOURNAUX
@@ -55,13 +68,19 @@ import JournauxEdit from "../features/comptabilité/pages/Journaux/Edit.jsx";
 import JournauxIndex from "../features/comptabilité/pages/Journaux/Index.jsx";
 import JournauxShow from "../features/comptabilité/pages/Journaux/Show.jsx";
 
+//Parametrage de la longeur des numeros de comptes
+import AccountCompanyConfigWizard from "../features/comptabilité/pages/parametrage/Accountcompanyconfigwizard.jsx";
+
+
+
+
 // IMPORTS DES PAGES PIÈCES COMPTABLES
 import PiecesComptablesCreate from "../features/comptabilité/pages/PiecesComptables/Create.jsx";
 import PiecesComptablesEdit from "../features/comptabilité/pages/PiecesComptables/Edit.jsx";
 import PiecesComptablesList from "../features/comptabilité/pages/PiecesComptables/List.jsx";
 import PiecesComptablesShow from "../features/comptabilité/pages/PiecesComptables/Show.jsx";
-import PlanList from '../features/comptabilité/pages/plans-comptables/PlanList.jsx';
 import PlanForm from '../features/comptabilité/pages/plans-comptables/PlanForm.jsx';
+import PlanList from '../features/comptabilité/pages/plans-comptables/PlanList.jsx';
 
 // IMPORTS DU MODULE ACHATS
 import AchatLayout from "../features/achat/layouts/AchatLayout";
@@ -72,17 +91,17 @@ import LignesBonCommandePage from "../features/achat/pages/LignesBonCommandePage
 import LignesDemandeAchatPage from "../features/achat/pages/LignesDemandeAchatPage";
 import PrixFournisseursPage from "../features/achat/pages/PrixFournisseursPage";
 
-// on ne parle pas beaucoup
-import FinancialReportsLayout from "../features/financial-reports/layouts/FinancialReportsHeader.jsx";
-import ReportDetail from "../features/financial-reports/pages/[id]/page.jsx"; // crée ce fichier si pas déjà fait
+// IMPORTS DU MODULE FINANCIAL REPORTS
+import PeriodSelectorPage from "../features/financial-reports/components/PeriodSelector.jsx";
+import FinancialReportsLayout from "../features/financial-reports/layouts/FinancialReportsLayout";
+import Indexpages from "../features/financial-reports/pages/[id]/lines/index.jsx";
+import ReportDetail from "../features/financial-reports/pages/[id]/page.jsx";
 import FinancialReportsDashboard from "../features/financial-reports/pages/dashboard.jsx";
+import ImportDetailPage from "../features/financial-reports/pages/import/[id].jsx";
+import ImportPage from "../features/financial-reports/pages/ImportData.jsx";
 import FinancialReportsList from "../features/financial-reports/pages/index.jsx";
 import NewReportPage from "../features/financial-reports/pages/new/page.jsx";
-import ImportPage from "../features/financial-reports/pages/ImportData.jsx";
-import ImportDetailPage from "../features/financial-reports/pages/import/[id].jsx";
 import SettingPage from "../features/financial-reports/pages/SettingsPage.jsx";
-import PeriodSelectorPage from "../features/financial-reports/components/PeriodSelector.jsx";
-import Indexpages from "../features/financial-reports/pages/[id]/lines/index.jsx"
 
 // COMPOSANT DE CHARGEMENT POUR SUSPENSE
 const LoadingFallback = () => (
@@ -197,6 +216,10 @@ export default function AppRouter() {
         <Route path="/auth/password/reset/:uid/:token" element={<ResetPasswordPage />} />
         <Route path="/auth/reset-confirm/success" element={<ConfirmResetPage />} />
         
+        {/* ROUTES DE SÉLECTION D'ENTITÉ (Après login) */}
+        <Route path="/select-entite" element={<SelectEntitePage />} />
+        <Route path="/no-entite" element={<NoEntitePage />} />
+        
         {/* ROUTES PROTÉGÉES PRINCIPALES */}
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -257,23 +280,26 @@ export default function AppRouter() {
           {/* Groups - Classes de comptes */}
           <Route path="groups">
             <Route index element={<GroupList />} />
-            <Route path="new" element={<GroupForm />} />
-            <Route path=":id/edit" element={<GroupForm />} />
+            <Route path="new" element={<GroupCreate />} />
+            <Route path=":id" element={<GroupDetail />} />
+            <Route path=":id/edit" element={<GroupEdit />} />
           </Route>
 
           {/* Types - Natures de comptes */}
           <Route path="types">
-            <Route index element={<TypeList />} />
-            <Route path="new" element={<TypeForm />} />
-            <Route path=":id/edit" element={<TypeForm />} />
+            <Route index                element={<TypeList   />} />
+            <Route path="new"           element={<TypeCreate />} />
+            <Route path=":id"           element={<TypeDetail />} />
+            <Route path=":id/edit"      element={<TypeEdit   />} />
           </Route>
 
           {/* Accounts - Comptes comptables */}
           <Route path="accounts">
-            <Route index element={<AccountList />} />
-            <Route path="new" element={<AccountForm />} />
-            <Route path="import" element={<AccountImport />} />
-            <Route path=":id/edit" element={<AccountForm />} />
+            <Route index                element={<AccountList   />} />
+            <Route path="new"           element={<AccountCreate />} />
+            <Route path="import"        element={<AccountImport />} />
+            <Route path=":id"           element={<AccountDetail />} />
+            <Route path=":id/edit"      element={<AccountEdit   />} />
           </Route>
 
           {/* ROUTES JOURNAUX */}
@@ -282,6 +308,11 @@ export default function AppRouter() {
             <Route path="create" element={<JournauxCreate />} />
             <Route path=":id" element={<JournauxShow />} />
             <Route path=":id/edit" element={<JournauxEdit />} />
+          </Route>
+
+          {/* Paramettrage de la longeur  */}
+          <Route path="parametrage">
+            <Route path="longueur-compte" element={<AccountCompanyConfigWizard />} />
           </Route>
           
           {/* ROUTE TAUX FISCAUX */}
@@ -307,10 +338,7 @@ export default function AppRouter() {
           <Route path="prix-fournisseurs" element={<PrixFournisseursPage />} />
         </Route>
 
-        {/* REDIRECTIONS */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        
-         {/* ROUTES ÉTATS FINANCIERS */}
+        {/* ROUTES ÉTATS FINANCIERS */}
         <Route element={<FinancialReportsLayout />}>
         <Route path="/financial-reports" element={<FinancialReportsList />} />
         <Route path="/financial-reports/:id" element={<ReportDetail />} />
@@ -319,11 +347,14 @@ export default function AppRouter() {
          {/* Optionnel : si tu veux une sous-route pour la création */}
         <Route path="/financial-reports/new" element={<NewReportPage />} /> 
         <Route path="/financial-reports/import" element={<ImportPage />} />
-        <Route path="/financial-reports/import/:id" element={<ImportDetailPage />} />        <Route path="/financial-reports/settings" element={<SettingPage />} />
+        <Route path="/financial-reports/import/:id" element={<ImportDetailPage />} />        
+        <Route path="/financial-reports/settings" element={<SettingPage />} />
         <Route path="/financial-reports/Periods" element={<PeriodSelectorPage />} />
         <Route path="/financial-reports/lignes" element={<Indexpages />} /> 
         </Route>
 
+        {/* REDIRECTIONS */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
         
         {/* 404 */}
         <Route path="*" element={

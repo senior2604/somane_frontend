@@ -6,17 +6,37 @@ const API_PREFIX = 'compta/';
 
 // ============= SERVICE PIÈCES =============
 const piecesService = {
-  // === REQUÊTES API ===
-  getAll: (filters = {}) => apiClient.get(`${API_PREFIX}moves/`, { params: filters }),
-  getById: (id) => apiClient.get(`${API_PREFIX}moves/${id}/`),
-  create: (data) => apiClient.post(`${API_PREFIX}moves/`, data),
-  update: (id, data) => apiClient.put(`${API_PREFIX}moves/${id}/`, data),
-  delete: (id) => apiClient.delete(`${API_PREFIX}moves/${id}/`),
+  // === REQUÊTES API AVEC ENTITÉ ===
+  getAll: (entityId = null, filters = {}) => {
+    const params = entityId ? { ...filters, company: entityId } : filters;
+    return apiClient.get(`${API_PREFIX}moves/`, { params });
+  },
   
-  // === DONNÉES DE RÉFÉRENCE ===
-  getJournals: async () => {
+  getById: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.get(`${API_PREFIX}moves/${id}/`, { params });
+  },
+  
+  create: (data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.post(`${API_PREFIX}moves/`, payload);
+  },
+  
+  update: (id, data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.put(`${API_PREFIX}moves/${id}/`, payload);
+  },
+  
+  delete: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.delete(`${API_PREFIX}moves/${id}/`, { params });
+  },
+  
+  // === DONNÉES DE RÉFÉRENCE AVEC ENTITÉ ===
+  getJournals: async (entityId = null) => {
     try {
-      const response = await apiClient.get(`${API_PREFIX}journals/`);
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}journals/`, { params });
       
       let journalsData = [];
       if (Array.isArray(response)) {
@@ -37,9 +57,10 @@ const piecesService = {
     }
   },
   
-  getAccounts: async () => {
+  getAccounts: async (entityId = null) => {
     try {
-      const response = await apiClient.get(`${API_PREFIX}accounts/`);
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}accounts/`, { params });
       
       let accountsData = [];
       if (Array.isArray(response)) {
@@ -60,10 +81,11 @@ const piecesService = {
     }
   },
   
-  // === PARTENAIRES ===
-  getPartners: async () => {
+  // === PARTENAIRES AVEC ENTITÉ ===
+  getPartners: async (entityId = null) => {
     try {
-      const response = await apiClient.get('partenaires/');
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get('partenaires/', { params });
       
       let partnersData = [];
       if (Array.isArray(response)) {
@@ -84,10 +106,11 @@ const piecesService = {
     }
   },
   
-  // === DEVISES ===
-  getDevises: async () => {
+  // === DEVISES AVEC ENTITÉ ===
+  getDevises: async (entityId = null) => {
     try {
-      const response = await apiClient.get('devises/');
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get('devises/', { params });
       
       let devisesData = [];
       if (Array.isArray(response)) {
@@ -111,12 +134,11 @@ const piecesService = {
   // === ENTREPRISES/ENTITES ===
   getCompanies: async () => {
     try {
-      // Essayer plusieurs endpoints possibles
       const endpoints = [
-        'entites/',      // Le plus probable
-        'companies/',    // Alternative anglaise
-        'entreprises/',  // Alternative française
-        'societes/'      // Autre alternative
+        'entites/',      
+        'companies/',    
+        'entreprises/',  
+        'societes/'      
       ];
       
       let companiesData = [];
@@ -135,18 +157,15 @@ const piecesService = {
             }
           }
           
-          // Si on a trouvé des données, on arrête la boucle
           if (companiesData.length > 0) {
             console.log(`✅ Entreprises chargées depuis: ${endpoint} (${companiesData.length})`);
             break;
           }
         } catch (err) {
-          // Continuer avec le prochain endpoint
           continue;
         }
       }
       
-      // Si toujours aucune donnée, retourner tableau vide
       return companiesData;
       
     } catch (error) {
@@ -155,14 +174,11 @@ const piecesService = {
     }
   },
   
-  // === UTILISATEUR CONNECTÉ ===
   getCurrentUser: async () => {
     try {
-      // Utiliser authService pour récupérer l'utilisateur
       const user = authService.getCurrentUser();
       
       if (!user) {
-        // Si pas d'utilisateur en cache, essayer de rafraîchir
         try {
           const refreshed = await authService.refreshUser();
           return refreshed || null;
@@ -179,7 +195,6 @@ const piecesService = {
     }
   },
   
-  // === FORMATAGE DES DONNÉES ===
   formatPieceForApi: (formData, companyId = 1, currencyId = 1) => {
     return {
       name: formData.reference || `ECR-${Date.now()}`,
@@ -206,27 +221,30 @@ const piecesService = {
     };
   },
   
-  // === MÉTHODES SUPPLEMENTAIRES ===
-  validate: (id) => apiClient.post(`${API_PREFIX}moves/${id}/validate/`),
-  cancel: (id) => apiClient.post(`${API_PREFIX}moves/${id}/cancel/`),
+  validate: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.post(`${API_PREFIX}moves/${id}/validate/`, {}, { params });
+  },
   
-  // === TESTS ET DIAGNOSTICS ===
-  testEndpoints: async () => {
+  cancel: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.post(`${API_PREFIX}moves/${id}/cancel/`, {}, { params });
+  },
+  
+  testEndpoints: async (entityId = null) => {
     const endpoints = [
       { name: 'Journaux', url: `${API_PREFIX}journals/` },
       { name: 'Comptes', url: `${API_PREFIX}accounts/` },
       { name: 'Partenaires', url: 'partenaires/' },
       { name: 'Devises', url: 'devises/' },
-      { name: 'Entreprises', url: 'entites/' },
-      { name: 'Companies', url: 'companies/' },
-      { name: 'Entreprises (fr)', url: 'entreprises/' },
     ];
     
     const results = [];
     
     for (const endpoint of endpoints) {
       try {
-        const response = await apiClient.get(endpoint.url);
+        const params = entityId ? { company: entityId } : {};
+        const response = await apiClient.get(endpoint.url, { params });
         let count = 0;
         
         if (Array.isArray(response)) {
@@ -261,11 +279,9 @@ const piecesService = {
     return results;
   },
   
-  // === VALIDATION DE L'ENVIRONNEMENT ===
   checkEnvironment: async () => {
     console.group('🔍 Diagnostic environnement comptabilité');
     
-    // Vérifier l'authentification
     const user = authService.getCurrentUser();
     console.log('👤 Utilisateur connecté:', user ? 'Oui' : 'Non');
     if (user) {
@@ -274,8 +290,7 @@ const piecesService = {
       console.log('   Entité:', user.entite);
     }
     
-    // Tester les endpoints principaux
-    const testResults = await piecesService.testEndpoints();
+    const testResults = await piecesService.testEndpoints(user?.company_id);
     
     console.groupEnd();
     
@@ -287,42 +302,126 @@ const piecesService = {
   }
 };
 
-// ============= AUTRES SERVICES =============
+// ============= SERVICE JOURNAUX =============
 const journauxService = {
-  getAll: (filters = {}) => apiClient.get(`${API_PREFIX}journals/`, { params: filters }),
-  getById: (id) => apiClient.get(`${API_PREFIX}journals/${id}/`),
-  create: (data) => apiClient.post(`${API_PREFIX}journals/`, data),
-  update: (id, data) => apiClient.put(`${API_PREFIX}journals/${id}/`, data),
-  delete: (id) => apiClient.delete(`${API_PREFIX}journals/${id}/`),
-  getTypes: () => apiClient.get(`${API_PREFIX}journal-types/`)
+  getAll: (entityId = null, filters = {}) => {
+    const params = entityId ? { ...filters, company: entityId } : filters;
+    return apiClient.get(`${API_PREFIX}journals/`, { params });
+  },
+  
+  getById: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.get(`${API_PREFIX}journals/${id}/`, { params });
+  },
+  
+  create: (data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.post(`${API_PREFIX}journals/`, payload);
+  },
+  
+  update: (id, data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.put(`${API_PREFIX}journals/${id}/`, payload);
+  },
+  
+  delete: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.delete(`${API_PREFIX}journals/${id}/`, { params });
+  },
+  
+  getTypes: (entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.get(`${API_PREFIX}journal-types/`, { params });
+  }
 };
 
+// ============= SERVICE COMPTES =============
 const comptesService = {
-  getAll: () => apiClient.get(`${API_PREFIX}accounts/`),
-  getById: (id) => apiClient.get(`${API_PREFIX}accounts/${id}/`),
-  create: (data) => apiClient.post(`${API_PREFIX}accounts/`, data),
-  update: (id, data) => apiClient.put(`${API_PREFIX}accounts/${id}/`, data),
-  delete: (id) => apiClient.delete(`${API_PREFIX}accounts/${id}/`)
+  getAll: (entityId = null, filters = {}) => {
+    const params = entityId ? { ...filters, company: entityId } : filters;
+    return apiClient.get(`${API_PREFIX}accounts/`, { params });
+  },
+  
+  getById: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.get(`${API_PREFIX}accounts/${id}/`, { params });
+  },
+  
+  create: (data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.post(`${API_PREFIX}accounts/`, payload);
+  },
+  
+  update: (id, data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.put(`${API_PREFIX}accounts/${id}/`, payload);
+  },
+  
+  delete: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.delete(`${API_PREFIX}accounts/${id}/`, { params });
+  }
 };
 
+// ============= SERVICE PARTENAIRES =============
 const partenairesService = {
-  getAll: () => piecesService.getPartners(),
-  getById: (id) => apiClient.get(`partenaires/${id}/`),
-  create: (data) => apiClient.post('partenaires/', data),
-  update: (id, data) => apiClient.put(`partenaires/${id}/`, data),
-  delete: (id) => apiClient.delete(`partenaires/${id}/`)
+  getAll: (entityId = null, filters = {}) => {
+    const params = entityId ? { ...filters, company: entityId } : filters;
+    return apiClient.get('partenaires/', { params });
+  },
+  
+  getById: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.get(`partenaires/${id}/`, { params });
+  },
+  
+  create: (data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.post('partenaires/', payload);
+  },
+  
+  update: (id, data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.put(`partenaires/${id}/`, payload);
+  },
+  
+  delete: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.delete(`partenaires/${id}/`, { params });
+  }
 };
 
+// ============= SERVICE DEVISES =============
 const devisesService = {
-  getAll: () => piecesService.getDevises(),
-  getById: (id) => apiClient.get(`devises/${id}/`),
-  create: (data) => apiClient.post('devises/', data),
-  update: (id, data) => apiClient.put(`devises/${id}/`, data),
-  delete: (id) => apiClient.delete(`devises/${id}/`)
+  getAll: (entityId = null, filters = {}) => {
+    const params = entityId ? { ...filters, company: entityId } : filters;
+    return apiClient.get('devises/', { params });
+  },
+  
+  getById: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.get(`devises/${id}/`, { params });
+  },
+  
+  create: (data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.post('devises/', payload);
+  },
+  
+  update: (id, data, entityId = null) => {
+    const payload = entityId ? { ...data, company: entityId } : data;
+    return apiClient.put(`devises/${id}/`, payload);
+  },
+  
+  delete: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.delete(`devises/${id}/`, { params });
+  }
 };
 
+// ============= SERVICE ENTREPRISES =============
 const entreprisesService = {
-  getAll: () => piecesService.getCompanies(),
+  getAll: (filters = {}) => apiClient.get('entites/', { params: filters }),
   getById: (id) => apiClient.get(`entites/${id}/`),
   create: (data) => apiClient.post('entites/', data),
   update: (id, data) => apiClient.put(`entites/${id}/`, data),

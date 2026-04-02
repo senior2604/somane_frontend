@@ -1,229 +1,225 @@
-// src/features/comptabilite/pages/accounts/AccountList.jsx
-
-import React, { useEffect, useState } from 'react';
+// src/features/comptabilité/pages/accounts/AccountList.jsx
 import {
-  Table,
+  BankOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  ExportOutlined,
+  EyeOutlined,
+  ImportOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
+import {
   Button,
-  Space,
   Card,
+  Col,
+  Empty,
+  Input,
   message,
   Modal,
-  Typography,
+  Row,
   Select,
-  Input,
+  Space,
+  Table,
   Tag,
   Tooltip,
-  Row,
-  Col,
+  Typography,
 } from 'antd';
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  SearchOutlined,
-  ImportOutlined,
-  ExportOutlined,
-  BankOutlined,
-} from '@ant-design/icons';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import axiosInstance from '../../../../config/axiosInstance';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ENDPOINTS } from '../../../../config/api';
+import axiosInstance from '../../../../config/axiosInstance';
+import useAccountStore from '../../../../stores/comptabilite/accountStore';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
-import useAccountStore from '../../../../stores/comptabilite/accountStore'; // ✅ NOUVEAU
 
 const { Title, Text } = Typography;
 const { confirm } = Modal;
-const { Option } = Select;
+
+const FRAMEWORK_SESSION_KEY = 'account_list_selected_framework';
 
 const AccountList = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  
-  // ✅ Utilisation des stores
-  const { frameworks, fetchFrameworks } = useFrameworkStore();
-  const { 
-    accounts, 
-    loading, 
-    pagination, 
-    fetchAccounts, 
-    deleteAccount,
-    setPagination 
-  } = useAccountStore();
 
-  // Filtres
-  const [selectedFramework, setSelectedFramework] = useState(
-    searchParams.get('framework') || null
-  );
-  const [selectedType, setSelectedType] = useState(null);
+  const { frameworks, fetchFrameworks }                             = useFrameworkStore();
+  const { accounts, loading, pagination, fetchAccounts, deleteAccount, setPagination } = useAccountStore();
+
+  const [selectedFramework, setSelectedFramework] = useState(() => {
+    const saved = sessionStorage.getItem(FRAMEWORK_SESSION_KEY);
+    return saved ? parseInt(saved, 10) : null;
+  });
+
+  const [selectedType,  setSelectedType]  = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
-  const [searchText, setSearchText] = useState('');
-
-  // Options pour les filtres
-  const [types, setTypes] = useState([]);
+  const [searchText,    setSearchText]    = useState('');
+  const [types,  setTypes]  = useState([]);
   const [groups, setGroups] = useState([]);
 
-  useEffect(() => {
-    fetchFrameworks();
-  }, []);
+  // ── Chargement initial ──────────────────────────────────────────────
+  // useEffect(() => { fetchFrameworks(); }, [fetchFrameworks]);
 
-  useEffect(() => {
-    if (selectedFramework) {
-      loadAccounts();
-      loadFilterOptions();
-    }
-  }, [selectedFramework, selectedType, selectedGroup, searchText, pagination.current]);
-
-  const loadFilterOptions = async () => {
+  const loadFilterOptions = useCallback(async (fwId) => {
     try {
       const [typesRes, groupsRes] = await Promise.all([
-        axiosInstance.get(ENDPOINTS.COMPTA.TYPES, { params: { framework: selectedFramework } }),
-        axiosInstance.get(ENDPOINTS.COMPTA.GROUPS, { params: { framework: selectedFramework } }),
+        axiosInstance.get(ENDPOINTS.COMPTA.TYPES,  { params: { framework: fwId, page_size: 200 } }),
+        axiosInstance.get(ENDPOINTS.COMPTA.GROUPS, { params: { framework: fwId, page_size: 200 } }),
       ]);
-
-      setTypes(typesRes.data.results || typesRes.data);
+      setTypes(typesRes.data.results   || typesRes.data);
       setGroups(groupsRes.data.results || groupsRes.data);
-    } catch (error) {
-      console.error('Erreur chargement filtres:', error);
-    }
-  };
+    } catch { console.error('Erreur chargement filtres'); }
+  }, []);
 
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
+    if (!selectedFramework) return;
     const params = {
-      framework: selectedFramework,
-      page: pagination.current,
-      page_size: pagination.pageSize,
+      framework:  selectedFramework,
+      page:       pagination.current,
+      page_size:  pagination.pageSize,
     };
-
-    if (selectedType) params.type = selectedType;
-    if (selectedGroup) params.group = selectedGroup;
-    if (searchText) params.search = searchText;
-
+    if (selectedType)  params.type   = selectedType;
+    if (selectedGroup) params.group  = selectedGroup;
+    if (searchText)    params.search = searchText;
     try {
       await fetchAccounts(params);
-    } catch (error) {
-      message.error('Erreur lors du chargement des comptes');
-      console.error(error);
-    }
+    } catch { message.error('Erreur lors du chargement des comptes'); }
+  }, [selectedFramework, selectedType, selectedGroup, searchText, pagination.current, pagination.pageSize, fetchAccounts]);
+
+
+// ✅ Effet 3 : comptes — se déclenche sur les vrais changements de filtre
+// ── Remplacer les useEffect existants par ceux-ci ──────────────────
+
+// Effet 1 : chargement initial des référentiels
+useEffect(() => { 
+  fetchFrameworks(); 
+}, []);
+
+// Effet 2 : quand le framework change → charger filtres ET reset
+useEffect(() => {
+  if (!selectedFramework) {
+    setTypes([]);
+    setGroups([]);
+    return;
+  }
+  loadFilterOptions(selectedFramework);  // ← C'était manquant !
+}, [selectedFramework]);
+
+// Effet 3 : charger les comptes selon tous les filtres actifs
+useEffect(() => {
+  if (!selectedFramework) return;
+
+  const params = {
+    framework: selectedFramework,
+    page:      pagination.current,
+    page_size: pagination.pageSize,
+  };
+  if (selectedType)  params.type   = selectedType;
+  if (selectedGroup) params.group  = selectedGroup;
+  if (searchText)    params.search = searchText;
+
+  fetchAccounts(params).catch(() =>
+    message.error('Erreur lors du chargement des comptes')
+  );
+}, [selectedFramework, selectedType, selectedGroup, searchText, pagination.current, pagination.pageSize]);
+
+// ← fetchAccounts PAS dans les deps (stable via zustand), loadAccounts supprimé
+
+  // ── Handlers ───────────────────────────────────────────────────────
+  const handleFrameworkChange = (value) => {
+    setSelectedFramework(value ?? null);
+    setSelectedType(null);
+    setSelectedGroup(null);
+    setTypes([]);    // ← reset les options
+    setGroups([]);   // ← reset les options
+    setPagination((prev) => ({ ...prev, current: 1 }));
+    if (value) sessionStorage.setItem(FRAMEWORK_SESSION_KEY, String(value));
+    else        sessionStorage.removeItem(FRAMEWORK_SESSION_KEY);
+  };
+
+  const handleNew    = () => navigate('/comptabilite/accounts/new',           { state: { frameworkId: selectedFramework } });
+  const handleView   = (r) => navigate(`/comptabilite/accounts/${r.id}`);
+  const handleEdit   = (r) => navigate(`/comptabilite/accounts/${r.id}/edit`, { state: { frameworkId: selectedFramework } });
+  const handleImport = ()  => navigate('/comptabilite/accounts/import',       { state: { frameworkId: selectedFramework } });
+
+  const handleExport = () => {
+    try {
+      const { exportAccountsToCSV } = useAccountStore.getState();
+      const csv     = exportAccountsToCSV();
+      const blob    = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url     = URL.createObjectURL(blob);
+      const link    = document.createElement('a');
+      link.href     = url;
+      link.download = `comptes_${selectedFramework}_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      message.success('Export CSV réussi');
+    } catch (e) { message.error(e.message || "Erreur lors de l'export"); }
   };
 
   const handleDelete = (record) => {
     confirm({
       title: 'Confirmer la suppression',
-      content: `Êtes-vous sûr de vouloir supprimer le compte "${record.code} - ${record.name}" ?`,
-      okText: 'Supprimer',
-      okType: 'danger',
-      cancelText: 'Annuler',
-      onOk: async () => {
-        try {
-          await deleteAccount(record.id);
-          message.success('Compte supprimé avec succès');
-          loadAccounts();
-        } catch (err) {
-          message.error('Erreur lors de la suppression');
-        }
+      content: (
+        <span>
+          Supprimer le compte <strong>{record.code} – {record.name}</strong> ?<br />
+          <Text type="danger" style={{ fontSize: 12 }}>Cette action est irréversible.</Text>
+        </span>
+      ),
+      okText: 'Supprimer', okType: 'danger', cancelText: 'Annuler',
+        onOk: async () => {
+      try {
+        await deleteAccount(record.id);
+        message.success('Compte supprimé avec succès');
+        // ✅ Recharger directement sans passer par loadAccounts
+        fetchAccounts({ 
+          framework: selectedFramework, 
+          page: pagination.current,
+          page_size: pagination.pageSize 
+        });
+      } catch { 
+        message.error('Erreur lors de la suppression');  }
       },
     });
   };
 
-  const handleExport = async () => {
-    try {
-      message.info('Export en cours...');
-      // TODO: Implémenter l'export CSV/Excel
-      message.success('Export réussi');
-    } catch (error) {
-      message.error('Erreur lors de l\'export');
-    }
-  };
+  const selectedFw = frameworks.find((f) => f.id === selectedFramework);
 
+  // ── Colonnes ───────────────────────────────────────────────────────
   const columns = [
     {
-      title: 'Code',
-      dataIndex: 'code',
-      key: 'code',
-      width: 120,
-      fixed: 'left',
-      render: (text) => <strong style={{ color: '#1890ff' }}>{text}</strong>,
-    },
-    {
-      title: 'Libellé',
-      dataIndex: 'name',
-      key: 'name',
-      width: 300,
-    },
-    {
-      title: 'Nature',
-      dataIndex: 'type_name',
-      key: 'type_name',
-      width: 200,
-      render: (text) => <Tag color="blue">{text}</Tag>,
-    },
-    {
-      title: 'Classe',
-      dataIndex: 'group_name',
-      key: 'group_name',
-      width: 150,
-      render: (text) => text || <Text type="secondary">-</Text>,
-    },
-    {
-      title: 'Solde ouverture',
-      dataIndex: 'opening_balance',
-      key: 'opening_balance',
-      width: 150,
-      align: 'right',
-      render: (value) => (
-        <Text style={{ fontFamily: 'monospace' }}>
-          {parseFloat(value || 0).toLocaleString('fr-FR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
-        </Text>
+      title: 'Code', dataIndex: 'code', key: 'code', width: 120, fixed: 'left',
+      sorter: (a, b) => a.code.localeCompare(b.code),
+      render: (text) => (
+        <Text strong style={{ color: '#1677ff', fontFamily: 'monospace' }}>{text}</Text>
       ),
     },
+    { title: 'Libellé', dataIndex: 'name', key: 'name', ellipsis: true },
     {
-      title: 'Lettrable',
-      dataIndex: 'reconcile',
-      key: 'reconcile',
-      width: 100,
-      align: 'center',
-      render: (reconcile) =>
-        reconcile ? (
-          <Tag color="success">Oui</Tag>
-        ) : (
-          <Tag color="default">Non</Tag>
-        ),
+      title: 'Nature', dataIndex: 'type_name', key: 'type_name', width: 180,
+      render: (text) => text ? <Tag color="blue">{text}</Tag> : <Text type="secondary">–</Text>,
     },
     {
-      title: 'Statut',
-      dataIndex: 'active',
-      key: 'active',
-      width: 100,
-      render: (active) => (
-        <Tag color={active ? 'success' : 'default'}>
-          {active ? 'Actif' : 'Inactif'}
-        </Tag>
-      ),
+      title: 'Classe', dataIndex: 'group_name', key: 'group_name', width: 150,
+      render: (text) => text || <Text type="secondary">–</Text>,
     },
     {
-      title: 'Actions',
-      key: 'actions',
-      width: 150,
-      fixed: 'right',
+      title: 'Lettrable', dataIndex: 'reconcile', key: 'reconcile', width: 100, align: 'center',
+      render: (v) => <Tag color={v ? 'success' : 'default'}>{v ? 'Oui' : 'Non'}</Tag>,
+    },
+    {
+      title: 'Statut', dataIndex: 'active', key: 'active', width: 90,
+      render: (v) => <Tag color={v ? 'success' : 'default'}>{v ? 'Actif' : 'Inactif'}</Tag>,
+    },
+    {
+      title: 'Actions', key: 'actions', width: 120, fixed: 'right', align: 'center',
       render: (_, record) => (
-        <Space size="small">
+        <Space size={2}>
+          <Tooltip title="Voir le détail">
+            <Button type="text" icon={<EyeOutlined />}    onClick={() => handleView(record)} />
+          </Tooltip>
           <Tooltip title="Modifier">
-            <Button
-              type="link"
-              icon={<EditOutlined />}
-              onClick={() => navigate(`/comptabilite/accounts/${record.id}/edit`)}
-            />
+            <Button type="text" icon={<EditOutlined />}   onClick={() => handleEdit(record)} />
           </Tooltip>
           <Tooltip title="Supprimer">
-            <Button
-              type="link"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDelete(record)}
-            />
+            <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)} />
           </Tooltip>
         </Space>
       ),
@@ -232,174 +228,108 @@ const AccountList = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <Card
-        bordered={false}
-        style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.1)', borderRadius: '8px' }}
-      >
+      <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderRadius: 8 }}>
+
         {/* En-tête */}
-        <div
-          style={{
-            marginBottom: '24px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
+        <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           <div>
-            <Title level={2} style={{ margin: 0 }}>
-              Comptes comptables
-            </Title>
-            <Text type="secondary">
-              Gérez les comptes du plan comptable sélectionné
-            </Text>
+            <Title level={3} style={{ margin: 0 }}>Comptes comptables</Title>
+            <Text type="secondary">Gérez les comptes du plan comptable sélectionné</Text>
           </div>
-          <Space>
-            <Button
-              icon={<ExportOutlined />}
-              onClick={handleExport}
-              disabled={!selectedFramework || accounts.length === 0}
-            >
+          <Space wrap>
+            <Button icon={<ExportOutlined />} onClick={handleExport}  disabled={!selectedFramework || accounts.length === 0}>
               Exporter
             </Button>
-            <Button
-              icon={<ImportOutlined />}
-              onClick={() => navigate('/comptabilite/accounts/import')}
-              disabled={!selectedFramework}
-            >
+            <Button icon={<ImportOutlined />} onClick={handleImport}  disabled={!selectedFramework}>
               Importer
             </Button>
-            <Button
-              type="primary"
-              size="large"
-              icon={<PlusOutlined />}
-              onClick={() => navigate('/comptabilite/accounts/new')}
-              disabled={!selectedFramework}
-            >
+            <Button type="primary" size="large" icon={<PlusOutlined />} onClick={handleNew} disabled={!selectedFramework}>
               Nouveau compte
             </Button>
           </Space>
         </div>
 
         {/* Filtres */}
-        <Row gutter={[16, 16]} style={{ marginBottom: '16px' }}>
-          <Col xs={24} sm={12} md={6}>
-            <Text strong>Référentiel:</Text>
-            <Select
-              style={{ width: '100%', marginTop: '8px' }}
-              size="large"
-              placeholder="Sélectionnez un plan"
-              onChange={(value) => {
-                setSelectedFramework(value);
-                setSelectedType(null);
-                setSelectedGroup(null);
-                setPagination((prev) => ({ ...prev, current: 1 }));
-              }}
-              value={selectedFramework}
-              allowClear
-            >
-              {frameworks.map((fw) => (
-                <Option key={fw.id} value={fw.id}>
-                  {fw.code} - {fw.name}
-                </Option>
-              ))}
-            </Select>
-          </Col>
-
-          <Col xs={24} sm={12} md={6}>
-            <Text strong>Nature:</Text>
-            <Select
-              style={{ width: '100%', marginTop: '8px' }}
-              size="large"
-              placeholder="Toutes les natures"
-              onChange={(value) => {
-                setSelectedType(value);
-                setPagination((prev) => ({ ...prev, current: 1 }));
-              }}
-              value={selectedType}
-              allowClear
-              disabled={!selectedFramework}
-            >
-              {types.map((type) => (
-                <Option key={type.id} value={type.id}>
-                  {type.name}
-                </Option>
-              ))}
-            </Select>
-          </Col>
-
-          <Col xs={24} sm={12} md={6}>
-            <Text strong>Classe:</Text>
-            <Select
-              style={{ width: '100%', marginTop: '8px' }}
-              size="large"
-              placeholder="Toutes les classes"
-              onChange={(value) => {
-                setSelectedGroup(value);
-                setPagination((prev) => ({ ...prev, current: 1 }));
-              }}
-              value={selectedGroup}
-              allowClear
-              disabled={!selectedFramework}
-            >
-              {groups.map((group) => (
-                <Option key={group.id} value={group.id}>
-                  {group.code} - {group.name}
-                </Option>
-              ))}
-            </Select>
-          </Col>
-
-          <Col xs={24} sm={12} md={6}>
-            <Text strong>Recherche:</Text>
-            <Input
-              style={{ marginTop: '8px' }}
-              size="large"
-              placeholder="Code ou libellé..."
-              prefix={<SearchOutlined />}
-              allowClear
-              onChange={(e) => {
-                setSearchText(e.target.value);
-                setPagination((prev) => ({ ...prev, current: 1 }));
-              }}
-              disabled={!selectedFramework}
-            />
-          </Col>
-        </Row>
-
-        {/* Table */}
-        {!selectedFramework ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '60px 0',
-              color: '#8c8c8c',
-            }}
-          >
-            <BankOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-            <div>
-              <Text type="secondary">
-                Veuillez sélectionner un référentiel comptable pour voir ses comptes
-              </Text>
+        <Card size="small" style={{ marginBottom: 20, background: '#fafafa', borderRadius: 6 }}>
+          <Row gutter={[16, 12]}>
+            <Col xs={24} sm={12} md={6}>
+              <Text strong style={{ display: 'block', marginBottom: 6 }}>Référentiel :</Text>
+              <Select
+                style={{ width: '100%' }}
+                placeholder="Sélectionnez un plan…"
+                onChange={handleFrameworkChange}
+                value={selectedFramework}
+                allowClear showSearch optionFilterProp="label"
+                options={frameworks.map((fw) => ({ label: `${fw.code} – ${fw.name}`, value: fw.id }))}
+              />
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Text strong style={{ display: 'block', marginBottom: 6 }}>Nature :</Text>
+              <Select
+                style={{ width: '100%' }}
+                placeholder="Toutes les natures"
+                onChange={(v) => { setSelectedType(v ?? null); setPagination((p) => ({ ...p, current: 1 })); }}
+                value={selectedType}
+                allowClear disabled={!selectedFramework}
+                showSearch optionFilterProp="label"
+                options={types.map((t) => ({ label: `${t.code} – ${t.name}`, value: t.id }))}
+              />
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Text strong style={{ display: 'block', marginBottom: 6 }}>Classe :</Text>
+              <Select
+                style={{ width: '100%' }}
+                placeholder="Toutes les classes"
+                onChange={(v) => { setSelectedGroup(v ?? null); setPagination((p) => ({ ...p, current: 1 })); }}
+                value={selectedGroup}
+                allowClear disabled={!selectedFramework}
+                showSearch optionFilterProp="label"
+                options={groups.map((g) => ({ label: `${g.code} – ${g.name}`, value: g.id }))}
+              />
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Text strong style={{ display: 'block', marginBottom: 6 }}>Recherche :</Text>
+              <Input
+                placeholder="Code ou libellé…"
+                prefix={<SearchOutlined />}
+                allowClear
+                disabled={!selectedFramework}
+                onChange={(e) => { setSearchText(e.target.value); setPagination((p) => ({ ...p, current: 1 })); }}
+              />
+            </Col>
+          </Row>
+          {selectedFw && (
+            <div style={{ marginTop: 10 }}>
+              <Tag color="blue">{selectedFw.code} — {pagination.total} compte(s)</Tag>
             </div>
-          </div>
+          )}
+        </Card>
+
+        {/* Table ou vide */}
+        {!selectedFramework ? (
+          <Empty
+            image={<BankOutlined style={{ fontSize: 48, color: '#d9d9d9' }} />}
+            description={<Text type="secondary">Sélectionnez un référentiel comptable pour afficher ses comptes</Text>}
+            style={{ padding: '60px 0' }}
+          />
         ) : (
           <Table
             columns={columns}
             dataSource={accounts}
             rowKey="id"
             loading={loading}
-            scroll={{ x: 1200 }}
+            size="middle"
+            scroll={{ x: 1100 }}
+            onRow={(record) => ({
+              onDoubleClick: () => handleView(record),
+              style: { cursor: 'pointer' },
+            })}
             pagination={{
               ...pagination,
               showSizeChanger: true,
-              showTotal: (total) => `Total: ${total} compte(s)`,
-              onChange: (page, pageSize) => {
-                setPagination((prev) => ({
-                  ...prev,
-                  current: page,
-                  pageSize: pageSize,
-                }));
-              },
+              pageSizeOptions: ['20', '50', '100'],
+              showTotal: (total) => `Total : ${total} compte(s)`,
+              onChange: (page, pageSize) => setPagination((prev) => ({ ...prev, current: page, pageSize })),
             }}
           />
         )}

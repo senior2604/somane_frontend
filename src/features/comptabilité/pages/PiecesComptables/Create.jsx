@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiPlus, FiTrash2, FiCheck, FiPaperclip, FiUpload, FiCopy, FiRotateCcw, FiMoreVertical, FiSave, FiX } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiCheck, FiPaperclip, FiUpload, FiCopy, FiRotateCcw, FiMoreVertical, FiSave, FiX, FiAlertCircle, FiBriefcase } from 'react-icons/fi';
+import { useEntity } from '../../../../context/EntityContext';
 import { piecesService } from "../../services";
 
 // ==========================================
 // COMPOSANT AUTOCOMPLETE RÉUTILISABLE
 // ==========================================
-const AutocompleteInput = ({ 
+const AutocompleteInput = ({
   value,
   selectedId,
   onChange,
@@ -56,10 +57,8 @@ const AutocompleteInput = ({
       updateDropdownPosition();
       const handleScroll = () => updateDropdownPosition();
       const handleResize = () => updateDropdownPosition();
-      
       window.addEventListener('scroll', handleScroll, true);
       window.addEventListener('resize', handleResize);
-      
       return () => {
         window.removeEventListener('scroll', handleScroll, true);
         window.removeEventListener('resize', handleResize);
@@ -70,9 +69,9 @@ const AutocompleteInput = ({
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
-        dropdownRef.current && 
+        dropdownRef.current &&
         !dropdownRef.current.contains(event.target) &&
-        inputRef.current && 
+        inputRef.current &&
         !inputRef.current.contains(event.target)
       ) {
         setIsOpen(false);
@@ -88,7 +87,6 @@ const AutocompleteInput = ({
     setIsOpen(true);
     setHighlightedIndex(0);
     onChange(newValue);
-    
     if (selectedId) {
       onSelect(null, '');
     }
@@ -106,7 +104,7 @@ const AutocompleteInput = ({
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setIsOpen(true);
-      setHighlightedIndex(prev => 
+      setHighlightedIndex(prev =>
         prev < filteredOptions.length - 1 ? prev + 1 : prev
       );
     } else if (e.key === 'ArrowUp') {
@@ -147,9 +145,8 @@ const AutocompleteInput = ({
         style={{ height: '26px', border: 'none', backgroundColor: 'transparent' }}
         autoComplete="off"
       />
-      
       {isOpen && filteredOptions.length > 0 && (
-        <div 
+        <div
           ref={dropdownRef}
           className="bg-white border border-gray-300 shadow-lg"
           style={dropdownStyle}
@@ -158,8 +155,8 @@ const AutocompleteInput = ({
             <div
               key={option.id}
               className={`px-2 py-1 text-xs cursor-pointer ${
-                index === highlightedIndex 
-                  ? 'bg-blue-100 text-blue-700' 
+                index === highlightedIndex
+                  ? 'bg-blue-100 text-blue-700'
                   : 'hover:bg-blue-50'
               } ${option.id === selectedId ? 'bg-blue-50' : ''}`}
               onClick={() => handleSelectOption(option)}
@@ -179,6 +176,8 @@ const AutocompleteInput = ({
 // ==========================================
 export default function Create() {
   const navigate = useNavigate();
+  const { activeEntity } = useEntity(); // ✅ Ajout du contexte entité
+  
   const [loading, setLoading] = useState(false);
   const [journals, setJournals] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -192,11 +191,17 @@ export default function Create() {
   const [pieceId, setPieceId] = useState(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
-  
   const today = new Date().toISOString().split('T')[0];
-  
+
+  // ✅ VÉRIFICATION INITIALE DE L'ENTITÉ
+  useEffect(() => {
+    if (!activeEntity) {
+      setError('Vous devez sélectionner une entité pour créer une pièce comptable');
+    }
+  }, [activeEntity]);
+
   const initialFormData = {
-    name: `ACH/26/${String(Date.now()).slice(-4)}`,
+    name: '', // ✅ Numéro généré automatiquement côté serveur après création
     state: 'draft',
     date: today,
     registration_date: today,
@@ -206,13 +211,13 @@ export default function Create() {
     journal_id: '',
     journal_label: '',
     lines: [
-      { 
-        name: 'Achat de farine', 
-        account_id: '', 
+      {
+        name: 'Achat de farine',
+        account_id: '',
         account_label: '',
-        partner_id: '', 
+        partner_id: '',
         partner_label: '',
-        debit: '', 
+        debit: '',
         credit: '',
         taxes: '',
         discount_date: '',
@@ -222,24 +227,27 @@ export default function Create() {
     notes: '',
     attachments: []
   };
-  
+
   const [formData, setFormData] = useState(initialFormData);
 
   // Chargement des données API
   useEffect(() => {
-    loadOptions();
-  }, []);
+    if (activeEntity) {
+      loadOptions();
+    }
+  }, [activeEntity]); // ✅ Dépendance sur activeEntity
 
   const loadOptions = async () => {
     setError(null);
     try {
+      // ✅ PASSER L'ENTITÉ AUX REQUÊTES
       const [journalsData, accountsData, partnersData, devisesData] = await Promise.all([
-        piecesService.getJournals(),
-        piecesService.getAccounts(),
-        piecesService.getPartners(),
-        piecesService.getDevises(),
+        piecesService.getJournals(activeEntity.id),
+        piecesService.getAccounts(activeEntity.id),
+        piecesService.getPartners(activeEntity.id),
+        piecesService.getDevises(activeEntity.id),
       ]);
-      
+
       const normalizeData = (data) => {
         if (!data) return [];
         if (Array.isArray(data)) return data;
@@ -247,40 +255,40 @@ export default function Create() {
         if (Array.isArray(data.data)) return data.data;
         return [];
       };
-      
+
       const normalizedJournals = normalizeData(journalsData) || [];
       const normalizedAccounts = normalizeData(accountsData) || [];
       const normalizedPartners = normalizeData(partnersData) || [];
       const normalizedDevises = normalizeData(devisesData) || [];
-      
+
       setJournals(normalizedJournals);
       setAccounts(normalizedAccounts);
       setPartners(normalizedPartners);
       setDevises(normalizedDevises);
-      
+
       let defaultCurrencyId = '';
       let defaultCurrencyLabel = '';
       let defaultJournalId = '';
       let defaultJournalLabel = '';
-      
+
       if (normalizedDevises.length > 0) {
-        const fcfaDevise = normalizedDevises.find(d => 
+        const fcfaDevise = normalizedDevises.find(d =>
           d.code === 'XOF' || d.code === 'FCFA'
         );
         const defaultCurrency = fcfaDevise || normalizedDevises[0];
         defaultCurrencyId = defaultCurrency.id;
         defaultCurrencyLabel = `${defaultCurrency.code} ${defaultCurrency.symbole ? `(${defaultCurrency.symbole})` : ''}`;
       }
-      
+
       if (normalizedJournals.length > 0) {
-        const achJournal = normalizedJournals.find(j => 
+        const achJournal = normalizedJournals.find(j =>
           j.code && j.code.toLowerCase().includes('ach')
         );
         const defaultJournal = achJournal || normalizedJournals[0];
         defaultJournalId = defaultJournal.id;
         defaultJournalLabel = `${defaultJournal.code} - ${defaultJournal.name}`;
       }
-      
+
       setFormData(prev => ({
         ...prev,
         currency_id: defaultCurrencyId,
@@ -288,7 +296,6 @@ export default function Create() {
         journal_id: defaultJournalId,
         journal_label: defaultJournalLabel
       }));
-
     } catch (err) {
       console.error('Erreur chargement options:', err);
       setError('Erreur lors du chargement des données.');
@@ -304,7 +311,7 @@ export default function Create() {
 
   // Fonction de sauvegarde automatique
   const saveAutoDraft = useCallback(async () => {
-    if (!hasUnsavedChanges || isAutoSaving) return;
+    if (!hasUnsavedChanges || isAutoSaving || !activeEntity) return; // ✅ Vérification entité
     
     setIsAutoSaving(true);
     try {
@@ -315,6 +322,7 @@ export default function Create() {
         ref: formData.ref,
         journal: formData.journal_id,
         currency: formData.currency_id,
+        company: activeEntity.id, // ✅ Ajout de l'entité
         lines: formData.lines.map(line => ({
           name: line.name,
           account: line.account_id,
@@ -326,39 +334,39 @@ export default function Create() {
           discount_amount: line.discount_amount ? parseFloat(line.discount_amount) : 0
         }))
       };
-      
+
       let result;
       if (pieceId) {
-        result = await piecesService.update(pieceId, apiData);
+        result = await piecesService.update(pieceId, apiData, activeEntity.id); // ✅ Avec entité
       } else {
-        result = await piecesService.create(apiData);
+        result = await piecesService.create(apiData, activeEntity.id); // ✅ Avec entité
         if (result && result.id) {
           setPieceId(result.id);
+          // Mettre à jour le numéro généré par le serveur
+          if (result.name) {
+            setFormData(prev => ({ ...prev, name: result.name }));
+          }
         }
       }
-      
+
       console.log('Sauvegarde automatique réussie');
       setHasUnsavedChanges(false);
-      
     } catch (err) {
       console.error('Erreur sauvegarde automatique:', err);
     } finally {
       setIsAutoSaving(false);
     }
-  }, [formData, hasUnsavedChanges, isAutoSaving, pieceId]);
+  }, [formData, hasUnsavedChanges, isAutoSaving, pieceId, activeEntity]); // ✅ Dépendance
 
   // Gestion de la navigation/quitter la page
   useEffect(() => {
     let isUnmounting = false;
-    
     const handleBeforeUnload = (e) => {
       if (hasUnsavedChanges && !isUnmounting) {
         saveAutoDraft();
       }
     };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
-    
     return () => {
       isUnmounting = true;
       window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -373,13 +381,11 @@ export default function Create() {
   const handleLineChange = (index, field, value) => {
     const newLines = [...formData.lines];
     newLines[index] = { ...newLines[index], [field]: value };
-    
     if (field === 'debit' && value) {
       newLines[index].credit = '';
     } else if (field === 'credit' && value) {
       newLines[index].debit = '';
     }
-    
     setFormData(prev => ({ ...prev, lines: newLines }));
     markAsModified();
   };
@@ -387,13 +393,13 @@ export default function Create() {
   const addLine = () => {
     setFormData(prev => ({
       ...prev,
-      lines: [...prev.lines, { 
-        name: '', 
-        account_id: '', 
+      lines: [...prev.lines, {
+        name: '',
+        account_id: '',
         account_label: '',
-        partner_id: '', 
+        partner_id: '',
         partner_label: '',
-        debit: '', 
+        debit: '',
         credit: '',
         taxes: '',
         discount_date: '',
@@ -408,7 +414,6 @@ export default function Create() {
       setError('Une pièce doit avoir au moins une ligne');
       return;
     }
-    
     setFormData(prev => ({
       ...prev,
       lines: prev.lines.filter((_, i) => i !== index)
@@ -421,7 +426,6 @@ export default function Create() {
       debit: acc.debit + (parseFloat(line.debit) || 0),
       credit: acc.credit + (parseFloat(line.credit) || 0)
     }), { debit: 0, credit: 0 });
-    
     return totals;
   };
 
@@ -439,11 +443,9 @@ export default function Create() {
   const handleLastFieldTab = (e, lineIndex) => {
     if (e.key === 'Tab' && !e.shiftKey) {
       const isLastLine = lineIndex === formData.lines.length - 1;
-      
       if (isLastLine) {
         e.preventDefault();
         addLine();
-        
         setTimeout(() => {
           const newLineIndex = formData.lines.length;
           const inputsInNewRow = document.querySelectorAll(
@@ -461,10 +463,14 @@ export default function Create() {
 
   // Fonction pour enregistrer comme brouillon (MANUEL)
   const handleSaveDraft = async () => {
+    if (!activeEntity) { // ✅ Vérification
+      setError('Vous devez sélectionner une entité');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     setSuccess(null);
-    
     try {
       const apiData = {
         name: formData.name,
@@ -473,6 +479,7 @@ export default function Create() {
         ref: formData.ref,
         journal: formData.journal_id,
         currency: formData.currency_id,
+        company: activeEntity.id, // ✅ Ajout de l'entité
         lines: formData.lines.map(line => ({
           name: line.name,
           account: line.account_id,
@@ -484,20 +491,23 @@ export default function Create() {
           discount_amount: line.discount_amount ? parseFloat(line.discount_amount) : 0
         }))
       };
-      
+
       let result;
       if (pieceId) {
-        result = await piecesService.update(pieceId, apiData);
+        result = await piecesService.update(pieceId, apiData, activeEntity.id);
       } else {
-        result = await piecesService.create(apiData);
+        result = await piecesService.create(apiData, activeEntity.id);
         if (result && result.id) {
           setPieceId(result.id);
+          // Mettre à jour le numéro généré par le serveur
+          if (result.name) {
+            setFormData(prev => ({ ...prev, name: result.name }));
+          }
         }
       }
-      
+
       setSuccess('Pièce enregistrée comme brouillon avec succès !');
       setHasUnsavedChanges(false);
-      
     } catch (err) {
       console.error('Erreur enregistrement brouillon:', err);
       setError(err.response?.data?.message || 'Erreur lors de l\'enregistrement de la pièce.');
@@ -508,10 +518,14 @@ export default function Create() {
 
   // Fonction pour comptabiliser ou remettre en brouillon (MANUEL)
   const handleToggleState = async () => {
+    if (!activeEntity) { // ✅ Vérification
+      setError('Vous devez sélectionner une entité');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     setSuccess(null);
-    
     try {
       const newState = formData.state === 'draft' ? 'posted' : 'draft';
       const apiData = {
@@ -521,6 +535,7 @@ export default function Create() {
         ref: formData.ref,
         journal: formData.journal_id,
         currency: formData.currency_id,
+        company: activeEntity.id, // ✅ Ajout de l'entité
         lines: formData.lines.map(line => ({
           name: line.name,
           account: line.account_id,
@@ -532,27 +547,28 @@ export default function Create() {
           discount_amount: line.discount_amount ? parseFloat(line.discount_amount) : 0
         }))
       };
-      
+
       let result;
       if (pieceId) {
-        result = await piecesService.update(pieceId, apiData);
+        result = await piecesService.update(pieceId, apiData, activeEntity.id);
       } else {
-        result = await piecesService.create(apiData);
+        result = await piecesService.create(apiData, activeEntity.id);
         if (result && result.id) {
           setPieceId(result.id);
+          // Mettre à jour le numéro généré par le serveur
+          if (result.name) {
+            setFormData(prev => ({ ...prev, name: result.name }));
+          }
         }
       }
-      
+
       setFormData(prev => ({ ...prev, state: newState }));
-      
       if (newState === 'posted') {
         setSuccess('Pièce comptabilisée avec succès !');
       } else {
         setSuccess('Pièce remise en brouillon avec succès !');
       }
-      
       setHasUnsavedChanges(false);
-      
     } catch (err) {
       console.error('Erreur changement état:', err);
       setError(err.response?.data?.message || 'Erreur lors du changement d\'état de la pièce.');
@@ -570,7 +586,6 @@ export default function Create() {
     setFormData(initialFormData);
     setPieceId(null);
     setHasUnsavedChanges(false);
-    
     setShowConfirmDialog(false);
     setSuccess('Modifications annulées.');
   };
@@ -593,7 +608,6 @@ export default function Create() {
 
   // Actions menu
   const actionsMenuRef = useRef(null);
-
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
@@ -621,16 +635,43 @@ export default function Create() {
 
   const isDraft = formData.state === 'draft';
 
+  // ✅ AFFICHAGE QUAND PAS D'ENTITÉ
+  if (!activeEntity) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Créer une pièce comptable</div>
+          </div>
+          <div className="p-8">
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-6 text-center">
+              <FiAlertCircle className="text-yellow-600 mx-auto mb-3" size={32} />
+              <p className="text-yellow-800 font-medium text-lg mb-3">
+                Aucune entité sélectionnée
+              </p>
+              <p className="text-sm text-gray-600 mb-4">
+                Vous devez sélectionner une entité pour créer une pièce comptable.
+              </p>
+              <p className="text-xs text-gray-500">
+                Cliquez sur l'icône <FiBriefcase className="inline text-purple-600 mx-1" size={14} /> 
+                en haut à droite pour choisir une entité.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-        
         {/* Barre d'en-tête - Ligne 1 */}
         <div className="border-b border-gray-300 px-4 py-3">
           {/* Première ligne : Titre et boutons */}
-          <div className="flex items-center justify-between mb-2">
-            {/* Partie gauche */}
-            <div className="flex items-center gap-3">
+          <div className="flex items-start justify-between mb-2">
+            {/* Partie gauche : Bouton Nouveau + Titre + État alignés verticalement */}
+            <div className="flex items-start gap-3">
               <button
                 onClick={handleNewPiece}
                 className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
@@ -638,13 +679,24 @@ export default function Create() {
                 <FiPlus size={12} />
                 <span>Nouveau</span>
               </button>
-              
-              <div className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600" 
-                   onClick={handleGoToList}>
-                Pièces comptables
+              <div className="flex flex-col">
+                <div 
+                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600"
+                  onClick={handleGoToList}
+                >
+                  Pièces comptables
+                </div>
+                {/* ✅ État aligné sous "Pièces comptables" */}
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm text-gray-700 font-medium">Etat:</span>
+                  <span className={`px-2 py-0.5 text-xs font-medium ${
+                    isDraft ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                  }`}>
+                    {isDraft ? 'Brouillon' : 'Comptabilisé'}
+                  </span>
+                </div>
               </div>
             </div>
-            
             {/* Partie droite */}
             <div className="flex items-center gap-2">
               {/* Menu Actions */}
@@ -656,7 +708,6 @@ export default function Create() {
                   <FiMoreVertical size={12} />
                   <span>Actions</span>
                 </button>
-                
                 {showActionsMenu && (
                   <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
                     <button
@@ -683,7 +734,6 @@ export default function Create() {
                   </div>
                 )}
               </div>
-              
               <button
                 onClick={handleDiscardChanges}
                 className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
@@ -691,7 +741,6 @@ export default function Create() {
                 <FiX size={12} />
                 <span>Ignorer les modifications</span>
               </button>
-              
               <button
                 onClick={handleSaveDraft}
                 disabled={loading}
@@ -700,23 +749,6 @@ export default function Create() {
                 <FiSave size={12} />
                 <span>Enregistrer</span>
               </button>
-            </div>
-          </div>
-          
-          {/* Deuxième ligne : État et N° pièce */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">Etat:</span>
-              <span className={`px-2 py-0.5 text-xs font-medium ${
-                isDraft ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-              }`}>
-                {isDraft ? 'Brouillon' : 'Comptabilisé'}
-              </span>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 font-medium">N° pièce:</span>
-              <span className="text-sm font-mono text-purple-600">{formData.name}</span>
             </div>
           </div>
         </div>
@@ -729,8 +761,8 @@ export default function Create() {
               onClick={handleToggleState}
               disabled={loading}
               className={`px-4 py-2 font-medium text-xs flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed ${
-                isDraft 
-                  ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                isDraft
+                  ? 'bg-purple-600 text-white hover:bg-purple-700'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
@@ -738,20 +770,18 @@ export default function Create() {
               <span>{isDraft ? 'Comptabiliser (Valider)' : 'Remettre en brouillon'}</span>
             </button>
           </div>
-          
           {/* Partie droite : Badges d'état (non cliquables) */}
           <div className="flex items-center gap-2">
             <div className={`px-3 py-1.5 text-xs font-medium border ${
-              isDraft 
-                ? 'bg-purple-100 text-purple-700 border-purple-300' 
+              isDraft
+                ? 'bg-purple-100 text-purple-700 border-purple-300'
                 : 'bg-gray-100 text-gray-500 border-gray-300'
             }`}>
               Brouillon
             </div>
-            
             <div className={`px-3 py-1.5 text-xs font-medium border ${
-              !isDraft 
-                ? 'bg-purple-100 text-purple-700 border-purple-300' 
+              !isDraft
+                ? 'bg-purple-100 text-purple-700 border-purple-300'
                 : 'bg-gray-100 text-gray-500 border-gray-300'
             }`}>
               Comptabilisé
@@ -771,8 +801,6 @@ export default function Create() {
 
         {/* Informations de la pièce */}
         <div className="px-4 py-3 border-b border-gray-300">
-          <div className="text-lg font-bold text-gray-900 mb-3">{formData.name}</div>
-          
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex items-center" style={{ height: '26px' }}>
@@ -785,7 +813,6 @@ export default function Create() {
                   style={{ height: '26px' }}
                 />
               </div>
-              
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Référence</label>
                 <input
@@ -798,16 +825,14 @@ export default function Create() {
                 />
               </div>
             </div>
-            
             <div className="space-y-2">
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Date enregistrement</label>
                 <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center"
-                     style={{ height: '26px' }}>
+                  style={{ height: '26px' }}>
                   {formatDateForDisplay(formData.registration_date)}
                 </div>
               </div>
-              
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Devise</label>
                 <div className="flex-1 ml-2">
@@ -826,7 +851,6 @@ export default function Create() {
                   />
                 </div>
               </div>
-              
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Journal</label>
                 <div className="flex-1 ml-2">
@@ -855,8 +879,8 @@ export default function Create() {
             <button
               onClick={() => setActiveTab('ecritures')}
               className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-                activeTab === 'ecritures' 
-                  ? 'border-purple-600 text-purple-600' 
+                activeTab === 'ecritures'
+                  ? 'border-purple-600 text-purple-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -865,8 +889,8 @@ export default function Create() {
             <button
               onClick={() => setActiveTab('notes')}
               className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-                activeTab === 'notes' 
-                  ? 'border-purple-600 text-purple-600' 
+                activeTab === 'notes'
+                  ? 'border-purple-600 text-purple-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -875,8 +899,8 @@ export default function Create() {
             <button
               onClick={() => setActiveTab('pieces-jointes')}
               className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-                activeTab === 'pieces-jointes' 
-                  ? 'border-purple-600 text-purple-600' 
+                activeTab === 'pieces-jointes'
+                  ? 'border-purple-600 text-purple-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -939,7 +963,6 @@ export default function Create() {
                             placeholder="Ex: 60110000"
                           />
                         </td>
-                        
                         <td className="border border-gray-300 p-1">
                           <AutocompleteInput
                             value={line.partner_label}
@@ -954,7 +977,6 @@ export default function Create() {
                             placeholder="Sélectionner..."
                           />
                         </td>
-                        
                         <td className="border border-gray-300 p-1">
                           <input
                             type="text"
@@ -965,7 +987,6 @@ export default function Create() {
                             placeholder="Achat de farine"
                           />
                         </td>
-                        
                         <td className="border border-gray-300 p-1">
                           <input
                             type="text"
@@ -975,7 +996,6 @@ export default function Create() {
                             style={{ height: '26px' }}
                           />
                         </td>
-                        
                         <td className="border border-gray-300 p-1">
                           <input
                             type="number"
@@ -988,7 +1008,6 @@ export default function Create() {
                             placeholder="0.00"
                           />
                         </td>
-                        
                         <td className="border border-gray-300 p-1">
                           <input
                             type="number"
@@ -1001,7 +1020,6 @@ export default function Create() {
                             placeholder="0.00"
                           />
                         </td>
-                        
                         <td className="border border-gray-300 p-1">
                           <input
                             type="date"
@@ -1011,7 +1029,6 @@ export default function Create() {
                             style={{ height: '26px' }}
                           />
                         </td>
-                        
                         <td className="border border-gray-300 p-1">
                           <input
                             type="number"
@@ -1025,7 +1042,6 @@ export default function Create() {
                             placeholder="0.00"
                           />
                         </td>
-                        
                         <td className="border border-gray-300 p-1">
                           <button
                             onClick={() => removeLine(lineIndex)}
@@ -1042,7 +1058,6 @@ export default function Create() {
                   </tbody>
                 </table>
               </div>
-              
               <div className="mb-3">
                 <button
                   onClick={addLine}
@@ -1053,7 +1068,6 @@ export default function Create() {
                   <span>Ajouter une ligne</span>
                 </button>
               </div>
-              
               <div className="bg-green-50 border border-green-200 px-4 py-2 flex justify-end gap-8">
                 <div className="text-sm font-bold text-gray-900">
                   {totals.debit.toFixed(2)} XOF

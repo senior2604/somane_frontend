@@ -19,13 +19,24 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    // ✅ Ajouter l'entité active si elle existe (pour vos endpoints comptables)
-    const entiteActive = localStorage.getItem('entiteActive');
-    if (entiteActive) {
-      config.headers['X-Entity-ID'] = entiteActive;
+
+    // ✅ Normaliser l'entité active : objet JSON ou ID brut
+    const raw = localStorage.getItem('entiteActive');
+    if (raw) {
+      let entityId = raw;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          entityId = String(parsed.id ?? '');
+        }
+      } catch {
+        // déjà un ID brut, on garde raw
+      }
+      if (entityId) {
+        config.headers['X-Entity-ID'] = entityId;
+      }
     }
-    
+
     return config;
   },
   (error) => Promise.reject(error)

@@ -1,85 +1,148 @@
-// features/comptabilité/pages/Journaux/Edit.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  FiArrowLeft, FiX, FiCheck, FiAlertCircle, FiType, 
-  FiBriefcase, FiCreditCard, FiDatabase, FiBook, FiSearch 
+  FiArrowLeft, 
+  FiX, 
+  FiCheck, 
+  FiAlertCircle, 
+  FiPlus,
+  FiSave,
+  FiEdit
 } from "react-icons/fi";
 import { useParams, useNavigate } from 'react-router-dom';
-
-// IMPORT CORRIGÉ : depuis le service unifié de comptabilité
 import { journauxService, apiClient } from "../../services";
+import { useEntity } from '../../../../context/EntityContext';
+
+// 🔥 CACHE POUR ÉVITER LES REQUÊTES MULTIPLES
+const DATA_CACHE = {
+  journalTypes: null,
+  comptes: null,
+  banques: null,
+  lastFetch: null,
+  CACHE_DURATION: 10 * 60 * 1000 // 10 minutes
+};
+
+// 🔥 FONCTION D'EXTRACTION ROBUSTE DES DONNÉES API
+const extractData = (response) => {
+  if (!response) return [];
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response.results)) return response.results;
+  if (Array.isArray(response.data)) return response.data;
+  return [];
+};
 
 export default function Edit() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { activeEntity } = useEntity();
   
   const [formData, setFormData] = useState({
     code: '',
     name: '',
     type: '',
-    company: '',
     default_account: '',
+    bank_account: '',
     note: '',
     active: true
   });
   
+  const [journal, setJournal] = useState(null);
   const [journalTypes, setJournalTypes] = useState([]);
-  const [companies, setCompanies] = useState([]);
   const [comptes, setComptes] = useState([]);
+  const [banques, setBanques] = useState([]);
+  
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [searchCompany, setSearchCompany] = useState('');
+  const [success, setSuccess] = useState(null);
+  
+  // États de recherche
   const [searchType, setSearchType] = useState('');
   const [searchCompte, setSearchCompte] = useState('');
-  const [manualCompany, setManualCompany] = useState('');
+  const [searchBanque, setSearchBanque] = useState('');
+  
+  // États pour le lazy loading
+  const [comptesLoaded, setComptesLoaded] = useState(false);
+  const [banquesLoaded, setBanquesLoaded] = useState(false);
+
+  // 🔥 FONCTION DE VALIDATION DU CACHE CENTRALISÉE
+  const isCacheValid = useCallback(() => {
+    if (!DATA_CACHE.lastFetch) return false;
+    return (Date.now() - DATA_CACHE.lastFetch) < DATA_CACHE.CACHE_DURATION;
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, [id]);
+    if (activeEntity) {
+      loadData();
+    } else {
+      setError('Aucune entité active sélectionnée');
+      setLoading(false);
+    }
+  }, [id, activeEntity]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Charger le journal à éditer AVEC LE SERVICE UNIFIÉ
-      const journal = await journauxService.getById(id);  // ← Utilisez le service
+      console.log('🔍 [Edit] Chargement du journal ID:', id);
+      
+      // Charger le journal à éditer
+      const journalData = await journauxService.getById(id);
+      console.log('📋 [Edit] Journal chargé:', JSON.stringify(journalData, null, 2));
+      setJournal(journalData);
+      
+      // 🔥 CORRECTION : Extraction robuste des IDs
+      const defaultAccountId = journalData.default_account?.id || 
+                               journalData.default_account_id || 
+                               (typeof journalData.default_account === 'object' && journalData.default_account !== null
+                                 ? journalData.default_account.id 
+                                 : journalData.default_account) || '';
+
+      const bankAccountId = journalData.bank_account?.id || 
+                            journalData.bank_account_id || 
+                            (typeof journalData.bank_account === 'object' && journalData.bank_account !== null
+                              ? journalData.bank_account.id 
+                              : journalData.bank_account) || '';
+
+      const typeId = journalData.type?.id || 
+                     journalData.type_id || 
+                     (typeof journalData.type === 'object' && journalData.type !== null
+                       ? journalData.type.id 
+                       : journalData.type) || '';
       
       // Pré-remplir le formulaire
       setFormData({
-        code: journal.data?.code || journal.code || '',
-        name: journal.data?.name || journal.name || '',
-        type: journal.data?.type?.id || journal.data?.type || journal.type?.id || journal.type || '',
-        company: journal.data?.company?.id || journal.data?.company || journal.company?.id || journal.company || '',
-        default_account: journal.data?.default_account?.id || journal.data?.default_account || journal.default_account?.id || journal.default_account || '',
-        note: journal.data?.note || journal.note || '',
-        active: journal.data?.active !== false && journal.active !== false
+        code: journalData.code || '',
+        name: journalData.name || '',
+        type: typeId,
+        default_account: defaultAccountId,
+        bank_account: bankAccountId,
+        note: journalData.note || '',
+        active: journalData.active !== false
       });
 
-      // Charger les options disponibles
-      try {
-        const typesRes = await journauxService.getTypes();  // ← Utilisez le service
-        setJournalTypes(typesRes.data || []);
-      } catch (err) {
-        setJournalTypes([]);
-      }
+      console.log('📝 [Edit] Formulaire pré-rempli:', {
+        code: journalData.code,
+        name: journalData.name,
+        typeId: typeId,
+        defaultAccountId: defaultAccountId,
+        bankAccountId: bankAccountId,
+        active: journalData.active
+      });
 
-      try {
-        const companiesRes = await apiClient.get('/entites/');
-        setCompanies(companiesRes.data || []);
-      } catch (err) {
-        setCompanies([]);
-      }
-
-      try {
-        const comptesRes = await apiClient.get('/compta/comptes/');
-        setComptes(comptesRes.data || []);
-      } catch (err) {
-        setComptes([]);
+      // Charger les types de journal
+      if (isCacheValid() && DATA_CACHE.journalTypes) {
+        setJournalTypes(DATA_CACHE.journalTypes);
+      } else {
+        const typesRes = await journauxService.getTypes();
+        const typesData = extractData(typesRes);
+        DATA_CACHE.journalTypes = typesData;
+        DATA_CACHE.lastFetch = Date.now();
+        setJournalTypes(typesData);
       }
 
     } catch (err) {
+      console.error('❌ [Edit] Erreur loadData:', err);
       if (err.response?.status === 404) {
         setError('Journal non trouvé');
       } else {
@@ -90,34 +153,150 @@ export default function Edit() {
     }
   };
 
-  // Récupérer le type de journal sélectionné
-  const getSelectedJournalType = () => {
-    return journalTypes.find(type => type.id === formData.type);
-  };
+  // 🔥 FONCTION POUR CHARGER LES COMPTES (LAZY) - CORRIGÉE AVEC activeEntity
+  const loadComptes = useCallback(async (force = false) => {
+    if (!activeEntity) {
+      console.warn('⚠️ [Edit] Tentative de chargement des comptes sans entité active');
+      return;
+    }
 
-  // Détermine si le compte par défaut doit être obligatoire (BAN ou CAI)
-  const isDefaultAccountRequired = () => {
-    const selectedType = getSelectedJournalType();
-    if (!selectedType) return false;
-    return selectedType.code === 'BAN' || selectedType.code === 'CAI';
-  };
+    if (!force && (comptesLoaded || comptes.length > 0)) return;
 
-  // Vérifier si un type est sélectionné
-  const isTypeSelected = () => {
-    return !!formData.type;
-  };
+    try {
+      console.log('🔄 [Edit] Chargement des comptes pour entité:', activeEntity.id);
+      setComptesLoaded(false);
+      
+      if (isCacheValid() && DATA_CACHE.comptes?.length > 0) {
+        setComptes(DATA_CACHE.comptes);
+      } else {
+        // 🔥 UTILISER activeEntity.id DU CONTEXTE
+        const response = await apiClient.get(`compta/accounts/?entity_id=${activeEntity.id}`);
+        const comptesData = extractData(response);
+        console.log('📊 [Edit] Comptes chargés:', comptesData.length, 'items');
+        DATA_CACHE.comptes = comptesData;
+        setComptes(comptesData);
+      }
+    } catch (err) {
+      console.error('❌ [Edit] Erreur chargement comptes:', err);
+      setError(prev => prev || 'Impossible de charger la liste des comptes');
+      setComptes([]);
+    } finally {
+      setComptesLoaded(true);
+    }
+  }, [comptesLoaded, comptes.length, isCacheValid, activeEntity]);
 
-  const handleChange = (field, value) => {
+  // 🔥 FONCTION POUR CHARGER LES BANQUES (LAZY)
+  const loadBanques = useCallback(async (force = false) => {
+    if (!force && (banquesLoaded || banques.length > 0)) return;
+
+    try {
+      console.log('🔄 [Edit] Chargement des banques...');
+      setBanquesLoaded(false);
+      
+      if (isCacheValid() && DATA_CACHE.banques?.length > 0) {
+        setBanques(DATA_CACHE.banques);
+      } else {
+        const response = await apiClient.get('banques/');
+        const banquesData = extractData(response);
+        console.log('🏦 [Edit] Banques chargées:', banquesData.length, 'items');
+        DATA_CACHE.banques = banquesData;
+        setBanques(banquesData);
+      }
+    } catch (err) {
+      console.error('❌ [Edit] Erreur chargement banques:', err);
+      setError(prev => prev || 'Impossible de charger la liste des banques');
+      setBanques([]);
+    } finally {
+      setBanquesLoaded(true);
+    }
+  }, [banquesLoaded, banques.length, isCacheValid]);
+
+  // 🔥 CHARGEMENT AUTO SEULEMENT POUR BAN/CAI
+  useEffect(() => {
+    console.log('🔧 [Edit] useEffect - formData.type:', formData.type, '(type:', typeof formData.type, ')');
+    console.log('🔧 [Edit] Comptes chargés:', comptesLoaded, 'Banques chargées:', banquesLoaded);
+    
+    if (!formData.type) {
+      setComptes([]);
+      setBanques([]);
+      setComptesLoaded(false);
+      setBanquesLoaded(false);
+      return;
+    }
+
+    const selectedType = journalTypes.find(type => type.id === formData.type);
+    if (!selectedType) return;
+
+    console.log('🔧 [Edit] Type sélectionné:', selectedType.code, '-', selectedType.name);
+    const needsAccounts = selectedType.code === 'BAN' || selectedType.code === 'CAI';
+    
+    if (needsAccounts) {
+      if (!comptesLoaded) {
+        console.log('🔄 [Edit] Déclenchement loadComptes');
+        loadComptes();
+      }
+      if (!banquesLoaded) {
+        console.log('🔄 [Edit] Déclenchement loadBanques');
+        loadBanques();
+      }
+    }
+  }, [formData.type, journalTypes, comptesLoaded, banquesLoaded, loadComptes, loadBanques]);
+
+  // 🔥 CALCULS DIRECTS
+  const selectedType = journalTypes.find(type => type.id === formData.type);
+  const isBankAccountRequired = selectedType?.code === 'BAN' || selectedType?.code === 'CAI';
+  const isDefaultAccountRequired = selectedType?.code === 'BAN' || selectedType?.code === 'CAI';
+
+  // 🔥 TROUVER LE COMPTE SÉLECTIONNÉ POUR L'AFFICHAGE
+  const selectedCompte = comptes.find(c => c.id === formData.default_account || 
+                                          c.id?.toString() === formData.default_account?.toString());
+  
+  const selectedBanque = banques.find(b => b.id === formData.bank_account || 
+                                          b.id?.toString() === formData.bank_account?.toString());
+
+  console.log('🔍 [Edit] Sélections actuelles:', {
+    typeId: formData.type,
+    typeValue: typeof formData.type,
+    compteId: formData.default_account,
+    compteValue: typeof formData.default_account,
+    banqueId: formData.bank_account,
+    banqueValue: typeof formData.bank_account,
+    selectedCompte: selectedCompte?.code || 'Aucun',
+    selectedBanque: selectedBanque?.numero_compte || 'Aucun'
+  });
+
+  const handleChange = useCallback((field, value) => {
+    console.log('✏️ [Edit] Changement:', field, '=', value, '(type:', typeof value, ')');
     setFormData(prev => ({ ...prev, [field]: value }));
-    setError(null);
-  };
+    if (error) setError(null);
+    
+    if (field === 'type') {
+      setFormData(prev => ({
+        ...prev,
+        default_account: '',
+        bank_account: ''
+      }));
+    }
+  }, [error]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitLoading(true);
     setError(null);
+    setSuccess(null);
 
-    // Validation de base
+    console.log('📤 [Edit] Envoi des données - formData:', JSON.stringify(formData, null, 2));
+
+    // 🔥 VÉRIFICATION CRITIQUE : Entité active obligatoire
+    if (!activeEntity) {
+      const errorMsg = 'Aucune entité active sélectionnée. Veuillez choisir une entité.';
+      console.error('❌ [Edit]', errorMsg);
+      setError(errorMsg);
+      setSubmitLoading(false);
+      return;
+    }
+
+    // Validation
     if (!formData.code.trim()) {
       setError('Le code du journal est obligatoire');
       setSubmitLoading(false);
@@ -137,42 +316,97 @@ export default function Edit() {
     }
 
     // Validation conditionnelle pour les comptes
-    const selectedType = getSelectedJournalType();
+    if (isDefaultAccountRequired && !formData.default_account) {
+      const errorMsg = `Le compte par défaut est obligatoire pour un journal de type ${selectedType.name}`;
+      setError(errorMsg);
+      setSubmitLoading(false);
+      return;
+    }
     
-    // Compte par défaut obligatoire seulement pour Banque et Caisse
-    if (isDefaultAccountRequired() && !formData.default_account) {
-      const typeName = selectedType?.name || 'Banque/Caisse';
-      setError(`Le compte par défaut est obligatoire pour un journal de type ${typeName}`);
+    if (isBankAccountRequired && !formData.bank_account) {
+      const errorMsg = `Le compte bancaire est obligatoire pour un journal de type ${selectedType.name}`;
+      setError(errorMsg);
       setSubmitLoading(false);
       return;
     }
 
     try {
-      // Préparer les données
-      const submitData = {
-        code: formData.code.trim(),
+      // 🔥 CORRECTION MAJEURE : Utiliser activeEntity.id du contexte + conversion en nombres
+      const submitData = { 
+        code: formData.code.trim().toUpperCase(),
         name: formData.name.trim(),
-        note: formData.note.trim(),
+        type_id: formData.type ? parseInt(formData.type, 10) : null,
+        company_id: activeEntity.id,
+        default_account_id: formData.default_account ? parseInt(formData.default_account, 10) : null,
+        bank_account_id: formData.bank_account ? parseInt(formData.bank_account, 10) : null,
+        note: formData.note || '',
         active: formData.active
       };
-
-      // Ajouter seulement si renseigné
-      if (formData.type) submitData.type = parseInt(formData.type);
-      if (formData.company) submitData.company = parseInt(formData.company);
-      if (formData.default_account) submitData.default_account = parseInt(formData.default_account);
-
-      // Si company_name est fourni (entreprise manuelle)
-      if (!formData.company && manualCompany.trim()) {
-        submitData.company_name = manualCompany.trim();
-      }
-
-      // Mettre à jour AVEC LE SERVICE UNIFIÉ
-      await journauxService.update(id, submitData);  // ← Utilisez le service
       
-      navigate(`/comptabilite/journaux/${id}`);
+      console.log('📦 [Edit] Données envoyées à l\'API:', JSON.stringify(submitData, null, 2));
+      console.log('📊 [Edit] Types des données envoyées:', {
+        code: typeof submitData.code,
+        name: typeof submitData.name,
+        type_id: typeof submitData.type_id + ' (' + submitData.type_id + ')',
+        company_id: typeof submitData.company_id + ' (' + submitData.company_id + ')',
+        default_account_id: typeof submitData.default_account_id + ' (' + submitData.default_account_id + ')',
+        bank_account_id: typeof submitData.bank_account_id + ' (' + submitData.bank_account_id + ')',
+        note: typeof submitData.note,
+        active: typeof submitData.active
+      });
+      
+      await journauxService.update(id, submitData);
+      
+      setSuccess('Journal mis à jour avec succès !');
+      
+      // Invalider le cache
+      DATA_CACHE.lastFetch = null;
+      
+      setTimeout(() => {
+        navigate(`/comptabilite/journaux/${id}`);
+      }, 1500);
       
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Erreur lors de la mise à jour');
+      console.error('❌ [Edit] Erreur soumission:', err);
+      
+      // 🔥 EXTRACTION DÉTAILLÉE DE L'ERREUR
+      let errorMessage = 'Erreur lors de la mise à jour du journal';
+      let errorDetails = null;
+      
+      if (err.response) {
+        errorDetails = err.response.data;
+        console.error('📄 [Edit] Réponse complète du serveur (400):', JSON.stringify(err.response.data, null, 2));
+        
+        // Extraire le message d'erreur spécifique
+        if (err.response.data?.detail) {
+          errorMessage = 'Erreur serveur: ' + err.response.data.detail;
+        } else if (err.response.data?.message) {
+          errorMessage = 'Erreur: ' + err.response.data.message;
+        } else if (err.response.data?.type) {
+          errorMessage = 'Type invalide: ' + (Array.isArray(err.response.data.type) ? err.response.data.type[0] : err.response.data.type);
+        } else if (err.response.data?.code) {
+          errorMessage = 'Code invalide: ' + (Array.isArray(err.response.data.code) ? err.response.data.code[0] : err.response.data.code);
+        } else if (err.response.data?.name) {
+          errorMessage = 'Nom invalide: ' + (Array.isArray(err.response.data.name) ? err.response.data.name[0] : err.response.data.name);
+        } else if (err.response.data?.company_id) {
+          errorMessage = 'Entité invalide: ' + (Array.isArray(err.response.data.company_id) ? err.response.data.company_id[0] : err.response.data.company_id);
+        } else if (err.response.data?.default_account_id) {
+          errorMessage = 'Compte par défaut invalide: ' + (Array.isArray(err.response.data.default_account_id) ? err.response.data.default_account_id[0] : err.response.data.default_account_id);
+        } else if (err.response.data?.bank_account_id) {
+          errorMessage = 'Compte bancaire invalide: ' + (Array.isArray(err.response.data.bank_account_id) ? err.response.data.bank_account_id[0] : err.response.data.bank_account_id);
+        } else {
+          errorMessage = 'Erreur ' + err.response.status + ': ' + JSON.stringify(err.response.data);
+        }
+      } else if (err.message) {
+        errorMessage = 'Erreur: ' + err.message;
+      }
+      
+      console.error('🔴 [Edit] Message d\'erreur final:', errorMessage);
+      if (errorDetails) {
+        console.error('🔴 [Edit] Détails techniques:', errorDetails);
+      }
+      
+      setError(errorMessage);
     } finally {
       setSubmitLoading(false);
     }
@@ -182,36 +416,86 @@ export default function Edit() {
     navigate(`/comptabilite/journaux/${id}`);
   };
 
+  const handleNewJournal = () => {
+    navigate('/comptabilite/journaux/create');
+  };
+
+  const handleGoToList = () => {
+    navigate('/comptabilite/journaux');
+  };
+
   if (loading) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-12 h-12 border-3 border-violet-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement...</p>
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Chargement...</div>
+          </div>
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-sm text-gray-600">Chargement des informations du journal...</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (error?.includes('non trouvé')) {
+  if (error?.includes('non trouvé') || !journal) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
-        <div className="text-center max-w-md">
-          <h2 className="text-lg font-bold text-gray-900 mb-2">Journal introuvable</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <div className="space-y-2">
-            <button
-              onClick={() => navigate('/comptabilite/journaux')}
-              className="w-full px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700"
-            >
-              Retour à la liste
-            </button>
-            <button
-              onClick={loadData}
-              className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
-            >
-              Réessayer
-            </button>
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Journal non trouvé</div>
+          </div>
+          <div className="p-8">
+            <div className="bg-red-50 border border-red-200 rounded p-4 text-center">
+              <FiX className="text-red-600 mx-auto mb-2" size={24} />
+              <p className="text-red-800 font-medium mb-3">
+                {error || 'Le journal demandé n\'existe pas.'}
+              </p>
+              <button
+                onClick={loadData}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 mr-2"
+              >
+                Réessayer
+              </button>
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+              >
+                Retour au journal
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 🔥 PROTECTION : Si pas d'entité active, afficher un message clair
+  if (!activeEntity) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Entité requise</div>
+          </div>
+          <div className="p-8">
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-4 text-center">
+              <FiAlertCircle className="text-yellow-600 mx-auto mb-2" size={24} />
+              <p className="text-yellow-800 font-medium mb-3">
+                Aucune entité sélectionnée
+              </p>
+              <p className="text-sm text-gray-600 mb-4">
+                Veuillez sélectionner une entité dans le menu principal pour pouvoir modifier ce journal.
+              </p>
+              <button
+                onClick={handleGoToList}
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+              >
+                Retour à la liste des journaux
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -219,98 +503,135 @@ export default function Edit() {
   }
 
   return (
-    <div className="p-4 min-h-screen">
-      <div className="max-w-2xl mx-auto">
-        {/* En-tête */}
-        <div className="mb-6">
-          <button
-            onClick={handleCancel}
-            className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-900 mb-3 text-sm hover:bg-gray-100 px-2 py-1 rounded transition-colors"
-          >
-            <FiArrowLeft size={14} />
-            Retour au journal
-          </button>
-          
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+        {/* Barre d'en-tête - Ligne 1 */}
+        <div className="border-b border-gray-300 px-4 py-3">
+          {/* Première ligne : Titre et boutons */}
           <div className="flex items-center justify-between mb-2">
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                Modifier le journal
-              </h1>
-              <p className="text-gray-600 mt-1 text-sm">
-                Modifiez les informations du journal <span className="font-medium text-violet-700">{formData.code}</span>
-              </p>
+            {/* Partie gauche */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleNewJournal}
+                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
+              >
+                <FiPlus size={12} />
+                <span>Nouveau</span>
+              </button>
+              <div 
+                className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600"
+                onClick={handleGoToList}
+              >
+                Journaux comptables
+              </div>
             </div>
-            <div>
+            {/* Partie droite */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={handleCancel}
-                className="px-3 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 text-sm transition-colors"
+                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
               >
-                <FiX size={14} />
-                Annuler
+                <FiX size={12} />
+                <span>Annuler</span>
               </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitLoading}
+                className="px-3 py-1.5 bg-purple-600 text-white text-xs flex items-center gap-1 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiSave size={12} />
+                <span>{submitLoading ? 'Sauvegarde...' : 'Enregistrer'}</span>
+              </button>
+            </div>
+          </div>
+          
+          {/* Deuxième ligne : État et Code */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700 font-medium">État:</span>
+              <span className={`px-2 py-0.5 text-xs font-medium ${
+                formData.active 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-gray-100 text-gray-600'
+              }`}>
+                {formData.active ? 'Actif' : 'Inactif'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700 font-medium">Code:</span>
+              <span className="text-sm font-mono font-bold text-purple-600">
+                {formData.code || '---'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700 font-medium">Type:</span>
+              <span className="text-sm font-medium">
+                {selectedType?.name || 'Non spécifié'} ({selectedType?.code || '???'})
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700 font-medium">Entité:</span>
+              <span className="text-sm font-medium text-blue-600">
+                {activeEntity.name || 'Non spécifiée'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Carte principale */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+        {/* Nouvelle ligne de boutons - Ligne 2 */}
+        <div className="border-b border-gray-300 px-4 py-3 flex items-center justify-between">
+          {/* Partie gauche : Badge d'état */}
+          <div>
+            <span className="text-sm text-gray-700 font-medium">Statut du journal:</span>
+          </div>
+          {/* Partie droite : Badges d'état (non cliquables) */}
+          <div className="flex items-center gap-2">
+            <div className={`px-3 py-1.5 text-xs font-medium border ${
+              formData.active
+                ? 'bg-purple-100 text-purple-700 border-purple-300'
+                : 'bg-gray-100 text-gray-500 border-gray-300'
+            }`}>
+              Actif
+            </div>
+            <div className={`px-3 py-1.5 text-xs font-medium border ${
+              !formData.active
+                ? 'bg-purple-100 text-purple-700 border-purple-300'
+                : 'bg-gray-100 text-gray-500 border-gray-300'
+            }`}>
+              Inactif
+            </div>
+          </div>
+        </div>
+
+        {/* Informations du journal */}
+        <div className="px-4 py-3">
+          <div className="text-lg font-bold text-gray-900 mb-4">Modifier le journal</div>
+          
           <form onSubmit={handleSubmit} className="space-y-3">
-            
-            {error && (
-              <div className="bg-gradient-to-r from-red-50 to-red-100 border-l-2 border-red-500 rounded-r p-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 bg-red-100 rounded">
-                    <FiX className="text-red-600" size={12} />
-                  </div>
-                  <span className="text-red-800 text-xs font-medium">{error}</span>
-                </div>
+            {/* Ligne 1 : Code et Type côte à côte */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+              {/* Code */}
+              <div className="flex items-center min-h-[26px]">
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
+                  Code <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.code}
+                  onChange={(e) => handleChange('code', e.target.value)}
+                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
+                  style={{ height: '26px' }}
+                  placeholder="Ex: VEN, ACH, BAN, CAI..."
+                  maxLength={8}
+                />
               </div>
-            )}
-            
-            {/* Section 1: Informations de Base */}
-            <div className="bg-gradient-to-br from-gray-50 to-white rounded border border-gray-200 p-2">
-              <div className="flex items-center gap-1.5 mb-2">
-                <div className="w-1 h-3 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-                <h3 className="text-sm font-semibold text-gray-900">Informations de Base</h3>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {/* Code */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-0.5">
-                    Code du Journal <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.code}
-                    onChange={(e) => handleChange('code', e.target.value)}
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                    placeholder="Ex: VEN, ACH, BAN, CAI..."
-                    maxLength={8}
-                  />
-                </div>
-                
-                {/* Nom */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-0.5">
-                    Nom du Journal <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => handleChange('name', e.target.value)}
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                    placeholder="Ex: Journal des ventes..."
-                  />
-                </div>
-                
-                {/* Type */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-0.5">
-                    Type de Journal <span className="text-red-500">*</span>
-                  </label>
+
+              {/* Type */}
+              <div className="flex items-center min-h-[26px]">
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
+                  Type <span className="text-red-500">*</span>
+                </label>
+                <div className="flex-1 ml-2">
                   <SearchableDropdown
                     value={formData.type}
                     onChange={(value) => handleChange('type', value)}
@@ -318,192 +639,172 @@ export default function Edit() {
                     searchValue={searchType}
                     onSearchChange={setSearchType}
                     placeholder="Sélectionnez un type..."
-                    icon={FiType}
-                    getOptionLabel={(type) => {
-                      return `${type.name || 'Sans nom'} (${type.code || 'Sans code'})`;
-                    }}
-                    getOptionValue={(type) => type.id}
+                    getOptionLabel={(type) => `${type.name || 'Sans nom'} (${type.code || 'Sans code'})`}
+                    getOptionValue={(type) => type.id?.toString()}
                     required={true}
-                    size="small"
-                  />
-                  {formData.type && isDefaultAccountRequired() && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      Compte par défaut requis pour ce type
-                    </p>
-                  )}
-                </div>
-                
-                {/* Note */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-0.5">
-                    Notes
-                  </label>
-                  <textarea
-                    value={formData.note}
-                    onChange={(e) => handleChange('note', e.target.value)}
-                    rows={1}
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                    placeholder="Notes additionnelles..."
+                    size="xs"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Section 2: Entreprise */}
-            <div className="bg-gradient-to-br from-green-50 to-white rounded border border-green-100 p-2">
-              <div className="flex items-center gap-1.5 mb-2">
-                <div className="w-1 h-3 bg-gradient-to-b from-green-600 to-green-400 rounded"></div>
-                <h3 className="text-sm font-semibold text-gray-900">Entreprise</h3>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-0.5">
-                  Entreprise
-                </label>
-                
-                {companies.length > 0 ? (
-                  <SearchableDropdown
-                    value={formData.company}
-                    onChange={(value) => handleChange('company', value)}
-                    options={companies}
-                    searchValue={searchCompany}
-                    onSearchChange={setSearchCompany}
-                    placeholder="Sélectionnez une entreprise"
-                    icon={FiBriefcase}
-                    getOptionLabel={(company) => company.raison_sociale || company.nom || 'Sans nom'}
-                    getOptionValue={(company) => company.id}
-                    size="small"
-                  />
-                ) : (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <FiAlertCircle size={10} />
-                      <span>Saisie manuelle</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={manualCompany}
-                      onChange={(e) => setManualCompany(e.target.value)}
-                      className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                      placeholder="Nom de l'entreprise..."
-                    />
-                  </div>
-                )}
-              </div>
+            {/* Ligne 2 : Nom seul sur toute la largeur */}
+            <div className="flex items-center min-h-[26px]">
+              <label className="text-xs text-gray-700 min-w-[140px] font-medium">
+                Nom <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => handleChange('name', e.target.value)}
+                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
+                style={{ height: '26px' }}
+                placeholder="Ex: Journal des ventes..."
+              />
             </div>
 
-            {/* Section 3: Configuration des Comptes */}
-            <div className="bg-gradient-to-br from-blue-50 to-white rounded border border-blue-100 p-2">
-              <div className="flex items-center gap-1.5 mb-2">
-                <div className="w-1 h-3 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
-                <h3 className="text-sm font-semibold text-gray-900">Configuration des Comptes</h3>
-              </div>
-              
-              <div>
-                <label className={`block text-xs font-medium mb-0.5 ${
-                  !isTypeSelected() || !isDefaultAccountRequired() 
-                    ? 'text-gray-700' 
-                    : 'text-gray-700'
-                }`}>
+            {/* Ligne 3 : Compte par défaut et Compte bancaire côte à côte */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+              {/* Compte par défaut */}
+              <div className="flex items-center min-h-[26px]">
+                <label className={`text-xs text-gray-700 min-w-[140px] font-medium`}>
                   Compte par défaut
-                  {isDefaultAccountRequired() && (
-                    <span className="text-red-500">*</span>
-                  )}
+                  {isDefaultAccountRequired && <span className="text-red-500">*</span>}
                 </label>
-                <SearchableDropdown
-                  value={formData.default_account}
-                  onChange={(value) => handleChange('default_account', value)}
-                  options={comptes}
-                  searchValue={searchCompte}
-                  onSearchChange={setSearchCompte}
-                  placeholder={
-                    !isTypeSelected() 
-                      ? "Sélectionnez d'abord un type" 
-                      : isDefaultAccountRequired()
-                        ? "Sélectionnez un compte par défaut..." 
-                        : "Optionnel"
-                  }
-                  icon={FiCreditCard}
-                  getOptionLabel={(compte) => `${compte.code || ''} - ${compte.name || 'Sans nom'}`}
-                  getOptionValue={(compte) => compte.id}
-                  required={isDefaultAccountRequired()}
-                  size="small"
-                  disabled={!isTypeSelected()}
-                  className={
-                    !isTypeSelected()
-                      ? "opacity-50 cursor-not-allowed bg-gray-100" 
-                      : ""
-                  }
-                />
-              </div>
-            </div>
-
-            {/* Section 4: Statut */}
-            <div className="bg-gradient-to-br from-amber-50 to-white rounded border border-amber-100 p-2">
-              <div className="flex items-center gap-1.5 mb-2">
-                <div className="w-1 h-3 bg-gradient-to-b from-amber-600 to-amber-400 rounded"></div>
-                <h3 className="text-sm font-semibold text-gray-900">Statut</h3>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="active"
-                    checked={formData.active}
-                    onChange={(e) => handleChange('active', e.target.checked)}
-                    className="w-3.5 h-3.5 text-violet-600 rounded focus:ring-violet-500"
+                <div className="flex-1 ml-2">
+                  <SearchableDropdown
+                    value={formData.default_account}
+                    onChange={(value) => handleChange('default_account', value)}
+                    options={comptes}
+                    searchValue={searchCompte}
+                    onSearchChange={setSearchCompte}
+                    placeholder={
+                      !formData.type 
+                        ? "Sélectionnez d'abord un type" 
+                        : isDefaultAccountRequired
+                          ? "Sélectionnez un compte (obligatoire)" 
+                          : "Optionnel - Cliquez pour choisir"
+                    }
+                    getOptionLabel={(compte) => `${compte.code || ''} - ${compte.name || compte.nom || 'Sans nom'}`}
+                    getOptionValue={(compte) => compte.id?.toString()}
+                    required={isDefaultAccountRequired}
+                    size="xs"
+                    disabled={!formData.type}
+                    isLoading={isDefaultAccountRequired && !comptesLoaded && !!formData.type}
+                    onOpen={() => {
+                      if (!comptesLoaded && formData.type) {
+                        loadComptes();
+                      }
+                    }}
                   />
-                  <label htmlFor="active" className="text-xs font-medium text-gray-700">
-                    Journal actif
-                  </label>
+                </div>
+              </div>
+
+              {/* Compte bancaire */}
+              <div className="flex items-center min-h-[26px]">
+                <label className={`text-xs text-gray-700 min-w-[140px] font-medium`}>
+                  Compte bancaire
+                  {isBankAccountRequired && <span className="text-red-500">*</span>}
+                </label>
+                <div className="flex-1 ml-2">
+                  <SearchableDropdown
+                    value={formData.bank_account}
+                    onChange={(value) => handleChange('bank_account', value)}
+                    options={banques}
+                    searchValue={searchBanque}
+                    onSearchChange={setSearchBanque}
+                    placeholder={
+                      !formData.type 
+                        ? "Sélectionnez d'abord un type" 
+                        : isBankAccountRequired
+                          ? "Sélectionnez un compte (obligatoire)" 
+                          : "Optionnel - Cliquez pour choisir"
+                    }
+                    getOptionLabel={(banque) => 
+                      banque.numero_compte 
+                        ? `${banque.banque?.nom || 'Banque'} - ${banque.numero_compte}`
+                        : banque.banque?.nom || banque.nom || 'Banque'
+                    }
+                    getOptionValue={(banque) => banque.id?.toString()}
+                    required={isBankAccountRequired}
+                    size="xs"
+                    disabled={!formData.type}
+                    isLoading={isBankAccountRequired && !banquesLoaded && !!formData.type}
+                    onOpen={() => {
+                      if (!banquesLoaded && formData.type) {
+                        loadBanques();
+                      }
+                    }}
+                  />
                 </div>
               </div>
             </div>
-            
-            {/* Boutons d'action */}
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="px-3 py-1 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium text-sm"
-                disabled={submitLoading}
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={submitLoading}
-                className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-medium flex items-center gap-1 text-sm"
-              >
-                {submitLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                    <span>Sauvegarde...</span>
-                  </>
-                ) : (
-                  <>
-                    <FiCheck size={12} />
-                    <span>Mettre à jour</span>
-                  </>
-                )}
-              </button>
+
+            {/* Ligne 4 : Notes */}
+            <div className="flex items-start min-h-[48px]">
+              <label className="text-xs text-gray-700 min-w-[140px] font-medium pt-1">
+                Notes
+              </label>
+              <textarea
+                value={formData.note}
+                onChange={(e) => handleChange('note', e.target.value)}
+                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
+                rows={2}
+                placeholder="Notes additionnelles..."
+              />
+            </div>
+
+            {/* Ligne 5 : Statut */}
+            <div className="flex items-center pt-3 border-t border-gray-200 min-h-[26px]">
+              <label className="text-xs text-gray-700 min-w-[140px] font-medium">
+                Statut
+              </label>
+              <div className="flex items-center gap-2 ml-2">
+                <input
+                  type="checkbox"
+                  id="active"
+                  checked={formData.active}
+                  onChange={(e) => handleChange('active', e.target.checked)}
+                  className="w-3.5 h-3.5 text-purple-600 rounded focus:ring-purple-500"
+                />
+                <label htmlFor="active" className="text-xs font-medium text-gray-700">
+                  Journal actif
+                </label>
+              </div>
             </div>
           </form>
         </div>
 
-        {/* Informations additionnelles */}
-        <div className="mt-4 text-xs text-gray-500">
-          <p>Journal ID: {id} • Dernière mise à jour: {new Date().toLocaleTimeString('fr-FR')}</p>
-        </div>
+        {/* Messages d'erreur/succès */}
+        {(error || success) && (
+          <div className={`px-4 py-3 text-sm border-t border-gray-300 ${
+            error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+          }`}>
+            <div className="flex items-center gap-2">
+              {error ? <FiAlertCircle size={14} /> : <FiCheck size={14} />}
+              <span>{error || success}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Indicateur pour les types spéciaux */}
+        {formData.type && isBankAccountRequired && (
+          <div className="px-4 py-2 bg-yellow-50 border border-yellow-200">
+            <div className="flex items-center gap-2 text-xs text-yellow-800">
+              <FiAlertCircle size={12} />
+              <span>
+                <span className="font-medium">Note :</span> Les comptes sont obligatoires pour les journaux Banque/Caisse
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// COMPOSANT SEARCHABLE DROPDOWN (reste identique)
+// 🔥 COMPOSANT SEARCHABLE DROPDOWN IDENTIQUE À CREATE
 function SearchableDropdown({ 
-  label, 
   value, 
   onChange, 
   options, 
@@ -512,19 +813,17 @@ function SearchableDropdown({
   placeholder,
   required = false,
   disabled = false,
-  icon: Icon,
+  isLoading = false,
+  onOpen,
   getOptionLabel = (option) => option,
   getOptionValue = (option) => option,
-  renderOption = (option) => getOptionLabel(option),
-  size = "small",
-  isError = false,
+  size = "xs",
   className = ""
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
-  // S'assurer que options est un tableau
   const safeOptions = Array.isArray(options) ? options : [];
 
   const filteredOptions = safeOptions.filter(option =>
@@ -549,9 +848,15 @@ function SearchableDropdown({
   }, [onSearchChange]);
 
   const handleToggle = () => {
-    if (!disabled) {
-      setIsOpen(!isOpen);
-      if (!isOpen) {
+    if (!disabled && !isLoading) {
+      const willOpen = !isOpen;
+      setIsOpen(willOpen);
+      
+      if (willOpen && onOpen) {
+        onOpen();
+      }
+      
+      if (willOpen) {
         setTimeout(() => {
           inputRef.current?.focus();
         }, 0);
@@ -569,73 +874,65 @@ function SearchableDropdown({
     }
   };
 
-  // Classes de taille
   const sizeClasses = {
-    small: {
-      button: 'px-2 py-1.5 text-sm',
-      input: 'px-2 py-1.5 text-sm',
-      option: 'px-2 py-1.5 text-sm',
-      icon: 'w-3.5 h-3.5'
-    },
-    default: {
-      button: 'px-3 py-2 text-sm',
-      input: 'px-3 py-2 text-sm',
-      option: 'px-3 py-2 text-sm',
-      icon: 'w-4 h-4'
+    xs: {
+      button: 'px-2 py-1 text-xs',
+      input: 'px-2 py-1 text-xs',
+      option: 'px-2 py-1 text-xs',
+      icon: 'w-2.5 h-2.5'
     }
   };
 
-  const sizeClass = sizeClasses[size] || sizeClasses.default;
+  const sizeClass = sizeClasses[size] || sizeClasses.xs;
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      {label && (
-        <label className="block text-xs font-medium text-gray-700 mb-0.5">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-      )}
-      
+    <div className="relative w-full" ref={dropdownRef}>
       <button
         type="button"
         onClick={handleToggle}
         onMouseDown={(e) => e.preventDefault()}
-        disabled={disabled}
-        className={`w-full text-left border rounded focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent transition-all ${sizeClass.button} ${className} ${
-          disabled 
+        disabled={disabled || isLoading}
+        className={`w-full text-left border rounded focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent transition-all ${sizeClass.button} ${className} ${
+          disabled || isLoading
             ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-300' 
-            : isError
-              ? 'border-red-500 bg-red-50 hover:border-red-600'
-              : 'bg-white hover:border-gray-400 border-gray-300'
-        } ${isOpen ? 'ring-1 ring-violet-500 border-violet-500' : ''}`}
+            : 'bg-white hover:border-gray-400 border-gray-300'
+        } ${isOpen ? 'ring-1 ring-purple-500 border-purple-500' : ''}`}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            {Icon && <Icon className={disabled ? "text-gray-300" : "text-gray-400"} size={14} />}
-            {selectedOption ? (
-              <span className={`font-medium truncate ${disabled ? 'text-gray-400' : 'text-gray-900'}`}>
-                {getOptionLabel(selectedOption)}
-              </span>
-            ) : (
-              <span className={disabled ? 'text-gray-400' : 'text-gray-500'}>{placeholder || `Sélectionnez...`}</span>
-            )}
-          </div>
-          <svg className={`transition-transform ${isOpen ? 'transform rotate-180' : ''} ${sizeClass.icon} ${disabled ? 'text-gray-300' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          <span className={`truncate text-xs ${
+            disabled || isLoading 
+              ? 'text-gray-400' 
+              : selectedOption 
+                ? 'text-gray-900 font-medium' 
+                : 'text-gray-500'
+          }`}>
+            {isLoading 
+              ? 'Chargement...' 
+              : selectedOption 
+                ? getOptionLabel(selectedOption) 
+                : (placeholder || 'Sélectionnez...')}
+          </span>
+          {!isLoading && (
+            <svg className={`transition-transform ${isOpen ? 'transform rotate-180' : ''} ${sizeClass.icon} ${disabled ? 'text-gray-300' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
+          {isLoading && (
+            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+          )}
         </div>
       </button>
 
-      {isOpen && !disabled && (
+      {isOpen && !disabled && !isLoading && (
         <div className="absolute z-50 w-full mt-0.5 bg-white border border-gray-300 rounded shadow-lg overflow-hidden">
-          <div className="p-1.5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+          <div className="p-1 border-b border-gray-200 bg-gray-50">
             <div className="relative">
-              <FiSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} />
               <input
                 ref={inputRef}
                 type="text"
                 value={searchValue}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className={`w-full pl-7 pr-2 ${sizeClass.input} border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white`}
+                className={`w-full pl-6 pr-2 ${sizeClass.input} border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent bg-white`}
                 placeholder={`Rechercher...`}
                 autoFocus
               />
@@ -648,41 +945,31 @@ function SearchableDropdown({
           <div 
             className="overflow-y-auto"
             style={{ 
-              maxHeight: '200px',
+              maxHeight: '140px',
               minHeight: '40px'
             }}
           >
             {filteredOptions.length === 0 ? (
-              <div className="py-4 text-center">
-                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-1">
-                  <FiSearch className="text-gray-400" size={12} />
-                </div>
+              <div className="py-2 text-center">
                 <p className="text-gray-500 text-xs">Aucun résultat</p>
               </div>
             ) : (
               <div>
                 {filteredOptions.map((option, index) => (
                   <div
-                    key={index}
-                    className={`${sizeClass.option} cursor-pointer hover:bg-violet-50 transition-colors ${
-                      value === getOptionValue(option) ? 'bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 font-medium' : 'text-gray-700'
+                    key={getOptionValue(option)}
+                    className={`${sizeClass.option} cursor-pointer hover:bg-purple-50 transition-colors ${
+                      value === getOptionValue(option) ? 'bg-purple-100 text-purple-700 font-medium' : 'text-gray-700'
                     } ${index < filteredOptions.length - 1 ? 'border-b border-gray-100' : ''}`}
                     onClick={() => handleOptionClick(getOptionValue(option))}
                   >
-                    {renderOption(option)}
+                    {getOptionLabel(option)}
                   </div>
                 ))}
               </div>
             )}
           </div>
         </div>
-      )}
-
-      {selectedOption && !isOpen && (
-        <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-0.5">
-          <FiCheck size={10} />
-          <span className="truncate">{getOptionLabel(selectedOption)}</span>
-        </p>
       )}
     </div>
   );

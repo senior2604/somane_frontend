@@ -1,4 +1,5 @@
 // src/features/comptabilite/pages/frameworks/FrameworkForm.jsx
+
 import { CloseOutlined, GlobalOutlined, SaveOutlined } from '@ant-design/icons';
 import {
   Button,
@@ -17,8 +18,8 @@ import {
 } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ENDPOINTS } from '../../../../config/api'; // ✅
-import axiosInstance from '../../../../config/axiosInstance'; // ✅
+import { ENDPOINTS } from '../../../../config/api';
+import axiosInstance from '../../../../config/axiosInstance';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 
 const { Option } = Select;
@@ -32,23 +33,36 @@ const FrameworkForm = () => {
   const { createFramework, updateFramework, fetchFrameworkById } = useFrameworkStore();
 
   const [loading, setLoading] = useState(false);
-  const [countries, setCountries] = useState([]);
-  const [entities, setEntities] = useState([]);
+  const [countries, setCountries] = useState([]);  // ✅ Initialisé comme array vide
+  const [entities, setEntities] = useState([]);    // ✅ Initialisé comme array vide
   const [isShared, setIsShared] = useState(true);
 
-  // ✅ useCallback pour mémoriser loadFormData
   const loadFormData = useCallback(async () => {
     setLoading(true);
     try {
-      // Charger les pays
-      const countriesRes = await axiosInstance.get(ENDPOINTS.PAYS);
-      setCountries(countriesRes.data.results || countriesRes.data);
+      // ✅ Charger les pays avec gestion d'erreur
+      try {
+        const countriesRes = await axiosInstance.get(ENDPOINTS.PAYS);
+        const countriesData = countriesRes.data.results || countriesRes.data || [];
+        setCountries(Array.isArray(countriesData) ? countriesData : []);
+      } catch (error) {
+        console.error('Erreur chargement pays:', error);
+        setCountries([]); // ✅ Fallback sur array vide
+        message.warning('Impossible de charger la liste des pays');
+      }
 
-      // Charger les entités
-      const entitiesRes = await axiosInstance.get(ENDPOINTS.ENTITES);
-      setEntities(entitiesRes.data.results || entitiesRes.data);
+      // ✅ Charger les entités avec gestion d'erreur
+      try {
+        const entitiesRes = await axiosInstance.get(ENDPOINTS.ENTITES);
+        const entitiesData = entitiesRes.data.results || entitiesRes.data || [];
+        setEntities(Array.isArray(entitiesData) ? entitiesData : []);
+      } catch (error) {
+        console.error('Erreur chargement entités:', error);
+        setEntities([]); // ✅ Fallback sur array vide
+        message.warning('Impossible de charger la liste des entités');
+      }
 
-      // Si édition, charger le framework
+      // ✅ Si édition, charger le framework
       if (id) {
         const framework = await fetchFrameworkById(id);
         const shared = !framework.company || framework.company.length === 0;
@@ -68,16 +82,16 @@ const FrameworkForm = () => {
         form.setFieldsValue({ shared: true, active: true });
       }
     } catch (error) {
-      message.error('Impossible de charger les données');
+      message.error('Impossible de charger les données du formulaire');
       console.error(error);
     } finally {
       setLoading(false);
     }
-  }, [id, fetchFrameworkById, form]); // ✅ Dépendances
+  }, [id, fetchFrameworkById, form]);
 
   useEffect(() => {
     loadFormData();
-  }, [loadFormData]); // ✅ Dépendance
+  }, [loadFormData]);
 
   const onFinish = async (values) => {
     // Si partagé, vider la liste des entités
@@ -96,7 +110,11 @@ const FrameworkForm = () => {
       }
       navigate('/comptabilite/frameworks');
     } catch (error) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Erreur lors de la sauvegarde';
+      const errorMessage = 
+        error.response?.data?.detail || 
+        error.response?.data?.non_field_errors?.[0] ||
+        error.message || 
+        'Erreur lors de la sauvegarde';
       message.error(errorMessage);
       console.error(error);
     } finally {
@@ -174,12 +192,20 @@ const FrameworkForm = () => {
                     allowClear
                     showSearch
                     optionFilterProp="children"
+                    loading={countries.length === 0}
                   >
-                    {countries.map((country) => (
-                      <Option key={country.id} value={country.id}>
-                        {country.nom || country.name || `Pays ${country.id}`}
+                    {/* ✅ Vérification avant le map */}
+                    {countries && countries.length > 0 ? (
+                      countries.map((country) => (
+                        <Option key={country.id} value={country.id}>
+                          {country.nom || country.name || `Pays ${country.id}`}
+                        </Option>
+                      ))
+                    ) : (
+                      <Option disabled value="">
+                        Aucun pays disponible
                       </Option>
-                    ))}
+                    )}
                   </Select>
                 </Form.Item>
               </Col>
@@ -233,16 +259,24 @@ const FrameworkForm = () => {
                   showSearch
                   optionFilterProp="children"
                   maxTagCount={3}
+                  loading={entities.length === 0}
                 >
-                  {entities.map((entity) => (
-                    <Option
-                      key={entity.id}
-                      value={entity.id}
-                      label={entity.name || entity.raison_sociale}
-                    >
-                      {entity.name || entity.raison_sociale || `Entité ${entity.id}`}
+                  {/* ✅ Vérification avant le map */}
+                  {entities && entities.length > 0 ? (
+                    entities.map((entity) => (
+                      <Option
+                        key={entity.id}
+                        value={entity.id}
+                        label={entity.name || entity.raison_sociale}
+                      >
+                        {entity.name || entity.raison_sociale || `Entité ${entity.id}`}
+                      </Option>
+                    ))
+                  ) : (
+                    <Option disabled value="">
+                      Aucune entité disponible
                     </Option>
-                  ))}
+                  )}
                 </Select>
               </Form.Item>
             )}

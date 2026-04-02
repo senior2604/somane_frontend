@@ -32,7 +32,8 @@ const useTypeStore = create((set, get) => ({
   fetchTypeById: async (id) => {
     set({ loading: true, error: null });
     try {
-      const response = await axiosInstance.get(`${ENDPOINTS.COMPTA.TYPES}/${id}`);
+      // ✅ CORRIGÉ : pas de / avant ${id} pour éviter le double slash
+      const response = await axiosInstance.get(`${ENDPOINTS.COMPTA.TYPES}${id}/`);
       set({ currentType: response.data, loading: false });
       return response.data;
     } catch (error) {
@@ -69,7 +70,8 @@ const useTypeStore = create((set, get) => ({
   updateType: async (id, data) => {
     set({ loading: true, error: null });
     try {
-      const response = await axiosInstance.put(`${ENDPOINTS.COMPTA.TYPES}/${id}`, data);
+      // ✅ CORRIGÉ : pas de / avant ${id} pour éviter le double slash
+      const response = await axiosInstance.put(`${ENDPOINTS.COMPTA.TYPES}${id}/`, data);
       set((state) => ({
         types: state.types.map((t) => (t.id === id ? response.data : t)),
         currentType: state.currentType?.id === id ? response.data : state.currentType,
@@ -88,7 +90,8 @@ const useTypeStore = create((set, get) => ({
   deleteType: async (id) => {
     set({ loading: true, error: null });
     try {
-      await axiosInstance.delete(`${ENDPOINTS.COMPTA.TYPES}/${id}`);
+      // ✅ CORRIGÉ : pas de / avant ${id} pour éviter le double slash
+      await axiosInstance.delete(`${ENDPOINTS.COMPTA.TYPES}${id}/`);
       set((state) => ({
         types: state.types.filter((t) => t.id !== id),
         loading: false,

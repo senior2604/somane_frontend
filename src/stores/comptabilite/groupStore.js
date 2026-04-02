@@ -1,7 +1,7 @@
 // C:\python\django\somane_frontend\src\stores\comptabilite\groupStore.js
 
 import { create } from 'zustand';
-import axiosInstance from '../../config/axiosInstance'; // ✅ Client centralisé
+import axiosInstance from '../../config/axiosInstance';
 import { ENDPOINTS } from '../../config/api';
 
 const useGroupStore = create((set, get) => ({
@@ -36,7 +36,8 @@ const useGroupStore = create((set, get) => ({
   fetchGroupById: async (id) => {
     set({ loading: true, error: null });
     try {
-      const response = await axiosInstance.get(`${ENDPOINTS.COMPTA.GROUPS}/${id}`);
+      // ✅ CORRIGÉ : pas de / avant ${id} pour éviter le double slash
+      const response = await axiosInstance.get(`${ENDPOINTS.COMPTA.GROUPS}${id}/`);
       set({ currentGroup: response.data, loading: false });
       return response.data;
     } catch (error) {
@@ -73,7 +74,8 @@ const useGroupStore = create((set, get) => ({
   updateGroup: async (id, data) => {
     set({ loading: true, error: null });
     try {
-      const response = await axiosInstance.put(`${ENDPOINTS.COMPTA.GROUPS}/${id}`, data);
+      // ✅ CORRIGÉ : pas de / avant ${id} pour éviter le double slash
+      const response = await axiosInstance.put(`${ENDPOINTS.COMPTA.GROUPS}${id}/`, data);
       set((state) => ({
         groups: state.groups.map((g) => (g.id === id ? response.data : g)),
         currentGroup: state.currentGroup?.id === id ? response.data : state.currentGroup,
@@ -92,7 +94,8 @@ const useGroupStore = create((set, get) => ({
   deleteGroup: async (id) => {
     set({ loading: true, error: null });
     try {
-      await axiosInstance.delete(`${ENDPOINTS.COMPTA.GROUPS}/${id}`);
+      // ✅ CORRIGÉ : pas de / avant ${id} pour éviter le double slash
+      await axiosInstance.delete(`${ENDPOINTS.COMPTA.GROUPS}${id}/`);
       set((state) => ({
         groups: state.groups.filter((g) => g.id !== id),
         loading: false,

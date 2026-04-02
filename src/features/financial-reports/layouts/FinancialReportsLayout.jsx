@@ -1,8 +1,8 @@
-// src/features/comptabilité/layouts/ComptabiliteLayout.jsx
+// src/features/financial-reports/layouts/FinancialReportsLayout.jsx
 import { Outlet } from "react-router-dom";
-import Header from "../../../components/Header"; // ← chemin relatif
+import Header from "../../../components/Header"; // ← chemin relatif vers ton header unifié
 
-export default function ComptabiliteLayout() {
+export default function FinancialReportsLayout() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <Header />

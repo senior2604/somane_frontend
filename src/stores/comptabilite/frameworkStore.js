@@ -1,8 +1,8 @@
 // src/stores/comptabilite/frameworkStore.js
 
 import { create } from 'zustand';
-import axiosInstance from '../../config/axiosInstance'; // ✅ Client centralisé
-import { ENDPOINTS } from '../../config/api';           // ✅ Endpoints configurés
+import axiosInstance from '../../config/axiosInstance';
+import { ENDPOINTS } from '../../config/api';
 
 const useFrameworkStore = create((set, get) => ({
   frameworks: [],
@@ -18,21 +18,27 @@ const useFrameworkStore = create((set, get) => ({
   fetchFrameworks: async (params = {}) => {
     set({ loading: true, error: null });
     try {
-      // ✅ Utilisation du client + endpoint configuré
       const response = await axiosInstance.get(ENDPOINTS.COMPTA.FRAMEWORKS, { params });
+      
+      const data = response.data.results || response.data || [];
+      
       set({
-        frameworks: response.data.results || response.data,
+        frameworks: Array.isArray(data) ? data : [],
         pagination: {
           current: params.page || 1,
           pageSize: params.page_size || 10,
-          total: response.data.count || response.data.length,
+          total: response.data.count || (Array.isArray(data) ? data.length : 0),
         },
         loading: false,
       });
+      
+      return response.data;
     } catch (error) {
+      console.error('Erreur fetch frameworks:', error);
       set({
         error: error.response?.data?.detail || 'Erreur lors du chargement des plans comptables',
         loading: false,
+        frameworks: [], // ✅ Réinitialiser en cas d'erreur
       });
       throw error;
     }
@@ -41,7 +47,8 @@ const useFrameworkStore = create((set, get) => ({
   fetchFrameworkById: async (id) => {
     set({ loading: true, error: null });
     try {
-      const response = await axiosInstance.get(`${ENDPOINTS.COMPTA.FRAMEWORKS}/${id}`);
+      // ✅ CORRIGÉ : Pas de slash supplémentaire
+      const response = await axiosInstance.get(`${ENDPOINTS.COMPTA.FRAMEWORKS}${id}/`);
       set({ currentFramework: response.data, loading: false });
       return response.data;
     } catch (error) {
@@ -59,6 +66,10 @@ const useFrameworkStore = create((set, get) => ({
       const response = await axiosInstance.post(ENDPOINTS.COMPTA.FRAMEWORKS, data);
       set((state) => ({
         frameworks: [response.data, ...state.frameworks],
+        pagination: {
+          ...state.pagination,
+          total: state.pagination.total + 1,
+        },
         loading: false,
       }));
       return response.data;
@@ -74,7 +85,8 @@ const useFrameworkStore = create((set, get) => ({
   updateFramework: async (id, data) => {
     set({ loading: true, error: null });
     try {
-      const response = await axiosInstance.put(`${ENDPOINTS.COMPTA.FRAMEWORKS}/${id}`, data);
+      // ✅ CORRIGÉ : Pas de slash supplémentaire
+      const response = await axiosInstance.put(`${ENDPOINTS.COMPTA.FRAMEWORKS}${id}/`, data);
       set((state) => ({
         frameworks: state.frameworks.map((f) => (f.id === id ? response.data : f)),
         currentFramework:
@@ -94,9 +106,14 @@ const useFrameworkStore = create((set, get) => ({
   deleteFramework: async (id) => {
     set({ loading: true, error: null });
     try {
-      await axiosInstance.delete(`${ENDPOINTS.COMPTA.FRAMEWORKS}/${id}`);
+      // ✅ CORRIGÉ : Pas de slash supplémentaire
+      await axiosInstance.delete(`${ENDPOINTS.COMPTA.FRAMEWORKS}${id}/`);
       set((state) => ({
         frameworks: state.frameworks.filter((f) => f.id !== id),
+        pagination: {
+          ...state.pagination,
+          total: Math.max(0, state.pagination.total - 1),
+        },
         loading: false,
       }));
     } catch (error) {
@@ -109,7 +126,23 @@ const useFrameworkStore = create((set, get) => ({
   },
 
   setCurrentFramework: (framework) => set({ currentFramework: framework }),
+  
   clearError: () => set({ error: null }),
+  
+  // ✅ BONUS : Méthode de reset complète
+  reset: () => {
+    set({
+      frameworks: [],
+      currentFramework: null,
+      loading: false,
+      error: null,
+      pagination: {
+        current: 1,
+        pageSize: 10,
+        total: 0,
+      },
+    });
+  },
 }));
 
 export default useFrameworkStore;

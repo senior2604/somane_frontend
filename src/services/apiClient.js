@@ -1,12 +1,13 @@
 // src/services/apiClient.js
 import { API_CONFIG } from '../config/api';
 import { authService } from './authService';
+import { getActiveEntity } from './entityUtils'; // ← AJOUTÉ
 
 class ApiClient {
   constructor() {
     // Normaliser l'URL de base
     this.baseURL = this.normalizeBaseURL(API_CONFIG.BASE_URL);
-    console.log('📡 API Client initialisé avec URL:', this.baseURL); // Pour débogage
+    console.log('📡 API Client initialisé avec URL:', this.baseURL);
     this.refreshPromise = null;
   }
 
@@ -73,6 +74,13 @@ class ApiClient {
       }
     }
 
+    // 🔑 AJOUT : Injecter l'entité active
+    const activeEntity = getActiveEntity();
+    if (activeEntity) {
+      config.headers['X-Entity-ID'] = activeEntity.id;
+      console.log(`🏢 Entité active injectée: ${activeEntity.id} (${activeEntity.raison_sociale})`);
+    }
+
     try {
       const response = await fetch(url, config);
       console.log(`📥 API Response: ${response.status} ${response.statusText} pour ${endpoint}`);
@@ -85,7 +93,6 @@ class ApiClient {
           // Essayer de rafraîchir le token si possible
           if (token && await this.tryRefreshToken()) {
             console.log('🔄 Token rafraîchi, réessai de la requête...');
-            // Réessayer la requête avec le nouveau token
             return await this.request(endpoint, options);
           }
           
@@ -108,6 +115,12 @@ class ApiClient {
           
         case 403: // Forbidden
           console.warn(`🚫 403 Forbidden sur ${endpoint}`);
+          // Vérifier si c'est lié à l'entité
+          if (activeEntity) {
+            console.error(`❌ Accès refusé à l'entité ID: ${activeEntity.id}`);
+            // Optionnel : déconnecter l'entité
+            localStorage.removeItem('currentEntite');
+          }
           throw {
             status: 403,
             message: 'Accès refusé - Permissions insuffisantes',
