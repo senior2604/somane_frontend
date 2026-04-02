@@ -5,11 +5,78 @@ import {
   FiEdit2,
   FiTrash2,
   FiAlertCircle,
-  FiFilter
+  FiFilter,
+  FiRefreshCw,
+  FiCheck,
+  FiXCircle,
+  FiClock,
+  FiDollarSign,
+  FiCreditCard
 } from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
 import { apiClient } from '../../../../services/apiClient';
 import ComptabiliteTableContainer from "../../components/ComptabiliteTableContainer";
+
+// ==========================================
+// FONCTION DE NORMALISATION
+// ==========================================
+const normalizeApiResponse = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (data.data && Array.isArray(data.data)) return data.data;
+  if (data.results && Array.isArray(data.results)) return data.results;
+  if (data.items && Array.isArray(data.items)) return data.items;
+  console.warn('⚠️ Format de réponse non reconnu:', data);
+  return [];
+};
+
+// ==========================================
+// FORMATAGE LIBELLÉ BANQUE (identique au Create)
+// ==========================================
+const getBankAccountLabel = (bankAccount) => {
+  if (!bankAccount) return '';
+  
+  let bankName = '';
+  let accountNumber = bankAccount.numero_compte || '';
+  
+  if (bankAccount.banque && typeof bankAccount.banque === 'object') {
+    bankName = bankAccount.banque.nom || 
+               bankAccount.banque.name || 
+               bankAccount.banque.raison_sociale || 
+               'Banque sans nom';
+  }
+  else if (bankAccount.banque_details) {
+    bankName = bankAccount.banque_details.nom || 
+               bankAccount.banque_details.name || 
+               bankAccount.banque_details.raison_sociale || 
+               'Banque sans nom';
+  }
+  else if (bankAccount.banque_nom) {
+    bankName = bankAccount.banque_nom;
+  }
+  else if (bankAccount.nom_banque) {
+    bankName = bankAccount.nom_banque;
+  }
+  else {
+    bankName = bankAccount.nom || 
+               bankAccount.name || 
+               bankAccount.libelle || 
+               (bankAccount.id ? `Banque #${bankAccount.id}` : 'Compte bancaire');
+  }
+  
+  let partnerInfo = '';
+  if (bankAccount.partenaire && typeof bankAccount.partenaire === 'object') {
+    partnerInfo = bankAccount.partenaire.nom || '';
+  } else if (bankAccount.partenaire_nom) {
+    partnerInfo = bankAccount.partenaire_nom;
+  }
+  
+  let label = bankName;
+  if (accountNumber) label += ` - ${accountNumber}`;
+  if (partnerInfo) label += ` (${partnerInfo})`;
+  
+  return label;
+};
 
 export default function JournauxPage() {
   const navigate = useNavigate();
@@ -24,6 +91,7 @@ export default function JournauxPage() {
   const [activeRowId, setActiveRowId] = useState(null);
   const [entityFilter, setEntityFilter] = useState(activeEntity?.id || '');
   const [showEntityFilter, setShowEntityFilter] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Synchroniser entityFilter avec activeEntity
   useEffect(() => {
@@ -34,7 +102,7 @@ export default function JournauxPage() {
   }, [activeEntity]);
 
   // Charger les données
-  const loadData = useCallback(async (entityId = null) => {
+  const loadData = useCallback(async (entityId = null, showRefresh = false) => {
     const targetEntityId = entityId || activeEntity?.id;
     
     if (!targetEntityId) {
@@ -45,37 +113,42 @@ export default function JournauxPage() {
       return;
     }
 
+    if (showRefresh) setRefreshing(true);
+    else setLoading(true);
+    
     try {
-      setLoading(true);
       setError(null);
       
       const [journauxRes, typesRes] = await Promise.all([
-        apiClient.get(`/compta/journals/?entity_id=${targetEntityId}`),
+        apiClient.get(`/compta/journals/?company_id=${targetEntityId}`),
         apiClient.get(`/compta/journal-types/`)
       ]);
 
-      const journauxData = journauxRes || [];
-      const typesData = typesRes || [];
+      const journauxData = normalizeApiResponse(journauxRes);
+      const typesData = normalizeApiResponse(typesRes);
 
-      // 🔥 CORRECTION : Gestion robuste du champ type (objet ou ID)
+      // Créer un Map pour une recherche plus rapide
+      const typesMap = new Map(typesData.map(t => [t.id, t]));
+
+      // Enrichir les journaux avec le type
       const enrichedJournaux = journauxData.map(journal => {
         // Extraire l'ID du type intelligemment
         let typeId = null;
         
         if (journal.type && typeof journal.type === 'object') {
-          // Cas où type est un objet complet
           typeId = journal.type.id;
         } else {
-          // Cas où type est directement l'ID
           typeId = journal.type;
         }
         
         // Trouver le type correspondant
-        const foundType = typesData.find(t => t.id === typeId);
+        const foundType = typesMap.get(typeId);
         
         return {
           ...journal,
-          type: foundType || { id: typeId, name: 'Inconnu', code: '??' }
+          type: foundType || { id: typeId, name: 'Inconnu', code: '??' },
+          // Formater le compte bancaire pour l'affichage
+          bank_account_display: journal.bank_account ? getBankAccountLabel(journal.bank_account) : null
         };
       });
 
@@ -92,6 +165,7 @@ export default function JournauxPage() {
       setFilteredJournaux([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [activeEntity]);
 
@@ -105,7 +179,12 @@ export default function JournauxPage() {
     loadData(entityId);
   };
 
-  // Gestion de la suppression individuelle
+  // Rafraîchir les données
+  const handleRefresh = () => {
+    loadData(entityFilter, true);
+  };
+
+  // Gestion de la suppression individuelle (supprimée mais gardée pour les actions groupées)
   const handleDelete = async (journal) => {
     if (!window.confirm(`Supprimer le journal "${journal.name}" ?`)) return;
     
@@ -127,9 +206,9 @@ export default function JournauxPage() {
     if (!window.confirm(`Supprimer ${selectedJournalIds.length} journal/aux ?`)) return;
     
     try {
-      for (const id of selectedJournalIds) {
-        await apiClient.delete(`/compta/journals/${id}/`);
-      }
+      await Promise.all(selectedJournalIds.map(id => 
+        apiClient.delete(`/compta/journals/${id}/`)
+      ));
       setSelectedJournalIds([]);
       loadData(entityFilter);
     } catch (err) {
@@ -144,9 +223,9 @@ export default function JournauxPage() {
     }
     
     try {
-      for (const id of selectedJournalIds) {
-        await apiClient.patch(`/compta/journals/${id}/`, { active: true });
-      }
+      await Promise.all(selectedJournalIds.map(id => 
+        apiClient.patch(`/compta/journals/${id}/`, { active: true })
+      ));
       setSelectedJournalIds([]);
       loadData(entityFilter);
     } catch (err) {
@@ -161,9 +240,9 @@ export default function JournauxPage() {
     }
     
     try {
-      for (const id of selectedJournalIds) {
-        await apiClient.patch(`/compta/journals/${id}/`, { active: false });
-      }
+      await Promise.all(selectedJournalIds.map(id => 
+        apiClient.patch(`/compta/journals/${id}/`, { active: false })
+      ));
       setSelectedJournalIds([]);
       loadData(entityFilter);
     } catch (err) {
@@ -182,13 +261,34 @@ export default function JournauxPage() {
         (j.type?.name || '').toLowerCase().includes(term.toLowerCase()) ||
         (j.type?.code || '').toLowerCase().includes(term.toLowerCase()) ||
         (j.default_account?.code || '').toLowerCase().includes(term.toLowerCase()) ||
-        (j.default_account?.name || '').toLowerCase().includes(term.toLowerCase())
+        (j.default_account?.name || '').toLowerCase().includes(term.toLowerCase()) ||
+        (j.bank_account_display || '').toLowerCase().includes(term.toLowerCase())
       );
       setFilteredJournaux(filtered);
     }
   }, [journaux]);
 
-  // Configuration des colonnes
+  // Vérifier si c'est un journal de type Banque
+  const isBankType = (journal) => {
+    const bankCodes = ['BQ', 'BN', 'BAN', 'BANQUE'];
+    const typeCode = journal.type?.code || journal.type_code || '';
+    return bankCodes.includes(typeCode) || 
+           typeCode === 'BAN' ||
+           typeCode === 'BANQUE' ||
+           typeCode?.startsWith('BQ') ||
+           typeCode?.startsWith('BN');
+  };
+
+  // Vérifier si c'est un journal de type Caisse
+  const isCashType = (journal) => {
+    const cashCodes = ['CA', 'CS', 'CAI', 'CAISSE'];
+    const typeCode = journal.type?.code || journal.type_code || '';
+    return cashCodes.includes(typeCode) || 
+           typeCode?.startsWith('CA') ||
+           typeCode?.startsWith('CS');
+  };
+
+  // Configuration des colonnes (sans la colonne actions)
   const columns = useMemo(() => [
     { 
       id: 'code', 
@@ -205,8 +305,10 @@ export default function JournauxPage() {
       render: (journal) => (
         <div>
           <div className="font-medium text-sm">{journal.name || '—'}</div>
-          <div className="text-xs text-gray-500 truncate">
-            {journal.note || ''}
+          <div className="text-xs text-gray-500 truncate flex items-center gap-1">
+            {journal.email && (
+              <span className="truncate" title={journal.email}>{journal.email}</span>
+            )}
           </div>
         </div>
       )
@@ -215,12 +317,20 @@ export default function JournauxPage() {
       id: 'type', 
       label: 'Type',
       width: '140px',
-      render: (journal) => (
-        <div>
-          <div className="font-medium text-sm">{journal.type?.code || '—'}</div>
-          <div className="text-xs text-gray-500">{journal.type?.name || ''}</div>
-        </div>
-      )
+      render: (journal) => {
+        const isBank = isBankType(journal);
+        const isCash = isCashType(journal);
+        return (
+          <div>
+            <div className="font-medium text-sm flex items-center gap-1">
+              {isBank && <FiCreditCard size={12} className="text-blue-500" />}
+              {isCash && <FiDollarSign size={12} className="text-green-500" />}
+              {journal.type?.code || '—'}
+            </div>
+            <div className="text-xs text-gray-500">{journal.type?.name || ''}</div>
+          </div>
+        );
+      }
     },
     { 
       id: 'compte', 
@@ -241,19 +351,51 @@ export default function JournauxPage() {
     },
     { 
       id: 'banque', 
-      label: 'Compte bancaire',
-      width: '160px',
-      render: (journal) => journal.bank_account ? (
-        <div>
-          <div className="font-medium text-sm">
-            {journal.bank_account.numero_compte || '—'}
+      label: 'Infos bancaires',
+      width: '200px',
+      render: (journal) => {
+        const isBank = isBankType(journal);
+        if (!isBank) return <span className="text-gray-400 italic text-sm">—</span>;
+        
+        return journal.bank_account_display ? (
+          <div>
+            <div className="font-medium text-sm truncate" title={journal.bank_account_display}>
+              {journal.bank_account_display}
+            </div>
+            {journal.import_bank_statements && (
+              <div className="text-xs text-blue-600 flex items-center gap-1">
+                <FiRefreshCw size={10} /> Import auto
+              </div>
+            )}
           </div>
-          <div className="text-xs text-gray-500">
-            {journal.bank_account.banque?.nom || journal.bank_account.nom || ''}
-          </div>
+        ) : (
+          <span className="text-gray-400 italic text-sm">Non défini</span>
+        );
+      }
+    },
+    { 
+      id: 'sequences', 
+      label: 'Séquences',
+      width: '140px',
+      render: (journal) => (
+        <div className="text-xs">
+          {journal.sequence && (
+            <div className="flex items-center gap-1 text-gray-700">
+              <FiClock size={10} />
+              <span className="truncate" title={journal.sequence.name}>
+                {journal.sequence.prefix}...{journal.sequence.suffix}
+              </span>
+            </div>
+          )}
+          {journal.use_refund_sequence && journal.refund_sequence && (
+            <div className="flex items-center gap-1 text-gray-500 mt-1">
+              <FiClock size={10} />
+              <span className="truncate text-xs" title={journal.refund_sequence.name}>
+                Avoirs: {journal.refund_sequence.prefix}...{journal.refund_sequence.suffix}
+              </span>
+            </div>
+          )}
         </div>
-      ) : (
-        <span className="text-gray-400 italic text-sm">Non défini</span>
       )
     },
     { 
@@ -261,16 +403,16 @@ export default function JournauxPage() {
       label: 'Statut',
       width: '100px',
       render: (journal) => (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
           journal.active
             ? 'bg-green-100 text-green-800'
             : 'bg-gray-100 text-gray-800'
         }`}>
+          {journal.active ? <FiCheck size={12} /> : <FiXCircle size={12} />}
           {journal.active ? 'Actif' : 'Inactif'}
         </span>
       )
     }
-    // Colonne ACTIONS SUPPRIMÉE
   ], []);
 
   // Export
@@ -296,7 +438,12 @@ export default function JournauxPage() {
     navigate('/comptabilite/journaux/create');
   };
 
-  // Composant de filtre d'entité à intégrer dans le header du tableau
+  // Navigation vers les détails (double-clic)
+  const handleRowDoubleClick = (journal) => {
+    navigate(`/comptabilite/journaux/${journal.id}`);
+  };
+
+  // Composant de filtre d'entité
   const EntityFilterButton = () => {
     if (!Array.isArray(entities) || entities.length <= 1) return null;
 
@@ -333,7 +480,7 @@ export default function JournauxPage() {
                       : 'hover:bg-gray-100'
                   }`}
                 >
-                  <div className="font-medium">{entity.name}</div>
+                  <div className="font-medium">{entity.raison_sociale || entity.nom || entity.name}</div>
                 </button>
               ))}
             </div>
@@ -342,6 +489,19 @@ export default function JournauxPage() {
       </div>
     );
   };
+
+  // Bouton de rafraîchissement
+  const RefreshButton = () => (
+    <button
+      onClick={handleRefresh}
+      disabled={refreshing}
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+      title="Rafraîchir"
+    >
+      <FiRefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+      <span>Rafraîchir</span>
+    </button>
+  );
 
   // Pas d'entité disponible
   if (!activeEntity && (!Array.isArray(entities) || entities.length === 0)) {
@@ -379,9 +539,9 @@ export default function JournauxPage() {
           title="Journaux Comptables"
           moduleType="journaux"
           columns={columns}
-          defaultVisibleColumns={['code', 'nom', 'type', 'compte', 'banque', 'statut']}
+          defaultVisibleColumns={['code', 'nom', 'type', 'compte', 'banque', 'sequences', 'statut']}
           onSelectionChange={setSelectedJournalIds}
-          onRefresh={() => loadData(entityFilter)}
+          onRefresh={handleRefresh}
           onExport={handleExport}
           onCreate={handleCreate}
           onSearch={handleSearch}
@@ -394,20 +554,14 @@ export default function JournauxPage() {
               alert('Veuillez sélectionner un seul journal à modifier');
             }
           }}
-          // Actions personnalisées via le menu
+          // Actions personnalisées
           onConfirm={handleBulkActivate}
           onCancel={handleBulkDeactivate}
           activeRowId={activeRowId}
           onRowClick={(journal, event) => {
-            // Clic simple : met à jour la ligne active
             setActiveRowId(journal.id);
-            // La sélection multiple est gérée dans le conteneur avec Ctrl/Shift
           }}
-          onRowDoubleClick={(journal) => {
-            // Double-clic : navigation vers la vue détail
-            navigate(`/comptabilite/journaux/${journal.id}`);
-          }}
-          // onView supprimé (remplacé par double-clic)
+          onRowDoubleClick={handleRowDoubleClick}
           itemsPerPage={10}
           emptyState={journaux.length === 0 ? {
             title: 'Aucun journal comptable',
@@ -417,8 +571,12 @@ export default function JournauxPage() {
               onClick: handleCreate
             }
           } : null}
-          // Ajout du bouton de filtre d'entité dans le header
-          headerExtra={<EntityFilterButton />}
+          headerExtra={
+            <div className="flex items-center gap-2">
+              <EntityFilterButton />
+              <RefreshButton />
+            </div>
+          }
         />
       </div>
     </div>

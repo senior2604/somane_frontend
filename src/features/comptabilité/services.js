@@ -32,6 +32,48 @@ const piecesService = {
     return apiClient.delete(`${API_PREFIX}moves/${id}/`, { params });
   },
   
+  // === MÉTHODES DE CHANGEMENT D'ÉTAT ===
+  
+  /**
+   * Valider une pièce (passer de brouillon à comptabilisé)
+   */
+  validate: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.post(`${API_PREFIX}moves/${id}/validate/`, {}, { params });
+  },
+  
+  /**
+   * Annuler une pièce comptabilisée
+   */
+  cancel: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.post(`${API_PREFIX}moves/${id}/cancel/`, {}, { params });
+  },
+  
+  /**
+   * Remettre une pièce en brouillon
+   */
+  draft: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.post(`${API_PREFIX}moves/${id}/draft/`, {}, { params });
+  },
+  
+  /**
+   * Dupliquer une pièce
+   */
+  duplicate: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.post(`${API_PREFIX}moves/${id}/duplicate/`, {}, { params });
+  },
+  
+  /**
+   * Extourner une pièce (créer une pièce inverse)
+   */
+  reverse: (id, entityId = null) => {
+    const params = entityId ? { company: entityId } : {};
+    return apiClient.post(`${API_PREFIX}moves/${id}/reverse/`, {}, { params });
+  },
+  
   // === DONNÉES DE RÉFÉRENCE AVEC ENTITÉ ===
   getJournals: async (entityId = null) => {
     try {
@@ -131,6 +173,81 @@ const piecesService = {
     }
   },
   
+  // === TAXES ===
+  getTaxes: async (entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}taxes/`, { params });
+      
+      let taxesData = [];
+      if (Array.isArray(response)) {
+        taxesData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          taxesData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          taxesData = response.data;
+        }
+      }
+      
+      return taxesData;
+      
+    } catch (error) {
+      console.error('Erreur chargement taxes:', error);
+      return [];
+    }
+  },
+  
+  // === UTILISATEURS ===
+  getUsers: async (entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get('core/users/', { params });
+      
+      let usersData = [];
+      if (Array.isArray(response)) {
+        usersData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          usersData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          usersData = response.data;
+        }
+      }
+      
+      return usersData;
+      
+    } catch (error) {
+      console.error('Erreur chargement utilisateurs:', error);
+      return [];
+    }
+  },
+  
+  // === POSITIONS FISCALES ===
+  getFiscalPositions: async (entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}fiscal-positions/`, { params });
+      
+      let positionsData = [];
+      if (Array.isArray(response)) {
+        positionsData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          positionsData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          positionsData = response.data;
+        }
+      }
+      
+      return positionsData;
+      
+    } catch (error) {
+      console.error('Erreur chargement positions fiscales:', error);
+      return [];
+    }
+  },
+  
   // === ENTREPRISES/ENTITES ===
   getCompanies: async () => {
     try {
@@ -221,22 +338,14 @@ const piecesService = {
     };
   },
   
-  validate: (id, entityId = null) => {
-    const params = entityId ? { company: entityId } : {};
-    return apiClient.post(`${API_PREFIX}moves/${id}/validate/`, {}, { params });
-  },
-  
-  cancel: (id, entityId = null) => {
-    const params = entityId ? { company: entityId } : {};
-    return apiClient.post(`${API_PREFIX}moves/${id}/cancel/`, {}, { params });
-  },
-  
   testEndpoints: async (entityId = null) => {
     const endpoints = [
       { name: 'Journaux', url: `${API_PREFIX}journals/` },
       { name: 'Comptes', url: `${API_PREFIX}accounts/` },
       { name: 'Partenaires', url: 'partenaires/' },
       { name: 'Devises', url: 'devises/' },
+      { name: 'Taxes', url: `${API_PREFIX}taxes/` },
+      { name: 'Positions fiscales', url: `${API_PREFIX}fiscal-positions/` },
     ];
     
     const results = [];

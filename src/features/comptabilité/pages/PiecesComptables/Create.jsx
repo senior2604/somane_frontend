@@ -1,8 +1,59 @@
+// C:\Users\IBM\Documents\somane_frontend\src\features\comptabilité\pages\Pieces\Create.jsx
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiPlus, FiTrash2, FiCheck, FiPaperclip, FiUpload, FiCopy, FiRotateCcw, FiMoreVertical, FiSave, FiX, FiAlertCircle, FiBriefcase } from 'react-icons/fi';
+import { 
+  FiPlus, 
+  FiTrash2, 
+  FiCheck, 
+  FiPaperclip, 
+  FiUpload, 
+  FiCopy, 
+  FiRotateCcw, 
+  FiSave, 
+  FiX, 
+  FiAlertCircle, 
+  FiBriefcase,
+  FiUploadCloud,
+  FiSettings,
+  FiInfo
+} from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
 import { piecesService } from "../../services";
+
+// ==========================================
+// COMPOSANT TOOLTIP
+// ==========================================
+const Tooltip = ({ children, text, position = 'top' }) => {
+  const [show, setShow] = useState(false);
+  
+  return (
+    <div className="relative inline-block">
+      <div
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        {children}
+      </div>
+      {show && (
+        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
+          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
+          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
+          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
+          'left-full top-1/2 transform -translate-y-1/2 ml-1'
+        }`}>
+          {text}
+          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
+            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
+            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
+            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
+            'right-full top-1/2 -translate-y-1/2 -mr-1'
+          }`} />
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ==========================================
 // COMPOSANT AUTOCOMPLETE RÉUTILISABLE
@@ -16,7 +67,8 @@ const AutocompleteInput = ({
   getOptionLabel,
   placeholder = "",
   className = "",
-  disabled = false
+  disabled = false,
+  required = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value || '');
@@ -141,6 +193,7 @@ const AutocompleteInput = ({
         }}
         placeholder={placeholder}
         disabled={disabled}
+        required={required}
         className={`w-full px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none ${className}`}
         style={{ height: '26px', border: 'none', backgroundColor: 'transparent' }}
         autoComplete="off"
@@ -184,6 +237,8 @@ export default function Create() {
   const [partners, setPartners] = useState([]);
   const [devises, setDevises] = useState([]);
   const [taxes, setTaxes] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [fiscalPositions, setFiscalPositions] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [activeTab, setActiveTab] = useState('ecritures');
@@ -193,6 +248,8 @@ export default function Create() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const today = new Date().toISOString().split('T')[0];
+
+  const actionsMenuRef = useRef(null);
 
   useEffect(() => {
     if (!activeEntity) {
@@ -208,11 +265,13 @@ export default function Create() {
     partner_label: '',
     debit: '',
     credit: '',
-    taxes: '',
-    discount_date: '',
-    discount_amount: '',
     tax_id: '',
     tax_label: '',
+    tax_base_amount: '',
+    date_maturity: '',
+    discount_amount_currency: '',
+    discount_percentage: '',
+    discount_date: '',
   });
 
   const initialFormData = {
@@ -229,6 +288,13 @@ export default function Create() {
     partner_id: '',
     partner_label: '',
     invoice_date: today,
+    invoice_date_due: '',
+    invoice_user_id: '',
+    invoice_user_label: '',
+    invoice_origin: '',
+    fiscal_position_id: '',
+    fiscal_position_label: '',
+    payment_reference: '',
     lines: [emptyLine()],
     notes: '',
     attachments: []
@@ -242,15 +308,35 @@ export default function Create() {
     }
   }, [activeEntity]);
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target)) {
+        setShowActionsMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const loadOptions = async () => {
     setError(null);
     try {
-      const [journalsData, accountsData, partnersData, devisesData, taxesData] = await Promise.all([
+      const [
+        journalsData, 
+        accountsData, 
+        partnersData, 
+        devisesData, 
+        taxesData,
+        usersData,
+        fiscalPositionsData
+      ] = await Promise.all([
         piecesService.getJournals(activeEntity.id),
         piecesService.getAccounts(activeEntity.id),
         piecesService.getPartners(activeEntity.id),
         piecesService.getDevises(activeEntity.id),
         piecesService.getTaxes?.(activeEntity.id) || Promise.resolve([]),
+        piecesService.getUsers?.(activeEntity.id) || Promise.resolve([]),
+        piecesService.getFiscalPositions?.(activeEntity.id) || Promise.resolve([]),
       ]);
 
       const normalizeData = (data) => {
@@ -261,19 +347,15 @@ export default function Create() {
         return [];
       };
 
-      const normalizedJournals  = normalizeData(journalsData);
-      const normalizedAccounts  = normalizeData(accountsData);
-      const normalizedPartners  = normalizeData(partnersData);
-      const normalizedDevises   = normalizeData(devisesData);
-      const normalizedTaxes     = normalizeData(taxesData);
+      setJournals(normalizeData(journalsData));
+      setAccounts(normalizeData(accountsData));
+      setPartners(normalizeData(partnersData));
+      setDevises(normalizeData(devisesData));
+      setTaxes(normalizeData(taxesData));
+      setUsers(normalizeData(usersData));
+      setFiscalPositions(normalizeData(fiscalPositionsData));
 
-      setJournals(normalizedJournals);
-      setAccounts(normalizedAccounts);
-      setPartners(normalizedPartners);
-      setDevises(normalizedDevises);
-      setTaxes(normalizedTaxes);
-
-      // Pré-sélection devise XOF/FCFA
+      const normalizedDevises = normalizeData(devisesData);
       let defaultCurrencyId = '';
       let defaultCurrencyLabel = '';
       if (normalizedDevises.length > 0) {
@@ -298,27 +380,20 @@ export default function Create() {
     if (!hasUnsavedChanges) setHasUnsavedChanges(true);
   };
 
-  // ── Mise à jour d'un champ simple du formulaire ──────────────
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     markAsModified();
   };
 
-  // ── Mise à jour d'un champ simple d'une ligne ────────────────
   const handleLineChange = (index, field, value) => {
     setFormData(prev => {
       const newLines = [...prev.lines];
       newLines[index] = { ...newLines[index], [field]: value };
-      // Effacer le champ opposé si débit/crédit saisi
-      if (field === 'debit' && value)  newLines[index].credit = '';
-      if (field === 'credit' && value) newLines[index].debit  = '';
       return { ...prev, lines: newLines };
     });
     markAsModified();
   };
 
-  // ✅ CORRECTION PRINCIPALE : mise à jour de PLUSIEURS champs d'une ligne en un seul setState
-  // Évite le bug où le 2e appel à handleLineChange écrasait le résultat du 1er
   const handleLineMultiChange = (index, fields) => {
     setFormData(prev => {
       const newLines = [...prev.lines];
@@ -329,7 +404,7 @@ export default function Create() {
   };
 
   const addLine = () => {
-    const firstName = formData.lines[0]?.name || '';
+    const firstName = formData.lines[0]?.name || 'Nouvelle ligne';
     setFormData(prev => ({
       ...prev,
       lines: [...prev.lines, { ...emptyLine(), name: firstName }]
@@ -378,64 +453,88 @@ export default function Create() {
     }
   };
 
-  // ── Préparation du payload API ───────────────────────────────
+  // ✅ Validation MINIMALE pour sauvegarder un brouillon
+  const canSaveDraft = () => {
+    if (!formData.journal_id) return false;
+    const lignesSansCompte = formData.lines.filter(l => !l.account_id);
+    if (lignesSansCompte.length > 0) return false;
+    return true;
+  };
+
+  // ✅ Validation COMPLÈTE pour comptabiliser
+  const isReadyForValidation = () => {
+    if (!formData.journal_id) return false;
+    if (formData.lines.length === 0) return false;
+    
+    const hasValidLines = formData.lines.every(line => 
+      line.account_id && line.name?.trim() !== ''
+    );
+    if (!hasValidLines) return false;
+    
+    const hasAmount = formData.lines.every(line => 
+      (parseFloat(line.debit) || 0) > 0 || (parseFloat(line.credit) || 0) > 0
+    );
+    if (!hasAmount) return false;
+    
+    const hasPartner = formData.partner_id || 
+      formData.lines.some(line => line.partner_id);
+    
+    return hasPartner;
+  };
+
   const prepareDataForApi = useCallback(() => {
+    const toNumber = (value) => {
+      if (!value || value === '') return 0;
+      return parseFloat(value) || 0;
+    };
+
+    const toNumberOrNull = (value) => {
+      if (!value || value === '') return null;
+      return parseInt(value) || null;
+    };
+
     const mainPartner = formData.partner_id ||
       formData.lines.find(l => l.partner_id)?.partner_id ||
       null;
 
-    let totalDebit = 0;
-    let totalCredit = 0;
-    formData.lines.forEach(line => {
-      totalDebit  += parseFloat(line.debit)  || 0;
-      totalCredit += parseFloat(line.credit) || 0;
-    });
-
-    // 🔍 Debug : vérifie que les account_id sont bien remplis
-    console.log('🔍 Lignes avant envoi:', formData.lines.map((l, i) => ({
-      index: i,
-      account_label: l.account_label,
-      account_id: l.account_id,   // ← doit être un nombre, pas ''
-      debit: l.debit,
-      credit: l.credit,
-    })));
-
     return {
-      name:          formData.name || `BROUILLON-${Date.now()}`,
-      move_type:     formData.move_type,
-      state:         formData.state,
-      journal:       formData.journal_id   || null,
-      date:          formData.date,
-      ref:           formData.ref,
-      partner:       mainPartner,
-      company_id:    activeEntity.id,
-      currency:      formData.currency_id  || null,
-      invoice_date:  formData.invoice_date || formData.date,
-      amount_total:  Math.max(totalDebit, totalCredit),
-      amount_untaxed: 0,
-      amount_tax:    0,
-      payment_state: 'not_paid',
-      notes:         formData.notes,
-
-      lines_write: formData.lines.map(line => {
-        const debit  = parseFloat(line.debit)  || 0;
-        const credit = parseFloat(line.credit) || 0;
-        return {
-          name:     line.name    || '',
-          date:     formData.date,
-          account:  line.account_id  || null,   // ✅ ID du compte (FK)
-          partner:  line.partner_id  || null,
-          tax_line: line.tax_id      || null,
-          debit,
-          credit,
-          // ❌ Ne pas envoyer : move, journal, company, currency, balance, reconciled
-          //    → injectés par le backend dans create()
-        };
-      }),
+      name: formData.name || `BROUILLON-${Date.now()}`,
+      move_type: 'entry',
+      state: formData.state,
+      journal_id: toNumberOrNull(formData.journal_id),
+      date: formData.date,
+      ref: formData.ref || '',
+      partner_id: mainPartner,
+      company_id: activeEntity?.id || null,
+      currency_id: toNumberOrNull(formData.currency_id),
+      invoice_date: formData.invoice_date || formData.date,
+      invoice_date_due: formData.invoice_date_due || null,
+      invoice_user_id: toNumberOrNull(formData.invoice_user_id),
+      invoice_origin: formData.invoice_origin || '',
+      fiscal_position_id: toNumberOrNull(formData.fiscal_position_id),
+      payment_reference: formData.payment_reference || '',
+      notes: formData.notes || '',
+      
+      lines_write: formData.lines.map((line, index) => ({
+        name: line.name?.trim() || `Ligne ${index + 1}`,
+        date: formData.date,
+        account_id: toNumberOrNull(line.account_id),
+        partner_id: toNumberOrNull(line.partner_id || mainPartner),
+        journal_id: toNumberOrNull(formData.journal_id),
+        company_id: activeEntity?.id || null,
+        currency_id: toNumberOrNull(formData.currency_id),
+        tax_id: toNumberOrNull(line.tax_id),
+        tax_base_amount: toNumber(line.tax_base_amount),
+        debit: toNumber(line.debit),
+        credit: toNumber(line.credit),
+        date_maturity: line.date_maturity || null,
+        discount_amount_currency: toNumber(line.discount_amount_currency),
+        discount_percentage: toNumber(line.discount_percentage) || null,
+        discount_date: line.discount_date || null,
+      })),
     };
   }, [formData, activeEntity]);
 
-  // ── Sauvegarde automatique ───────────────────────────────────
   const saveAutoDraft = useCallback(async () => {
     if (!hasUnsavedChanges || isAutoSaving || !activeEntity) return;
     setIsAutoSaving(true);
@@ -460,34 +559,39 @@ export default function Create() {
   }, [hasUnsavedChanges, isAutoSaving, pieceId, activeEntity, prepareDataForApi]);
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (hasUnsavedChanges) saveAutoDraft();
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges, saveAutoDraft]);
+  }, [hasUnsavedChanges]);
 
-  // ── Enregistrer brouillon (manuel) ──────────────────────────
-  const handleSaveDraft = async () => {
-    if (!activeEntity) { setError('Vous devez sélectionner une entité'); return; }
-
-    // Validation minimale côté frontend
-    const lignesInvalides = formData.lines.filter(l => !l.account_id);
-    if (lignesInvalides.length > 0) {
-      setError(`${lignesInvalides.length} ligne(s) sans compte comptable. Veuillez sélectionner un compte pour chaque ligne.`);
-      return;
+  const handleSave = async (silent = false) => {
+    if (!activeEntity) { 
+      setError('Vous devez sélectionner une entité'); 
+      return false; 
     }
+
     if (!formData.journal_id) {
-      setError('Veuillez sélectionner un journal.');
-      return;
+      setError('Le journal est obligatoire pour sauvegarder.');
+      return false;
+    }
+
+    const lignesSansCompte = formData.lines.filter(l => !l.account_id);
+    if (lignesSansCompte.length > 0) {
+      setError(`${lignesSansCompte.length} ligne(s) sans compte comptable.`);
+      return false;
     }
 
     setLoading(true);
-    setError(null);
-    setSuccess(null);
+    if (!silent) setError(null);
+    
     try {
       const apiData = prepareDataForApi();
-      console.log('📤 Envoi API (save draft):', apiData);
+      console.log('📤 Données envoyées:', JSON.stringify(apiData, null, 2));
 
       let result;
       if (pieceId) {
@@ -500,22 +604,34 @@ export default function Create() {
         }
       }
 
-      setSuccess('Pièce enregistrée comme brouillon avec succès !');
+      if (!silent) {
+        setSuccess('Pièce enregistrée comme brouillon avec succès !');
+      }
       setHasUnsavedChanges(false);
+      return true;
+      
     } catch (err) {
       console.error('❌ Erreur enregistrement brouillon:', err);
-      const detail = err.response?.data
-        ? JSON.stringify(err.response.data, null, 2)
-        : err.message;
-      setError(`Erreur lors de l'enregistrement : ${detail}`);
+      
+      const errorMessage = err.response?.data || err.data || err.message || 'Erreur inconnue';
+      setError(`Échec de l'enregistrement : ${JSON.stringify(errorMessage)}`);
+      
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Comptabiliser / remettre en brouillon ───────────────────
   const handleToggleState = async () => {
-    if (!activeEntity) { setError('Vous devez sélectionner une entité'); return; }
+    if (!activeEntity) { 
+      setError('Vous devez sélectionner une entité'); 
+      return; 
+    }
+
+    if (!isReadyForValidation()) {
+      setError('Champs obligatoires manquants : journal, compte, libellé, partenaire et montant sont requis pour comptabiliser.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -523,6 +639,7 @@ export default function Create() {
     try {
       const newState = formData.state === 'draft' ? 'posted' : 'draft';
       const apiData  = { ...prepareDataForApi(), state: newState };
+      console.log('📤 Données pour changement état:', JSON.stringify(apiData, null, 2));
 
       let result;
       if (pieceId) {
@@ -542,51 +659,64 @@ export default function Create() {
       setHasUnsavedChanges(false);
     } catch (err) {
       console.error('❌ Erreur changement état:', err);
-      const detail = err.response?.data
-        ? JSON.stringify(err.response.data, null, 2)
-        : err.message;
-      setError(`Erreur lors du changement d'état : ${detail}`);
+      
+      const errorMessage = err.response?.data || err.data || err.message || 'Erreur inconnue';
+      setError(`Échec de la comptabilisation : ${JSON.stringify(errorMessage)}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDiscardChanges  = () => setShowConfirmDialog(true);
+  const handleDiscardChanges = () => {
+    setShowConfirmDialog(true);
+  };
+  
   const confirmDiscardChanges = () => {
     setFormData(initialFormData);
     setPieceId(null);
     setHasUnsavedChanges(false);
     setShowConfirmDialog(false);
-    setSuccess('Modifications annulées.');
-  };
-
-  const handleNewPiece = () => {
-    if (hasUnsavedChanges) saveAutoDraft();
-    navigate('/comptabilite/pieces/create');
-  };
-  const handleGoToList = () => {
-    if (hasUnsavedChanges) saveAutoDraft();
     navigate('/comptabilite/pieces');
   };
 
-  const actionsMenuRef = useRef(null);
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target))
-        setShowActionsMenu(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const handleNewPiece = () => {
+    if (hasUnsavedChanges) {
+      setShowConfirmDialog(true);
+    } else {
+      navigate('/comptabilite/pieces/create');
+    }
+  };
 
-  const handleDuplicate  = () => { setSuccess('Fonctionnalité de duplication à implémenter'); setShowActionsMenu(false); };
-  const handleDelete     = () => { setSuccess('Fonctionnalité de suppression à implémenter'); setShowActionsMenu(false); };
-  const handleExtourner  = () => { setSuccess("Fonctionnalité d'extourne à implémenter");     setShowActionsMenu(false); };
+  const handleGoToList = () => {
+    if (hasUnsavedChanges) {
+      setShowConfirmDialog(true);
+    } else {
+      navigate('/comptabilite/pieces');
+    }
+  };
 
-  const isDraft  = formData.state === 'draft';
-  const totals   = calculateTotals();
+  const handleDuplicate = () => {
+    setSuccess('Duplication à implémenter');
+    setShowActionsMenu(false);
+  };
 
-  // ── Rendu : pas d'entité ─────────────────────────────────────
+  const handleDelete = () => {
+    setSuccess('Suppression à implémenter');
+    setShowActionsMenu(false);
+  };
+
+  const handleExtourner = () => {
+    setSuccess("Extourne à implémenter");
+    setShowActionsMenu(false);
+  };
+
+  const isDraft = formData.state === 'draft';
+  const totals = calculateTotals();
+  const difference = Math.abs(totals.debit - totals.credit).toFixed(2);
+  const isBalanced = difference === '0.00' || difference === '0';
+  
+  const readyForValidation = isReadyForValidation();
+
   if (!activeEntity) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -612,26 +742,32 @@ export default function Create() {
     );
   }
 
-  // ── Rendu principal ──────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto bg-white border border-gray-300">
 
-        {/* ── En-tête ligne 1 ── */}
+        {/* En-tête ligne 1 */}
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-start gap-3">
-              <button onClick={handleNewPiece}
-                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1">
-                <FiPlus size={12} /><span>Nouveau</span>
-              </button>
-              <div className="flex flex-col">
-                <div className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600"
-                  onClick={handleGoToList}>
+              <Tooltip text="Créer une nouvelle pièce">
+                <button 
+                  onClick={handleNewPiece}
+                  className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
+                  style={{ minWidth: '100px' }}
+                >
+                  <FiPlus size={16} className="mr-1" />
+                  <span>Nouveau</span>
+                </button>
+              </Tooltip>
+              <div className="flex flex-col h-12 justify-center">
+                <div 
+                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
+                  onClick={handleGoToList}
+                >
                   Pièces comptables
                 </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm text-gray-700 font-medium">Etat :</span>
+                <div className="flex items-center gap-2 mt-0.5">
                   <span className={`px-2 py-0.5 text-xs font-medium ${isDraft ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
                     {isDraft ? 'Brouillon' : 'Comptabilisé'}
                   </span>
@@ -640,59 +776,120 @@ export default function Create() {
             </div>
             <div className="flex items-center gap-2">
               <div className="relative" ref={actionsMenuRef}>
-                <button onClick={() => setShowActionsMenu(!showActionsMenu)}
-                  className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1">
-                  <FiMoreVertical size={12} /><span>Actions</span>
-                </button>
+                <Tooltip text="Menu des actions">
+                  <button 
+                    onClick={() => setShowActionsMenu(!showActionsMenu)}
+                    className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                  >
+                    <FiSettings size={12} /><span>Actions</span>
+                  </button>
+                </Tooltip>
                 {showActionsMenu && (
                   <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
-                    <button onClick={handleDuplicate}
-                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100">
-                      <FiCopy size={12} /><span>Dupliquer</span>
+                    <button onClick={handleDuplicate} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
+                      <FiCopy size={12} /> Dupliquer
                     </button>
-                    <button onClick={handleDelete}
-                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100">
-                      <FiTrash2 size={12} /><span>Supprimer</span>
+                    <button onClick={handleDelete} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
+                      <FiTrash2 size={12} /> Supprimer
                     </button>
-                    <button onClick={handleExtourner}
-                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2">
-                      <FiRotateCcw size={12} /><span>Extourné</span>
+                    <button onClick={handleExtourner} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2">
+                      <FiRotateCcw size={12} /> Extourné
                     </button>
                   </div>
                 )}
               </div>
-              <button onClick={handleDiscardChanges}
-                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1">
-                <FiX size={12} /><span>Ignorer les modifications</span>
-              </button>
-              <button onClick={handleSaveDraft} disabled={loading}
-                className="px-3 py-1.5 bg-purple-600 text-white text-xs flex items-center gap-1 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                <FiSave size={12} /><span>Enregistrer</span>
-              </button>
+              <Tooltip text="Enregistrer la pièce">
+                <button 
+                  onClick={() => handleSave().then(success => {
+                    if (success) navigate('/comptabilite/pieces');
+                  })} 
+                  disabled={loading}
+                  className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 hover:scale-110 hover:shadow-lg active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm"
+                >
+                  <FiUploadCloud size={16} />
+                </button>
+              </Tooltip>
+              <Tooltip text="Annuler les modifications">
+                <button 
+                  onClick={handleDiscardChanges}
+                  className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 hover:scale-110 hover:shadow-lg active:scale-90 transition-all duration-200 flex items-center justify-center"
+                >
+                  <FiX size={16} />
+                </button>
+              </Tooltip>
             </div>
           </div>
         </div>
 
-        {/* ── En-tête ligne 2 ── */}
-        <div className="border-b border-gray-300 px-4 py-3 flex items-center justify-between">
-          <button onClick={handleToggleState} disabled={loading}
-            className={`px-4 py-2 font-medium text-xs flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed ${
-              isDraft ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}>
-            <FiCheck size={12} />
-            <span>{isDraft ? 'Comptabiliser (Valider)' : 'Remettre en brouillon'}</span>
-          </button>
-          <div className="flex items-center gap-2">
-            <div className={`px-3 py-1.5 text-xs font-medium border ${isDraft ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>
-              Brouillon
+        {/* En-tête ligne 2 - MODIFIÉ : affichage des erreurs à côté du bouton */}
+        <div className="border-b border-gray-300 px-4 py-3">
+          <div className="flex flex-col">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Tooltip text={
+                  !readyForValidation 
+                    ? "Remplissez tous les champs obligatoires (journal, compte, libellé, partenaire et montant)" 
+                    : (isDraft ? "Valider la pièce" : "Déjà comptabilisé")
+                }>
+                  <button
+                    type="button"
+                    onClick={handleToggleState}
+                    disabled={loading || !isDraft || !readyForValidation}
+                    className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center justify-center ${
+                      isDraft && readyForValidation
+                        ? 'bg-purple-600 text-white border-purple-600 hover:bg-purple-700 hover:border-purple-700 hover:scale-105 hover:shadow-md active:scale-95 cursor-pointer' 
+                        : 'bg-gray-100 text-gray-500 border-gray-300 cursor-not-allowed'
+                    }`}
+                  >
+                    Comptabiliser
+                  </button>
+                </Tooltip>
+                
+                {/* ✅ Affichage des erreurs ici à la place du message générique */}
+                {error ? (
+                  <div className="flex items-center gap-1 text-xs text-red-600">
+                    <FiAlertCircle size={14} />
+                    <span>{error}</span>
+                  </div>
+                ) : !readyForValidation && isDraft ? (
+                  <div className="flex items-center gap-1 text-xs text-amber-600">
+                    <FiInfo size={14} />
+                    <span>Complétez tous les champs pour comptabiliser</span>
+                  </div>
+                ) : null}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
+                  isDraft 
+                    ? 'bg-yellow-100 text-yellow-700 border-yellow-300' 
+                    : 'bg-gray-100 text-gray-500 border-gray-300'
+                }`}>
+                  Brouillon
+                </div>
+                <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
+                  !isDraft 
+                    ? 'bg-green-100 text-green-700 border-green-300' 
+                    : 'bg-gray-100 text-gray-500 border-gray-300'
+                }`}>
+                  Comptabilisé
+                </div>
+              </div>
             </div>
-            <div className={`px-3 py-1.5 text-xs font-medium border ${!isDraft ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>
-              Comptabilisé
+            
+            <div className="mt-2 ml-1">
+              <span className="text-xs text-gray-600">
+                N° {formData.name && formData.name !== `BROUILLON-${Date.now()}` && formData.journal_id 
+                  ? formData.name 
+                  : formData.journal_id 
+                    ? 'Génération en cours...' 
+                    : 'Sélectionnez un journal pour générer le numéro'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* ── Indicateur modifications ── */}
+        {/* Indicateur modifications */}
         {hasUnsavedChanges && (
           <div className="px-4 py-1 bg-blue-50 text-blue-700 text-xs border-b border-blue-200 flex items-center justify-between">
             <span>Modifications non sauvegardées</span>
@@ -700,49 +897,37 @@ export default function Create() {
           </div>
         )}
 
-        {/* ── Informations pièce ── */}
+        {/* Informations pièce */}
         <div className="px-4 py-3 border-b border-gray-300">
           <div className="grid grid-cols-2 gap-4">
-            {/* Colonne gauche */}
             <div className="space-y-2">
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Date comptable</label>
-                <input type="date" value={formData.date}
+                <input
+                  type="date"
+                  value={formData.date}
                   onChange={(e) => handleChange('date', e.target.value)}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2" style={{ height: '26px' }} />
+                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
+                  style={{ height: '26px' }}
+                />
               </div>
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Référence</label>
-                <input type="text" value={formData.ref}
+                <input
+                  type="text"
+                  value={formData.ref}
                   onChange={(e) => handleChange('ref', e.target.value)}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2" style={{ height: '26px' }}
-                  placeholder="SCMI/002/2026" />
+                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
+                  style={{ height: '26px' }}
+                  placeholder="SCMI/002/2026"
+                />
               </div>
             </div>
-            {/* Colonne droite */}
             <div className="space-y-2">
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Date enregistrement</label>
                 <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center" style={{ height: '26px' }}>
                   {formatDateForDisplay(formData.registration_date)}
-                </div>
-              </div>
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Devise</label>
-                <div className="flex-1 ml-2">
-                  <AutocompleteInput
-                    value={formData.currency_label}
-                    selectedId={formData.currency_id}
-                    onChange={(text) => handleChange('currency_label', text)}
-                    onSelect={(id, label) => handleLineMultiChange
-                      ? setFormData(prev => ({ ...prev, currency_id: id, currency_label: label })) && markAsModified()
-                      : null
-                    }
-                    options={devises}
-                    getOptionLabel={(o) => `${o.code}${o.symbole ? ` (${o.symbole})` : ''}`}
-                    placeholder="Sélectionner une devise"
-                    className="border border-gray-300"
-                  />
                 </div>
               </div>
               <div className="flex items-center" style={{ height: '26px' }}>
@@ -759,7 +944,7 @@ export default function Create() {
                     options={journals}
                     getOptionLabel={(o) => `${o.code} - ${o.name}`}
                     placeholder="Sélectionner un journal"
-                    className="border border-gray-300"
+                    required={true}
                   />
                 </div>
               </div>
@@ -767,21 +952,28 @@ export default function Create() {
           </div>
         </div>
 
-        {/* ── Onglets ── */}
+        {/* Onglets */}
         <div className="border-b border-gray-300">
           <div className="px-4 flex">
             {['ecritures', 'notes', 'pieces-jointes'].map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-                  activeTab === tab ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}>
-                {tab === 'ecritures' ? 'Ecritures comptable' : tab === 'notes' ? 'Notes' : 'Pièces jointes'}
+              <button 
+                key={tab} 
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 text-xs font-medium border-b-2 transition-all duration-200 ${
+                  activeTab === tab 
+                    ? 'border-purple-600 text-purple-600 hover:text-purple-800' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab === 'ecritures' ? 'Écritures comptables' : 
+                 tab === 'notes' ? 'Notes' : 
+                 'Pièces jointes'}
               </button>
             ))}
           </div>
         </div>
 
-        {/* ── Contenu onglets ── */}
+        {/* Contenu onglets */}
         <div className="p-4">
           {activeTab === 'ecritures' ? (
             <>
@@ -789,18 +981,22 @@ export default function Create() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-gray-100">
-                      {['Compte Général', 'Partenaire', 'Libellé', 'Taxes', 'Débit', 'Crédit', 'Date escompte', 'Montant escompte', '•••'].map(h => (
-                        <th key={h} className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">
-                          {h}
-                        </th>
-                      ))}
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Compte *</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Partenaire</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Libellé</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Taxe</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">Débit</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">Crédit</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Date échéance</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">Montant remise</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">% remise</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Date remise</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-center">•••</th>
                     </tr>
                   </thead>
                   <tbody>
                     {formData.lines.map((line, lineIndex) => (
                       <tr key={lineIndex} className="hover:bg-gray-50">
-
-                        {/* ✅ Compte — onSelect groupé via handleLineMultiChange */}
                         <td className="border border-gray-300 p-1" style={{ minWidth: '150px' }}>
                           <AutocompleteInput
                             value={line.account_label}
@@ -811,11 +1007,10 @@ export default function Create() {
                             }
                             options={accounts}
                             getOptionLabel={(o) => `${o.code} - ${o.name}`}
-                            placeholder="Ex: 60110000"
+                            placeholder="Compte"
+                            required={true}
                           />
                         </td>
-
-                        {/* ✅ Partenaire — onSelect groupé */}
                         <td className="border border-gray-300 p-1" style={{ minWidth: '120px' }}>
                           <AutocompleteInput
                             value={line.partner_label}
@@ -826,52 +1021,108 @@ export default function Create() {
                             }
                             options={partners}
                             getOptionLabel={(o) => o.nom || o.name || o.raison_sociale || ''}
-                            placeholder="Sélectionner…"
+                            placeholder="Partenaire"
                           />
                         </td>
-
                         <td className="border border-gray-300 p-1" style={{ minWidth: '150px' }}>
-                          <input type="text" value={line.name}
+                          <input 
+                            type="text" 
+                            value={line.name}
                             onChange={(e) => handleLineChange(lineIndex, 'name', e.target.value)}
                             className="w-full px-2 py-1 border-0 text-xs focus:ring-1 focus:ring-blue-500"
-                            style={{ height: '26px' }} placeholder="Libellé de l'écriture" />
-                        </td>
-                        <td className="border border-gray-300 p-1" style={{ minWidth: '80px' }}>
-                          <input type="text" value={line.taxes}
-                            onChange={(e) => handleLineChange(lineIndex, 'taxes', e.target.value)}
-                            className="w-full px-2 py-1 border-0 text-xs focus:ring-1 focus:ring-blue-500"
-                            style={{ height: '26px' }} placeholder="TVA 18%" />
+                            style={{ height: '26px' }} 
+                            placeholder="Libellé"
+                          />
                         </td>
                         <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
-                          <input type="number" step="0.01" min="0" value={line.debit}
+                          <AutocompleteInput
+                            value={line.tax_label}
+                            selectedId={line.tax_id}
+                            onChange={(text) => handleLineChange(lineIndex, 'tax_label', text)}
+                            onSelect={(id, label) =>
+                              handleLineMultiChange(lineIndex, { tax_id: id, tax_label: label })
+                            }
+                            options={taxes}
+                            getOptionLabel={(t) => `${t.name} (${t.amount}%)`}
+                            placeholder="TVA..."
+                          />
+                        </td>
+                        <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            min="0" 
+                            value={line.debit}
                             onChange={(e) => handleLineChange(lineIndex, 'debit', e.target.value)}
                             className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                            style={{ height: '26px' }} placeholder="0.00" />
+                            style={{ height: '26px' }} 
+                            placeholder="0.00" 
+                          />
                         </td>
                         <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
-                          <input type="number" step="0.01" min="0" value={line.credit}
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            min="0" 
+                            value={line.credit}
                             onChange={(e) => handleLineChange(lineIndex, 'credit', e.target.value)}
                             className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                            style={{ height: '26px' }} placeholder="0.00" />
+                            style={{ height: '26px' }} 
+                            placeholder="0.00" 
+                          />
                         </td>
                         <td className="border border-gray-300 p-1" style={{ minWidth: '120px' }}>
-                          <input type="date" value={line.discount_date}
+                          <input 
+                            type="date" 
+                            value={line.date_maturity}
+                            onChange={(e) => handleLineChange(lineIndex, 'date_maturity', e.target.value)}
+                            className="w-full px-2 py-1 border-0 text-xs focus:ring-1 focus:ring-blue-500"
+                            style={{ height: '26px' }} 
+                          />
+                        </td>
+                        <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            min="0" 
+                            value={line.discount_amount_currency || ''}
+                            onChange={(e) => handleLineChange(lineIndex, 'discount_amount_currency', e.target.value)}
+                            className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
+                            style={{ height: '26px' }} 
+                            placeholder="0.00" 
+                          />
+                        </td>
+                        <td className="border border-gray-300 p-1" style={{ minWidth: '80px' }}>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            min="0" 
+                            max="100" 
+                            value={line.discount_percentage || ''}
+                            onChange={(e) => handleLineChange(lineIndex, 'discount_percentage', e.target.value)}
+                            className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
+                            style={{ height: '26px' }} 
+                            placeholder="0.00" 
+                          />
+                        </td>
+                        <td className="border border-gray-300 p-1" style={{ minWidth: '120px' }}>
+                          <input 
+                            type="date" 
+                            value={line.discount_date || ''}
                             onChange={(e) => handleLineChange(lineIndex, 'discount_date', e.target.value)}
                             className="w-full px-2 py-1 border-0 text-xs focus:ring-1 focus:ring-blue-500"
-                            style={{ height: '26px' }} />
-                        </td>
-                        <td className="border border-gray-300 p-1" style={{ minWidth: '120px' }}>
-                          <input type="number" step="0.01" min="0" value={line.discount_amount}
-                            onChange={(e) => handleLineChange(lineIndex, 'discount_amount', e.target.value)}
-                            onKeyDown={(e) => handleLastFieldTab(e, lineIndex)}
-                            className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                            style={{ height: '26px' }} placeholder="0.00" />
+                            style={{ height: '26px' }} 
+                          />
                         </td>
                         <td className="border border-gray-300 p-1 w-[40px]">
-                          <button onClick={() => removeLine(lineIndex)} tabIndex="-1"
-                            className="w-full flex items-center justify-center p-1 text-gray-400 hover:text-red-600 transition-colors"
-                            style={{ height: '26px' }} title="Supprimer cette ligne">
-                            <FiTrash2 size={12} />
+                          <button 
+                            onClick={() => removeLine(lineIndex)} 
+                            tabIndex="-1"
+                            className="w-full flex items-center justify-center p-1 text-gray-400 hover:text-red-600 hover:scale-110 active:scale-90 transition-all duration-200"
+                            style={{ height: '26px' }} 
+                            title="Supprimer"
+                          >
+                            <FiTrash2 size={14} />
                           </button>
                         </td>
                       </tr>
@@ -880,12 +1131,28 @@ export default function Create() {
                 </table>
               </div>
 
-              <div className="mb-3">
-                <button onClick={addLine}
-                  className="px-3 py-1 bg-purple-600 text-white text-xs flex items-center gap-1 hover:bg-purple-700 transition-colors"
-                  style={{ height: '26px' }}>
-                  <FiPlus size={10} /><span>Ajouter une ligne</span>
-                </button>
+              <div className="mb-3 flex items-center gap-4">
+                <Tooltip text="Ajouter une ligne d'écriture">
+                  <button 
+                    onClick={addLine}
+                    className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                  >
+                    <FiPlus size={12} /><span>Ajouter une ligne</span>
+                  </button>
+                </Tooltip>
+
+                {!isBalanced && (
+                  <div className="text-xs text-yellow-700 bg-yellow-50 px-3 py-1 rounded flex items-center gap-1 border border-yellow-200">
+                    <FiAlertCircle size={12} />
+                    ⚠ Différence de {difference} XOF
+                  </div>
+                )}
+                {isBalanced && totals.debit > 0 && (
+                  <div className="text-xs text-green-700 bg-green-50 px-3 py-1 rounded flex items-center gap-1 border border-green-200">
+                    <FiCheck size={12} />
+                    ✓ Écriture équilibrée
+                  </div>
+                )}
               </div>
 
               <div className="bg-green-50 border border-green-200 px-4 py-2 flex justify-end gap-8">
@@ -895,10 +1162,55 @@ export default function Create() {
             </>
           ) : activeTab === 'notes' ? (
             <div className="border border-gray-300">
-              <textarea value={formData.notes}
+              <div className="grid grid-cols-3 bg-gray-100 border-b border-gray-300">
+                <div className="border-r border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700">Devise</div>
+                <div className="border-r border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700">Position fiscale</div>
+                <div className="px-2 py-1.5 text-xs font-medium text-gray-700">Entité</div>
+              </div>
+              <div className="grid grid-cols-3 border-b border-gray-300">
+                <div className="border-r border-gray-300 p-1">
+                  <AutocompleteInput
+                    value={formData.currency_label}
+                    selectedId={formData.currency_id}
+                    onChange={(text) => handleChange('currency_label', text)}
+                    onSelect={(id, label) => {
+                      setFormData(prev => ({ ...prev, currency_id: id, currency_label: label }));
+                      markAsModified();
+                    }}
+                    options={devises}
+                    getOptionLabel={(o) => `${o.code}${o.symbole ? ` (${o.symbole})` : ''}`}
+                    placeholder="Sélectionner une devise"
+                    className="border-0 focus:ring-0"
+                  />
+                </div>
+                <div className="border-r border-gray-300 p-1">
+                  <AutocompleteInput
+                    value={formData.fiscal_position_label}
+                    selectedId={formData.fiscal_position_id}
+                    onChange={(text) => handleChange('fiscal_position_label', text)}
+                    onSelect={(id, label) => {
+                      setFormData(prev => ({ ...prev, fiscal_position_id: id, fiscal_position_label: label }));
+                      markAsModified();
+                    }}
+                    options={fiscalPositions}
+                    getOptionLabel={(f) => f.name}
+                    placeholder="Sélectionner une position"
+                    className="border-0 focus:ring-0"
+                  />
+                </div>
+                <div className="p-1">
+                  <div className="w-full px-2 py-1 text-xs text-gray-700 flex items-center" style={{ height: '26px' }}>
+                    <FiBriefcase className="mr-1 text-purple-600 flex-shrink-0" size={12} />
+                    <span className="truncate">{activeEntity?.nom || activeEntity?.name || activeEntity?.raison_sociale || 'Entité sélectionnée'}</span>
+                  </div>
+                </div>
+              </div>
+              <textarea 
+                value={formData.notes}
                 onChange={(e) => handleChange('notes', e.target.value)}
                 className="w-full h-48 px-3 py-2 border-0 text-xs focus:ring-2 focus:ring-blue-500"
-                placeholder="Ajouter des notes…" />
+                placeholder="Ajouter des notes complémentaires..." 
+              />
             </div>
           ) : (
             <div className="border border-gray-300 p-6">
@@ -908,39 +1220,62 @@ export default function Create() {
                 <input type="file" id="attachments" className="hidden" multiple
                   onChange={(e) => handleChange('attachments', Array.from(e.target.files))} />
                 <label htmlFor="attachments"
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-purple-600 text-white text-xs cursor-pointer hover:bg-purple-700 transition-colors"
+                  className="inline-flex items-center gap-2 h-8 px-3 bg-purple-600 text-white text-xs cursor-pointer hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200"
                   style={{ height: '26px' }}>
-                  <FiUpload size={12} /><span>Télécharger des fichiers</span>
+                  <FiUpload size={12} /><span>Télécharger</span>
                 </label>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── Messages erreur/succès ── */}
-        {(error || success) && (
-          <div className={`px-4 py-3 text-sm border-t border-gray-300 ${error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-            {error || success}
+        {/* Messages - on peut le garder pour les erreurs backend */}
+        {(error && !error.includes('Champs obligatoires')) || success && (
+          <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
+            error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+          }`}>
+            <div className="flex items-center gap-2">
+              {error ? <FiAlertCircle size={14} /> : <FiCheck size={14} />}
+              <span>{error || success}</span>
+            </div>
           </div>
         )}
       </div>
 
-      {/* ── Dialogue confirmation ── */}
+      {/* Dialogue confirmation */}
       {showConfirmDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-3">Ignorer les modifications ?</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">
-              Êtes-vous sûr de vouloir annuler toutes les modifications ? Cette action ne peut pas être annulée.
+              Voulez-vous enregistrer les modifications avant de quitter ?
             </p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowConfirmDialog(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">
-                Annuler
+              <button 
+                onClick={async () => {
+                  setShowConfirmDialog(false);
+                  const saved = await handleSave(true);
+                  if (saved) {
+                    navigate('/comptabilite/pieces');
+                  }
+                }} 
+                className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 active:scale-95 transition-all duration-200"
+              >
+                Enregistrer
               </button>
-              <button onClick={confirmDiscardChanges}
-                className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700">
-                Ignorer les modifications
+              <button 
+                onClick={() => {
+                  confirmDiscardChanges();
+                }} 
+                className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 hover:scale-105 active:scale-95 transition-all duration-200"
+              >
+                Ne pas enregistrer
+              </button>
+              <button 
+                onClick={() => setShowConfirmDialog(false)} 
+                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 hover:scale-105 active:scale-95 transition-all duration-200"
+              >
+                Annuler
               </button>
             </div>
           </div>

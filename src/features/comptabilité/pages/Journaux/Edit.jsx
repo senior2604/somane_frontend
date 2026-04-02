@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   FiPlus,
-  // FiEdit,  // Commenté car non utilisé
   FiTrash2, 
   FiX,
   FiBriefcase,
@@ -11,13 +10,13 @@ import {
   FiCreditCard,
   FiDollarSign,
   FiInfo,
-  // FiSave,  // Commenté car non utilisé
   FiAlertCircle,
   FiCheck,
-  FiUploadCloud,
   FiCopy,
   FiRotateCcw,
-  FiSettings
+  FiSettings,
+  FiSave,
+  FiArrowLeft
 } from "react-icons/fi";
 import { useParams, useNavigate } from 'react-router-dom';
 import { journauxService, comptesService, apiClient } from "../../services";
@@ -71,7 +70,8 @@ const AutocompleteInput = ({
   className = "",
   disabled = false,
   required = false,
-  loading = false
+  loading = false,
+  error = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value || '');
@@ -231,7 +231,8 @@ const JournalTypeSelect = ({
   placeholder = "Sélectionner",
   disabled = false,
   required = false,
-  loading = false
+  loading = false,
+  error = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -263,7 +264,9 @@ const JournalTypeSelect = ({
     <div ref={containerRef} className="relative w-full">
       <div
         onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
-        className={`w-full h-[26px] px-2 border border-gray-300 text-xs flex items-center justify-between cursor-pointer hover:border-purple-400 bg-white ${disabled || loading ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+        className={`w-full h-[26px] px-2 border text-xs flex items-center justify-between cursor-pointer hover:border-purple-400 bg-white ${
+          disabled || loading ? 'bg-gray-100 cursor-not-allowed' : ''
+        } ${error ? 'border-red-300' : 'border-gray-300'}`}
       >
         <span className={selectedOption ? 'text-gray-900 truncate pr-1' : 'text-gray-400 truncate pr-1'}>
           {loading ? 'Chargement...' : (selectedOption ? `${selectedOption.code} - ${selectedOption.name}` : placeholder)}
@@ -378,6 +381,34 @@ const getBankAccountLabel = (bankAccount) => {
 };
 
 // ==========================================
+// FORMATAGE LIBELLÉ SÉQUENCE
+// ==========================================
+const getSequenceLabel = (sequence) => {
+  if (!sequence) return '';
+  const prefix = sequence.prefix || '';
+  const suffix = sequence.suffix || '';
+  return `${prefix}...${suffix} (${sequence.current_number || 0})`;
+};
+
+// ==========================================
+// FORMATAGE LIBELLÉ BANQUE (core.Banque)
+// ==========================================
+const getBankLabel = (bank) => {
+  if (!bank) return '';
+  return bank.nom || bank.name || 'Banque sans nom';
+};
+
+// ==========================================
+// COMPOSANT D'ÉTIQUETTE AVEC ASTÉRISQUE
+// ==========================================
+const RequiredLabel = ({ children, required }) => (
+  <label className="text-xs text-gray-700 w-40 font-medium">
+    {children}
+    {required && <span className="text-red-500 ml-1">*</span>}
+  </label>
+);
+
+// ==========================================
 // COMPOSANT PRINCIPAL
 // ==========================================
 export default function Edit() {
@@ -389,7 +420,9 @@ export default function Edit() {
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [loadingTypes, setLoadingTypes] = useState(false);
   const [loadingBanks, setLoadingBanks] = useState(false);
+  const [loadingBankAccounts, setLoadingBankAccounts] = useState(false);
   const [loadingPayments, setLoadingPayments] = useState(false);
+  const [loadingSequences, setLoadingSequences] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -397,13 +430,17 @@ export default function Edit() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState('comptable');
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   
   const [accounts, setAccounts] = useState([]);
   const [journalTypes, setJournalTypes] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
+  const [banks, setBanks] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
+  const [sequences, setSequences] = useState([]);
   
-  // État du formulaire
+  // État du formulaire - on garde TOUS les champs pour l'UI
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -423,11 +460,21 @@ export default function Edit() {
     suspense_account_out_name: '',
     bank_account_id: '',
     bank_account_name: '',
+    bank_acc_number: '',
+    bank_id: '',
+    bank_name: '',
+    bank_statements_source: 'manual',
     email: '',
     payment_method_in: [],
     payment_method_out: [],
     note: '',
-    active: true
+    active: true,
+    use_refund_sequence: false,
+    sequence_id: '',
+    sequence_name: '',
+    refund_sequence_id: '',
+    refund_sequence_name: '',
+    import_bank_statements: false
   });
 
   const actionsMenuRef = useRef(null);
@@ -453,7 +500,7 @@ export default function Edit() {
     try {
       const response = await comptesService.getAll();
       setAccounts(normalizeApiResponse(response));
-      console.log('✅ Comptes chargés:', accounts.length);
+      console.log('✅ Comptes chargés:', response?.length || 0);
     } catch (err) {
       console.warn('⚠️ Erreur chargement comptes:', err);
     } finally {
@@ -468,7 +515,7 @@ export default function Edit() {
     try {
       const response = await apiClient.get('/compta/journal-types/');
       setJournalTypes(normalizeApiResponse(response));
-      console.log('✅ Types de journal chargés:', journalTypes.length);
+      console.log('✅ Types de journal chargés:', response?.length || 0);
     } catch (err) {
       console.warn('⚠️ Erreur chargement types:', err);
     } finally {
@@ -479,32 +526,44 @@ export default function Edit() {
   const loadBankAccounts = useCallback(async () => {
     if (bankAccounts.length > 0) return;
     
-    setLoadingBanks(true);
+    setLoadingBankAccounts(true);
     try {
       const response = await apiClient.get('/banques-partenaires/');
       setBankAccounts(normalizeApiResponse(response));
-      console.log('✅ Banques chargées:', bankAccounts.length);
+      console.log('✅ Banques partenaires chargées:', response?.length || 0);
+    } catch (err) {
+      console.warn('⚠️ Erreur chargement banques partenaires:', err);
+    } finally {
+      setLoadingBankAccounts(false);
+    }
+  }, [bankAccounts.length]);
+
+  const loadBanks = useCallback(async () => {
+    if (banks.length > 0) return;
+    
+    setLoadingBanks(true);
+    try {
+      const response = await apiClient.get('/banques/');
+      setBanks(normalizeApiResponse(response));
+      console.log('✅ Banques chargées:', response?.length || 0);
     } catch (err) {
       console.warn('⚠️ Erreur chargement banques:', err);
     } finally {
       setLoadingBanks(false);
     }
-  }, [bankAccounts.length]);
+  }, [banks.length]);
 
+  // Méthodes de paiement - DÉSACTIVÉ TEMPORAIREMENT
   const loadPaymentMethods = useCallback(async () => {
-    if (paymentMethods.length > 0) return;
-    
-    setLoadingPayments(true);
-    try {
-      const response = await apiClient.get('/compta/payment-methods/');
-      setPaymentMethods(normalizeApiResponse(response));
-      console.log('✅ Méthodes de paiement chargées:', paymentMethods.length);
-    } catch (err) {
-      console.log('ℹ️ Méthodes de paiement non disponibles');
-    } finally {
-      setLoadingPayments(false);
-    }
-  }, [paymentMethods.length]);
+    setPaymentMethods([]);
+    console.log('ℹ️ Méthodes de paiement désactivées (endpoint à créer)');
+  }, []);
+
+  // Séquences - DÉSACTIVÉ TEMPORAIREMENT
+  const loadSequences = useCallback(async () => {
+    setSequences([]);
+    console.log('ℹ️ Séquences désactivées (endpoint à créer)');
+  }, []);
 
   // Chargement du journal
   const loadJournal = useCallback(async () => {
@@ -516,13 +575,20 @@ export default function Edit() {
 
     setLoading(true);
     setError(null);
+    setNotFound(false);
     
     try {
       console.log('🔍 Chargement du journal ID:', id);
       const journalData = await journauxService.getById(id);
       console.log('📋 Journal chargé:', journalData);
       
-      // Pré-remplir le formulaire
+      if (!journalData) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+      
+      // Pré-remplir le formulaire avec tous les champs
       setFormData({
         name: journalData.name || '',
         code: journalData.code || '',
@@ -531,35 +597,50 @@ export default function Edit() {
         default_account_id: journalData.default_account?.id || journalData.default_account_id || '',
         default_account_name: journalData.default_account ? 
           `${journalData.default_account.code || ''} - ${journalData.default_account.name || ''}`.trim() : '',
-        profit_account_id: journalData.profit_account?.id || journalData.profit_account_id || journalData.profit_account || '',
+        profit_account_id: journalData.profit_account?.id || journalData.profit_account_id || '',
         profit_account_name: journalData.profit_account && typeof journalData.profit_account === 'object' ? 
           `${journalData.profit_account.code || ''} - ${journalData.profit_account.name || ''}`.trim() : '',
-        loss_account_id: journalData.loss_account?.id || journalData.loss_account_id || journalData.loss_account || '',
+        loss_account_id: journalData.loss_account?.id || journalData.loss_account_id || '',
         loss_account_name: journalData.loss_account && typeof journalData.loss_account === 'object' ? 
           `${journalData.loss_account.code || ''} - ${journalData.loss_account.name || ''}`.trim() : '',
-        suspense_account_id: journalData.suspense_account?.id || journalData.suspense_account_id || journalData.suspense_account || '',
+        suspense_account_id: journalData.suspense_account?.id || journalData.suspense_account_id || '',
         suspense_account_name: journalData.suspense_account && typeof journalData.suspense_account === 'object' ? 
           `${journalData.suspense_account.code || ''} - ${journalData.suspense_account.name || ''}`.trim() : '',
-        suspense_account_in_id: journalData.suspense_in_account?.id || journalData.suspense_in_account_id || '',
-        suspense_account_in_name: journalData.suspense_in_account && typeof journalData.suspense_in_account === 'object' ? 
-          `${journalData.suspense_in_account.code || ''} - ${journalData.suspense_in_account.name || ''}`.trim() : '',
-        suspense_account_out_id: journalData.suspense_out_account?.id || journalData.suspense_out_account_id || '',
-        suspense_account_out_name: journalData.suspense_out_account && typeof journalData.suspense_out_account === 'object' ? 
-          `${journalData.suspense_out_account.code || ''} - ${journalData.suspense_out_account.name || ''}`.trim() : '',
+        // Champs en attente backend - on les initialise vides car ils ne viennent pas de l'API
+        suspense_account_in_id: '',
+        suspense_account_in_name: '',
+        suspense_account_out_id: '',
+        suspense_account_out_name: '',
         bank_account_id: journalData.bank_account?.id || journalData.bank_account_id || '',
         bank_account_name: journalData.bank_account ? getBankAccountLabel(journalData.bank_account) : '',
+        bank_acc_number: journalData.bank_acc_number || '',
+        bank_id: journalData.bank?.id || journalData.bank_id || '',
+        bank_name: journalData.bank ? getBankLabel(journalData.bank) : '',
+        bank_statements_source: journalData.bank_statements_source || 'manual',
         email: journalData.email || activeEntity?.email || '',
         payment_method_in: journalData.inbound_payment_methods?.map(m => m.id) || 
                           journalData.inbound_payment_method_ids || [],
         payment_method_out: journalData.outbound_payment_methods?.map(m => m.id) || 
                            journalData.outbound_payment_method_ids || [],
         note: journalData.note || '',
-        active: journalData.active !== false
+        active: journalData.active !== false,
+        use_refund_sequence: journalData.use_refund_sequence || false,
+        sequence_id: journalData.sequence?.id || journalData.sequence_id || '',
+        sequence_name: journalData.sequence ? getSequenceLabel(journalData.sequence) : '',
+        refund_sequence_id: journalData.refund_sequence?.id || journalData.refund_sequence_id || '',
+        refund_sequence_name: journalData.refund_sequence ? getSequenceLabel(journalData.refund_sequence) : '',
+        import_bank_statements: journalData.import_bank_statements || false
       });
 
     } catch (err) {
       console.error('❌ Erreur chargement:', err);
-      setError(err.message || 'Erreur lors du chargement du journal');
+      
+      // Détecter les erreurs 404
+      if (err.response?.status === 404 || err.message?.includes('404')) {
+        setNotFound(true);
+      } else {
+        setError(err.message || 'Erreur lors du chargement du journal');
+      }
     } finally {
       setLoading(false);
     }
@@ -579,12 +660,13 @@ export default function Edit() {
     
     const loadData = async () => {
       await loadJournal();
-      // Charger les autres données en parallèle
-      await Promise.all([
+      await Promise.allSettled([
         loadAccounts(),
         loadJournalTypes(),
         loadBankAccounts(),
-        loadPaymentMethods()
+        loadBanks(),
+        loadPaymentMethods(),
+        loadSequences()
       ]);
     };
     
@@ -593,67 +675,64 @@ export default function Edit() {
     return () => {
       console.log('🧹 Nettoyage du composant');
     };
-  }, [activeEntity, loadJournal, loadAccounts, loadJournalTypes, loadBankAccounts, loadPaymentMethods]);
+  }, [activeEntity, loadJournal, loadAccounts, loadJournalTypes, loadBankAccounts, loadBanks, loadPaymentMethods, loadSequences]);
 
-  const markAsModified = () => {
+  // Sauvegarde automatique
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  const markAsModified = useCallback(() => {
     if (!hasUnsavedChanges) setHasUnsavedChanges(true);
-  };
+  }, [hasUnsavedChanges]);
 
-  const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleChange = useCallback((field, value) => {
+    setFormData(prev => {
+      // Éviter les mises à jour inutiles
+      if (prev[field] === value) return prev;
+      return { ...prev, [field]: value };
+    });
     markAsModified();
-  };
+  }, [markAsModified]);
 
-  // Vérifier si le type est Banque ou Caisse
-  const isBankOrCashType = useCallback(() => {
-    const typeCode = formData.type_code || '';
-    const bankCashCodes = ['BQ', 'CA', 'BN', 'CS'];
-    return bankCashCodes.includes(typeCode) || 
-           typeCode?.startsWith('B') || 
-           typeCode?.startsWith('C');
+  // Vérifier si le type est Banque
+  const isBankType = useCallback(() => {
+    const bankCodes = ['BQ', 'BN', 'BAN', 'BANQUE'];
+    return bankCodes.includes(formData.type_code) || 
+           formData.type_code === 'BAN' ||
+           formData.type_code === 'BANQUE' ||
+           formData.type_code?.startsWith('BQ') ||
+           formData.type_code?.startsWith('BN');
   }, [formData.type_code]);
 
+  // Vérifier si le type est Caisse
+  const isCashType = useCallback(() => {
+    const cashCodes = ['CA', 'CS', 'CAI', 'CAISSE'];
+    return cashCodes.includes(formData.type_code) || 
+           formData.type_code?.startsWith('CA') ||
+           formData.type_code?.startsWith('CS');
+  }, [formData.type_code]);
+
+  // Vérifier si le type est Banque ou Caisse (pour validation)
+  const isBankOrCashType = useCallback(() => {
+    return isBankType() || isCashType();
+  }, [isBankType, isCashType]);
+
   const showFullAccounting = isBankOrCashType();
+  const showBankSpecific = isBankType();
+  const showCashSpecific = isCashType();
 
   // ==========================================
-  // PRÉPARATION DES DONNÉES POUR L'API
+  // FONCTION DE VALIDATION DU FORMULAIRE
   // ==========================================
-  const prepareDataForApi = useCallback(() => {
-    const apiData = {
-      name: formData.name,
-      code: formData.code.toUpperCase().slice(0, 8),
-      type_id: formData.type_id || null,
-      company_id: activeEntity?.id || null,
-      default_account_id: formData.default_account_id || null,
-      profit_account_id: formData.profit_account_id || null,
-      loss_account_id: formData.loss_account_id || null,
-      suspense_account_id: formData.suspense_account_id || null,
-      suspense_in_account_id: formData.suspense_account_in_id || null,
-      suspense_out_account_id: formData.suspense_account_out_id || null,
-      bank_account_id: formData.bank_account_id || null,
-      email: formData.email || null,
-      note: formData.note || '',
-      active: formData.active,
-      use_refund_sequence: false,
-      import_bank_statements: false,
-      inbound_payment_method_ids: formData.payment_method_in.length ? formData.payment_method_in : [],
-      outbound_payment_method_ids: formData.payment_method_out.length ? formData.payment_method_out : []
-    };
-    
-    Object.keys(apiData).forEach(key => {
-      if (apiData[key] === undefined || apiData[key] === '' || 
-          (Array.isArray(apiData[key]) && apiData[key].length === 0)) {
-        delete apiData[key];
-      }
-    });
-    
-    return apiData;
-  }, [formData, activeEntity]);
-
-  // ==========================================
-  // SAUVEGARDE
-  // ==========================================
-  const handleSave = async (silent = false) => {
+  const validateForm = useCallback((silent = false) => {
     if (!activeEntity) { 
       if (!silent) setError('Vous devez sélectionner une entité'); 
       return false; 
@@ -679,29 +758,145 @@ export default function Edit() {
       return false;
     }
 
-    // Validation selon le type de journal
-    if (showFullAccounting) {
+    if (isBankType()) {
+      if (!formData.bank_account_id) {
+        if (!silent) setError('Le compte bancaire lié est obligatoire pour un journal de type Banque');
+        return false;
+      }
+      if (!formData.bank_acc_number) {
+        if (!silent) setError('Le numéro de compte (IBAN/RIB) est obligatoire pour un journal de type Banque');
+        return false;
+      }
+      if (!formData.bank_id) {
+        if (!silent) setError('La banque est obligatoire pour un journal de type Banque');
+        return false;
+      }
+      
+    } else if (isCashType()) {
       if (!formData.default_account_id) {
-        if (!silent) setError('Le compte d\'achat par défaut est obligatoire pour un journal de type Banque/Caisse');
+        if (!silent) setError('Le compte d\'achat par défaut est obligatoire pour un journal de type Caisse');
         return false;
       }
       if (!formData.suspense_account_id) {
-        if (!silent) setError('Le compte d\'attente est obligatoire pour un journal de type Banque/Caisse');
+        if (!silent) setError('Le compte d\'attente est obligatoire pour un journal de type Caisse');
         return false;
       }
       if (!formData.profit_account_id) {
-        if (!silent) setError('Le compte de profit est obligatoire pour un journal de type Banque/Caisse');
+        if (!silent) setError('Le compte de profit est obligatoire pour un journal de type Caisse');
         return false;
       }
       if (!formData.loss_account_id) {
-        if (!silent) setError('Le compte de perte est obligatoire pour un journal de type Banque/Caisse');
+        if (!silent) setError('Le compte de perte est obligatoire pour un journal de type Caisse');
         return false;
       }
+      
     } else {
       if (!formData.default_account_id) {
         if (!silent) setError('Le compte d\'achat par défaut est obligatoire');
         return false;
       }
+    }
+
+    return true;
+  }, [activeEntity, formData, isBankType, isCashType]);
+
+  // ==========================================
+  // FONCTION POUR OBTENIR LES CHAMPS OBLIGATOIRES
+  // ==========================================
+  const getRequiredFields = useCallback(() => {
+    if (!formData.type_id) return ['name', 'code', 'type_id'];
+    
+    if (isBankType()) {
+      return [
+        'name', 'code', 'type_id', 
+        'bank_account_id', 'bank_acc_number', 'bank_id'
+      ];
+    } else if (isCashType()) {
+      return [
+        'name', 'code', 'type_id',
+        'default_account_id', 'suspense_account_id', 
+        'profit_account_id', 'loss_account_id'
+      ];
+    } else {
+      return [
+        'name', 'code', 'type_id', 'default_account_id'
+      ];
+    }
+  }, [formData.type_id, isBankType, isCashType]);
+
+  // Fonction pour obtenir les erreurs de champ
+  const getFieldError = useCallback((field) => {
+    if (!formData.type_id) return null;
+    
+    const requiredFields = getRequiredFields();
+    if (!requiredFields.includes(field)) return null;
+    
+    const value = formData[field];
+    if (!value || value === '') {
+      return 'Ce champ est requis';
+    }
+    
+    return null;
+  }, [formData, getRequiredFields]);
+
+  // ==========================================
+  // PRÉPARATION DES DONNÉES POUR L'API - MODIFIÉE
+  // ==========================================
+  const prepareDataForApi = useCallback(() => {
+    const apiData = {
+      name: formData.name,
+      code: formData.code.toUpperCase().slice(0, 8),
+      type_id: formData.type_id || null,
+      company_id: activeEntity?.id || null,
+      default_account_id: formData.default_account_id || null,
+      profit_account_id: formData.profit_account_id || null,
+      loss_account_id: formData.loss_account_id || null,
+      suspense_account_id: formData.suspense_account_id || null,
+      // ⚠️ Champs qui n'existent pas encore dans le backend - IGNORÉS
+      // suspense_in_account_id: formData.suspense_account_in_id || null,
+      // suspense_out_account_id: formData.suspense_account_out_id || null,
+      bank_account_id: formData.bank_account_id || null,
+      bank_acc_number: formData.bank_acc_number || null,
+      bank_id: formData.bank_id || null,
+      bank_statements_source: formData.bank_statements_source || 'manual',
+      email: formData.email || null,
+      note: formData.note || '',
+      active: formData.active,
+      use_refund_sequence: formData.use_refund_sequence || false,
+      sequence_id: formData.sequence_id || null,
+      refund_sequence_id: formData.refund_sequence_id || null,
+      import_bank_statements: formData.import_bank_statements || false,
+      inbound_payment_method_ids: formData.payment_method_in.length ? formData.payment_method_in : [],
+      outbound_payment_method_ids: formData.payment_method_out.length ? formData.payment_method_out : []
+    };
+    
+    // Nettoyer les valeurs vides
+    Object.keys(apiData).forEach(key => {
+      if (apiData[key] === undefined || apiData[key] === null || apiData[key] === '') {
+        delete apiData[key];
+      }
+    });
+    
+    // Optionnel : Sauvegarder les champs ignorés dans la note pour ne pas perdre l'info
+    if (formData.suspense_account_in_id || formData.suspense_account_out_id) {
+      const ignoredFields = {
+        suspense_in: formData.suspense_account_in_id,
+        suspense_out: formData.suspense_account_out_id
+      };
+      apiData.note = apiData.note 
+        ? apiData.note + '\n[Champs en attente backend] ' + JSON.stringify(ignoredFields)
+        : '[Champs en attente backend] ' + JSON.stringify(ignoredFields);
+    }
+    
+    return apiData;
+  }, [formData, activeEntity]);
+
+  // ==========================================
+  // SAUVEGARDE
+  // ==========================================
+  const handleSave = async (silent = false) => {
+    if (!validateForm(silent)) {
+      return false;
     }
 
     setIsSubmitting(true);
@@ -720,7 +915,7 @@ export default function Edit() {
       
       if (!silent) {
         setTimeout(() => {
-          navigate(`/comptabilite/journaux/${id}`);
+          navigate(`/comptabilite/journaux`);
         }, 1500);
       }
       
@@ -728,7 +923,32 @@ export default function Edit() {
       
     } catch (err) {
       console.error('❌ Erreur mise à jour:', err);
-      if (!silent) setError(`Erreur: ${err.message}`);
+      
+      if (err.response?.data) {
+        console.error('📄 Détails erreur serveur:', err.response.data);
+        if (!silent) {
+          const errorData = err.response.data;
+          let errorMsg = '';
+          
+          if (typeof errorData === 'object') {
+            const messages = [];
+            for (const [field, errors] of Object.entries(errorData)) {
+              if (Array.isArray(errors)) {
+                messages.push(`${field}: ${errors.join(', ')}`);
+              } else if (typeof errors === 'string') {
+                messages.push(`${field}: ${errors}`);
+              }
+            }
+            errorMsg = messages.join(' • ');
+          } else {
+            errorMsg = JSON.stringify(errorData);
+          }
+          
+          setError(`Erreur: ${errorMsg || 'Données invalides'}`);
+        }
+      } else {
+        if (!silent) setError(`Erreur: ${err.message}`);
+      }
       return false;
     } finally {
       setIsSubmitting(false);
@@ -738,36 +958,60 @@ export default function Edit() {
   const handleDiscardChanges = () => setShowConfirmDialog(true);
   
   const confirmDiscardChanges = () => {
-    navigate(`/comptabilite/journaux/${id}`);
+    navigate(`/comptabilite/journaux`);
   };
 
   const handleNewJournal = () => {
     if (hasUnsavedChanges) {
-      handleSave(true);
+      if (window.confirm('Vous avez des modifications non sauvegardées. Voulez-vous vraiment quitter ?')) {
+        navigate('/comptabilite/journaux/create');
+      }
+    } else {
+      navigate('/comptabilite/journaux/create');
     }
-    navigate('/comptabilite/journaux/create');
   };
 
   const handleGoToList = () => {
     if (hasUnsavedChanges) {
-      handleSave(true);
+      if (window.confirm('Vous avez des modifications non sauvegardées. Voulez-vous vraiment quitter ?')) {
+        navigate('/comptabilite/journaux');
+      }
+    } else {
+      navigate('/comptabilite/journaux');
     }
-    navigate('/comptabilite/journaux');
   };
 
   const handleDuplicate = () => {
     setShowActionsMenu(false);
+    navigate(`/comptabilite/journaux/create?duplicate_from=${id}`);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     setShowActionsMenu(false);
-    setShowConfirmDialog(true);
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce journal ?')) {
+      return;
+    }
+    
+    try {
+      await journauxService.delete(id);
+      setSuccess('Journal supprimé avec succès !');
+      setTimeout(() => {
+        navigate('/comptabilite/journaux');
+      }, 1500);
+    } catch (err) {
+      console.error('❌ Erreur suppression:', err);
+      setError(`Erreur lors de la suppression: ${err.message}`);
+    }
   };
 
   const handleExtourner = () => {
     setShowActionsMenu(false);
+    // TODO: Implémenter l'extourne
   };
 
+  // ==========================================
+  // RENDU CONDITIONNEL
+  // ==========================================
   if (!activeEntity) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -782,6 +1026,12 @@ export default function Edit() {
               <p className="text-sm text-gray-600 mb-4">
                 Vous devez sélectionner une entité pour modifier un journal.
               </p>
+              <button
+                onClick={() => navigate('/comptabilite/journaux')}
+                className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 active:scale-95 transition-all duration-200"
+              >
+                Retour à la liste
+              </button>
             </div>
           </div>
         </div>
@@ -797,13 +1047,40 @@ export default function Edit() {
             <div className="text-lg font-bold text-gray-900">Chargement...</div>
           </div>
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
-            <p className="text-sm text-gray-600">Chargement des informations du journal...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
+            <p className="text-sm text-gray-600 mt-4">Chargement des informations du journal...</p>
           </div>
         </div>
       </div>
     );
   }
+
+  if (notFound) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+          <div className="border-b border-gray-300 px-4 py-3">
+            <div className="text-lg font-bold text-gray-900">Journal non trouvé</div>
+          </div>
+          <div className="p-8 text-center">
+            <FiAlertCircle className="text-red-500 mx-auto mb-4" size={48} />
+            <p className="text-gray-600 mb-4">
+              Le journal que vous cherchez à modifier n'existe pas ou a été supprimé.
+            </p>
+            <button
+              onClick={() => navigate('/comptabilite/journaux')}
+              className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 active:scale-95 transition-all duration-200"
+            >
+              Retour à la liste
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const requiredFields = getRequiredFields();
+  const isFieldRequired = (fieldName) => requiredFields.includes(fieldName);
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -813,6 +1090,14 @@ export default function Edit() {
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-start gap-3">
+              <Tooltip text="Retour à la liste">
+                <button 
+                  onClick={handleGoToList}
+                  className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                >
+                  <FiArrowLeft size={12} /><span>Liste</span>
+                </button>
+              </Tooltip>
               <Tooltip text="Créer un nouveau journal">
                 <button 
                   onClick={handleNewJournal}
@@ -826,7 +1111,12 @@ export default function Edit() {
                   className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
                   onClick={handleGoToList}
                 >
-                  Journaux
+                  Journal
+                </div>
+                <div className="text-sm text-gray-600 mt-0.5">
+                  État : <span className={`font-medium ${formData.active ? 'text-green-600' : 'text-gray-500'}`}>
+                    {formData.active ? 'Actif' : 'Inactif'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -842,13 +1132,22 @@ export default function Edit() {
                 </Tooltip>
                 {showActionsMenu && (
                   <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
-                    <button onClick={handleDuplicate} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
+                    <button 
+                      onClick={handleDuplicate} 
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100"
+                    >
                       <FiCopy size={12} /> Dupliquer
                     </button>
-                    <button onClick={handleDelete} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
+                    <button 
+                      onClick={handleDelete} 
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100 text-red-600"
+                    >
                       <FiTrash2 size={12} /> Supprimer
                     </button>
-                    <button onClick={handleExtourner} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2">
+                    <button 
+                      onClick={handleExtourner} 
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2"
+                    >
                       <FiRotateCcw size={12} /> Extourné
                     </button>
                   </div>
@@ -857,18 +1156,18 @@ export default function Edit() {
               <Tooltip text="Annuler les modifications">
                 <button 
                   onClick={handleDiscardChanges}
-                  className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 hover:scale-110 hover:shadow-lg active:scale-90 transition-all duration-200 flex items-center justify-center"
+                  className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
                 >
-                  <FiX size={16} />
+                  <FiX size={12} /><span>Ignorer</span>
                 </button>
               </Tooltip>
               <Tooltip text="Enregistrer les modifications">
                 <button 
                   onClick={() => handleSave(false)} 
                   disabled={isSubmitting}
-                  className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 hover:scale-110 hover:shadow-lg active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm"
+                  className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-1"
                 >
-                  <FiUploadCloud size={16} />
+                  <FiSave size={12} /><span>Enregistrer</span>
                 </button>
               </Tooltip>
             </div>
@@ -900,9 +1199,7 @@ export default function Edit() {
                 />
               </button>
             </Tooltip>
-            <span className={`text-sm font-medium ${formData.active ? 'text-green-600' : 'text-gray-500'}`}>
-              {formData.active ? 'Activé' : 'Désactivé'}
-            </span>
+            <span className="text-sm text-gray-700 font-medium">Activer/Désactiver</span>
           </div>
           <div className="flex items-center gap-2">
             <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
@@ -926,42 +1223,57 @@ export default function Edit() {
         {hasUnsavedChanges && (
           <div className="px-4 py-1 bg-blue-50 text-blue-700 text-xs border-b border-blue-200 flex items-center justify-between">
             <span>Modifications non sauvegardées</span>
+            {isAutoSaving && <span className="animate-pulse">Sauvegarde en cours…</span>}
           </div>
         )}
 
         {/* Informations de base */}
         <div className="px-4 py-3 border-b border-gray-300">
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center" style={{ height: '26px' }}>
-              <label className="text-xs text-gray-700 w-24 font-medium">Nom</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => handleChange('name', e.target.value)}
-                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2 hover:border-purple-400 focus:border-purple-600 transition-colors"
-                style={{ height: '26px' }}
-                placeholder="Journal des achats"
-                maxLength="64"
-              />
+            <div className="flex items-start" style={{ minHeight: '26px' }}>
+              <RequiredLabel required={isFieldRequired('name')}>Nom</RequiredLabel>
+              <div className="flex-1 ml-2">
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => handleChange('name', e.target.value)}
+                  className={`w-full px-2 py-1 border text-xs hover:border-purple-400 focus:border-purple-600 transition-colors ${
+                    getFieldError('name') ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  }`}
+                  style={{ height: '26px' }}
+                  placeholder="Journal des achats"
+                  maxLength="64"
+                />
+                {getFieldError('name') && (
+                  <p className="text-red-500 text-xs mt-1">{getFieldError('name')}</p>
+                )}
+              </div>
             </div>
-            <div className="flex items-center" style={{ height: '26px' }}>
-              <label className="text-xs text-gray-700 w-24 font-medium">Code</label>
-              <input
-                type="text"
-                value={formData.code}
-                onChange={(e) => handleChange('code', e.target.value.toUpperCase().slice(0, 8))}
-                className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2 hover:border-purple-400 focus:border-purple-600 transition-colors"
-                style={{ height: '26px' }}
-                placeholder="ACH"
-                maxLength="8"
-              />
+            <div className="flex items-start" style={{ minHeight: '26px' }}>
+              <RequiredLabel required={isFieldRequired('code')}>Code</RequiredLabel>
+              <div className="flex-1 ml-2">
+                <input
+                  type="text"
+                  value={formData.code}
+                  onChange={(e) => handleChange('code', e.target.value.toUpperCase().slice(0, 8))}
+                  className={`w-full px-2 py-1 border text-xs hover:border-purple-400 focus:border-purple-600 transition-colors ${
+                    getFieldError('code') ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  }`}
+                  style={{ height: '26px' }}
+                  placeholder="ACH"
+                  maxLength="8"
+                />
+                {getFieldError('code') && (
+                  <p className="text-red-500 text-xs mt-1">{getFieldError('code')}</p>
+                )}
+              </div>
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4 mt-2">
-            <div className="flex items-center" style={{ height: '26px' }}>
-              <label className="text-xs text-gray-700 w-24 font-medium">Type</label>
-              <div className="flex-1 ml-2" style={{ height: '26px' }}>
+            <div className="flex items-start" style={{ minHeight: '26px' }}>
+              <RequiredLabel required={isFieldRequired('type_id')}>Type</RequiredLabel>
+              <div className="flex-1 ml-2">
                 <JournalTypeSelect
                   value={formData.type_id}
                   onChange={(id) => {
@@ -972,19 +1284,22 @@ export default function Edit() {
                   options={journalTypes}
                   placeholder="Type de journal"
                   loading={loadingTypes}
+                  error={!!getFieldError('type_id')}
                 />
+                {getFieldError('type_id') && (
+                  <p className="text-red-500 text-xs mt-1">{getFieldError('type_id')}</p>
+                )}
               </div>
             </div>
             <div className="flex items-center" style={{ height: '26px' }}>
-              {/* Cellule vide */}
             </div>
           </div>
         </div>
 
-        {/* Onglets */}
+        {/* Onglets - 4 ONGLETS */}
         <div className="border-b border-gray-300">
           <div className="px-4 flex">
-            {['comptable', 'avance', 'notes'].map(tab => (
+            {['comptable', 'avance', 'numerotation', 'notes'].map(tab => (
               <button 
                 key={tab} 
                 onClick={() => setActiveTab(tab)}
@@ -994,17 +1309,18 @@ export default function Edit() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {tab === 'comptable' ? 'Paramètres comptables' : tab === 'avance' ? 'Paramètres avancés' : 'Notes'}
+                {tab === 'comptable' ? 'Paramètres comptables' : 
+                 tab === 'avance' ? 'Paramètres avancés' :
+                 tab === 'numerotation' ? 'Numérotation' : 'Notes'}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Contenu onglets avec affichage conditionnel */}
+        {/* Contenu onglets */}
         <div className="p-4">
           {activeTab === 'comptable' && (
             <div className="space-y-3">
-              {/* Indicateur de chargement des comptes */}
               {loadingAccounts && (
                 <div className="text-xs text-purple-600 flex items-center gap-2 mb-2">
                   <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
@@ -1012,127 +1328,329 @@ export default function Edit() {
                 </div>
               )}
 
-              {/* Première ligne - Compte d'achat par défaut TOUJOURS présent */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">
-                    Compte d'achat par défaut
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
-                    <AutocompleteInput
-                      value={formData.default_account_name}
-                      selectedId={formData.default_account_id}
-                      onChange={(text) => handleChange('default_account_name', text)}
-                      onSelect={(id, label) => {
-                        handleChange('default_account_id', id);
-                        handleChange('default_account_name', label);
-                      }}
-                      options={accounts}
-                      getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                      placeholder="Compte d'achat par défaut"
-                      required
-                      loading={loadingAccounts}
-                    />
-                  </div>
-                </div>
-                
-                {/* Deuxième colonne - Affiche le compte d'attente uniquement pour Banque/Caisse */}
-                <div className="flex items-center" style={{ height: '26px' }}>
-                  {formData.type_id ? (
-                    showFullAccounting ? (
-                      <>
-                        <label className="text-xs text-gray-700 w-40 font-medium">
-                          Compte d'attente
-                          <span className="text-red-500 ml-1">*</span>
-                        </label>
-                        <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
-                          <AutocompleteInput
-                            value={formData.suspense_account_name}
-                            selectedId={formData.suspense_account_id}
-                            onChange={(text) => handleChange('suspense_account_name', text)}
-                            onSelect={(id, label) => {
-                              handleChange('suspense_account_id', id);
-                              handleChange('suspense_account_name', label);
-                            }}
-                            options={accounts}
-                            getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                            placeholder="Compte d'attente"
-                            required
-                            loading={loadingAccounts}
-                          />
+              {formData.type_id ? (
+                <>
+                  {/* SECTION POUR TYPE BANQUE */}
+                  {showBankSpecific && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-start" style={{ minHeight: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('bank_account_id')}>
+                            Compte bancaire lié
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2">
+                            <div className={`border ${
+                              getFieldError('bank_account_id') ? 'border-red-300' : 'border-gray-300 hover:border-purple-400'
+                            } transition-colors`} style={{ height: '26px' }}>
+                              <AutocompleteInput
+                                value={formData.bank_account_name}
+                                selectedId={formData.bank_account_id}
+                                onChange={(text) => handleChange('bank_account_name', text)}
+                                onSelect={(id, label) => {
+                                  handleChange('bank_account_id', id);
+                                  handleChange('bank_account_name', label);
+                                }}
+                                options={bankAccounts}
+                                getOptionLabel={getBankAccountLabel}
+                                placeholder="Compte bancaire (obligatoire)"
+                                required={isFieldRequired('bank_account_id')}
+                                loading={loadingBankAccounts}
+                                error={!!getFieldError('bank_account_id')}
+                              />
+                            </div>
+                            {getFieldError('bank_account_id') && (
+                              <p className="text-red-500 text-xs mt-1">{getFieldError('bank_account_id')}</p>
+                            )}
+                          </div>
                         </div>
-                      </>
-                    ) : (
-                      <div className="w-full"></div>
-                    )
-                  ) : (
-                    <div className="text-xs text-gray-400 italic ml-2">
-                      Sélectionnez un type pour voir les champs supplémentaires
+                        
+                        <div className="flex items-start" style={{ minHeight: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('bank_acc_number')}>
+                            Numéro de compte
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2">
+                            <input
+                              type="text"
+                              value={formData.bank_acc_number || ''}
+                              onChange={(e) => handleChange('bank_acc_number', e.target.value)}
+                              className={`w-full px-2 py-1 border text-xs hover:border-purple-400 focus:border-purple-600 transition-colors ${
+                                getFieldError('bank_acc_number') ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                              }`}
+                              style={{ height: '26px' }}
+                              placeholder="FR76 3000 4001 2300 0123 4567 89"
+                            />
+                            {getFieldError('bank_acc_number') && (
+                              <p className="text-red-500 text-xs mt-1">{getFieldError('bank_acc_number')}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-start" style={{ minHeight: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('bank_id')}>
+                            Banque
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2">
+                            <div className={`border ${
+                              getFieldError('bank_id') ? 'border-red-300' : 'border-gray-300 hover:border-purple-400'
+                            } transition-colors`} style={{ height: '26px' }}>
+                              <AutocompleteInput
+                                value={formData.bank_name}
+                                selectedId={formData.bank_id}
+                                onChange={(text) => handleChange('bank_name', text)}
+                                onSelect={(id, label) => {
+                                  handleChange('bank_id', id);
+                                  handleChange('bank_name', label);
+                                }}
+                                options={banks}
+                                getOptionLabel={getBankLabel}
+                                placeholder="Sélectionner une banque (obligatoire)"
+                                required={isFieldRequired('bank_id')}
+                                loading={loadingBanks}
+                                error={!!getFieldError('bank_id')}
+                              />
+                            </div>
+                            {getFieldError('bank_id') && (
+                              <p className="text-red-500 text-xs mt-1">{getFieldError('bank_id')}</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                          <RequiredLabel required={false}>
+                            Source des relevés
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2 relative">
+                            <select
+                              value={formData.bank_statements_source || 'manual'}
+                              onChange={(e) => handleChange('bank_statements_source', e.target.value)}
+                              className="w-full px-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none"
+                              style={{ height: '26px' }}
+                            >
+                              <option value="manual">Saisie manuelle</option>
+                              <option value="file">Fichier importé</option>
+                              <option value="online">Connexion en ligne</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                          <RequiredLabel required={false}>
+                            Import relevés bancaires
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2 flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={formData.import_bank_statements}
+                              onChange={(e) => handleChange('import_bank_statements', e.target.checked)}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                            />
+                            <span className="ml-2 text-xs text-gray-600">
+                              Activer l'import automatique
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200">
+                        <p className="text-xs flex items-center gap-1 text-blue-700">
+                          <FiInfo size={12} />
+                          Journal de type Banque - Les informations bancaires remplacent les comptes standard.
+                        </p>
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
-              
-              {/* Deuxième ligne - Comptes profit et perte (UNIQUEMENT pour Banque/Caisse) */}
-              {formData.type_id && showFullAccounting && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center" style={{ height: '26px' }}>
-                    <label className="text-xs text-gray-700 w-40 font-medium">
-                      Compte de profit
-                      <span className="text-red-500 ml-1">*</span>
-                    </label>
-                    <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
-                      <AutocompleteInput
-                        value={formData.profit_account_name}
-                        selectedId={formData.profit_account_id}
-                        onChange={(text) => handleChange('profit_account_name', text)}
-                        onSelect={(id, label) => {
-                          handleChange('profit_account_id', id);
-                          handleChange('profit_account_name', label);
-                        }}
-                        options={accounts}
-                        getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                        placeholder="Compte de profit"
-                        required
-                        loading={loadingAccounts}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center" style={{ height: '26px' }}>
-                    <label className="text-xs text-gray-700 w-40 font-medium">
-                      Compte de perte
-                      <span className="text-red-500 ml-1">*</span>
-                    </label>
-                    <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
-                      <AutocompleteInput
-                        value={formData.loss_account_name}
-                        selectedId={formData.loss_account_id}
-                        onChange={(text) => handleChange('loss_account_name', text)}
-                        onSelect={(id, label) => {
-                          handleChange('loss_account_id', id);
-                          handleChange('loss_account_name', label);
-                        }}
-                        options={accounts}
-                        getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                        placeholder="Compte de perte"
-                        required
-                        loading={loadingAccounts}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {/* Message d'information */}
-              {formData.type_id && (
-                <div className={`mt-2 p-2 rounded ${showFullAccounting ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-200'}`}>
-                  <p className={`text-xs flex items-center gap-1 ${showFullAccounting ? 'text-blue-700' : 'text-gray-600'}`}>
-                    <FiInfo size={12} />
-                    {showFullAccounting 
-                      ? "Tous les comptes sont obligatoires pour les journaux de type Banque et Caisse."
-                      : "Seul le compte d'achat par défaut est requis pour ce type de journal."}
-                  </p>
+                  {/* SECTION POUR TYPE CAISSE */}
+                  {showCashSpecific && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-start" style={{ minHeight: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('default_account_id')}>
+                            Compte d'achat par défaut
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2">
+                            <div className={`border ${
+                              getFieldError('default_account_id') ? 'border-red-300' : 'border-gray-300 hover:border-purple-400'
+                            } transition-colors`} style={{ height: '26px' }}>
+                              <AutocompleteInput
+                                value={formData.default_account_name}
+                                selectedId={formData.default_account_id}
+                                onChange={(text) => handleChange('default_account_name', text)}
+                                onSelect={(id, label) => {
+                                  handleChange('default_account_id', id);
+                                  handleChange('default_account_name', label);
+                                }}
+                                options={accounts}
+                                getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                                placeholder="Compte d'achat par défaut"
+                                required={isFieldRequired('default_account_id')}
+                                loading={loadingAccounts}
+                                error={!!getFieldError('default_account_id')}
+                              />
+                            </div>
+                            {getFieldError('default_account_id') && (
+                              <p className="text-red-500 text-xs mt-1">{getFieldError('default_account_id')}</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start" style={{ minHeight: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('suspense_account_id')}>
+                            Compte d'attente
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2">
+                            <div className={`border ${
+                              getFieldError('suspense_account_id') ? 'border-red-300' : 'border-gray-300 hover:border-purple-400'
+                            } transition-colors`} style={{ height: '26px' }}>
+                              <AutocompleteInput
+                                value={formData.suspense_account_name}
+                                selectedId={formData.suspense_account_id}
+                                onChange={(text) => handleChange('suspense_account_name', text)}
+                                onSelect={(id, label) => {
+                                  handleChange('suspense_account_id', id);
+                                  handleChange('suspense_account_name', label);
+                                }}
+                                options={accounts}
+                                getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                                placeholder="Compte d'attente"
+                                required={isFieldRequired('suspense_account_id')}
+                                loading={loadingAccounts}
+                                error={!!getFieldError('suspense_account_id')}
+                              />
+                            </div>
+                            {getFieldError('suspense_account_id') && (
+                              <p className="text-red-500 text-xs mt-1">{getFieldError('suspense_account_id')}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-start" style={{ minHeight: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('profit_account_id')}>
+                            Compte de profit
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2">
+                            <div className={`border ${
+                              getFieldError('profit_account_id') ? 'border-red-300' : 'border-gray-300 hover:border-purple-400'
+                            } transition-colors`} style={{ height: '26px' }}>
+                              <AutocompleteInput
+                                value={formData.profit_account_name}
+                                selectedId={formData.profit_account_id}
+                                onChange={(text) => handleChange('profit_account_name', text)}
+                                onSelect={(id, label) => {
+                                  handleChange('profit_account_id', id);
+                                  handleChange('profit_account_name', label);
+                                }}
+                                options={accounts}
+                                getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                                placeholder="Compte de profit"
+                                required={isFieldRequired('profit_account_id')}
+                                loading={loadingAccounts}
+                                error={!!getFieldError('profit_account_id')}
+                              />
+                            </div>
+                            {getFieldError('profit_account_id') && (
+                              <p className="text-red-500 text-xs mt-1">{getFieldError('profit_account_id')}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-start" style={{ minHeight: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('loss_account_id')}>
+                            Compte de perte
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2">
+                            <div className={`border ${
+                              getFieldError('loss_account_id') ? 'border-red-300' : 'border-gray-300 hover:border-purple-400'
+                            } transition-colors`} style={{ height: '26px' }}>
+                              <AutocompleteInput
+                                value={formData.loss_account_name}
+                                selectedId={formData.loss_account_id}
+                                onChange={(text) => handleChange('loss_account_name', text)}
+                                onSelect={(id, label) => {
+                                  handleChange('loss_account_id', id);
+                                  handleChange('loss_account_name', label);
+                                }}
+                                options={accounts}
+                                getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                                placeholder="Compte de perte"
+                                required={isFieldRequired('loss_account_id')}
+                                loading={loadingAccounts}
+                                error={!!getFieldError('loss_account_id')}
+                              />
+                            </div>
+                            {getFieldError('loss_account_id') && (
+                              <p className="text-red-500 text-xs mt-1">{getFieldError('loss_account_id')}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200">
+                        <p className="text-xs flex items-center gap-1 text-blue-700">
+                          <FiInfo size={12} />
+                          Tous les comptes sont obligatoires pour les journaux de type Caisse.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION POUR AUTRES TYPES */}
+                  {!showBankSpecific && !showCashSpecific && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-start" style={{ minHeight: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('default_account_id')}>
+                            Compte d'achat par défaut
+                          </RequiredLabel>
+                          <div className="flex-1 ml-2">
+                            <div className={`border ${
+                              getFieldError('default_account_id') ? 'border-red-300' : 'border-gray-300 hover:border-purple-400'
+                            } transition-colors`} style={{ height: '26px' }}>
+                              <AutocompleteInput
+                                value={formData.default_account_name}
+                                selectedId={formData.default_account_id}
+                                onChange={(text) => handleChange('default_account_name', text)}
+                                onSelect={(id, label) => {
+                                  handleChange('default_account_id', id);
+                                  handleChange('default_account_name', label);
+                                }}
+                                options={accounts}
+                                getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                                placeholder="Compte d'achat par défaut"
+                                required={isFieldRequired('default_account_id')}
+                                loading={loadingAccounts}
+                                error={!!getFieldError('default_account_id')}
+                              />
+                            </div>
+                            {getFieldError('default_account_id') && (
+                              <p className="text-red-500 text-xs mt-1">{getFieldError('default_account_id')}</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 p-2 rounded bg-gray-50 border border-gray-200">
+                        <p className="text-xs flex items-center gap-1 text-gray-600">
+                          <FiInfo size={12} />
+                          Seul le compte d'achat par défaut est requis pour ce type de journal.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-xs text-gray-400 italic">
+                  Sélectionnez un type pour voir les champs correspondants.
                 </div>
               )}
             </div>
@@ -1140,9 +1658,22 @@ export default function Edit() {
 
           {activeTab === 'avance' && (
             <div className="space-y-3">
+              {loadingBanks && (
+                <div className="text-xs text-purple-600 flex items-center gap-2 mb-2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+                  Chargement des banques...
+                </div>
+              )}
+              {loadingPayments && (
+                <div className="text-xs text-purple-600 flex items-center gap-2 mb-2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+                  Chargement des méthodes de paiement...
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">Société</label>
+                  <RequiredLabel required={false}>Société</RequiredLabel>
                   <div className="flex-1 ml-2 px-2 py-1 bg-gray-100 border border-gray-300 text-xs text-gray-700 flex items-center gap-2" style={{ height: '26px' }}>
                     <FiBriefcase size={12} className="text-purple-600" />
                     {activeEntity?.raison_sociale || activeEntity?.nom || 'Non définie'}
@@ -1150,28 +1681,7 @@ export default function Edit() {
                 </div>
                 
                 <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">Compte bancaire</label>
-                  <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
-                    <AutocompleteInput
-                      value={formData.bank_account_name}
-                      selectedId={formData.bank_account_id}
-                      onChange={(text) => handleChange('bank_account_name', text)}
-                      onSelect={(id, label) => {
-                        handleChange('bank_account_id', id);
-                        handleChange('bank_account_name', label);
-                      }}
-                      options={bankAccounts}
-                      getOptionLabel={getBankAccountLabel}
-                      placeholder="Compte bancaire (optionnel)"
-                      loading={loadingBanks}
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">E-mail</label>
+                  <RequiredLabel required={false}>E-mail</RequiredLabel>
                   <div className="flex-1 ml-2 relative">
                     <FiMail className="absolute left-2 top-1.5 text-gray-400" size={12} />
                     <input
@@ -1184,9 +1694,11 @@ export default function Edit() {
                     />
                   </div>
                 </div>
-                
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">Mode de paiement entrant</label>
+                  <RequiredLabel required={false}>Mode de paiement entrant</RequiredLabel>
                   <div className="flex-1 ml-2 relative">
                     <FiCreditCard className="absolute left-2 top-1.5 text-gray-400" size={12} />
                     <select
@@ -1203,11 +1715,9 @@ export default function Edit() {
                     </select>
                   </div>
                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+                
                 <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">Mode de paiement sortant</label>
+                  <RequiredLabel required={false}>Mode de paiement sortant</RequiredLabel>
                   <div className="flex-1 ml-2 relative">
                     <FiDollarSign className="absolute left-2 top-1.5 text-gray-400" size={12} />
                     <select
@@ -1224,51 +1734,149 @@ export default function Edit() {
                     </select>
                   </div>
                 </div>
-                
-                <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">Compte de paiement entrant en suspens</label>
-                  <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
-                    <AutocompleteInput
-                      value={formData.suspense_account_in_name}
-                      selectedId={formData.suspense_account_in_id}
-                      onChange={(text) => handleChange('suspense_account_in_name', text)}
-                      onSelect={(id, label) => {
-                        handleChange('suspense_account_in_id', id);
-                        handleChange('suspense_account_in_name', label);
-                      }}
-                      options={accounts}
-                      getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                      placeholder="Compte suspens entrant (optionnel)"
-                      loading={loadingAccounts}
-                    />
-                  </div>
-                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-start" style={{ minHeight: '26px' }}>
+                  <RequiredLabel required={false}>Compte suspens entrant</RequiredLabel>
+                  <div className="flex-1 ml-2">
+                    <div className="border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                      <AutocompleteInput
+                        value={formData.suspense_account_in_name}
+                        selectedId={formData.suspense_account_in_id}
+                        onChange={(text) => handleChange('suspense_account_in_name', text)}
+                        onSelect={(id, label) => {
+                          handleChange('suspense_account_in_id', id);
+                          handleChange('suspense_account_in_name', label);
+                        }}
+                        options={accounts}
+                        getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                        placeholder="Compte suspens entrant (optionnel)"
+                        loading={loadingAccounts}
+                      />
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1 italic">
+                      ⏳ Champ en attente d'implémentation backend
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-start" style={{ minHeight: '26px' }}>
+                  <RequiredLabel required={false}>Compte suspens sortant</RequiredLabel>
+                  <div className="flex-1 ml-2">
+                    <div className="border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                      <AutocompleteInput
+                        value={formData.suspense_account_out_name}
+                        selectedId={formData.suspense_account_out_id}
+                        onChange={(text) => handleChange('suspense_account_out_name', text)}
+                        onSelect={(id, label) => {
+                          handleChange('suspense_account_out_id', id);
+                          handleChange('suspense_account_out_name', label);
+                        }}
+                        options={accounts}
+                        getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                        placeholder="Compte suspens sortant (optionnel)"
+                        loading={loadingAccounts}
+                      />
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1 italic">
+                      ⏳ Champ en attente d'implémentation backend
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'numerotation' && (
+            <div className="space-y-3">
+              {loadingSequences && (
+                <div className="text-xs text-purple-600 flex items-center gap-2 mb-2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+                  Chargement des séquences...
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-start" style={{ minHeight: '26px' }}>
+                  <RequiredLabel required={false}>Séquence de numérotation</RequiredLabel>
+                  <div className="flex-1 ml-2">
+                    <div className="border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                      <AutocompleteInput
+                        value={formData.sequence_name}
+                        selectedId={formData.sequence_id}
+                        onChange={(text) => handleChange('sequence_name', text)}
+                        onSelect={(id, label) => {
+                          handleChange('sequence_id', id);
+                          handleChange('sequence_name', label);
+                        }}
+                        options={sequences}
+                        getOptionLabel={getSequenceLabel}
+                        placeholder="Séquence (optionnel)"
+                        loading={loadingSequences}
+                      />
+                    </div>
+                  </div>
+                </div>
                 <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">Compte de paiement sortant en suspens</label>
-                  <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
-                    <AutocompleteInput
-                      value={formData.suspense_account_out_name}
-                      selectedId={formData.suspense_account_out_id}
-                      onChange={(text) => handleChange('suspense_account_out_name', text)}
-                      onSelect={(id, label) => {
-                        handleChange('suspense_account_out_id', id);
-                        handleChange('suspense_account_out_name', label);
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <RequiredLabel required={false}>Séquence séparée pour les avoirs</RequiredLabel>
+                  <div className="flex-1 ml-2 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.use_refund_sequence}
+                      onChange={(e) => {
+                        handleChange('use_refund_sequence', e.target.checked);
+                        if (!e.target.checked) {
+                          handleChange('refund_sequence_id', '');
+                          handleChange('refund_sequence_name', '');
+                        }
                       }}
-                      options={accounts}
-                      getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                      placeholder="Compte suspens sortant (optionnel)"
-                      loading={loadingAccounts}
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                     />
                   </div>
                 </div>
                 
                 <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium"> </label>
-                  <div className="flex-1 ml-2"></div>
                 </div>
+              </div>
+
+              {formData.use_refund_sequence && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-start" style={{ minHeight: '26px' }}>
+                    <RequiredLabel required={false}>Séquence des avoirs</RequiredLabel>
+                    <div className="flex-1 ml-2">
+                      <div className="border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                        <AutocompleteInput
+                          value={formData.refund_sequence_name}
+                          selectedId={formData.refund_sequence_id}
+                          onChange={(text) => handleChange('refund_sequence_name', text)}
+                          onSelect={(id, label) => {
+                            handleChange('refund_sequence_id', id);
+                            handleChange('refund_sequence_name', label);
+                          }}
+                          options={sequences}
+                          getOptionLabel={getSequenceLabel}
+                          placeholder="Séquence des avoirs"
+                          loading={loadingSequences}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center" style={{ height: '26px' }}>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-2 p-2 rounded bg-gray-50 border border-gray-200">
+                <p className="text-xs flex items-center gap-1 text-gray-600">
+                  <FiInfo size={12} />
+                  Les séquences définissent le format de numérotation des pièces comptables.
+                </p>
               </div>
             </div>
           )}
@@ -1286,7 +1894,6 @@ export default function Edit() {
           )}
         </div>
 
-        {/* Messages */}
         {(error || success) && (
           <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
             error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
@@ -1299,7 +1906,6 @@ export default function Edit() {
         )}
       </div>
 
-      {/* Dialogue confirmation */}
       {showConfirmDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">

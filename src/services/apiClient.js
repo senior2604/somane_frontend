@@ -48,7 +48,6 @@ class ApiClient {
       'core/banque/': 'core/banques/',
       'compta/journal/': 'compta/journals/',
       'banque-partenaires/': 'banques-partenaires/',     // ✅ Corrigé : sans core/
-      // 'banques-partenaires/': 'core/banques-partenaires/',  // ❌ SUPPRIMÉ
     };
     
     // Liste des endpoints qui nécessitent le préfixe 'core/'
@@ -188,85 +187,117 @@ class ApiClient {
       const response = await fetch(url, config);
       console.log(`📥 API Response: ${response.status} ${response.statusText} pour ${endpoint}`);
       
-      // Gestion spécifique des codes d'erreur
-      switch (response.status) {
-        case 401:
-          console.warn(`🔐 401 Unauthorized sur ${endpoint}`);
-          if (token && await this.tryRefreshToken()) {
-            console.log('🔄 Token rafraîchi, réessai...');
-            return await this.request(endpoint, options);
-          }
-          authService.logout();
-          if (!this.isPublicEndpoint(endpoint)) {
-            setTimeout(() => {
-              window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
-            }, 1000);
-          }
-          throw {
-            status: 401,
-            message: 'Session expirée',
-            endpoint: endpoint,
-            url: url
-          };
-          
-        case 403:
-          console.warn(`🚫 403 Forbidden sur ${endpoint}`);
-          throw {
-            status: 403,
-            message: 'Accès refusé',
-            endpoint: endpoint,
-            url: url
-          };
-          
-        case 404:
-          console.warn(`🔍 404 Not Found sur ${endpoint}`);
-          console.log(`URL complète: ${url}`);
-          
-          // ✅ CORRIGÉ : Vérifier si c'est un module optionnel
-          const isOptionalModule = 
-            endpoint.includes('banques-partenaires') || 
-            endpoint.includes('taux-change') ||
-            endpoint.includes('banques');
-            
-          if (isOptionalModule) {
-            console.warn(`ℹ️ Module optionnel non disponible: ${endpoint} (retourne tableau vide)`);
-            return [];
-          }
-          
-          throw {
-            status: 404,
-            message: `Ressource non trouvée: ${endpoint}`,
-            endpoint: endpoint,
-            url: url
-          };
-          
-        case 500:
-          console.error(`🔥 500 Server Error sur ${endpoint}`);
-          throw {
-            status: 500,
-            message: 'Erreur serveur interne',
-            endpoint: endpoint,
-            url: url
-          };
-      }
-
+      // Si la réponse n'est pas OK, on essaie de lire le body d'erreur
       if (!response.ok) {
-        let errorMessage = `HTTP error! status: ${response.status}`;
+        let errorData = null;
+        let errorText = null;
+        
         try {
-          const errorData = await response.json();
-          errorMessage = errorData.detail || errorData.message || errorMessage;
+          // Essayer de parser comme JSON d'abord
+          errorData = await response.json();
           console.error('📄 Détails erreur serveur:', errorData);
         } catch (e) {
-          const text = await response.text();
-          if (text) errorMessage = text;
+          // Si ce n'est pas du JSON, lire comme texte
+          try {
+            errorText = await response.text();
+            if (errorText) {
+              console.error('📄 Réponse erreur (texte):', errorText);
+            }
+          } catch (textError) {
+            console.error('❌ Impossible de lire la réponse d\'erreur');
+          }
         }
         
-        throw {
-          status: response.status,
-          message: errorMessage,
-          endpoint: endpoint,
-          url: url
-        };
+        // Gestion spécifique des codes d'erreur
+        switch (response.status) {
+          case 400:
+            console.error(`❌ 400 Bad Request sur ${endpoint}`);
+            console.error('📄 Détails:', errorData || errorText || 'Aucun détail');
+            console.error('📄 Détails COMPLETS:', JSON.stringify(errorData, null, 2)); 
+            throw {
+              status: 400,
+              message: errorData?.detail || errorData?.message || errorText || 'Bad Request',
+              data: errorData,
+              endpoint: endpoint,
+              url: url
+            };
+            
+          case 401:
+            console.warn(`🔐 401 Unauthorized sur ${endpoint}`);
+            if (token && await this.tryRefreshToken()) {
+              console.log('🔄 Token rafraîchi, réessai...');
+              return await this.request(endpoint, options);
+            }
+            authService.logout();
+            if (!this.isPublicEndpoint(endpoint)) {
+              setTimeout(() => {
+                window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+              }, 1000);
+            }
+            throw {
+              status: 401,
+              message: 'Session expirée',
+              endpoint: endpoint,
+              url: url
+            };
+            
+          case 403:
+            console.warn(`🚫 403 Forbidden sur ${endpoint}`);
+            throw {
+              status: 403,
+              message: 'Accès refusé',
+              endpoint: endpoint,
+              url: url
+            };
+            
+          case 404:
+            console.warn(`🔍 404 Not Found sur ${endpoint}`);
+            console.log(`URL complète: ${url}`);
+            
+            const isOptionalModule = 
+              endpoint.includes('banques-partenaires') || 
+              endpoint.includes('taux-change') ||
+              endpoint.includes('banques');
+              
+            if (isOptionalModule) {
+              console.warn(`ℹ️ Module optionnel non disponible: ${endpoint} (retourne tableau vide)`);
+              return [];
+            }
+            
+            throw {
+              status: 404,
+              message: `Ressource non trouvée: ${endpoint}`,
+              endpoint: endpoint,
+              url: url
+            };
+            
+          case 500:
+            console.error(`🔥 500 Server Error sur ${endpoint}`);
+            console.error('📄 Détails:', errorData || errorText || 'Aucun détail');
+            throw {
+              status: 500,
+              message: errorData?.detail || errorData?.message || errorText || 'Erreur serveur interne',
+              data: errorData,
+              endpoint: endpoint,
+              url: url
+            };
+            
+          default:
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            if (errorData) {
+              errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+            } else if (errorText) {
+              errorMessage = errorText;
+            }
+            
+            throw {
+              status: response.status,
+              message: errorMessage,
+              data: errorData,
+              endpoint: endpoint,
+              url: url
+            };
+        }
       }
 
       if (response.status === 204) {

@@ -12,11 +12,28 @@ import {
   FiAlertCircle,
   FiCopy,
   FiRotateCcw,
-  FiSettings
+  FiSettings,
+  FiCreditCard,
+  FiDollarSign,
+  FiClock
 } from "react-icons/fi";
 import { useParams, useNavigate } from 'react-router-dom';
+import { apiClient } from '../../../../services/apiClient';
 import { journauxService, comptesService } from "../../services";
 import { useEntity } from '../../../../context/EntityContext';
+
+// ==========================================
+// NORMALISATION DES DONNÉES API
+// ==========================================
+const normalizeApiResponse = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (data.data && Array.isArray(data.data)) return data.data;
+  if (data.results && Array.isArray(data.results)) return data.results;
+  if (data.items && Array.isArray(data.items)) return data.items;
+  console.warn('⚠️ Format de réponse non reconnu:', data);
+  return [];
+};
 
 // ==========================================
 // COMPOSANT TOOLTIP
@@ -52,6 +69,7 @@ const Tooltip = ({ children, text, position = 'top' }) => {
   );
 };
 
+
 export default function Show() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -59,8 +77,10 @@ export default function Show() {
   
   const [journal, setJournal] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [sequences, setSequences] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [loadingSequences, setLoadingSequences] = useState(false);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -98,7 +118,7 @@ export default function Show() {
 
   // Chargement des comptes en arrière-plan
   const loadAccounts = useCallback(async () => {
-    if (accounts.length > 0) return; // Déjà chargés
+    if (accounts.length > 0) return;
     
     setLoadingAccounts(true);
     try {
@@ -113,6 +133,24 @@ export default function Show() {
     }
   }, [accounts.length]);
 
+  // Chargement des séquences en arrière-plan
+  const loadSequences = useCallback(async () => {
+    if (sequences.length > 0) return;
+    
+    setLoadingSequences(true);
+    try {
+      console.log('🔢 Début chargement des séquences...');
+      const response = await apiClient.get('/core/sequences/');
+      const sequencesData = normalizeApiResponse(response);
+      setSequences(sequencesData);
+      console.log('🔢 Séquences chargées avec succès:', sequencesData.length);
+    } catch (err) {
+      console.warn('⚠️ Erreur chargement séquences:', err);
+    } finally {
+      setLoadingSequences(false);
+    }
+  }, [sequences.length]);
+
   // Chargement initial
   useEffect(() => {
     if (initialLoadDone.current) {
@@ -123,16 +161,15 @@ export default function Show() {
     initialLoadDone.current = true;
     console.log('🚀 Chargement initial des données');
     
-    // Charge d'abord le journal (prioritaire)
     loadJournal().then(() => {
-      // Puis charge les comptes en arrière-plan
       loadAccounts();
+      loadSequences();
     });
     
     return () => {
       console.log('🧹 Nettoyage du composant');
     };
-  }, [loadJournal, loadAccounts]);
+  }, [loadJournal, loadAccounts, loadSequences]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -153,11 +190,19 @@ export default function Show() {
     return map;
   }, [accounts]);
 
-  // Fonction pour obtenir le libellé d'un compte à partir de son ID (optimisée)
+  // Créer un Map pour les séquences
+  const sequencesMap = useMemo(() => {
+    const map = new Map();
+    sequences.forEach(sequence => {
+      map.set(sequence.id, sequence);
+    });
+    return map;
+  }, [sequences]);
+
+  // Fonction pour obtenir le libellé d'un compte à partir de son ID
   const getAccountLabel = useCallback((accountId) => {
     if (!accountId) return null;
     
-    // Chercher dans le Map d'abord
     const account = accountsMap.get(accountId);
     if (account) {
       return `${account.code} - ${account.name}`;
@@ -165,6 +210,18 @@ export default function Show() {
     
     return null;
   }, [accountsMap]);
+
+  // Fonction pour obtenir le libellé d'une séquence
+  const getSequenceLabel = useCallback((sequenceId) => {
+    if (!sequenceId) return null;
+    
+    const sequence = sequencesMap.get(sequenceId);
+    if (sequence) {
+      return `${sequence.prefix}...${sequence.suffix} (${sequence.current_number || 0})`;
+    }
+    
+    return null;
+  }, [sequencesMap]);
 
   // Extraire les IDs des comptes une seule fois
   const accountIds = useMemo(() => {
@@ -180,7 +237,17 @@ export default function Show() {
     };
   }, [journal]);
 
-  // Obtenir les libellés (optimisé)
+  // Extraire les IDs des séquences
+  const sequenceIds = useMemo(() => {
+    if (!journal) return {};
+    
+    return {
+      main: journal.sequence?.id || journal.sequence_id,
+      refund: journal.refund_sequence?.id || journal.refund_sequence_id
+    };
+  }, [journal]);
+
+  // Obtenir les libellés des comptes
   const labels = useMemo(() => {
     if (!journal) return {};
     
@@ -210,6 +277,21 @@ export default function Show() {
           `${journal.suspense_out_account.code || ''} - ${journal.suspense_out_account.name || ''}`.trim() : null)
     };
   }, [journal, accountIds, getAccountLabel]);
+
+  // Obtenir les libellés des séquences
+  const sequenceLabels = useMemo(() => {
+    if (!journal) return {};
+    
+    return {
+      main: getSequenceLabel(sequenceIds.main) || 
+        (journal.sequence && typeof journal.sequence === 'object' ? 
+          `${journal.sequence.prefix || ''}...${journal.sequence.suffix || ''}`.trim() : null),
+      
+      refund: getSequenceLabel(sequenceIds.refund) || 
+        (journal.refund_sequence && typeof journal.refund_sequence === 'object' ? 
+          `${journal.refund_sequence.prefix || ''}...${journal.refund_sequence.suffix || ''}`.trim() : null)
+    };
+  }, [journal, sequenceIds, getSequenceLabel]);
 
   const handleDelete = async () => {
     if (!journal) return;
@@ -244,6 +326,7 @@ export default function Show() {
 
   const handleDuplicate = () => {
     setShowActionsMenu(false);
+    navigate(`/comptabilite/journaux/create?duplicate_from=${id}`);
   };
 
   const handleExtourner = () => {
@@ -254,7 +337,7 @@ export default function Show() {
   const isBankOrCashType = useCallback(() => {
     if (!journal) return false;
     const typeCode = journal.type?.code || journal.type_code || '';
-    const bankCashCodes = ['BQ', 'CA', 'BN', 'CS'];
+    const bankCashCodes = ['BQ', 'CA', 'BN', 'CS', 'BAN', 'CAI', 'BANQUE', 'CAISSE'];
     return bankCashCodes.includes(typeCode) || 
            typeCode?.startsWith('B') || 
            typeCode?.startsWith('C');
@@ -311,7 +394,8 @@ export default function Show() {
   const showFullAccounting = isBankOrCashType();
 
   // Banque
-  const bankAccountName = journal.bank_account?.banque?.nom || 
+  const bankAccountName = journal.bank_account?.banque_details?.nom || 
+                        journal.bank_account?.banque?.nom || 
                         journal.bank_account?.nom || 
                         journal.bank_account_name || 
                         '';
@@ -329,6 +413,9 @@ export default function Show() {
 
   // Email
   const email = journal.email || '';
+
+  // Import relevés bancaires
+  const importBankStatements = journal.import_bank_statements || false;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -455,7 +542,6 @@ export default function Show() {
               </div>
             </div>
             <div className="flex items-center" style={{ height: '26px' }}>
-              {/* Cellule vide */}
             </div>
           </div>
         </div>
@@ -491,7 +577,7 @@ export default function Show() {
                 </div>
               )}
               
-              {/* Première ligne - Compte d'achat par défaut TOUJOURS présent */}
+              {/* Première ligne - Compte d'achat par défaut */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center" style={{ height: '26px' }}>
                   <label className="text-xs text-gray-700 w-40 font-medium">
@@ -509,7 +595,7 @@ export default function Show() {
                   </div>
                 </div>
                 
-                {/* Deuxième colonne - Affiche le compte d'attente uniquement pour Banque/Caisse */}
+                {/* Deuxième colonne - Compte d'attente pour Banque/Caisse */}
                 <div className="flex items-center" style={{ height: '26px' }}>
                   {showFullAccounting ? (
                     <>
@@ -533,7 +619,7 @@ export default function Show() {
                 </div>
               </div>
               
-              {/* Deuxième ligne - Comptes profit et perte (UNIQUEMENT pour Banque/Caisse) */}
+              {/* Deuxième ligne - Comptes profit et perte pour Banque/Caisse */}
               {showFullAccounting && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center" style={{ height: '26px' }}>
@@ -583,6 +669,15 @@ export default function Show() {
 
           {activeTab === 'avance' && (
             <div className="space-y-3">
+              {/* Indicateur de chargement des séquences */}
+              {loadingSequences && (
+                <div className="text-xs text-purple-600 flex items-center gap-2 mb-2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+                  Chargement des séquences...
+                </div>
+              )}
+
+              {/* Première ligne */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center" style={{ height: '26px' }}>
                   <label className="text-xs text-gray-700 w-40 font-medium">Société</label>
@@ -604,6 +699,7 @@ export default function Show() {
                 </div>
               </div>
               
+              {/* Deuxième ligne */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center" style={{ height: '26px' }}>
                   <label className="text-xs text-gray-700 w-40 font-medium">E-mail</label>
@@ -613,6 +709,64 @@ export default function Show() {
                   </div>
                 </div>
                 
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Import relevés bancaires</label>
+                  <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2 flex items-center gap-2">
+                    <FiCreditCard size={12} className="text-gray-400" />
+                    {importBankStatements ? (
+                      <span className="text-green-600">Activé</span>
+                    ) : (
+                      <span className="text-gray-400 italic">Désactivé</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* NOUVELLE SECTION : Numérotation */}
+              <div className="border-t border-gray-200 pt-3 mt-2">
+                <h3 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                  <FiClock size={12} /> Numérotation
+                </h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center" style={{ height: '26px' }}>
+                    <label className="text-xs text-gray-700 w-40 font-medium">
+                      Séquence principale
+                    </label>
+                    <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                      {sequenceLabels.main ? (
+                        <span className="font-mono">{sequenceLabels.main}</span>
+                      ) : (
+                        <span className="text-gray-400 italic">
+                          {loadingSequences ? 'Chargement...' : 'Non définie'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center" style={{ height: '26px' }}>
+                    <label className="text-xs text-gray-700 w-40 font-medium">
+                      Séquence séparée avoirs
+                    </label>
+                    <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
+                      {journal.use_refund_sequence ? (
+                        sequenceLabels.refund ? (
+                          <span className="font-mono">{sequenceLabels.refund}</span>
+                        ) : (
+                          <span className="text-gray-400 italic">
+                            {loadingSequences ? 'Chargement...' : 'Non définie'}
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-gray-400 italic">Non activé</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Méthodes de paiement */}
+              <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center" style={{ height: '26px' }}>
                   <label className="text-xs text-gray-700 w-40 font-medium">Mode de paiement entrant</label>
                   <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
@@ -629,9 +783,7 @@ export default function Show() {
                     )}
                   </div>
                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+                
                 <div className="flex items-center" style={{ height: '26px' }}>
                   <label className="text-xs text-gray-700 w-40 font-medium">Mode de paiement sortant</label>
                   <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
@@ -648,9 +800,12 @@ export default function Show() {
                     )}
                   </div>
                 </div>
-                
+              </div>
+              
+              {/* Comptes de suspens */}
+              <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">Compte de paiement entrant en suspens</label>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Compte suspens entrant</label>
                   <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
                     {labels.suspenseIn ? (
                       <span className="font-mono">{labels.suspenseIn}</span>
@@ -661,11 +816,9 @@ export default function Show() {
                     )}
                   </div>
                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+                
                 <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium">Compte de paiement sortant en suspens</label>
+                  <label className="text-xs text-gray-700 w-40 font-medium">Compte suspens sortant</label>
                   <div className="flex-1 px-2 py-1 bg-gray-50 border border-gray-300 text-xs ml-2">
                     {labels.suspenseOut ? (
                       <span className="font-mono">{labels.suspenseOut}</span>
@@ -675,10 +828,6 @@ export default function Show() {
                       </span>
                     )}
                   </div>
-                </div>
-                <div className="flex items-center" style={{ height: '26px' }}>
-                  <label className="text-xs text-gray-700 w-40 font-medium"> </label>
-                  <div className="flex-1 ml-2"></div>
                 </div>
               </div>
             </div>
