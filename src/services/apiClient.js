@@ -1,13 +1,66 @@
 // src/services/apiClient.js
 import { API_CONFIG } from '../config/api';
 import { authService } from './authService';
+import { getActiveEntity } from './entityUtils';
 
 class ApiClient {
   constructor() {
     // Normaliser l'URL de base
     this.baseURL = this.normalizeBaseURL(API_CONFIG.BASE_URL);
-    console.log('📡 API Client initialisé avec URL:', this.baseURL); // Pour débogage
+    console.log('📡 API Client initialisé avec URL:', this.baseURL);
     this.refreshPromise = null;
+    
+    // Endpoints qui ne nécessitent PAS d'entité
+    this.nonEntityEndpoints = [
+      'auth/',
+      'login/',
+      'register/',
+      'pays/',
+      'devises/',
+      'subdivisions/',
+      'villes/',
+      'langues/',
+      'banques/',
+      'banques-partenaires/',      // ✅ Maintenant sans core/
+      'taux-change/',
+      'groupes/',
+      'modules/',
+      'permissions/',
+      'api/schema/',
+      'swagger/',
+      'redoc/'
+    ];
+    
+    // Endpoints publics (sans authentification)
+    this.publicEndpoints = [
+      'auth/',
+      'login/',
+      'register/',
+      'pays/',
+      'api/schema/',
+      'swagger/',
+      'redoc/'
+    ];
+    
+    // Mapping des corrections d'endpoints courants
+    this.endpointCorrections = {
+      'core/banque-partenaires/': 'core/banques-partenaires/',
+      'core/banque/': 'core/banques/',
+      'compta/journal/': 'compta/journals/',
+      'banque-partenaires/': 'banques-partenaires/',     // ✅ Corrigé : sans core/
+    };
+    
+    // Liste des endpoints qui nécessitent le préfixe 'core/'
+    this.coreEndpoints = [
+      'utilisateurentites/',
+      'parametres/',
+      'journals/',
+      'taches/',
+      'informations/',
+      'modules/',
+      'permissions/',
+      'groupes/',
+    ];
   }
 
   /**
@@ -16,12 +69,10 @@ class ApiClient {
   normalizeBaseURL(url) {
     let normalized = url;
     
-    // Ajouter le protocole si manquant
     if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
       normalized = 'http://' + normalized;
     }
     
-    // Assurer qu'elle se termine par un slash
     if (!normalized.endsWith('/')) {
       normalized = normalized + '/';
     }
@@ -30,21 +81,74 @@ class ApiClient {
   }
 
   /**
+   * Vérifie si un endpoint nécessite une entité
+   */
+  requiresEntity(endpoint) {
+    return !this.nonEntityEndpoints.some(nonEntityEndpoint => 
+      endpoint.startsWith(nonEntityEndpoint)
+    );
+  }
+
+  /**
+   * Corrige automatiquement les endpoints mal écrits
+   */
+  correctEndpoint(endpoint) {
+    let corrected = endpoint;
+    
+    // Nettoyer d'abord les slashes superflus
+    if (corrected.startsWith('/')) {
+      corrected = corrected.substring(1);
+    }
+    
+    // Appliquer les corrections connues
+    Object.entries(this.endpointCorrections).forEach(([wrong, correct]) => {
+      if (corrected === wrong || corrected === wrong.replace(/\/$/, '')) {
+        console.warn(`🔄 Correction automatique: "${wrong}" → "${correct}"`);
+        corrected = correct;
+      }
+    });
+    
+    // ✅ NOUVEAU : Ajouter automatiquement 'core/' pour certains endpoints
+    const needsCore = this.coreEndpoints.some(prefix => 
+      corrected.startsWith(prefix) && !corrected.startsWith('core/')
+    );
+    
+    if (needsCore) {
+      corrected = 'core/' + corrected;
+      console.warn(`🔄 Ajout automatique du préfixe core/: "${endpoint}" → "${corrected}"`);
+    }
+    
+    // Correction générique: remplacer les underscores par des tirets
+    if (corrected.includes('banque_')) {
+      corrected = corrected.replace(/banque_/g, 'banques-');
+      console.warn(`🔄 Correction auto (underscore → tiret): "${endpoint}" → "${corrected}"`);
+    }
+    
+    return corrected;
+  }
+
+  /**
    * Méthode générique pour effectuer des requêtes HTTP
-   * Gère automatiquement l'authentification et le rafraîchissement des tokens
    */
   async request(endpoint, options = {}) {
-    // Normaliser l'endpoint (supprimer le slash de début si présent)
+    // Sauvegarder l'original pour les logs
+    const originalEndpoint = endpoint;
+    
+    // Corriger l'endpoint si nécessaire
+    endpoint = this.correctEndpoint(endpoint);
+    
+    // Supprimer le slash de début si présent
     if (endpoint.startsWith('/')) {
       endpoint = endpoint.substring(1);
-      console.warn(`⚠️ Endpoint corrigé: supprimé le slash de début. Nouvel endpoint: ${endpoint}`);
+      console.warn(`⚠️ Slash de début supprimé. Nouvel endpoint: ${endpoint}`);
     }
     
     const url = `${this.baseURL}${endpoint}`;
     console.log('📤 API Request:', {
       url,
       method: options.method || 'GET',
-      endpoint: endpoint
+      endpoint: endpoint,
+      originalEndpoint: originalEndpoint !== endpoint ? originalEndpoint : undefined
     });
     
     // Récupérer le token actuel
@@ -64,133 +168,177 @@ class ApiClient {
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
       console.log('🔑 Token JWT ajouté à la requête');
-    } else {
-      console.warn(`⚠️ Aucun token JWT trouvé pour l'endpoint: ${endpoint}`);
-      
-      // Pour les endpoints publics, on continue sans token
-      if (this.isPublicEndpoint(endpoint)) {
-        console.log(`✅ Endpoint public ${endpoint} - requête sans token`);
+    }
+
+    // N'injecter l'entité QUE pour les endpoints qui en ont besoin
+    if (this.requiresEntity(endpoint)) {
+      const activeEntity = getActiveEntity();
+      if (activeEntity) {
+        config.headers['X-Entity-ID'] = activeEntity.id;
+        console.log(`🏢 Entité active injectée: ${activeEntity.id} (${activeEntity.raison_sociale})`);
+      } else {
+        console.log(`⚠️ Endpoint ${endpoint} nécessite une entité mais aucune n'est active`);
       }
+    } else {
+      console.log(`⏭️ Endpoint ${endpoint} ne nécessite pas d'entité`);
     }
 
     try {
       const response = await fetch(url, config);
       console.log(`📥 API Response: ${response.status} ${response.statusText} pour ${endpoint}`);
       
-      // Gestion spécifique des codes d'erreur
-      switch (response.status) {
-        case 401: // Unauthorized
-          console.warn(`🔐 401 Unauthorized sur ${endpoint}`);
-          
-          // Essayer de rafraîchir le token si possible
-          if (token && await this.tryRefreshToken()) {
-            console.log('🔄 Token rafraîchi, réessai de la requête...');
-            // Réessayer la requête avec le nouveau token
-            return await this.request(endpoint, options);
-          }
-          
-          // Si le refresh échoue ou si pas de token initial
-          authService.logout();
-          
-          // Ne rediriger que si ce n'est pas une page publique
-          if (!this.isPublicEndpoint(endpoint)) {
-            setTimeout(() => {
-              window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
-            }, 1000);
-          }
-          
-          throw {
-            status: 401,
-            message: 'Session expirée ou non authentifiée',
-            endpoint: endpoint,
-            url: url
-          };
-          
-        case 403: // Forbidden
-          console.warn(`🚫 403 Forbidden sur ${endpoint}`);
-          throw {
-            status: 403,
-            message: 'Accès refusé - Permissions insuffisantes',
-            endpoint: endpoint,
-            url: url
-          };
-          
-        case 404: // Not Found
-          console.warn(`🔍 404 Not Found sur ${endpoint}`);
-          console.log(`URL complète: ${url}`);
-          throw {
-            status: 404,
-            message: `Ressource non trouvée: ${endpoint}`,
-            endpoint: endpoint,
-            url: url
-          };
-          
-        case 500: // Internal Server Error
-          console.error(`🔥 500 Server Error sur ${endpoint}`);
-          throw {
-            status: 500,
-            message: 'Erreur serveur interne',
-            endpoint: endpoint,
-            url: url
-          };
-      }
-
-      // Si la réponse n'est pas OK (autres erreurs)
+      // Si la réponse n'est pas OK, on essaie de lire le body d'erreur
       if (!response.ok) {
-        // Essayer de récupérer le message d'erreur du serveur
-        let errorMessage = `HTTP error! status: ${response.status}`;
+        let errorData = null;
+        let errorText = null;
+        
         try {
-          const errorData = await response.json();
-          errorMessage = errorData.detail || errorData.message || errorMessage;
-          console.log('📄 Détails erreur serveur:', errorData);
+          // Essayer de parser comme JSON d'abord
+          errorData = await response.json();
+          console.error('📄 Détails erreur serveur:', errorData);
         } catch (e) {
-          // Si pas de JSON, utiliser le texte brut
-          const text = await response.text();
-          if (text) errorMessage = text;
+          // Si ce n'est pas du JSON, lire comme texte
+          try {
+            errorText = await response.text();
+            if (errorText) {
+              console.error('📄 Réponse erreur (texte):', errorText);
+            }
+          } catch (textError) {
+            console.error('❌ Impossible de lire la réponse d\'erreur');
+          }
         }
         
-        throw {
-          status: response.status,
-          message: errorMessage,
-          endpoint: endpoint,
-          url: url
-        };
+        // Gestion spécifique des codes d'erreur
+        switch (response.status) {
+          case 400:
+            console.error(`❌ 400 Bad Request sur ${endpoint}`);
+            console.error('📄 Détails:', errorData || errorText || 'Aucun détail');
+            console.error('📄 Détails COMPLETS:', JSON.stringify(errorData, null, 2)); 
+            throw {
+              status: 400,
+              message: errorData?.detail || errorData?.message || errorText || 'Bad Request',
+              data: errorData,
+              endpoint: endpoint,
+              url: url
+            };
+            
+          case 401:
+            console.warn(`🔐 401 Unauthorized sur ${endpoint}`);
+            if (token && await this.tryRefreshToken()) {
+              console.log('🔄 Token rafraîchi, réessai...');
+              return await this.request(endpoint, options);
+            }
+            authService.logout();
+            if (!this.isPublicEndpoint(endpoint)) {
+              setTimeout(() => {
+                window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+              }, 1000);
+            }
+            throw {
+              status: 401,
+              message: 'Session expirée',
+              endpoint: endpoint,
+              url: url
+            };
+            
+          case 403:
+            console.warn(`🚫 403 Forbidden sur ${endpoint}`);
+            throw {
+              status: 403,
+              message: 'Accès refusé',
+              endpoint: endpoint,
+              url: url
+            };
+            
+          case 404:
+            console.warn(`🔍 404 Not Found sur ${endpoint}`);
+            console.log(`URL complète: ${url}`);
+            
+            const isOptionalModule = 
+              endpoint.includes('banques-partenaires') || 
+              endpoint.includes('taux-change') ||
+              endpoint.includes('banques');
+              
+            if (isOptionalModule) {
+              console.warn(`ℹ️ Module optionnel non disponible: ${endpoint} (retourne tableau vide)`);
+              return [];
+            }
+            
+            throw {
+              status: 404,
+              message: `Ressource non trouvée: ${endpoint}`,
+              endpoint: endpoint,
+              url: url
+            };
+            
+          case 500:
+            console.error(`🔥 500 Server Error sur ${endpoint}`);
+            console.error('📄 Détails:', errorData || errorText || 'Aucun détail');
+            throw {
+              status: 500,
+              message: errorData?.detail || errorData?.message || errorText || 'Erreur serveur interne',
+              data: errorData,
+              endpoint: endpoint,
+              url: url
+            };
+            
+          default:
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            if (errorData) {
+              errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+            } else if (errorText) {
+              errorMessage = errorText;
+            }
+            
+            throw {
+              status: response.status,
+              message: errorMessage,
+              data: errorData,
+              endpoint: endpoint,
+              url: url
+            };
+        }
       }
 
-      // Gestion des réponses vides (204 No Content)
       if (response.status === 204) {
         console.log(`✅ 204 No Content pour ${endpoint}`);
         return null;
       }
 
-      // Parser la réponse JSON
       try {
         const data = await response.json();
         console.log(`✅ Réponse JSON reçue pour ${endpoint}:`, 
-          Array.isArray(data) ? `${data.length} items` : 'Object reçu');
+          Array.isArray(data) ? `${data.length} items` : 'Objet reçu');
         return data;
       } catch (e) {
         console.error(`❌ Erreur parsing JSON sur ${endpoint}:`, e);
         throw {
           status: response.status,
-          message: 'Réponse serveur invalide (JSON mal formé)',
+          message: 'JSON invalide',
           endpoint: endpoint,
           url: url
         };
       }
       
     } catch (error) {
+      // ✅ CORRIGÉ : Gestion des erreurs pour modules optionnels
+      if (error.status === 404 && 
+          (endpoint.includes('banques-partenaires') || 
+           endpoint.includes('taux-change') ||
+           endpoint.includes('banques'))) {
+        console.warn(`ℹ️ Module optionnel non disponible: ${endpoint} (retourne tableau vide)`);
+        return [];
+      }
+      
       console.error(`❌ API Request failed ${endpoint}:`, error);
       
-      // Si l'erreur est déjà formatée, la renvoyer telle quelle
       if (error.status && error.message) {
         throw error;
       }
       
-      // Sinon, formater l'erreur
       throw {
         status: 0,
-        message: error.message || 'Erreur réseau ou serveur indisponible',
+        message: error.message || 'Erreur réseau',
         endpoint: endpoint,
         url: url,
         originalError: error
@@ -198,11 +346,7 @@ class ApiClient {
     }
   }
 
-  /**
-   * Tente de rafraîchir le token JWT
-   */
   async tryRefreshToken() {
-    // Éviter plusieurs tentatives de rafraîchissement simultanées
     if (this.refreshPromise) {
       return await this.refreshPromise;
     }
@@ -217,11 +361,9 @@ class ApiClient {
           return false;
         }
         
-        // IMPORTANT: Corrigez l'URL - enlever le double slash
         const refreshUrl = `${this.baseURL.replace(/\/$/, '')}/auth/jwt/refresh/`;
         console.log('URL de rafraîchissement:', refreshUrl);
         
-        // Appel au endpoint de rafraîchissement
         const response = await fetch(refreshUrl, {
           method: 'POST',
           headers: {
@@ -236,11 +378,11 @@ class ApiClient {
           console.log('✅ Token rafraîchi avec succès');
           return true;
         } else {
-          console.warn('❌ Échec du rafraîchissement du token', response.status);
+          console.warn('❌ Échec du rafraîchissement', response.status);
           return false;
         }
       } catch (error) {
-        console.error('❌ Erreur lors du rafraîchissement du token:', error);
+        console.error('❌ Erreur refresh token:', error);
         return false;
       } finally {
         this.refreshPromise = null;
@@ -250,31 +392,13 @@ class ApiClient {
     return await this.refreshPromise;
   }
 
-  /**
-   * Vérifie si un endpoint est public (ne nécessite pas d'authentification)
-   */
   isPublicEndpoint(endpoint) {
-    const publicEndpoints = [
-      'auth/',
-      'login/',
-      'register/',
-      'pays/',
-      'compta/taxes/',
-      'compta/accounts/',
-      'api/schema/',
-      'swagger/',
-      'redoc/'
-    ];
-    
-    return publicEndpoints.some(publicEndpoint => 
+    return this.publicEndpoints.some(publicEndpoint => 
       endpoint.startsWith(publicEndpoint)
     );
   }
 
-  /**
-   * Méthodes raccourcies pour les verbes HTTP
-   */
-  
+  // Méthodes raccourcies
   get(endpoint, options = {}) {
     return this.request(endpoint, { ...options, method: 'GET' });
   }
@@ -307,9 +431,6 @@ class ApiClient {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
 
-  /**
-   * Méthode pour uploader des fichiers
-   */
   upload(endpoint, formData, options = {}) {
     const config = {
       ...options,
@@ -320,15 +441,10 @@ class ApiClient {
       body: formData,
     };
     
-    // Supprimer Content-Type pour que le navigateur le définisse avec le boundary
     delete config.headers['Content-Type'];
-    
     return this.request(endpoint, config);
   }
 
-  /**
-   * Méthode pour télécharger des fichiers
-   */
   download(endpoint, options = {}) {
     const config = {
       ...options,
@@ -338,13 +454,11 @@ class ApiClient {
       },
     };
     
-    // Récupérer le token
     const token = authService.getToken();
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // Normaliser l'endpoint
     if (endpoint.startsWith('/')) {
       endpoint = endpoint.substring(1);
     }
@@ -352,16 +466,11 @@ class ApiClient {
     return fetch(`${this.baseURL}${endpoint}`, config);
   }
   
-  /**
-   * Méthode pour tester la connexion
-   */
   async testConnection() {
     console.log('🔧 Test de connexion API...');
-    console.log('Base URL:', this.baseURL);
-    
     try {
       const response = await fetch(this.baseURL);
-      console.log('Status racine:', response.status, response.statusText);
+      console.log('Status racine:', response.status);
       return response.ok;
     } catch (error) {
       console.error('❌ Erreur connexion:', error);
@@ -369,28 +478,16 @@ class ApiClient {
     }
   }
   
-  /**
-   * Méthode pour obtenir la configuration actuelle
-   */
   getConfig() {
     return {
       baseURL: this.baseURL,
       hasToken: !!authService.getToken(),
-      endpoints: {
-        journals: `${this.baseURL}compta/journals/`,
-        accounts: `${this.baseURL}compta/accounts/`,
-        moves: `${this.baseURL}compta/moves/`
-      }
     };
   }
 }
 
-// Créer une instance unique (Singleton)
 export const apiClient = new ApiClient();
 
-/**
- * Hook personnalisé pour utiliser l'apiClient dans les composants React
- */
 export const useApiClient = () => {
   return {
     get: apiClient.get.bind(apiClient),

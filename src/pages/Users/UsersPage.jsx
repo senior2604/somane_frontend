@@ -6,10 +6,10 @@ import {
   FiEye, FiCheckCircle, FiXCircle, FiUserCheck, FiShield, FiFolder,
   FiKey, FiLock, FiUnlock, FiMoreVertical, FiLink, FiUser, FiMail,
   FiPhone, FiCalendar, FiClock, FiImage, FiLayers, FiBriefcase,
-  FiArrowRight, FiArrowLeft, FiFilter, FiCopy, FiSave
+  FiArrowRight, FiArrowLeft, FiFilter, FiCopy, FiSave, FiMapPin
 } from "react-icons/fi";
 
-// Types d'accès (identique à votre code permissions)
+// Types d'accès
 const TYPES_ACCES = [
   { value: 'aucun', label: 'Aucun accès', color: 'red', bgColor: 'bg-red-100', textColor: 'text-red-800', borderColor: 'border-red-300' },
   { value: 'lecture', label: 'Lecture seule', color: 'blue', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-300' },
@@ -26,6 +26,7 @@ export default function UnifiedPermissionsPage() {
   const [permissions, setPermissions] = useState([]);
   const [modules, setModules] = useState([]);
   const [entites, setEntites] = useState([]);
+  const [partenaires, setPartenaires] = useState([]);
   
   // États pour les associations
   const [userGroups, setUserGroups] = useState({});
@@ -66,13 +67,21 @@ export default function UnifiedPermissionsPage() {
       setLoading(true);
       setError(null);
       
-      // Chargement parallèle
-      const [usersResponse, groupsResponse, permissionsResponse, modulesResponse, entitesResponse] = await Promise.all([
+      // Chargement parallèle de toutes les données nécessaires
+      const [
+        usersResponse, 
+        groupsResponse, 
+        permissionsResponse, 
+        modulesResponse, 
+        entitesResponse,
+        partenairesResponse
+      ] = await Promise.all([
         apiClient.get('/users/'),
         apiClient.get('/groupes/'),
         apiClient.get('/permissions/'),
         apiClient.get('/modules/'),
-        apiClient.get('/entites/')
+        apiClient.get('/entites/'),
+        apiClient.get('/partenaires/')
       ]);
       
       // Extraction des données
@@ -88,12 +97,14 @@ export default function UnifiedPermissionsPage() {
       const permissionsData = extractArrayData(permissionsResponse);
       const modulesData = extractArrayData(modulesResponse);
       const entitesData = extractArrayData(entitesResponse);
+      const partenairesData = extractArrayData(partenairesResponse);
       
       setUsers(usersData);
       setGroups(groupsData);
       setPermissions(permissionsData);
       setModules(modulesData);
       setEntites(entitesData);
+      setPartenaires(partenairesData);
       
       // Charger les associations
       await loadAssociations(usersData, groupsData, permissionsData);
@@ -139,6 +150,17 @@ export default function UnifiedPermissionsPage() {
       console.error('Erreur lors du chargement des associations:', err);
     }
   };
+
+  // === FILTRAGE DES PARTENAIRES ÉLIGIBLES ===
+  const partenairesEligibles = useMemo(() => {
+    return partenaires.filter(partenaire => {
+      // Un partenaire est éligible s'il a au moins une entité
+      const partenaireEntites = entites.filter(entite => 
+        entite.partenaire === partenaire.id || entite.partenaire?.id === partenaire.id
+      );
+      return partenaireEntites.length > 0;
+    });
+  }, [partenaires, entites]);
 
   // === GESTION DES UTILISATEURS ===
   const handleNewUser = () => {
@@ -414,7 +436,7 @@ export default function UnifiedPermissionsPage() {
   // === RENDU PRINCIPAL ===
   return (
     <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
-      {/* HEADER COMPACT AVEC RECHERCHE AU CENTRE - TOUT EN VIOLET */}
+      {/* HEADER COMPACT AVEC RECHERCHE AU CENTRE */}
       <div className="mb-6">
         {/* Barre de recherche au centre */}
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -441,7 +463,7 @@ export default function UnifiedPermissionsPage() {
                 </button>
               )}
               
-              {/* Bouton de filtre avec dropdown */}
+              {/* Bouton de filtre */}
               <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
                 <button
                   onClick={() => setShowFilterDropdown(!showFilterDropdown)}
@@ -625,7 +647,7 @@ export default function UnifiedPermissionsPage() {
           </div>
         </div>
 
-        {/* Onglets Utilisateurs | Groupes | Permissions - TOUT EN VIOLET */}
+        {/* Onglets Utilisateurs | Groupes | Permissions */}
         <div className="flex border-b border-gray-200 mb-3">
           <button
             onClick={() => {
@@ -1284,6 +1306,8 @@ export default function UnifiedPermissionsPage() {
         <UserFormModal
           user={editingUser}
           groupes={groups}
+          partenaires={partenairesEligibles}
+          entiteContexte={1} // Ici, vous devez passer l'ID de l'entité active du contexte réel
           onClose={() => {
             setShowUserForm(false);
             setEditingUser(null);
@@ -1364,36 +1388,42 @@ export default function UnifiedPermissionsPage() {
 }
 
 // ============================================
-// MODALS MIS À JOUR
+// MODAL FORMULAIRE UTILISATEUR - MIS À JOUR SELON RÈGLES MÉTIER
 // ============================================
 
-// MODAL FORMULAIRE UTILISATEUR
-function UserFormModal({ user, groupes, onClose, onSuccess }) {
+function UserFormModal({ user, groupes, partenaires, entiteContexte, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
-    email: user?.email || '',
-    first_name: user?.first_name || '',
-    last_name: user?.last_name || '',
-    telephone: user?.telephone || '',
+    partenaire: user?.partenaire?.id || user?.partenaire || '',
     statut: user?.statut || 'actif',
     groups: user?.groups?.map(g => g.id) || [],
   });
 
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(user?.photo || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setPhotoFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
+  
+  // État pour le menu déroulant des partenaires avec recherche
+  const [showPartenaireDropdown, setShowPartenaireDropdown] = useState(false);
+  const [partenaireSearch, setPartenaireSearch] = useState('');
+  
+  // Partenaire sélectionné pour l'affichage
+  const [selectedPartenaireData, setSelectedPartenaireData] = useState(() => {
+    if (user?.partenaire) {
+      const partenaireId = user.partenaire.id || user.partenaire;
+      return partenaires.find(p => p.id === partenaireId) || null;
     }
-  };
+    return null;
+  });
+  
+  // Filtrer les partenaires basé sur la recherche
+  const filteredPartenaires = useMemo(() => {
+    if (!partenaireSearch) return partenaires;
+    return partenaires.filter(partenaire => 
+      partenaire.email?.toLowerCase().includes(partenaireSearch.toLowerCase()) ||
+      partenaire.nom?.toLowerCase().includes(partenaireSearch.toLowerCase()) ||
+      partenaire.prenom?.toLowerCase().includes(partenaireSearch.toLowerCase()) ||
+      partenaire.telephone?.includes(partenaireSearch)
+    );
+  }, [partenaires, partenaireSearch]);
 
   const toggleGroup = (groupId) => {
     setFormData(prev => ({
@@ -1409,15 +1439,29 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
     setLoading(true);
     setError(null);
 
+    // Validation
+    if (!formData.partenaire) {
+      setError('Veuillez sélectionner un partenaire');
+      setLoading(false);
+      return;
+    }
+
     try {
+      // Récupérer les données du partenaire sélectionné
+      const partenaire = partenaires.find(p => p.id === parseInt(formData.partenaire));
+      
+      if (!partenaire) {
+        setError('Partenaire non trouvé');
+        setLoading(false);
+        return;
+      }
+
       if (user) {
         // MODIFICATION
         const patchData = {
-          email: formData.email,
-          first_name: formData.first_name || '',
-          last_name: formData.last_name || '',
-          telephone: formData.telephone || '',
-          statut: formData.statut || 'actif',
+          partenaire: parseInt(formData.partenaire),
+          entite_active: parseInt(entiteContexte),
+          statut: formData.statut,
           groups: formData.groups,
           is_active: formData.statut === 'actif',
         };
@@ -1429,18 +1473,23 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
         onSuccess();
         
       } else {
-        // CRÉATION - Djoser
-        const djoserData = {
-          email: formData.email,
-          first_name: formData.first_name || '',
-          last_name: formData.last_name || '',
-          telephone: formData.telephone || '',
+        // CRÉATION - Djoser avec données du partenaire
+        const userData = {
+          partenaire: parseInt(formData.partenaire),
+          entite: parseInt(entiteContexte),
+          email: partenaire.email || '',
+          first_name: partenaire.prenom || partenaire.first_name || '',
+          last_name: partenaire.nom || partenaire.last_name || '',
+          telephone: partenaire.telephone || '',
+          statut: formData.statut,
+          groups: formData.groups,
+          is_active: formData.statut === 'actif',
         };
 
-        console.log('📤 Création utilisateur (Djoser):', djoserData);
+        console.log('📤 Création utilisateur:', userData);
         
-        const djoserResponse = await apiClient.post('/auth/users/', djoserData);
-        console.log('✅ Réponse Djoser:', djoserResponse);
+        const response = await apiClient.post('/users/', userData);
+        console.log('✅ Réponse création:', response);
         onSuccess();
       }
       
@@ -1473,10 +1522,20 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
     }));
   };
 
+  const handleSelectPartenaire = (partenaire) => {
+    setFormData(prev => ({
+      ...prev,
+      partenaire: partenaire.id
+    }));
+    setSelectedPartenaireData(partenaire);
+    setShowPartenaireDropdown(false);
+    setPartenaireSearch('');
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
-        {/* Header du modal - TOUT EN VIOLET */}
+        {/* Header du modal */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1489,7 +1548,7 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
                 </h2>
                 {!user && (
                   <p className="text-violet-100 text-xs mt-0.5">
-                    L'utilisateur recevra un email pour définir son mot de passe
+                    L'utilisateur sera créé à partir des données d'un partenaire
                   </p>
                 )}
               </div>
@@ -1515,128 +1574,156 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
         )}
         
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Section Photo de profil */}
+          {/* Section Sélection du partenaire */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Photo de profil</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Sélection du Partenaire</h3>
             </div>
             
-            <div className="flex flex-col items-center">
-              <div className="relative mb-3">
-                <div className="w-24 h-24 bg-gradient-to-br from-violet-100 to-violet-200 rounded-full flex items-center justify-center overflow-hidden">
-                  {photoPreview ? (
-                    <img 
-                      src={photoPreview} 
-                      alt="Prévisualisation"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <FiUser className="w-12 h-12 text-violet-600" />
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Partenaire <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <FiUser className="text-gray-400" size={16} />
+                    <div 
+                      className="flex-1 relative cursor-pointer"
+                      onClick={() => setShowPartenaireDropdown(!showPartenaireDropdown)}
+                    >
+                      <div className="w-full pl-3 pr-9 py-2 border border-gray-300 rounded-lg bg-white text-sm text-left">
+                        {selectedPartenaireData ? (
+                          <div>
+                            <div className="font-medium">
+                              {selectedPartenaireData.nom || selectedPartenaireData.name} {selectedPartenaireData.prenom || ''}
+                            </div>
+                            <div className="text-xs text-gray-500">{selectedPartenaireData.email}</div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-500">Sélectionnez un partenaire...</span>
+                        )}
+                      </div>
+                      <FiChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                    </div>
+                  </div>
+                  
+                  {/* Menu déroulant avec recherche */}
+                  {showPartenaireDropdown && (
+                    <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-60 overflow-hidden">
+                      <div className="p-2 border-b border-gray-200">
+                        <div className="relative">
+                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                          <input
+                            type="text"
+                            value={partenaireSearch}
+                            onChange={(e) => setPartenaireSearch(e.target.value)}
+                            className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                            placeholder="Rechercher un partenaire..."
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="max-h-48 overflow-y-auto">
+                        {filteredPartenaires.length === 0 ? (
+                          <div className="p-3 text-center text-sm text-gray-500">
+                            Aucun partenaire trouvé
+                          </div>
+                        ) : (
+                          filteredPartenaires.map(partenaire => (
+                            <div
+                              key={partenaire.id}
+                              className="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                              onClick={() => handleSelectPartenaire(partenaire)}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${formData.partenaire === partenaire.id ? 'bg-violet-600' : 'bg-gray-300'}`}></div>
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm">
+                                    {partenaire.nom || partenaire.name} {partenaire.prenom || ''}
+                                  </div>
+                                  <div className="text-xs text-gray-500">{partenaire.email}</div>
+                                  {partenaire.telephone && (
+                                    <div className="text-xs text-gray-500">{partenaire.telephone}</div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
-                {photoPreview && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhotoPreview(null);
-                      setPhotoFile(null);
-                    }}
-                    className="absolute top-0 right-0 p-1.5 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors"
-                  >
-                    <FiX size={14} />
-                  </button>
-                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  {partenaires.length} partenaire(s) éligible(s) (avec au moins une entité)
+                </p>
               </div>
               
-              <div className="relative group">
-                <input
-                  type="file"
-                  id="photo"
-                  accept="image/*"
-                  onChange={handlePhotoChange}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="photo"
-                  className="px-3 py-1.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded-lg hover:from-violet-100 hover:to-violet-200 transition-all duration-200 font-medium cursor-pointer flex items-center gap-1.5 text-sm"
-                >
-                  <FiImage size={14} />
-                  {photoPreview ? 'Changer la photo' : 'Télécharger une photo'}
-                </label>
+              {/* Aperçu des données du partenaire */}
+              {selectedPartenaireData && (
+                <div className="bg-gradient-to-br from-violet-50 to-violet-50 rounded-lg p-3 border border-violet-200">
+                  <h4 className="text-xs font-semibold text-gray-900 mb-2">Données du partenaire</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-xs font-medium text-gray-500">Email</p>
+                      <p className="text-xs text-gray-900 font-medium">{selectedPartenaireData.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-500">Téléphone</p>
+                      <p className="text-xs text-gray-900">{selectedPartenaireData.telephone || '-'}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-xs font-medium text-gray-500">Nom complet</p>
+                      <p className="text-xs text-gray-900">
+                        {(selectedPartenaireData.prenom || selectedPartenaireData.first_name || '') + ' ' + 
+                         (selectedPartenaireData.nom || selectedPartenaireData.last_name || '')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section Entité Active (lecture seule) */}
+          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
+              <h3 className="text-sm font-semibold text-gray-900">Entité Active</h3>
+            </div>
+            
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Entité
+              </label>
+              <div className="relative">
+                <FiMapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <div className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm">
+                  <div className="font-medium text-gray-900">
+                    Entité #{entiteContexte}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    L'entité active est imposée par le contexte
+                  </div>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-1 text-center">
-                Formats acceptés: JPG, PNG, GIF • Max: 5MB
+              <p className="text-xs text-gray-500 mt-1">
+                Cette entité ne peut pas être modifiée manuellement
               </p>
             </div>
           </div>
 
-          {/* Section Informations Générales */}
+          {/* Section Paramètres utilisateur */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Informations Générales</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Paramètres Utilisateur</h3>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" size={16} />
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => handleChange('email', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                    placeholder="utilisateur@example.com"
-                  />
-                </div>
-                {!user && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Un email sera envoyé à cette adresse pour activer le compte
-                  </p>
-                )}
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Prénom</label>
-                <input
-                  type="text"
-                  value={formData.first_name}
-                  onChange={(e) => handleChange('first_name', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                  placeholder="Jean"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Nom</label>
-                <input
-                  type="text"
-                  value={formData.last_name}
-                  onChange={(e) => handleChange('last_name', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                  placeholder="Dupont"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Téléphone</label>
-                <div className="relative">
-                  <FiPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    type="tel"
-                    value={formData.telephone}
-                    onChange={(e) => handleChange('telephone', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
-                    placeholder="+228 XX XX XX XX"
-                  />
-                </div>
-              </div>
-              
+            <div className="grid grid-cols-1 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Statut</label>
                 <select
@@ -1707,17 +1794,15 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
             <div className="bg-gradient-to-br from-violet-50 to-violet-50 rounded-lg p-3 border border-violet-200">
               <div className="flex items-center gap-2 mb-3">
                 <FiMail className="w-4 h-4 text-violet-600" />
-                <h3 className="text-sm font-semibold text-gray-900">Activation du compte</h3>
+                <h3 className="text-sm font-semibold text-gray-900">Processus de création</h3>
               </div>
               <div className="space-y-2">
-                <p className="text-xs text-gray-700">
-                  <span className="font-medium">Processus d'activation :</span>
-                </p>
                 <ul className="text-xs text-gray-600 space-y-1 list-disc pl-4">
-                  <li>Un email sera envoyé à <span className="font-medium">{formData.email}</span></li>
-                  <li>L'utilisateur cliquera sur le lien d'activation</li>
-                  <li>Il définira son propre mot de passe sécurisé</li>
-                  <li>Le compte sera activé automatiquement</li>
+                  <li>L'utilisateur sera créé avec les données du partenaire sélectionné</li>
+                  <li>L'adresse email du partenaire sera utilisée comme identifiant</li>
+                  <li>Un email d'activation sera envoyé par Djoser (pas de mot de passe requis)</li>
+                  <li>L'utilisateur héritera des groupes sélectionnés</li>
+                  <li>L'entité active est imposée par le contexte et ne peut pas être modifiée</li>
                 </ul>
               </div>
             </div>
@@ -1731,8 +1816,18 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-lg p-2 border border-gray-200">
+                <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Partenaire</div>
+                <div className="text-xs font-medium text-gray-900 truncate">
+                  {selectedPartenaireData 
+                    ? `${selectedPartenaireData.nom || selectedPartenaireData.last_name || ''} ${selectedPartenaireData.prenom || selectedPartenaireData.first_name || ''}`.trim()
+                    : 'Non sélectionné'}
+                </div>
+              </div>
+              <div className="bg-white rounded-lg p-2 border border-gray-200">
                 <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Email</div>
-                <div className="text-xs font-medium text-gray-900 truncate">{formData.email || 'Non défini'}</div>
+                <div className="text-xs font-medium text-gray-900 truncate">
+                  {selectedPartenaireData?.email || 'Non disponible'}
+                </div>
               </div>
               <div className="bg-white rounded-lg p-2 border border-gray-200">
                 <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Statut</div>
@@ -1747,19 +1842,9 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
                 </div>
               </div>
               <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Nom complet</div>
-                <div className="text-xs font-medium text-gray-900 truncate">
-                  {formData.first_name || formData.last_name 
-                    ? `${formData.first_name} ${formData.last_name}`.trim() 
-                    : 'Non défini'}
-                </div>
-              </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Groupes</div>
+                <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Entité active</div>
                 <div className="text-xs font-medium text-gray-900">
-                  {formData.groups.length > 0 
-                    ? `${formData.groups.length} groupe(s)` 
-                    : 'Aucun groupe'}
+                  Entité #{entiteContexte}
                 </div>
               </div>
             </div>
@@ -1777,8 +1862,8 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 transition-all duration-200 font-medium flex items-center space-x-1.5 shadow hover:shadow-md text-sm"
+              disabled={loading || !formData.partenaire}
+              className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium flex items-center space-x-1.5 shadow hover:shadow-md text-sm"
             >
               {loading ? (
                 <>
@@ -1799,7 +1884,12 @@ function UserFormModal({ user, groupes, onClose, onSuccess }) {
   );
 }
 
-// MODAL FORMULAIRE GROUPE - COMPLÈTEMENT MIS À JOUR
+// ============================================
+// LES AUTRES MODAUX RESTENT IDENTIQUES
+// (GroupFormModal, PermissionFormModal, DetailModal, AssociationModal)
+// ============================================
+
+// GroupFormModal (identique)
 function GroupFormModal({ group, users = [], permissions = [], groups: allGroups = [], onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     name: group?.name || '',
@@ -1813,18 +1903,15 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // États pour les listes déroulantes avec filtres
   const [availableMembers, setAvailableMembers] = useState([...users]);
   const [selectedMembers, setSelectedMembers] = useState([...users].filter(u => formData.members.includes(u.id)));
   const [availableGroups, setAvailableGroups] = useState([...allGroups].filter(g => !group || g.id !== group.id));
   const [selectedGroups, setSelectedGroups] = useState([...allGroups].filter(g => formData.inherited_groups.includes(g.id)));
   
-  // États pour les filtres
   const [memberFilter, setMemberFilter] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
   const [permissionFilter, setPermissionFilter] = useState('');
 
-  // Filtrer les permissions par catégorie
   const categorizedPermissions = useMemo(() => {
     const categories = {};
     permissions.forEach(permission => {
@@ -1847,7 +1934,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
     return categories;
   }, [permissions]);
 
-  // Filtrer les membres disponibles
   useEffect(() => {
     const filtered = users.filter(user => 
       !memberFilter || 
@@ -1858,10 +1944,9 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
     setAvailableMembers(filtered.filter(u => !selectedMembers.find(sm => sm.id === u.id)));
   }, [users, selectedMembers, memberFilter]);
 
-  // Filtrer les groupes disponibles
   useEffect(() => {
     const filtered = allGroups.filter(g => 
-      (!group || g.id !== group.id) && // Exclure le groupe courant si édition
+      (!group || g.id !== group.id) &&
       (!groupFilter || 
         g.name?.toLowerCase().includes(groupFilter.toLowerCase()) ||
         g.description?.toLowerCase().includes(groupFilter.toLowerCase()))
@@ -1869,7 +1954,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
     setAvailableGroups(filtered.filter(g => !selectedGroups.find(sg => sg.id === g.id)));
   }, [allGroups, selectedGroups, groupFilter, group]);
 
-  // Gérer la sélection des membres
   const handleSelectMember = (member) => {
     setSelectedMembers([...selectedMembers, member]);
     setAvailableMembers(availableMembers.filter(m => m.id !== member.id));
@@ -1890,7 +1974,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
     setSelectedMembers([]);
   };
 
-  // Gérer la sélection des groupes
   const handleSelectGroup = (groupItem) => {
     setSelectedGroups([...selectedGroups, groupItem]);
     setAvailableGroups(availableGroups.filter(g => g.id !== groupItem.id));
@@ -1911,7 +1994,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
     setSelectedGroups([]);
   };
 
-  // Gérer la sélection des permissions
   const togglePermission = (permissionId) => {
     setFormData(prev => ({
       ...prev,
@@ -1926,7 +2008,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
     const allInCategorySelected = categoryPermissions.every(p => formData.permissions.includes(p.id));
     
     if (allInCategorySelected) {
-      // Désélectionner toutes les permissions de la catégorie
       setFormData(prev => ({
         ...prev,
         permissions: prev.permissions.filter(id => 
@@ -1934,7 +2015,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
         )
       }));
     } else {
-      // Sélectionner toutes les permissions de la catégorie
       const newPermissions = [...new Set([...formData.permissions, ...categoryPermissions.map(p => p.id)])];
       setFormData(prev => ({
         ...prev,
@@ -1961,7 +2041,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
       
       const method = group ? 'PUT' : 'POST';
 
-      // Mettre à jour formData avec les membres et groupes sélectionnés
       const finalFormData = {
         ...formData,
         members: selectedMembers.map(m => m.id),
@@ -1996,7 +2075,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
       <div className="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] overflow-y-auto shadow-xl">
-        {/* Header du modal - TOUT EN VIOLET */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -2007,11 +2085,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                 <h2 className="text-base font-bold">
                   {group ? 'Modifier le groupe' : 'Nouveau Groupe'}
                 </h2>
-                {!group && (
-                  <p className="text-violet-100 text-xs mt-0.5">
-                    Ajout de Groupe d'utilisateurs
-                  </p>
-                )}
               </div>
             </div>
             <button
@@ -2035,7 +2108,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
         )}
         
         <form onSubmit={handleSubmit} className="p-4 space-y-6">
-          {/* Section Informations Générales */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-4 border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
@@ -2086,14 +2158,12 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
             </div>
           </div>
 
-          {/* Section Permissions - Interface similaire à Django */}
           <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-4 border border-violet-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Permissions</h3>
             </div>
 
-            {/* Filtre pour les permissions */}
             <div className="mb-4">
               <div className="relative">
                 <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
@@ -2107,7 +2177,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
               </div>
             </div>
 
-            {/* Liste des permissions par catégorie */}
             <div className="max-h-80 overflow-y-auto border border-gray-200 rounded-lg bg-white">
               {Object.keys(categorizedPermissions).length === 0 ? (
                 <div className="text-center py-6">
@@ -2177,7 +2246,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
               <button
                 type="button"
                 onClick={() => {
-                  // Sélectionner toutes les permissions
                   const allPermissionIds = permissions.map(p => p.id);
                   setFormData(prev => ({
                     ...prev,
@@ -2191,7 +2259,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
               <button
                 type="button"
                 onClick={() => {
-                  // Désélectionner toutes les permissions
                   setFormData(prev => ({
                     ...prev,
                     permissions: []
@@ -2204,7 +2271,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
             </div>
           </div>
 
-          {/* Section Membres du groupe - Interface double liste */}
           <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-4 border border-blue-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-blue-600 to-blue-400 rounded"></div>
@@ -2212,7 +2278,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Membres disponibles */}
               <div>
                 <div className="mb-2">
                   <h4 className="text-xs font-medium text-gray-700 mb-1">
@@ -2223,7 +2288,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   </p>
                 </div>
 
-                {/* Filtre */}
                 <div className="mb-3">
                   <div className="relative">
                     <FiFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} />
@@ -2237,7 +2301,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   </div>
                 </div>
 
-                {/* Liste des membres disponibles */}
                 <div className="border border-gray-300 rounded h-48 overflow-y-auto">
                   {availableMembers.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-500 text-xs">
@@ -2262,7 +2325,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   )}
                 </div>
 
-                {/* Boutons d'action */}
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
@@ -2275,7 +2337,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                 </div>
               </div>
 
-              {/* Membres sélectionnés */}
               <div>
                 <div className="mb-2">
                   <h4 className="text-xs font-medium text-gray-700 mb-1">
@@ -2286,7 +2347,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   </p>
                 </div>
 
-                {/* Filtre */}
                 <div className="mb-3">
                   <div className="relative">
                     <FiFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} />
@@ -2300,7 +2360,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   </div>
                 </div>
 
-                {/* Liste des membres sélectionnés */}
                 <div className="border border-gray-300 rounded h-48 overflow-y-auto">
                   {selectedMembers.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-500 text-xs">
@@ -2326,7 +2385,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   )}
                 </div>
 
-                {/* Boutons d'action */}
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
@@ -2350,7 +2408,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
             </div>
           </div>
 
-          {/* Section Groupes hérités - Interface double liste */}
           <div className="bg-gradient-to-br from-green-50 to-white rounded-lg p-4 border border-green-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-green-600 to-green-400 rounded"></div>
@@ -2358,7 +2415,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Groupes disponibles */}
               <div>
                 <div className="mb-2">
                   <h4 className="text-xs font-medium text-gray-700 mb-1">
@@ -2369,7 +2425,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   </p>
                 </div>
 
-                {/* Filtre */}
                 <div className="mb-3">
                   <div className="relative">
                     <FiFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} />
@@ -2383,7 +2438,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   </div>
                 </div>
 
-                {/* Liste des groupes disponibles */}
                 <div className="border border-gray-300 rounded h-48 overflow-y-auto">
                   {availableGroups.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-500 text-xs">
@@ -2408,7 +2462,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   )}
                 </div>
 
-                {/* Boutons d'action */}
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
@@ -2421,7 +2474,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                 </div>
               </div>
 
-              {/* Groupes sélectionnés */}
               <div>
                 <div className="mb-2">
                   <h4 className="text-xs font-medium text-gray-700 mb-1">
@@ -2432,7 +2484,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   </p>
                 </div>
 
-                {/* Filtre */}
                 <div className="mb-3">
                   <div className="relative">
                     <FiFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} />
@@ -2446,7 +2497,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   </div>
                 </div>
 
-                {/* Liste des groupes sélectionnés */}
                 <div className="border border-gray-300 rounded h-48 overflow-y-auto">
                   {selectedGroups.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-500 text-xs">
@@ -2472,7 +2522,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
                   )}
                 </div>
 
-                {/* Boutons d'action */}
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
@@ -2496,7 +2545,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
             </div>
           </div>
 
-          {/* Aperçu */}
           <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-4 border border-violet-100">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
@@ -2522,7 +2570,6 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
             </div>
           </div>
           
-          {/* Boutons d'action */}
           <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
             <button
               type="button"
@@ -2556,7 +2603,7 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
   );
 }
 
-// MODAL FORMULAIRE PERMISSION - AMÉLIORÉ
+// PermissionFormModal (identique)
 function PermissionFormModal({ permission, groupes, modules, entites, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     name: permission?.name || '',
@@ -2575,7 +2622,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
     setLoading(true);
     setError(null);
 
-    // Validation
     if (!formData.groupe) {
       setError('Le groupe est obligatoire');
       setLoading(false);
@@ -2595,7 +2641,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
       
       const method = permission ? 'PUT' : 'POST';
 
-      // Préparer les données pour l'API
       const apiData = {
         groupe: parseInt(formData.groupe),
         module: parseInt(formData.module),
@@ -2636,7 +2681,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
       <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
-        {/* Header du modal - TOUT EN VIOLET */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -2647,11 +2691,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                 <h2 className="text-base font-bold">
                   {permission ? 'Modifier la permission' : 'Ajout de permission'}
                 </h2>
-                {!permission && (
-                  <p className="text-violet-100 text-xs mt-0.5">
-                    Créez une nouvelle permission dans le système
-                  </p>
-                )}
               </div>
             </div>
             <button
@@ -2675,7 +2714,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
         )}
         
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Section Informations Générales */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
@@ -2683,7 +2721,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Nom */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Nom
@@ -2700,7 +2737,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                 </div>
               </div>
               
-              {/* Groupe */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Groupe <span className="text-red-500">*</span>
@@ -2723,7 +2759,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                 </div>
               </div>
               
-              {/* Module */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Module <span className="text-red-500">*</span>
@@ -2746,7 +2781,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                 </div>
               </div>
               
-              {/* Entité */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Entité</label>
                 <div className="relative">
@@ -2766,7 +2800,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                 </div>
               </div>
               
-              {/* Type d'accès */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Accès <span className="text-red-500">*</span>
@@ -2805,7 +2838,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
             </div>
           </div>
 
-          {/* Aperçu */}
           <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-3 border border-violet-100">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
@@ -2858,7 +2890,6 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
             </div>
           </div>
           
-          {/* Boutons d'action */}
           <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button
               type="button"
@@ -2892,7 +2923,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
   );
 }
 
-// MODAL DE DÉTAILS (wrapper)
+// DetailModal wrapper
 function DetailModal({ item, type, userGroups, groupPermissions, groups, users, permissions, modules, onClose }) {
   if (type === 'users') {
     return <UserDetailModal item={item} userGroups={userGroups} groups={groups} onClose={onClose} />;
@@ -2903,7 +2934,7 @@ function DetailModal({ item, type, userGroups, groupPermissions, groups, users, 
   }
 }
 
-// MODAL DE DÉTAILS UTILISATEUR
+// UserDetailModal (adapté pour afficher partenaire et entité)
 function UserDetailModal({ item, userGroups, groups, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
@@ -2989,6 +3020,22 @@ function UserDetailModal({ item, userGroups, groups, onClose }) {
                   )}
                 </div>
               </div>
+              {item.partenaire && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-0.5">Partenaire</p>
+                  <p className="text-sm text-gray-900">
+                    {item.partenaire.nom || item.partenaire.name} {item.partenaire.prenom || ''}
+                  </p>
+                </div>
+              )}
+              {item.entite_active && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-0.5">Entité active</p>
+                  <p className="text-sm text-gray-900">
+                    {item.entite_active.raison_sociale || item.entite_active.name}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -3063,7 +3110,7 @@ function UserDetailModal({ item, userGroups, groups, onClose }) {
   );
 }
 
-// MODAL DE DÉTAILS GROUPE
+// GroupDetailModal (identique)
 function GroupDetailModal({ item, userGroups, groupPermissions, permissions, modules, users, onClose }) {
   const groupUsers = Object.entries(userGroups)
     .filter(([userId, groupIds]) => groupIds.includes(item.id))
@@ -3204,7 +3251,7 @@ function GroupDetailModal({ item, userGroups, groupPermissions, permissions, mod
   );
 }
 
-// MODAL DE DÉTAILS PERMISSION
+// PermissionDetailModal (identique)
 function PermissionDetailModal({ item, groups, modules, onClose }) {
   const group = groups.find(g => g.id === item.groupe || g.id === item.groupe?.id);
   const module = modules.find(m => m.id === item.module);
@@ -3301,7 +3348,7 @@ function PermissionDetailModal({ item, groups, modules, onClose }) {
   );
 }
 
-// MODAL D'ASSOCIATION
+// AssociationModal (identique)
 function AssociationModal({ 
   type, 
   target, 
@@ -3360,7 +3407,6 @@ function AssociationModal({
           groups: selectedItems
         });
       } else if (type === 'group-users') {
-        // Mettre à jour chaque utilisateur
         const updates = availableItems.map(user => {
           const currentGroups = userGroups[user.id] || [];
           const newGroups = selectedItems.includes(user.id)
@@ -3373,10 +3419,6 @@ function AssociationModal({
         });
         
         await Promise.all(updates);
-      } else if (type === 'group-permissions') {
-        // Pour simplifier, on pourrait mettre à jour les permissions existantes
-        // ou créer de nouvelles permissions
-        // Note: Dans une vraie implémentation, il faudrait gérer la création/suppression
       }
       
       onSuccess();

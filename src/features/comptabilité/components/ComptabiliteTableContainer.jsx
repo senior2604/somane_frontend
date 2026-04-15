@@ -1,4 +1,3 @@
-// features/comptabilité/components/ComptabiliteTableContainer.jsx
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   FiSearch, 
@@ -45,6 +44,7 @@ export default function ComptabiliteTableContainer({
   onItemsPerPageChange = null,
   pagination = null,
   onRowClick = null,
+  onRowDoubleClick = null,
   onView = null,
   onEdit = null,
   onDelete = null,
@@ -56,6 +56,7 @@ export default function ComptabiliteTableContainer({
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
   const [activeFilters, setActiveFilters] = useState([]);
   const [itemsPerPage, setItemsPerPage] = useState(initialItemsPerPage);
   const [currentPage, setCurrentPage] = useState(1);
@@ -142,11 +143,31 @@ export default function ComptabiliteTableContainer({
     onFilterChange([]);
   };
   
-  const toggleRowSelection = (id) => {
+  // Gestion de la sélection multiple avec Ctrl et Shift
+  const toggleRowSelection = (id, index, event) => {
     setSelectedRows(prev => {
-      const newSelected = prev.includes(id)
-        ? prev.filter(rowId => rowId !== id)
-        : [...prev, id];
+      let newSelected;
+      
+      // Si Ctrl est pressé (ou Cmd sur Mac)
+      if (event.ctrlKey || event.metaKey) {
+        // Ajout/retrait individuel
+        newSelected = prev.includes(id)
+          ? prev.filter(rowId => rowId !== id)
+          : [...prev, id];
+      }
+      // Si Shift est pressé et qu'on a une dernière sélection
+      else if (event.shiftKey && lastSelectedIndex !== null) {
+        // Sélection de plage
+        const start = Math.min(lastSelectedIndex, index);
+        const end = Math.max(lastSelectedIndex, index);
+        const rangeIds = paginatedData.slice(start, end + 1).map(item => item.id);
+        newSelected = [...new Set([...prev, ...rangeIds])];
+      }
+      else {
+        // Clic simple sans modif : remplace la sélection
+        newSelected = [id];
+        setLastSelectedIndex(index);
+      }
       
       if (onSelectionChange) {
         onSelectionChange(newSelected);
@@ -225,47 +246,9 @@ export default function ComptabiliteTableContainer({
     return '-';
   };
   
-  const renderDefaultActions = (item) => {
-    return (
-      <div className="flex items-center gap-1">
-        {(onView || onRowClick) && (
-          <button
-            onClick={() => onView ? onView(item) : onRowClick(item)}
-            className="p-1 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow"
-            title="Voir détails"
-          >
-            <FiEye size={12} />
-          </button>
-        )}
-        {onEdit && (
-          <button
-            onClick={() => onEdit(item)}
-            className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
-            title="Modifier"
-          >
-            <FiEdit2 size={12} />
-          </button>
-        )}
-        {onDelete && (
-          <button
-            onClick={() => onDelete(item)}
-            className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
-            title="Supprimer"
-          >
-            <FiTrash2 size={12} />
-          </button>
-        )}
-      </div>
-    );
-  };
-  
   const renderCell = (item, column) => {
     if (column.render) {
       return column.render(item);
-    }
-    
-    if (column.type === 'actions') {
-      return renderDefaultActions(item);
     }
     
     if (column.field === 'statut' || column.field === 'active') {
@@ -287,7 +270,7 @@ export default function ComptabiliteTableContainer({
 
   if (loading) {
     return (
-      <div className="px-4 pt-0 pb-4 bg-gradient-to-br from-gray-50 to-white min-h-screen"> {/* 👈 pt-0 ici aussi */}
+      <div className="px-4 pt-0 pb-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
         <div className="flex flex-col items-center justify-center h-96">
           <div className="relative">
             <div className="w-12 h-12 border-3 border-gray-200 rounded-full"></div>
@@ -302,7 +285,6 @@ export default function ComptabiliteTableContainer({
     );
   }
 
-  // 👇 CHANGEMENT PRINCIPAL ICI : pt-0 au lieu de p-4
   return (
     <div className="px-4 pt-0 pb-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
       
@@ -617,7 +599,7 @@ export default function ComptabiliteTableContainer({
                     </th>
                   ))}
 
-                  {/* ✅ BOUTON ⋯ ICI — APRÈS TOUTES LES COLONNES, Y COMPRIS "ACTIONS" */}
+                  {/* ✅ BOUTON ⋯ ICI — APRÈS TOUTES LES COLONNES */}
                   <th 
                     scope="col" 
                     className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 tracking-wider border-r border-gray-300 whitespace-nowrap w-8"
@@ -650,7 +632,7 @@ export default function ComptabiliteTableContainer({
             <tbody className="divide-y divide-gray-200">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleColumnDefs.length + 1} className="px-3 py-4 text-center">
+                  <td colSpan={visibleColumnDefs.length + 2} className="px-3 py-4 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
                         <config.icon className="w-6 h-6 text-gray-400" />
@@ -678,42 +660,54 @@ export default function ComptabiliteTableContainer({
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((item, index) => (
-                  <tr 
-                    key={item.id || `row-${index}`}
-                    className={`transition-all duration-150 cursor-pointer ${
-                      item.id === activeRowId
-                        ? 'bg-gradient-to-r from-violet-100 to-violet-50 border-l-4 border-l-violet-500'
-                        : selectedRows.includes(item.id)
-                          ? 'bg-gradient-to-r from-violet-50 to-violet-25 hover:bg-gradient-to-r hover:from-violet-100 hover:to-violet-50'
-                          : 'bg-white hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100'
-                    }`}
-                    onClick={() => onRowClick && onRowClick(item)}
-                  >
-                    <td className="px-2 py-2 whitespace-nowrap border-r border-gray-200 w-8">
-                      <input
-                        type="checkbox"
-                        checked={selectedRows.includes(item.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          toggleRowSelection(item.id);
-                        }}
-                        className="w-2.5 h-2.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
-                      />
-                    </td>
-                    
-                    {visibleColumnDefs.map(column => (
-                      <td 
-                        key={column.id}
-                        className="px-3 py-2 border-r border-gray-200 text-sm whitespace-nowrap"
-                      >
-                        {renderCell(item, column)}
+                paginatedData.map((item, index) => {
+                  const globalIndex = startIndex + index;
+                  
+                  return (
+                    <tr 
+                      key={item.id || `row-${index}`}
+                      className={`transition-all duration-150 cursor-pointer ${
+                        item.id === activeRowId
+                          ? 'bg-gradient-to-r from-violet-100 to-violet-50 border-l-4 border-l-violet-500'
+                          : selectedRows.includes(item.id)
+                            ? 'bg-gradient-to-r from-violet-50 to-violet-25 hover:bg-gradient-to-r hover:from-violet-100 hover:to-violet-50'
+                            : 'bg-white hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100'
+                      }`}
+                      onClick={(event) => {
+                        // Gestion de la sélection multiple avec Ctrl/Shift
+                        toggleRowSelection(item.id, globalIndex, event);
+                        // Appel du callback onRowClick si fourni
+                        if (onRowClick) {
+                          onRowClick(item, event);
+                        }
+                      }}
+                      onDoubleClick={() => onRowDoubleClick && onRowDoubleClick(item)}
+                    >
+                      <td className="px-2 py-2 whitespace-nowrap border-r border-gray-200 w-8">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(item.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleRowSelection(item.id, globalIndex, e);
+                          }}
+                          className="w-2.5 h-2.5 text-violet-600 rounded focus:ring-violet-500 border-gray-300"
+                        />
                       </td>
-                    ))}
+                      
+                      {visibleColumnDefs.map(column => (
+                        <td 
+                          key={column.id}
+                          className="px-3 py-2 border-r border-gray-200 text-sm whitespace-nowrap"
+                        >
+                          {renderCell(item, column)}
+                        </td>
+                      ))}
 
-                    {/* ❌ PAS DE COLONNE ⋯ ICI */}
-                  </tr>
-                ))
+                      {/* ❌ PAS DE COLONNE ⋯ ICI - déjà gérée dans l'en-tête */}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
