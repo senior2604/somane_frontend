@@ -12,80 +12,66 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const submit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    
-    try {
-      const API_URL = "http://localhost:8000/api/auth/jwt/create/";
-      
-      const credentials = {
-        email: email,
-        password: password
-      };
+const submit = async (e) => {
+  e.preventDefault();
+  setError(null);
+  setLoading(true);
 
-      const resp = await axios.post(API_URL, credentials, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      });
+  try {
+    // ←←← MODIFICATION ICI
+    const API_URL = `${process.env.REACT_APP_API_URL}/auth/jwt/create/`;
+    // ou si tu utilises authService plus tard : authService.login(credentials)
 
-      if (resp.data?.access) {
-        // Stockage des tokens JWT
-        localStorage.setItem("accessToken", resp.data.access);
-        localStorage.setItem("refreshToken", resp.data.refresh);
-        
-        // Stockage des infos utilisateur
-        if (resp.data.user) {
-          localStorage.setItem("user", JSON.stringify(resp.data.user));
-          localStorage.setItem("entiteActive", resp.data.user.entite_active || '');
-        }
-        
-        console.log("✅ Connexion réussie avec JWT");
-        
-        // Récupérer les entités accessibles par l'utilisateur
-        await fetchUserEntites(resp.data.access);
-        
-      } else {
-        setError("Connexion réussie mais aucun token JWT reçu.");
+    const credentials = { email, password };
+
+    const resp = await axios.post(API_URL, credentials, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000,
+    });
+
+    if (resp.data?.access) {
+      localStorage.setItem("accessToken", resp.data.access);
+      localStorage.setItem("refreshToken", resp.data.refresh);
+
+      if (resp.data.user) {
+        localStorage.setItem("user", JSON.stringify(resp.data.user));
+        localStorage.setItem("entiteActive", resp.data.user.entite_active || '');
       }
-    } catch (err) {
-      let errorMessage = "Identifiants incorrects ou erreur serveur.";
-      
-      if (err.response) {
-        const data = err.response.data;
-        
-        if (data.detail) {
-          errorMessage = data.detail;
-        } else if (data.non_field_errors) {
-          errorMessage = data.non_field_errors[0];
-        } else if (data.email) {
-          errorMessage = `Email: ${data.email[0]}`;
-        } else if (data.password) {
-          errorMessage = `Mot de passe: ${data.password[0]}`;
-        } else if (typeof data === 'object') {
-          const firstError = Object.values(data)[0];
-          errorMessage = Array.isArray(firstError) ? firstError[0] : String(firstError);
-        }
-      } else if (err.request) {
-        errorMessage = "Impossible de contacter le serveur. Vérifiez que Django est démarré sur le port 8000.";
-      } else if (err.code === 'ECONNREFUSED') {
-        errorMessage = "Serveur Django non accessible. Vérifiez qu'il est démarré sur le port 8000.";
-      }
-      
-      setError(errorMessage);
-      console.error('Erreur de connexion JWT:', err);
-    } finally {
-      setLoading(false);
+
+      console.log("✅ Connexion réussie avec JWT");
+      await fetchUserEntites(resp.data.access);
+    } else {
+      setError("Connexion réussie mais aucun token JWT reçu.");
     }
-  };
+  } catch (err) {
+    let errorMessage = "Identifiants incorrects ou erreur serveur.";
+
+    if (err.response) {
+      const data = err.response.data;
+      if (data.detail) errorMessage = data.detail;
+      else if (data.non_field_errors) errorMessage = data.non_field_errors[0];
+      else if (data.email) errorMessage = `Email: ${data.email[0]}`;
+      else if (data.password) errorMessage = `Mot de passe: ${data.password[0]}`;
+      else if (typeof data === 'object') {
+        const firstError = Object.values(data)[0];
+        errorMessage = Array.isArray(firstError) ? firstError[0] : String(firstError);
+      }
+    } else if (err.request) {
+      // ←←← Message plus adapté à la production
+      errorMessage = "Impossible de contacter le serveur. Vérifiez que l'application est bien démarrée.";
+    }
+
+    setError(errorMessage);
+    console.error('Erreur de connexion:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchUserEntites = async (accessToken) => {
     try {
       // ✅ Endpoint correct selon vos logs : /api/entites/
-      const response = await axios.get("http://localhost:8000/api/entites/", {
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/entites/`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',

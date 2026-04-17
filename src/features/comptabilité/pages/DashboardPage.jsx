@@ -14,16 +14,18 @@ import {
   FiChevronUp,
   FiX
 } from "react-icons/fi";
+import { API_CONFIG } from '../../../config/api';
 
 // IMPORT SIMPLIFIÉ - Crée directement l'instance axios
 import axios from 'axios';
 
-// Configuration de base d'axios
+// Configuration axios pour Production + Synology
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: API_CONFIG.BASE_URL,        // ← Utilise maintenant /api/
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000,
 });
 
 // Intercepteur pour ajouter le token automatiquement

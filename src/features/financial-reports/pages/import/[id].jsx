@@ -51,18 +51,27 @@ const BADGE_CONFIG = {
 };
 
 function ErrorCell({ errorDetails }) {
-  if (!errorDetails) return <span className="text-gray-400 text-xs">—</span>;
+  if (!errorDetails) 
+    return <span className="text-gray-400 text-xs">—</span>;
 
   let details = errorDetails;
+
+  // Si c'est une string JSON
   if (typeof details === 'string') {
-    try { details = JSON.parse(details); } catch { /* keep string */ }
+    try { 
+      details = JSON.parse(details); 
+    } catch {
+      return <span className="text-red-600 text-xs">{details}</span>;
+    }
   }
-  if (typeof details === 'string') {
-    return <span className="text-red-600 text-xs">{details}</span>;
+
+  // Si c'est un objet vide ou invalide
+  if (!details || typeof details !== 'object' || Object.keys(details).length === 0) {
+    return <span className="text-gray-400 text-xs">—</span>;
   }
 
   const parts = Object.entries(BADGE_CONFIG)
-    .filter(([key]) => details[key])
+    .filter(([key]) => details[key] != null && details[key] !== '')  // ignorer les valeurs vides
     .map(([key, cfg]) => (
       <div key={key} className="flex items-start gap-1.5 mb-1 last:mb-0">
         <span className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${cfg.bg} ${cfg.text}`}>
@@ -72,9 +81,9 @@ function ErrorCell({ errorDetails }) {
       </div>
     ));
 
-  return parts.length > 0
-    ? <div>{parts}</div>
-    : <span className="text-red-600 text-xs">{JSON.stringify(details)}</span>;
+  return parts.length > 0 
+    ? <div>{parts}</div> 
+    : <span className="text-gray-400 text-xs">—</span>;
 }
 
 // ============================================================================
@@ -153,6 +162,8 @@ export default function ImportDetail() {
   const [activeCell, setActiveCell] = useState(null);
   const [editValue, setEditValue]   = useState('');
   const [savingCell, setSavingCell] = useState(null);
+  const [bilanData, setBilanData] = useState(null);
+  const [loadingBilan, setLoadingBilan] = useState(false);
   const isEditingRef = useRef(false);
 
   // ── Chargement ──────────────────────────────────────────────────────────
@@ -208,23 +219,54 @@ export default function ImportDetail() {
     isEditingRef.current = true;
   };
 
-  const saveCell = async (lineId, field, newVal, oldVal) => {
-    const line = stagingLines.find(l => l.id === lineId);
-    if (!line) return;
-    const toSave = NUMERIC.includes(field) ? parseNumberForSave(newVal) : newVal;
-    const orig   = NUMERIC.includes(field) ? (oldVal ?? 0) : oldVal;
-    if (toSave === orig) return;
-    setSavingCell({ lineId, field });
-    try {
-      const resp = await apiClient.patch(`financial-reports/staging/${lineId}/`, { [field]: toSave });
-      setStagingLines(prev => prev.map(l => l.id === lineId ? { ...l, ...resp } : l));
-      setSuccessMessage('Cellule mise à jour');
-      setTimeout(() => setSuccessMessage(''), 2000);
-    } catch (err) {
-      setError(`Erreur : ${err.response?.data?.detail || err.message}`);
-      await fetchData();
-    } finally { setSavingCell(null); }
-  };
+const saveCell = async (lineId, field, newVal, oldVal) => {
+  const line = stagingLines.find(l => l.id === lineId);
+  if (!line) return;
+
+  const toSave = NUMERIC.includes(field) 
+    ? parseNumberForSave(newVal) 
+    : newVal;
+
+  const orig = NUMERIC.includes(field) 
+    ? (oldVal ?? 0) 
+    : oldVal;
+
+  if (toSave === orig) return;
+
+  setSavingCell({ lineId, field });
+
+  try {
+    // ── Toujours passer par update_line pour avoir les vérifications R1/R3/R5/R6
+    const resp = await apiClient.patch(
+      `financial-reports/staging/${lineId}/update_line/`,
+      { [field]: toSave }
+    );
+
+    setStagingLines(prev => 
+      prev.map(l => l.id === lineId ? { ...l, ...resp } : l)
+    );
+
+    setSuccessMessage('Cellule mise à jour');
+
+    setTimeout(async () => {
+      try {
+        const r = await apiClient.get(`financial-reports/raw-imports/${id}/staging_lines/`);
+        const lines = r.results || r || [];
+        setStagingLines(Array.from(new Map(lines.map(l => [l.id, l])).values()));
+      } catch {
+        await fetchData();
+      }
+      setSuccessMessage('');
+    }, 400);
+
+  } catch (err) {
+    console.error(err);
+    setError(`Erreur : ${err.response?.data?.detail || err.message || 'Erreur inconnue'}`);
+    await fetchData();
+  } finally {
+    setSavingCell(null);
+  }
+};
 
   const exitEditMode = (save = true) => {
     if (!activeCell) return;
@@ -260,7 +302,7 @@ export default function ImportDetail() {
     }
   };
 
-  // ── Actions ──────────────────────────────────────────────────────────────
+  // ── Actions ────────────────────────────────────────────────────────────── bilan
   const handleValidateImport = async () => {
     if (!window.confirm("Valider cet import ?")) return;
     setProcessing(true); setError(null);
@@ -301,6 +343,27 @@ export default function ImportDetail() {
     } finally { setChecking(false); }
   };
 
+    const handleLoadBilan = async () => {
+    if (!importData || importData.state !== 'validated') {
+      setError("Le Bilan n'est disponible que pour les imports validés.");
+      return;
+    }
+
+    setLoadingBilan(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.get(`financial-reports/raw-imports/${id}/bilan/`);
+      setBilanData(response);
+      setSuccessMessage("Bilan chargé avec succès");
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.detail || "Impossible de charger le Bilan");
+    } finally {
+      setLoadingBilan(false);
+    }
+  };
+
   const handleGoImportN1 = () => {
     navigate('/financial-reports/import', {
       state: {
@@ -321,7 +384,11 @@ export default function ImportDetail() {
 
   const hasErrors   = stats.error > 0;
   const hasWarning  = importData?.opening_balance_warning === true;
-  const canValidate = !processing && !hasErrors && !hasWarning && stagingLines.length > 0;
+  const canValidate = !processing && 
+                      !hasErrors && 
+                      !hasWarning && 
+                      stagingLines.length > 0 &&
+                      (stats.pending === 0 || stats.error === 0); // ← changer ici
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) return (
@@ -567,7 +634,14 @@ export default function ImportDetail() {
                     isSaving:  savingCell?.lineId === line.id && savingCell?.field === field,
                     editValue: activeCell?.lineId === line.id && activeCell?.field === field ? editValue : '',
                     onEditChange: setEditValue,
-                    onBlur: () => setTimeout(() => isEditingRef.current && exitEditMode(true), 100),
+                    onBlur: () => {
+                      // Petit délai pour laisser le temps au click de se propager si besoin
+                      setTimeout(() => {
+                        if (isEditingRef.current) {
+                          exitEditMode(true);
+                        }
+                      }, 150);
+                    },
                     onKeyDown: handleKeyDown,
                     onClick: handleCellClick,
                   });
@@ -671,7 +745,69 @@ export default function ImportDetail() {
           </table>
         </div>
       </div>
+                  {/* ====================== AFFICHAGE DU BILAN ====================== */}
+      {bilanData && (
+        <div className="mt-8 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 text-white">
+            <h2 className="text-xl font-bold">Bilan Comptable</h2>
+            <p className="text-sm opacity-90">
+              {bilanData.periode_name} • Généré le {bilanData.date_generation}
+            </p>
+          </div>
 
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* ACTIF */}
+            <div>
+              <h3 className="text-lg font-semibold text-emerald-700 mb-4 border-b pb-2">ACTIF</h3>
+              {Object.entries(bilanData.actif).map(([key, item]) => (
+                <div key={key} className="flex justify-between py-2 border-b last:border-0">
+                  <span className="text-gray-700">{item.libelle}</span>
+                  <span className="font-medium tabular-nums">
+                    {item.solde.toLocaleString('fr-FR')} FCFA
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between py-3 mt-4 font-bold text-lg border-t border-emerald-200">
+                <span>Total Actif</span>
+                <span>{bilanData.total_actif.toLocaleString('fr-FR')} FCFA</span>
+              </div>
+            </div>
+
+            {/* PASSIF */}
+            <div>
+              <h3 className="text-lg font-semibold text-red-700 mb-4 border-b pb-2">PASSIF</h3>
+              {Object.entries(bilanData.passif).map(([key, item]) => (
+                <div key={key} className="flex justify-between py-2 border-b last:border-0">
+                  <span className="text-gray-700">{item.libelle}</span>
+                  <span className="font-medium tabular-nums">
+                    {item.solde.toLocaleString('fr-FR')} FCFA
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between py-3 mt-4 font-bold text-lg border-t border-red-200">
+                <span>Total Passif</span>
+                <span>{bilanData.total_passif.toLocaleString('fr-FR')} FCFA</span>
+              </div>
+
+              {/* Résultat Net */}
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <div className="flex justify-between text-lg">
+                  <span className="font-medium">Résultat Net de l'exercice</span>
+                  <span className={`font-bold ${bilanData.resultat_net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {bilanData.resultat_net.toLocaleString('fr-FR')} FCFA
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 px-6 py-3 text-center text-sm text-gray-500 border-t">
+            {bilanData.est_equilibre 
+              ? "✅ Bilan équilibré" 
+              : "⚠️ Bilan non équilibré — vérifiez les données"}
+          </div>
+        </div>
+      )}
       {/* Instructions */}
       <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 flex flex-wrap gap-x-4 gap-y-1 items-center">
         <span><strong>💡 Navigation :</strong> Cliquez pour éditer</span>
@@ -723,6 +859,18 @@ export default function ImportDetail() {
               <FiCheckCircle size={15} />
               {processing ? 'Validation…' : 'Valider toutes les lignes'}
             </button>
+          )}
+          {importData.state === 'validated' && (
+            <>
+              <button onClick={() => navigate(`/financial-reports/statements/${id}`)}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium">
+                📊 États financiers
+              </button>
+              <button onClick={() => navigate(`/financial-reports/statements-syscohada/${id}`)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 text-sm font-medium">
+                📄 Format SYSCOHADA
+              </button>
+            </>
           )}
         </div>
       </div>

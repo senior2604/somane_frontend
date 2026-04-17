@@ -1,7 +1,7 @@
-// C:\python\django\somane_frontend\src\config\api.js
+// src/config/api.js  → Version Production Pure
 
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api/',
+  BASE_URL: 'http://localhost:8000/api',           // ← Important : chemin relatif via Nginx
   TIMEOUT: 10000,
 };
 
@@ -17,26 +17,24 @@ export const ENDPOINTS = {
     PASSWORD_RESET_CONFIRM: 'auth/users/reset_password_confirm/',
   },
   
-  // ✅ CORE ENDPOINTS
   USERS: 'users/',
   ENTITES: 'entites/',
-  PAYS: 'pays/',           // ✅ AJOUTÉ avec slash
-  DEVISES: 'devises/',     // ✅ Slash ajouté
+  PAYS: 'pays/',
+  DEVISES: 'devises/',
   ROLES: 'roles/',
-  PARTENAIRES: 'partenaires/',  // ✅ AJOUTÉ
+  PARTENAIRES: 'partenaires/',
   
-  // ✅ COMPTABILITÉ - Tous les endpoints avec slashes
   COMPTA: {
     FRAMEWORKS: 'compta/frameworks/',
     GROUPS: 'compta/groups/',
-    TYPES: 'compta/types/',         // ✅ AccountAccountType
+    TYPES: 'compta/types/',
     ACCOUNTS: 'compta/accounts/',
     JOURNALS: 'compta/journals/',
     MOVES: 'compta/moves/',
     TAXES: 'compta/taxes/',
     FISCAL_POSITIONS: 'compta/fiscal-positions/',
-    PAYMENTS: 'compta/payments/',   // ✅ AJOUTÉ
-    BANK_STATEMENTS: 'compta/bank-statements/',  // ✅ AJOUTÉ
-    ACCOUNT_COMPANY_CONFIGS: 'compta/account-company-configs/',   // ← Important
+    PAYMENTS: 'compta/payments/',
+    BANK_STATEMENTS: 'compta/bank-statements/',
+    ACCOUNT_COMPANY_CONFIGS: 'compta/account-company-configs/',
   },
 };

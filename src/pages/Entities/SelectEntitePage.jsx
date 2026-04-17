@@ -15,6 +15,8 @@ import {
 import { TbBuildingSkyscraper } from 'react-icons/tb';
 import Header from '../../components/Header';
 import EntityFormModal from '../../components/EntityFormModal';
+import { useEntity } from '../../context/EntityContext';
+
 
 // ─────────────────────────────────────────────
 // CONSTANTES
@@ -49,6 +51,7 @@ const isActive = (entite) => entite.statut === true || entite.statut === 'true';
 // ─────────────────────────────────────────────
 function useEntities() {
   const navigate = useNavigate();
+  const { selectEntity } = useEntity(); // ← AJOUT
   const [entites, setEntites] = useState([]);
   const [pays, setPays] = useState([]);
   const [devises, setDevises] = useState([]);
@@ -105,8 +108,9 @@ function useEntities() {
     fetchAll();
   }, [fetchAll]);
 
-  const selectEntite = useCallback((entite) => {
+ const selectEntite = useCallback((entite) => {
     setSelectedEntite(entite);
+    selectEntity(entite); // ← AJOUT : synchronise le contexte partagé avec le header
 
     localStorage.setItem('currentEntite', JSON.stringify(entite));
     localStorage.setItem('entiteActive', entite.id.toString());
@@ -117,13 +121,11 @@ function useEntities() {
       user.company_id = entite.id;
       user.entite_active = entite.id;
       localStorage.setItem('user', JSON.stringify(user));
-    } catch {
-      // silencieux — non bloquant
-    }
+    } catch { }
 
     setTimeout(() => navigate('/dashboard'), 800);
-  }, [navigate]);
-
+  }, [navigate, selectEntity]); // ← ajouter selectEntity dans les dépendances
+  
   return {
     entites, pays, devises, langues,
     loading, error,
