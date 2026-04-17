@@ -1,0 +1,444 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { apiClient } from '../../../../services/apiClient';
+import { FiArrowLeft, FiSave, FiPlus } from 'react-icons/fi';
+
+export default function BonsCommandeCreate() {
+  const navigate = useNavigate();
+  const [fournisseurs, setFournisseurs] = useState([]);
+  const [devises, setDevises] = useState([]);
+  const [societes, setSocietes] = useState([]);
+  const [utilisateurs, setUtilisateurs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
+  
+  const [formData, setFormData] = useState({
+    name: 'BC/26/001',
+    partner_id: '',
+    date_order: '2026-02-05',
+    currency_id: '',
+    company_id: '',
+    user_id: '',
+    state: 'brouillon',
+    amount_total: 0,
+    notes: ''
+  });
+
+  const [lignes, setLignes] = useState([{
+    article: '',
+    description: '',
+    quantite: '1',
+    prix_unitaire: '0,00',
+    taxes: '18',
+    tva: '0,00',
+    date_livraison: '',
+  }]);
+
+  const fetchReferenceData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [fournisseurRes, devisesRes, societesRes, utilisateursRes] = await Promise.all([
+        apiClient.get('/fournisseurs/'),
+        apiClient.get('/devises/'),
+        apiClient.get('/societes/'),
+        apiClient.get('/utilisateurs/')
+      ]);
+      
+      setFournisseurs(fournisseurRes.data || []);
+      setDevises(devisesRes.data || []);
+      setSocietes(societesRes.data || []);
+      setUtilisateurs(utilisateursRes.data || []);
+    } catch (error) {
+      console.error('Erreur:', error);
+      alert('Erreur lors du chargement des données');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReferenceData();
+  }, [fetchReferenceData]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const handleLigneChange = (index, field, value) => {
+    const newLignes = [...lignes];
+    newLignes[index][field] = value;
+    
+    // Calcul automatique de la TVA
+    if (field === 'quantite' || field === 'prix_unitaire' || field === 'taxes') {
+      const quantite = parseFloat(newLignes[index].quantite.replace(',', '.')) || 0;
+      const prix = parseFloat(newLignes[index].prix_unitaire.replace(',', '.')) || 0;
+      const tauxTVA = parseFloat(newLignes[index].taxes) || 0;
+      const montantHT = quantite * prix;
+      const montantTVA = (montantHT * tauxTVA) / 100;
+      newLignes[index].tva = montantTVA.toFixed(2).replace('.', ',');
+      
+      // Mise à jour du montant total
+      const totalHT = newLignes.reduce((sum, ligne) => {
+        const q = parseFloat(ligne.quantite.replace(',', '.')) || 0;
+        const p = parseFloat(ligne.prix_unitaire.replace(',', '.')) || 0;
+        return sum + (q * p);
+      }, 0);
+      
+      const totalTVA = newLignes.reduce((sum, ligne) => {
+        return sum + (parseFloat(ligne.tva.replace(',', '.')) || 0);
+      }, 0);
+      
+      setFormData(prev => ({ ...prev, amount_total: totalHT + totalTVA }));
+    }
+    
+    setLignes(newLignes);
+  };
+
+  const addLigne = () => {
+    setLignes([...lignes, {
+      article: '',
+      description: '',
+      quantite: '1',
+      prix_unitaire: '0,00',
+      taxes: '18',
+      tva: '0,00',
+      date_livraison: '',
+    }]);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+
+    try {
+      await apiClient.post('/achats/bons-commande/', formData);
+      navigate('/achats/bons-commande');
+    } catch (error) {
+      if (error.response?.data) {
+        setErrors(error.response.data);
+      } else {
+        alert('Erreur lors de la création');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('fr-FR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount || 0);
+  };
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600"></div></div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      {/* Ligne supérieure */}
+      <div className="flex items-center gap-3 mb-4">
+        <button
+          onClick={() => navigate('/achats/bons-commande')}
+          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+        >
+          <FiArrowLeft className="text-sm" />
+          <span>Retour</span>
+        </button>
+        <span className="text-gray-400">|</span>
+        <h1 className="text-lg font-semibold text-gray-900">Créer un Bon de Commande</h1>
+      </div>
+
+      {/* Ligne état + numéro + BOUTON ENREGISTRER VIOLET */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-600">Etat:</span>
+          <span className="px-3 py-1 bg-gray-200 text-gray-800 text-sm rounded-full">
+            {formData.state}
+          </span>
+          <span className="text-sm text-gray-600">N° bon:</span>
+          <span className="text-sm font-bold text-gray-900">{formData.name}</span>
+        </div>
+        
+        {/* BOUTON ENREGISTRER VIOLET */}
+        <button
+          onClick={handleSubmit}
+          disabled={saving}
+          className="px-4 py-2 bg-violet-600 text-white text-sm rounded hover:bg-violet-700 flex items-center gap-2 disabled:opacity-50"
+        >
+          <FiSave className="text-sm" />
+          Enregistrer
+        </button>
+      </div>
+
+      {/* BLOC UNIQUE - Tout relié avec lignes de séparation */}
+      <div className="bg-white rounded-lg border border-gray-300 mb-6">
+        {/* Numéro en grand */}
+        <div className="p-6 border-b border-gray-300">
+          <h2 className="text-3xl font-bold text-gray-900 text-center">{formData.name}</h2>
+        </div>
+
+        {/* PARTIE HAUTE - Grille 7 champs */}
+        <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          {/* Date de Commande */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Date commande *</p>
+            <input
+              type="date"
+              name="date_order"
+              value={formData.date_order}
+              onChange={handleChange}
+              className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+          
+          {/* Référence */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Référence *</p>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="BC/26/001"
+              className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+          
+          {/* Société */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Société *</p>
+            <select
+              name="company_id"
+              value={formData.company_id}
+              onChange={handleChange}
+              className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              <option value="">Sélectionner</option>
+              {societes.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Fournisseur */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Fournisseur *</p>
+            <select
+              name="partner_id"
+              value={formData.partner_id}
+              onChange={handleChange}
+              className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              <option value="">Sélectionner</option>
+              {fournisseurs.map(f => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Devise */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Devise *</p>
+            <select
+              name="currency_id"
+              value={formData.currency_id}
+              onChange={handleChange}
+              className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              <option value="">Sélectionner</option>
+              {devises.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Statut */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Statut</p>
+            <select
+              name="state"
+              value={formData.state}
+              onChange={handleChange}
+              className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="brouillon">Brouillon</option>
+              <option value="demande_prix">Demande Prix</option>
+              <option value="envoyer">Envoyé</option>
+              <option value="confirmer">Confirmé</option>
+              <option value="annule">Annulé</option>
+            </select>
+          </div>
+          
+          {/* Acheteur */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Acheteur *</p>
+            <select
+              name="user_id"
+              value={formData.user_id}
+              onChange={handleChange}
+              className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              <option value="">Sélectionner</option>
+              {utilisateurs.map(u => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* LIGNE DE SÉPARATION */}
+        <div className="border-t border-gray-300"></div>
+
+        {/* TABLEAU COMPACT TYPE EXCEL */}
+        <div className="p-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead className="bg-gray-50">
+                <tr className="text-left">
+                  <th className="px-3 py-2 font-medium text-gray-500 border border-gray-300">Article</th>
+                  <th className="px-3 py-2 font-medium text-gray-500 border border-gray-300">Description</th>
+                  <th className="px-3 py-2 font-medium text-gray-500 border border-gray-300 w-20">Quantité</th>
+                  <th className="px-3 py-2 font-medium text-gray-500 border border-gray-300 w-24">Prix Unitaire</th>
+                  <th className="px-3 py-2 font-medium text-gray-500 border border-gray-300 w-20">Taxes %</th>
+                  <th className="px-3 py-2 font-medium text-gray-500 border border-gray-300 w-24">Montant TVA</th>
+                  <th className="px-3 py-2 font-medium text-gray-500 border border-gray-300 w-28">Date livraison</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lignes.map((ligne, index) => (
+                  <tr key={index}>
+                    <td className="px-3 py-1.5 border border-gray-300">
+                      <input
+                        type="text"
+                        value={ligne.article}
+                        onChange={(e) => handleLigneChange(index, 'article', e.target.value)}
+                        placeholder="Code"
+                        className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 border border-gray-300">
+                      <input
+                        type="text"
+                        value={ligne.description}
+                        onChange={(e) => handleLigneChange(index, 'description', e.target.value)}
+                        placeholder="Description"
+                        className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 border border-gray-300">
+                      <input
+                        type="text"
+                        value={ligne.quantite}
+                        onChange={(e) => handleLigneChange(index, 'quantite', e.target.value)}
+                        className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs text-right bg-transparent"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 border border-gray-300">
+                      <input
+                        type="text"
+                        value={ligne.prix_unitaire}
+                        onChange={(e) => handleLigneChange(index, 'prix_unitaire', e.target.value)}
+                        className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs text-right bg-transparent"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 border border-gray-300">
+                      <select
+                        value={ligne.taxes}
+                        onChange={(e) => handleLigneChange(index, 'taxes', e.target.value)}
+                        className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent"
+                      >
+                        <option value="18">18%</option>
+                        <option value="20">20%</option>
+                        <option value="0">0%</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-1.5 border border-gray-300">
+                      <input
+                        type="text"
+                        value={ligne.tva}
+                        onChange={(e) => handleLigneChange(index, 'tva', e.target.value)}
+                        className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs text-right bg-transparent"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 border border-gray-300">
+                      <input
+                        type="date"
+                        value={ligne.date_livraison}
+                        onChange={(e) => handleLigneChange(index, 'date_livraison', e.target.value)}
+                        className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* LIGNE DE SÉPARATION */}
+        <div className="border-t border-gray-300"></div>
+
+        {/* TOTAUX EXACTEMENT COMME IMAGE 111 */}
+        <div className="p-4 flex justify-end">
+          <div className="flex space-x-8">
+            <div className="text-right">
+              <div className="text-sm text-gray-600 mb-1">0,00 XOF</div>
+              <div className="text-sm text-gray-600">0,00 XOF</div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-gray-600 mb-1">0,00 XOF</div>
+              <div className="text-sm text-gray-600">0,00 XOF</div>
+            </div>
+          </div>
+        </div>
+
+        {/* BOUTON AJOUTER UNE LIGNE */}
+        <div className="px-4 py-3 border-t border-gray-300">
+          <button
+            type="button"
+            onClick={addLigne}
+            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
+          >
+            <FiPlus className="text-sm" />
+            Ajouter une ligne
+          </button>
+        </div>
+
+        {/* LIGNE DE SÉPARATION */}
+        <div className="border-t border-gray-300"></div>
+
+        {/* NOTES */}
+        <div className="p-6">
+          <p className="text-sm text-gray-500 mb-2">Notes</p>
+          <textarea
+            name="notes"
+            value={formData.notes}
+            onChange={handleChange}
+            placeholder="Ajoutez des notes ici..."
+            rows="3"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

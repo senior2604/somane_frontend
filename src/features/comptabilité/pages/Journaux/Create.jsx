@@ -533,16 +533,17 @@ export default function JournauxCreate() {
       }
       
       try {
-        const sequencesResponse = await apiClient.get('/sequences/');
-        const sequencesData = normalizeApiResponse(sequencesResponse);
-        const filteredSequences = sequencesData.filter(s => 
-          !s.company || s.company === activeEntity?.id
-        );
-        setSequences(filteredSequences);
-      } catch (err) {
-        console.log('ℹ️ Séquences non disponibles');
-        setSequences([]);
-      }
+            const sequencesResponse = await apiClient.get('/sequences/');
+            const sequencesData = normalizeApiResponse(sequencesResponse);
+            const filteredSequences = sequencesData.filter(s => 
+            !s.company || s.company === activeEntity?.id
+           );
+      setSequences(filteredSequences);
+                  console.log('✅ Séquences chargées:', filteredSequences); 
+} catch (err) {
+  console.log('ℹ️ Séquences non disponibles', err); 
+  setSequences([]);
+}
       
     } catch (err) {
       console.error('❌ Erreur critique:', err);

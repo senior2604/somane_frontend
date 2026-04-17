@@ -90,6 +90,11 @@ import TauxFiscauxEdit from "../features/comptabilité/pages/TauxFiscaux/Edit.js
 // NOUVEL IMPORT : BALANCE GÉNÉRALE
 import BalanceGenerale from "../features/comptabilité/pages/Balance/Index.jsx";
 
+// ========== IMPORTS DES SÉQUENCES ==========
+import SequencesList from "../features/comptabilité/pages/Sequences/List.jsx";
+import SequencesCreate from "../features/comptabilité/pages/Sequences/Create.jsx";
+import SequencesShow from "../features/comptabilité/pages/Sequences/Show.jsx";
+
 // IMPORTS DU MODULE ACHATS
 import AchatLayout from "../features/achat/layouts/AchatLayout";
 import AchatDashboard from "../features/achat/pages/AchatDashboard";
@@ -277,6 +282,13 @@ export default function AppRouter() {
 
           {/* NOUVELLE ROUTE : BALANCE GÉNÉRALE */}
           <Route path="balance" element={<BalanceGenerale />} />
+
+          {/* ========== ROUTES SÉQUENCES ========== */}
+          <Route path="sequences">
+            <Route index element={<SequencesList />} />
+            <Route path="create" element={<SequencesCreate />} />
+            <Route path=":id" element={<SequencesShow />} />
+          </Route>
         </Route>
 
         {/* ROUTES ACHATS */}
@@ -297,9 +309,9 @@ export default function AppRouter() {
           <Route path="/financial-reports/dashboard" element={<FinancialReportsDashboard />} />
           <Route path="/financial-reports/new" element={<NewReportPage />} /> 
           <Route path="/financial-reports/import" element={<ImportPage />} />
-          <Route path="/financial-reports/import/:id" element={<ImportDetailPage />} />
+          <Route path="/financial-reports/import/:id" element={<ImportDetailPage />} />  
           <Route path="/financial-reports/statements/:id" element={<StatementsDetailPage />} />
-          <Route path="/financial-reports/statements-syscohada/:id" element={<StatementsSyscohadaPage />} />
+          <Route path="/financial-reports/statements-syscohada/:id" element={<StatementsSyscohadaPage />} />      
           <Route path="/financial-reports/settings" element={<SettingPage />} />
           <Route path="/financial-reports/Periods" element={<PeriodSelectorPage />} />
           <Route path="/financial-reports/lignes" element={<Indexpages />} /> 
