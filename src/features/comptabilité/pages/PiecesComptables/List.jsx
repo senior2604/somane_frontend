@@ -66,6 +66,66 @@ const SortIcon = ({ column, sortColumn, sortDirection }) => {
     <FiArrowDown size={12} className="ml-1 inline" />;
 };
 
+// ✅ Fonction pour formater les montants sans décimales avec séparateur d'espace
+const formatAmount = (value) => {
+  if (!value && value !== 0) return '0';
+  const num = parseFloat(value);
+  if (isNaN(num)) return '0';
+  return Math.round(num).toLocaleString('fr-FR');
+};
+
+// ✅ Fonction pour extraire le montant de la taxe d'une ligne (identique à Show.jsx)
+const extractTaxAmount = (line, taxesMap) => {
+  if (!line) return 0;
+  
+  // 1. Si tax_base_amount existe, l'utiliser directement
+  if (line.tax_base_amount && parseFloat(line.tax_base_amount) > 0) {
+    return parseFloat(line.tax_base_amount);
+  }
+  
+  // 2. Chercher dans tax_ids
+  if (line.tax_ids && Array.isArray(line.tax_ids) && line.tax_ids.length > 0) {
+    const firstTax = line.tax_ids[0];
+    let taxRate = 0;
+    
+    // Cas 1: c'est un objet avec amount
+    if (typeof firstTax === 'object' && firstTax !== null) {
+      taxRate = parseFloat(firstTax.amount) || 0;
+    }
+    // Cas 2: c'est un ID
+    else if (typeof firstTax === 'number' && taxesMap && taxesMap[firstTax]) {
+      taxRate = parseFloat(taxesMap[firstTax].amount) || 0;
+    }
+    // Cas 3: c'est une string numérique
+    else if (typeof firstTax === 'string' && !isNaN(firstTax) && taxesMap && taxesMap[parseInt(firstTax, 10)]) {
+      taxRate = parseFloat(taxesMap[parseInt(firstTax, 10)].amount) || 0;
+    }
+    
+    if (taxRate > 0) {
+      const amount = Math.max(parseFloat(line.debit) || 0, parseFloat(line.credit) || 0);
+      return (amount * taxRate) / 100;
+    }
+  }
+  
+  // 3. Chercher dans tax_line
+  if (line.tax_line) {
+    let taxRate = 0;
+    
+    if (typeof line.tax_line === 'object' && line.tax_line !== null) {
+      taxRate = parseFloat(line.tax_line.amount) || 0;
+    } else if (typeof line.tax_line === 'number' && taxesMap && taxesMap[line.tax_line]) {
+      taxRate = parseFloat(taxesMap[line.tax_line].amount) || 0;
+    }
+    
+    if (taxRate > 0) {
+      const amount = Math.max(parseFloat(line.debit) || 0, parseFloat(line.credit) || 0);
+      return (amount * taxRate) / 100;
+    }
+  }
+  
+  return 0;
+};
+
 // ==========================================
 // COMPOSANT PRINCIPAL
 // ==========================================
@@ -115,6 +175,7 @@ export default function PiecesComptablesList() {
   const [partnersMap, setPartnersMap] = useState({});
   const [journalsMap, setJournalsMap] = useState({});
   const [currenciesMap, setCurrenciesMap] = useState({});
+  const [taxesMap, setTaxesMap] = useState({});
   const [referentialsLoaded, setReferentialsLoaded] = useState(false);
   const [partnerList, setPartnerList] = useState([]);
 
@@ -178,6 +239,12 @@ export default function PiecesComptablesList() {
         currencies.forEach(c => { currenciesObj[c.id] = c; });
         setCurrenciesMap(currenciesObj);
         
+        // ✅ Charger les taxes pour pouvoir calculer les montants
+        const taxes = await piecesService.getTaxes?.(activeEntity.id) || [];
+        const taxesObj = {};
+        taxes.forEach(t => { taxesObj[t.id] = t; });
+        setTaxesMap(taxesObj);
+        
         setReferentialsLoaded(true);
         
       } catch (err) {
@@ -191,8 +258,8 @@ export default function PiecesComptablesList() {
     loadReferentials();
   }, [activeEntity]);
 
-  // Fonction pour calculer les montants
-  const calculateAmounts = (piece) => {
+  // ✅ Fonction CORRIGÉE pour calculer les montants HT, Taxes, TTC
+  const calculateAmounts = useCallback((piece) => {
     if (!piece.lines || piece.lines.length === 0) {
       return { amount_untaxed: 0, amount_tax: 0, amount_total: 0 };
     }
@@ -207,19 +274,19 @@ export default function PiecesComptablesList() {
       totalDebit += debit;
       totalCredit += credit;
       
-      if (line.tax_base_amount) {
-        taxAmount += parseFloat(line.tax_base_amount) || 0;
-      }
+      // ✅ Utiliser la fonction extractTaxAmount pour récupérer le montant de la taxe
+      taxAmount += extractTaxAmount(line, taxesMap);
     });
     
-    const amountTotal = Math.max(totalDebit, totalCredit);
+    // Le HT est le total des débits (ou crédits, ils doivent être égaux)
+    const amountUntaxed = Math.max(totalDebit, totalCredit);
     
     return {
-      amount_untaxed: amountTotal - taxAmount,
-      amount_tax: taxAmount,
-      amount_total: amountTotal
+      amount_untaxed: amountUntaxed,           // HT
+      amount_tax: taxAmount,                    // Taxes
+      amount_total: amountUntaxed + taxAmount   // TTC = HT + Taxes
     };
-  };
+  }, [taxesMap]);
 
   // Fonctions utilitaires
   const getJournalCode = (piece) => {
@@ -290,7 +357,7 @@ export default function PiecesComptablesList() {
     } finally {
       setLoading(false);
     }
-  }, [activeEntity, referentialsLoaded, partnersMap, journalsMap, currenciesMap]);
+  }, [activeEntity, referentialsLoaded, partnersMap, journalsMap, currenciesMap, calculateAmounts]);
 
   useEffect(() => {
     if (referentialsLoaded && activeEntity) {
@@ -655,7 +722,7 @@ export default function PiecesComptablesList() {
                 </h1>
               </Tooltip>
               
-              {/* Menu Actions - JUSTE L'ICÔNE */}
+              {/* Menu Actions */}
               <div className="relative" ref={actionsMenuRef}>
                 <Tooltip text="Menu des actions">
                   <button
@@ -1012,7 +1079,7 @@ export default function PiecesComptablesList() {
                     </button>
                   </Tooltip>
                 </th>
-                </tr>
+              </tr>
             </thead>
             <tbody>
               {error ? (
@@ -1077,21 +1144,24 @@ export default function PiecesComptablesList() {
                         <PartnerDisplay partner={getPartnerDisplay(piece)} />
                       </td>
                     )}
+                    {/* ✅ HT formaté sans virgules */}
                     {visibleColumns.montant_ht && (
                       <td className="border border-gray-300 px-2 py-1.5 text-right text-xs">
-                        {(piece.amount_untaxed || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatAmount(piece.amount_untaxed)}
                         <span className="text-gray-400 text-[10px] ml-1">{getCurrencyCode(piece)}</span>
                       </td>
                     )}
+                    {/* ✅ Taxes formatées sans virgules */}
                     {visibleColumns.montant_taxes && (
                       <td className="border border-gray-300 px-2 py-1.5 text-right text-xs text-blue-600">
-                        {(piece.amount_tax || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatAmount(piece.amount_tax)}
                         <span className="text-gray-400 text-[10px] ml-1">{getCurrencyCode(piece)}</span>
                       </td>
                     )}
+                    {/* ✅ TTC formaté sans virgules */}
                     {visibleColumns.montant_ttc && (
                       <td className="border border-gray-300 px-2 py-1.5 text-right text-xs text-red-600">
-                        {(piece.amount_total || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatAmount(piece.amount_total)}
                         <span className="text-gray-400 text-[10px] ml-1">{getCurrencyCode(piece)}</span>
                       </td>
                     )}
@@ -1113,7 +1183,7 @@ export default function PiecesComptablesList() {
           </table>
         </div>
 
-        {/* Menu colonnes flottant (en dehors du tableau) */}
+        {/* Menu colonnes flottant */}
         {showColumnsMenu && (
           <div 
             id="columns-menu"

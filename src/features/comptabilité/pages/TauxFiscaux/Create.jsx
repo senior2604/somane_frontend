@@ -1,7 +1,7 @@
-// C:\Users\IBM\Documents\somane_frontend\src\features\comptabilité\pages\TauxFiscaux\Create.jsx
+// C:\Users\senio\Documents\somane_frontend\src\features\comptabilité\pages\TauxFiscaux\Create.jsx
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   FiPlus, FiTrash2, FiCheck, FiUploadCloud, FiX, FiAlertCircle,
   FiBriefcase, FiSettings, FiInfo, FiPercent, FiTag, FiCreditCard,
@@ -130,16 +130,52 @@ const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, get
 };
 
 // ==========================================
+// UTILITAIRE NETTOYAGE ID
+// ==========================================
+const cleanId = (value) => {
+  if (!value || value === '' || value === 'null' || value === 'undefined') return null;
+  const parsed = parseInt(value, 10);
+  return isNaN(parsed) ? null : parsed;
+};
+
+// ==========================================
+// NORMALISATION DES DONNÉES API
+// ==========================================
+const normalizeData = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (data.results && Array.isArray(data.results)) return data.results;
+  if (data.data && Array.isArray(data.data)) return data.data;
+  return [];
+};
+
+// ==========================================
+// CONVERSION TYPE BACKEND
+// ==========================================
+const convertToBackendType = (displayType) => {
+  if (displayType === 'base') return 'base';
+  if (displayType === 'tax_main') return 'tax';
+  if (displayType === 'tax_split') return 'delatax';
+  return 'tax';
+};
+
+// ==========================================
 // COMPOSANT LIGNE DE RÉPARTITION
 // ==========================================
-const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemove, isLast, canDelete, onTabAtLastField }) => {
+const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemove, isLast, canDelete, onTabAtLastField, docType }) => {
   const handleTypeChange = (e) => {
     const newType = e.target.value;
     onChange('repartition_type', newType);
-    if (newType === 'base') onChange('factor_percent', 100);
+    if (newType === 'base') {
+      onChange('factor_percent', 100);
+    }
   };
 
   const isBase = line.repartition_type === 'base';
+  const isRefund = docType === 'refund';
+
+  // Valeur affichée : toujours positive
+  const displayValue = isBase ? 100 : Math.abs(line.factor_percent || 0);
 
   return (
     <tr className="hover:bg-gray-50">
@@ -153,14 +189,21 @@ const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemo
       </td>
       <td className="border border-gray-300 p-1" style={{ width: '70px', minWidth: '70px' }}>
         {isBase ? (
-          <div className="w-full px-1 py-1 text-xs text-right text-gray-600 bg-gray-100 font-medium" style={{ height: '26px', lineHeight: '20px' }}>100%</div>
+          <div className="w-full px-1 py-1 text-xs text-right font-medium text-green-600 bg-gray-50" style={{ height: '26px', lineHeight: '20px' }}>
+            {displayValue}%
+          </div>
         ) : (
           <div className="relative">
-            <input type="number" value={line.factor_percent}
-              onChange={(e) => onChange('factor_percent', e.target.value === '' ? 0 : parseFloat(e.target.value))}
-              min="-100" max="100" step="0.01"
-              className={`w-full px-1 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-purple-500 focus:outline-none ${line.factor_percent < 0 ? 'text-red-600 bg-red-50' : ''}`}
-              style={{ height: '26px' }} placeholder="100"
+            <input type="number" 
+              value={displayValue}
+              onChange={(e) => {
+                const val = e.target.value === '' ? 0 : Math.abs(parseFloat(e.target.value));
+                onChange('factor_percent', val);
+              }}
+              min="0" max="100" step="0.01"
+              className="w-full px-1 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-purple-500 focus:outline-none appearance-none text-gray-900"
+              style={{ height: '26px' }} 
+              placeholder="100"
             />
             <span className="absolute right-1 top-1.5 text-xs text-gray-400">%</span>
           </div>
@@ -214,37 +257,51 @@ const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemo
 // COMPOSANT RÉCAPITULATIF
 // ==========================================
 const RepartitionSummary = ({ lines, title }) => {
+  const isRefund = title === 'Avoir';
+  
   let baseTotal = 0;
-  let taxTotal = 0;
+  let taxMainTotal = 0;
+  let taxSplitTotal = 0;
   
   lines.forEach(line => {
-    const percent = parseFloat(line.factor_percent) || 0;
-    if (line.repartition_type === 'base') baseTotal += percent;
-    else taxTotal += percent;
+    const percent = Math.abs(parseFloat(line.factor_percent) || 0);
+    
+    if (line.repartition_type === 'base') {
+      baseTotal += percent;
+    } else if (line.repartition_type === 'tax_main') {
+      taxMainTotal += percent;
+    } else if (line.repartition_type === 'tax_split') {
+      taxSplitTotal += percent;
+    }
   });
 
-  const isBaseValid = Math.abs(baseTotal - 100) <= 0.01;
-  const isTaxValid = Math.abs(taxTotal - 100) <= 0.01;
+  const isSplitUsed = taxSplitTotal > 0;
+  const isBalanced = Math.abs(taxMainTotal - taxSplitTotal) <= 0.01;
+  const isValid = !isSplitUsed || isBalanced;
 
-  const bgColor = title === 'Facture' ? 'bg-blue-50' : 'bg-green-50';
-  const borderColor = title === 'Facture' ? 'border-blue-200' : 'border-green-200';
-  const textColor = title === 'Facture' ? 'text-blue-700' : 'text-green-700';
+  const bgColor = isRefund ? 'bg-green-50' : 'bg-blue-50';
+  const borderColor = isRefund ? 'border-green-200' : 'border-blue-200';
+  const textColor = isRefund ? 'text-green-700' : 'text-blue-700';
 
   return (
-    <div className={`${bgColor} border ${borderColor} px-3 py-1.5 flex justify-between items-center mt-2`}>
-      <span className={`text-xs font-medium ${textColor}`}>Total {title}</span>
-      <div className="flex gap-4">
-        <div className="text-xs">
-          <span className="text-gray-600 mr-1">Base:</span>
-          <span className={`font-bold ${isBaseValid ? 'text-green-700' : 'text-red-600'}`}>{baseTotal.toFixed(2)}%</span>
-          {!isBaseValid && <span className="ml-1 text-red-500">(100%)</span>}
-        </div>
-        <div className="text-xs">
-          <span className="text-gray-600 mr-1">Taxe:</span>
-          <span className={`font-bold ${isTaxValid ? 'text-green-700' : 'text-red-600'}`}>{taxTotal.toFixed(2)}%</span>
-          {!isTaxValid && <span className="ml-1 text-red-500">(100%)</span>}
+    <div className={`${bgColor} border ${borderColor} px-3 py-1.5 flex flex-col gap-1 mt-2`}>
+      <div className="flex justify-between items-center">
+        <span className={`text-xs font-medium ${textColor}`}>Total {title}</span>
+        <div className="flex gap-3 text-xs">
+          <span className="text-gray-600">Base: <b>{baseTotal.toFixed(2)}%</b></span>
+          <span className="text-gray-600">Taxe: <b>{taxMainTotal.toFixed(2)}%</b></span>
+          {isSplitUsed && <span className="text-gray-600">De la taxe: <b>{taxSplitTotal.toFixed(2)}%</b></span>}
         </div>
       </div>
+      
+      {isValid ? (
+        <div className="text-xs text-green-600 font-bold">✅ Équilibre parfait</div>
+      ) : (
+        <div className="text-xs text-red-600 font-bold">
+          ⚠️ Déséquilibré ! La somme des lignes "Taxe" ({taxMainTotal}%) 
+          doit être égale à la somme des lignes "De la taxe" ({taxSplitTotal}%).
+        </div>
+      )}
     </div>
   );
 };
@@ -254,9 +311,11 @@ const RepartitionSummary = ({ lines, title }) => {
 // ==========================================
 export default function TauxFiscauxCreate() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { activeEntity } = useEntity();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
@@ -279,37 +338,145 @@ export default function TauxFiscauxCreate() {
     hide_tax_exigibility: false, is_base_affected: true, analytic: false, sequence: 10, note: '',
   });
 
-  // INITIALISATION : 2 LIGNES (Base + Taxe)
+  const generateId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+
   const [invoiceRepartitionLines, setInvoiceRepartitionLines] = useState([
-    { id: `inv_${Date.now()}_1`, repartition_type: 'base', factor_percent: 100, account: '', account_label: '', tax_group: '', tax_group_label: '' },
-    { id: `inv_${Date.now()}_2`, repartition_type: 'tax_main', factor_percent: 100, account: '', account_label: '', tax_group: '', tax_group_label: '' }
+    { id: generateId(), repartition_type: 'base', factor_percent: 100, account: null, account_label: '', tax_group: null, tax_group_label: '' },
+    { id: generateId(), repartition_type: 'tax_main', factor_percent: 100, account: null, account_label: '', tax_group: null, tax_group_label: '' }
   ]);
 
   const [refundRepartitionLines, setRefundRepartitionLines] = useState([
-    { id: `ref_${Date.now()}_1`, repartition_type: 'base', factor_percent: 100, account: '', account_label: '', tax_group: '', tax_group_label: '' },
-    { id: `ref_${Date.now()}_2`, repartition_type: 'tax_main', factor_percent: 100, account: '', account_label: '', tax_group: '', tax_group_label: '' }
+    { id: generateId(), repartition_type: 'base', factor_percent: 100, account: null, account_label: '', tax_group: null, tax_group_label: '' },
+    { id: generateId(), repartition_type: 'tax_main', factor_percent: 100, account: null, account_label: '', tax_group: null, tax_group_label: '' }
   ]);
 
   const invoiceTableRef = useRef(null);
   const actionsMenuRef = useRef(null);
 
-  // Helper pour obtenir le nom de l'entité (compatible avec différentes structures)
   const getEntityName = useCallback(() => {
     if (!activeEntity) return 'Non définie';
     return activeEntity.nom || activeEntity.name || activeEntity.raison_sociale || 'Non définie';
   }, [activeEntity]);
 
-  useEffect(() => {
-    if (!activeEntity) {
-      setError('Vous devez sélectionner une entité pour créer un taux fiscal');
+  // Chargement des options
+  const loadOptions = useCallback(async () => {
+    if (!activeEntity || !activeEntity.id) return;
+
+    try {
+      const [accountsRes, paysRes, taxGroupsRes, fiscalPositionsRes] = await Promise.all([
+        apiClient.get('/compta/accounts/', { params: { company: activeEntity.id } }).catch(() => ({ data: [] })),
+        apiClient.get('/pays/').catch(() => ({ data: [] })),
+        apiClient.get('/compta/tax-groups/', { params: { company: activeEntity.id } }).catch(() => ({ data: [] })),
+        apiClient.get('/compta/fiscal-positions/', { params: { company: activeEntity.id } }).catch(() => ({ data: [] }))
+      ]);
+
+      const allAccounts = normalizeData(accountsRes);
+      const operationalAccounts = allAccounts.filter(acc => acc.company !== null);
+      setAccounts(operationalAccounts);
+      setPays(normalizeData(paysRes));
+      setTaxGroups(normalizeData(taxGroupsRes));
+      setFiscalPositions(normalizeData(fiscalPositionsRes));
+      
+    } catch (err) {
+      console.error('❌ Erreur chargement options:', err);
     }
   }, [activeEntity]);
+
+  // Chargement des données en mode édition
+  const loadTaxData = useCallback(async (id) => {
+    setIsLoading(true);
+    try {
+      const taxRes = await apiClient.get(`/compta/taxes/${id}/`);
+      const tax = taxRes;
+      
+      const linesRes = await apiClient.get(`/compta/tax-repartition-lines/?tax=${id}`);
+      const allLines = normalizeData(linesRes);
+      
+      const invoiceLines = allLines.filter(l => l.document_type === 'invoice');
+      const refundLines = allLines.filter(l => l.document_type === 'refund');
+      
+      // Remplir le formulaire
+      setFormData({
+        name: tax.name || '',
+        amount: tax.amount || '',
+        amount_type: tax.amount_type || 'percent',
+        type_tax_use: tax.type_tax_use || 'sale',
+        tax_scope: tax.tax_scope || '',
+        fiscal_position: tax.fiscal_position || '',
+        fiscal_position_label: '',
+        country: tax.country || '',
+        country_label: '',
+        active: tax.active !== undefined ? tax.active : true,
+        price_include: tax.price_include || false,
+        include_base_amount: tax.include_base_amount || false,
+        tax_exigibility: tax.tax_exigibility || 'on_invoice',
+        account: tax.account || '',
+        account_label: '',
+        cash_basis_transition_account: tax.cash_basis_transition_account || '',
+        cash_basis_transition_account_label: '',
+        description: tax.description || '',
+        tax_group: tax.tax_group || '',
+        tax_group_label: '',
+        refund_account: tax.refund_account || '',
+        refund_account_label: '',
+        hide_tax_exigibility: tax.hide_tax_exigibility || false,
+        is_base_affected: tax.is_base_affected !== undefined ? tax.is_base_affected : true,
+        analytic: tax.analytic || false,
+        sequence: tax.sequence || 10,
+        note: tax.note || '',
+      });
+      
+      // Remplir les lignes de répartition (en valeurs absolues)
+      if (invoiceLines.length > 0) {
+        const mappedInvoiceLines = invoiceLines.map(line => ({
+          id: generateId(),
+          repartition_type: line.repartition_type === 'base' ? 'base' : (line.repartition_type === 'tax' ? 'tax_main' : 'tax_split'),
+          factor_percent: Math.abs(line.factor_percent),
+          account: line.account_id,
+          account_label: '',
+          tax_group: line.tax_group_id,
+          tax_group_label: '',
+        }));
+        setInvoiceRepartitionLines(mappedInvoiceLines);
+      }
+      
+      if (refundLines.length > 0) {
+        const mappedRefundLines = refundLines.map(line => ({
+          id: generateId(),
+          repartition_type: line.repartition_type === 'base' ? 'base' : (line.repartition_type === 'tax' ? 'tax_main' : 'tax_split'),
+          factor_percent: Math.abs(line.factor_percent),
+          account: line.account_id,
+          account_label: '',
+          tax_group: line.tax_group_id,
+          tax_group_label: '',
+        }));
+        setRefundRepartitionLines(mappedRefundLines);
+      }
+      
+      setTaxId(id);
+      setHasUnsavedChanges(false);
+    } catch (err) {
+      console.error('❌ Erreur chargement taxe:', err);
+      setError('Impossible de charger les données de la taxe');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Vérifier si on est en mode édition
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const idFromUrl = searchParams.get('id');
+    if (idFromUrl && !taxId) {
+      loadTaxData(idFromUrl);
+    }
+  }, [location.search, loadTaxData, taxId]);
 
   useEffect(() => {
     if (activeEntity) {
       loadOptions();
     }
-  }, [activeEntity]);
+  }, [activeEntity, loadOptions]);
 
   useEffect(() => {
     const handleClickOutside = (e) => { if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target)) setShowActionsMenu(false); };
@@ -317,66 +484,57 @@ export default function TauxFiscauxCreate() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const loadOptions = async () => {
-    if (!activeEntity || !activeEntity.id) {
-      setError('Entité non sélectionnée');
-      return;
-    }
-
-    try {
-      const [accountsRes, paysRes, taxGroupsRes, fiscalPositionsRes] = await Promise.all([
-        apiClient.get('/compta/accounts/', { 
-          params: { company: activeEntity.id }
-        }).catch(() => ({ data: [] })),
-        apiClient.get('/pays/', { 
-          params: { company: activeEntity.id }
-        }).catch(() => ({ data: [] })),
-        apiClient.get('/compta/tax-groups/', { 
-          params: { company: activeEntity.id }
-        }).catch(() => ({ data: [] })),
-        apiClient.get('/compta/fiscal-positions/', { 
-          params: { company: activeEntity.id }
-        }).catch(() => ({ data: [] }))
-      ]);
-
-      const normalizeData = (data) => {
-        if (!data) return [];
-        if (Array.isArray(data)) return data;
-        if (Array.isArray(data.results)) return data.results;
-        if (Array.isArray(data.data)) return data.data;
-        return [];
-      };
-
-      setAccounts(normalizeData(accountsRes));
-      setPays(normalizeData(paysRes));
-      setTaxGroups(normalizeData(taxGroupsRes));
-      setFiscalPositions(normalizeData(fiscalPositionsRes));
-      
-    } catch (err) {
-      console.error('❌ Erreur chargement options:', err);
-      setError('Erreur lors du chargement des données');
-    }
-  };
+  // Synchronisation des lignes de répartition
+  useEffect(() => {
+    setRefundRepartitionLines(prev => 
+      prev.map((refundLine, index) => {
+        const invoiceLine = invoiceRepartitionLines[index];
+        if (!invoiceLine) return refundLine;
+        
+        return {
+          ...refundLine,
+          repartition_type: invoiceLine.repartition_type,
+          factor_percent: invoiceLine.factor_percent,
+          account: invoiceLine.account,
+          account_label: invoiceLine.account_label,
+          tax_group: invoiceLine.tax_group,
+          tax_group_label: invoiceLine.tax_group_label,
+        };
+      })
+    );
+  }, [invoiceRepartitionLines]);
 
   const markAsModified = () => { if (!hasUnsavedChanges) setHasUnsavedChanges(true); };
 
-  const handleChange = (field, value) => { setFormData(prev => ({ ...prev, [field]: value })); markAsModified(); };
-
-  const syncLines = (newLines) => {
-    setInvoiceRepartitionLines(newLines);
-    setRefundRepartitionLines(newLines.map((line, index) => ({
-      ...line,
-      id: `ref_${Date.now()}_${index}`,
-    })));
+  const handleChange = (field, value) => { 
+    setFormData(prev => ({ ...prev, [field]: value })); 
+    markAsModified(); 
   };
 
   const addRepartitionLine = () => {
-    const newLine = { repartition_type: 'tax_split', factor_percent: 100, account: '', account_label: '', tax_group: '', tax_group_label: '' };
-    const newLines = [...invoiceRepartitionLines, { ...newLine, id: `inv_${Date.now()}_${invoiceRepartitionLines.length}` }];
-    syncLines(newLines);
+    const newInvoiceLine = { 
+      id: generateId(),
+      repartition_type: 'tax_split', 
+      factor_percent: 0,
+      account: null, 
+      account_label: '', 
+      tax_group: null, 
+      tax_group_label: '' 
+    };
+    
+    const newRefundLine = { 
+      ...newInvoiceLine,
+      id: generateId(),
+      factor_percent: 0,
+    };
+    
+    setInvoiceRepartitionLines(prev => [...prev, newInvoiceLine]);
+    setRefundRepartitionLines(prev => [...prev, newRefundLine]);
+    
     markAsModified();
+    
     setTimeout(() => {
-      const row = invoiceTableRef.current?.querySelector(`tbody tr:nth-child(${newLines.length})`);
+      const row = invoiceTableRef.current?.querySelector(`tbody tr:nth-child(${invoiceRepartitionLines.length + 2})`);
       const firstInput = row?.querySelector('input');
       if (firstInput) firstInput.focus();
     }, 50);
@@ -384,116 +542,318 @@ export default function TauxFiscauxCreate() {
 
   const removeRepartitionLine = (index) => {
     if (index === 0) return;
-    const newLines = invoiceRepartitionLines.filter((_, i) => i !== index);
-    syncLines(newLines);
+    const taxLines = invoiceRepartitionLines.filter(l => l.repartition_type !== 'base');
+    if (taxLines.length <= 1 && invoiceRepartitionLines[index].repartition_type !== 'base') {
+      setError("❌ Il doit y avoir au moins une ligne de taxe");
+      return;
+    }
+    setInvoiceRepartitionLines(prev => prev.filter((_, i) => i !== index));
+    setRefundRepartitionLines(prev => prev.filter((_, i) => i !== index));
     markAsModified();
   };
 
   const handleInvoiceLineChange = (index, field, value) => {
-    const newLines = [...invoiceRepartitionLines];
-    newLines[index] = { ...newLines[index], [field]: value };
-    syncLines(newLines);
+    setInvoiceRepartitionLines(prevLines => {
+      const newLines = [...prevLines];
+      const currentLine = newLines[index];
+      
+      switch (field) {
+        case 'account':
+          const accountId = cleanId(value);
+          newLines[index] = { ...currentLine, account: accountId };
+          break;
+        case 'account_label':
+          newLines[index] = { ...currentLine, account_label: value };
+          break;
+        case 'tax_group':
+          const taxGroupId = cleanId(value);
+          newLines[index] = { ...currentLine, tax_group: taxGroupId };
+          break;
+        case 'tax_group_label':
+          newLines[index] = { ...currentLine, tax_group_label: value };
+          break;
+        case 'repartition_type':
+          newLines[index] = { ...currentLine, repartition_type: value };
+          if (value === 'base') newLines[index].factor_percent = 100;
+          break;
+        case 'factor_percent':
+          newLines[index] = { ...currentLine, factor_percent: Math.abs(parseFloat(value) || 0) };
+          break;
+        default:
+          newLines[index] = { ...currentLine, [field]: value };
+      }
+      return newLines;
+    });
     markAsModified();
   };
 
   const handleRefundLineChange = (index, field, value) => {
-    const newLines = [...refundRepartitionLines];
-    newLines[index] = { ...newLines[index], [field]: value };
-    syncLines(newLines);
+    setRefundRepartitionLines(prevLines => {
+      const newLines = [...prevLines];
+      const currentLine = newLines[index];
+      
+      switch (field) {
+        case 'account':
+          const accountId = cleanId(value);
+          newLines[index] = { ...currentLine, account: accountId };
+          break;
+        case 'account_label':
+          newLines[index] = { ...currentLine, account_label: value };
+          break;
+        case 'tax_group':
+          const taxGroupId = cleanId(value);
+          newLines[index] = { ...currentLine, tax_group: taxGroupId };
+          break;
+        case 'tax_group_label':
+          newLines[index] = { ...currentLine, tax_group_label: value };
+          break;
+        case 'repartition_type':
+          newLines[index] = { ...currentLine, repartition_type: value };
+          if (value === 'base') newLines[index].factor_percent = 100;
+          break;
+        case 'factor_percent':
+          newLines[index] = { ...currentLine, factor_percent: Math.abs(parseFloat(value) || 0) };
+          break;
+        default:
+          newLines[index] = { ...currentLine, [field]: value };
+      }
+      return newLines;
+    });
     markAsModified();
   };
 
+  // Validation du formulaire
   const validateForm = () => {
     const errors = [];
     
-    if (!formData.name.trim()) errors.push("Le nom de la taxe est obligatoire");
-    if (!formData.amount || parseFloat(formData.amount) <= 0) errors.push("La valeur de la taxe doit être supérieure à 0");
+    if (!formData.name.trim()) errors.push("❌ Le nom de la taxe est obligatoire");
+    if (!formData.amount || parseFloat(formData.amount) <= 0) errors.push("❌ La valeur de la taxe doit être supérieure à 0");
     
-    const invoiceBase = invoiceRepartitionLines.find(l => l.repartition_type === 'base');
-    const invoiceTaxTotal = invoiceRepartitionLines.filter(l => l.repartition_type !== 'base').reduce((sum, l) => sum + (parseFloat(l.factor_percent) || 0), 0);
+    // Facture
+    const invoiceBaseLines = invoiceRepartitionLines.filter(l => l.repartition_type === 'base');
+    const invoiceTaxMainLines = invoiceRepartitionLines.filter(l => l.repartition_type === 'tax_main');
+    const invoiceTaxSplitLines = invoiceRepartitionLines.filter(l => l.repartition_type === 'tax_split');
     
-    if (!invoiceBase) errors.push("Facture : Ligne 'Base' requise");
-    if (invoiceBase && Math.abs(parseFloat(invoiceBase.factor_percent) - 100) > 0.01) errors.push("Facture : La ligne 'Base' doit être à 100%");
-    if (Math.abs(invoiceTaxTotal - 100) > 0.01) errors.push(`Facture : Le total des lignes de taxe doit être 100% (actuel: ${invoiceTaxTotal.toFixed(2)}%)`);
+    if (invoiceBaseLines.length === 0) errors.push("❌ Facture : Au moins une ligne de type 'Base' est requise");
+    if (invoiceTaxMainLines.length === 0) errors.push("❌ Facture : Au moins une ligne de type 'Taxe' est requise");
     
-    const refundBase = refundRepartitionLines.find(l => l.repartition_type === 'base');
-    const refundTaxTotal = refundRepartitionLines.filter(l => l.repartition_type !== 'base').reduce((sum, l) => sum + (parseFloat(l.factor_percent) || 0), 0);
-    
-    if (!refundBase) errors.push("Avoir : Ligne 'Base' requise");
-    if (refundBase && Math.abs(parseFloat(refundBase.factor_percent) - 100) > 0.01) errors.push("Avoir : La ligne 'Base' doit être à 100%");
-    if (Math.abs(refundTaxTotal - 100) > 0.01) errors.push(`Avoir : Le total des lignes de taxe doit être 100% (actuel: ${refundTaxTotal.toFixed(2)}%)`);
-    
-    const invoiceLinesSansCompte = invoiceRepartitionLines.filter(l => !l.account || (l.account_label && l.account_label.trim() === ''));
-    if (invoiceLinesSansCompte.length > 0) {
-      errors.push(`Facture : ${invoiceLinesSansCompte.length} ligne(s) sans compte comptable`);
+    const invoiceLinesWithoutAccount = invoiceRepartitionLines.filter(l => 
+      (!l.account || l.account === '' || l.account === null) && 
+      (!l.account_label || l.account_label.trim() === '')
+    );
+    if (invoiceLinesWithoutAccount.length > 0) {
+      errors.push(`❌ Facture : ${invoiceLinesWithoutAccount.length} ligne(s) sans compte comptable`);
     }
     
-    const refundLinesSansCompte = refundRepartitionLines.filter(l => !l.account || (l.account_label && l.account_label.trim() === ''));
-    if (refundLinesSansCompte.length > 0) {
-      errors.push(`Avoir : ${refundLinesSansCompte.length} ligne(s) sans compte comptable`);
+    const invoiceBaseTotal = invoiceBaseLines.reduce((sum, l) => sum + (Math.abs(parseFloat(l.factor_percent)) || 0), 0);
+    if (Math.abs(invoiceBaseTotal - 100) > 0.01) {
+      errors.push(`❌ Facture : La somme des bases doit être 100% (actuel: ${invoiceBaseTotal}%)`);
+    }
+    
+    const invoiceTaxMainTotal = invoiceTaxMainLines.reduce((sum, l) => sum + (Math.abs(parseFloat(l.factor_percent)) || 0), 0);
+    const invoiceTaxSplitTotal = invoiceTaxSplitLines.reduce((sum, l) => sum + (Math.abs(parseFloat(l.factor_percent)) || 0), 0);
+    
+    if (invoiceTaxSplitTotal > 0 && Math.abs(invoiceTaxMainTotal - invoiceTaxSplitTotal) > 0.01) {
+      errors.push(`❌ Facture : La somme des lignes "Taxe" (${invoiceTaxMainTotal}%) doit être égale à la somme des lignes "De la taxe" (${invoiceTaxSplitTotal}%).`);
+    }
+    
+    // Avoir
+    const refundBaseLines = refundRepartitionLines.filter(l => l.repartition_type === 'base');
+    const refundTaxMainLines = refundRepartitionLines.filter(l => l.repartition_type === 'tax_main');
+    const refundTaxSplitLines = refundRepartitionLines.filter(l => l.repartition_type === 'tax_split');
+    
+    if (refundBaseLines.length === 0) errors.push("❌ Avoir : Au moins une ligne de type 'Base' est requise");
+    if (refundTaxMainLines.length === 0) errors.push("❌ Avoir : Au moins une ligne de type 'Taxe' est requise");
+    
+    const refundLinesWithoutAccount = refundRepartitionLines.filter(l => 
+      (!l.account || l.account === '' || l.account === null) && 
+      (!l.account_label || l.account_label.trim() === '')
+    );
+    if (refundLinesWithoutAccount.length > 0) {
+      errors.push(`❌ Avoir : ${refundLinesWithoutAccount.length} ligne(s) sans compte comptable`);
+    }
+    
+    const refundBaseTotal = refundBaseLines.reduce((sum, l) => sum + (Math.abs(parseFloat(l.factor_percent)) || 0), 0);
+    if (Math.abs(refundBaseTotal - 100) > 0.01) {
+      errors.push(`❌ Avoir : La somme des bases doit être 100% (actuel: ${refundBaseTotal}%)`);
+    }
+    
+    const refundTaxMainTotal = refundTaxMainLines.reduce((sum, l) => sum + (Math.abs(parseFloat(l.factor_percent)) || 0), 0);
+    const refundTaxSplitTotal = refundTaxSplitLines.reduce((sum, l) => sum + (Math.abs(parseFloat(l.factor_percent)) || 0), 0);
+
+    if (refundTaxSplitTotal > 0 && Math.abs(refundTaxMainTotal - refundTaxSplitTotal) > 0.01) {
+      errors.push(`❌ Avoir : La somme des lignes "Taxe" (${refundTaxMainTotal}%) doit être égale à la somme des lignes "De la taxe" (${refundTaxSplitTotal}%).`);
     }
     
     return errors;
   };
 
   const prepareDataForApi = useCallback(() => {
+    if (!activeEntity || !activeEntity.id) {
+      throw new Error('Aucune entité sélectionnée');
+    }
+    
+    const companyId = activeEntity.id;
+    
     const taxData = {
-      name: formData.name, amount: parseFloat(formData.amount) || 0, amount_type: formData.amount_type,
-      type_tax_use: formData.type_tax_use, tax_scope: formData.tax_scope || null, fiscal_position: formData.fiscal_position || null,
-      company: activeEntity ? activeEntity.id : null, country: formData.country || null, active: formData.active, price_include: formData.price_include,
-      include_base_amount: formData.include_base_amount, tax_exigibility: formData.tax_exigibility, account: formData.account || null,
-      cash_basis_transition_account: formData.cash_basis_transition_account || null, description: formData.description || '',
-      tax_group: formData.tax_group || null, refund_account: formData.refund_account || null, hide_tax_exigibility: formData.hide_tax_exigibility,
-      is_base_affected: formData.is_base_affected, analytic: formData.analytic, sequence: formData.sequence, note: formData.note || '',
+      name: formData.name,
+      amount: parseFloat(formData.amount) || 0,
+      amount_type: formData.amount_type,
+      type_tax_use: formData.type_tax_use,
+      tax_scope: formData.tax_scope || '',
+      fiscal_position: cleanId(formData.fiscal_position),
+      company: companyId,
+      country: cleanId(formData.country),
+      active: formData.active,
+      price_include: formData.price_include,
+      include_base_amount: formData.include_base_amount,
+      tax_exigibility: formData.tax_exigibility,
+      account: cleanId(formData.account),
+      cash_basis_transition_account: cleanId(formData.cash_basis_transition_account),
+      description: formData.description || '',
+      tax_group: cleanId(formData.tax_group),
+      refund_account: cleanId(formData.refund_account),
+      hide_tax_exigibility: formData.hide_tax_exigibility,
+      is_base_affected: formData.is_base_affected,
+      analytic: formData.analytic,
+      sequence: formData.sequence,
+      note: formData.note || '',
     };
 
-    const convertToBackendType = (displayType) => displayType === 'base' ? 'base' : 'tax';
+    const invoiceLines = invoiceRepartitionLines
+      .filter(line => line.account || (line.account_label && line.account_label.trim() !== ''))
+      .map((line, index) => {
+        let accountId = cleanId(line.account);
+        if (!accountId && line.account_label?.trim()) {
+          const label = line.account_label.toLowerCase().trim();
+          const found = accounts.find(a => {
+            const fullLabel = `${a.code} - ${a.name}`.toLowerCase();
+            return fullLabel === label || a.name?.toLowerCase() === label || a.code?.toString() === label;
+          });
+          if (found) accountId = found.id;
+        }
+        
+        const taxGroupId = cleanId(line.tax_group);
+        let factorPercent = Math.abs(parseFloat(line.factor_percent) || 0);
+        if (line.repartition_type === 'base') {
+          factorPercent = 100;
+        }
+        
+        return {
+          repartition_type: convertToBackendType(line.repartition_type),
+          factor_percent: factorPercent,
+          account_id: accountId,
+          company_id: companyId,
+          tax_group_id: taxGroupId,
+          document_type: 'invoice',
+          sequence: (index + 1) * 10,
+        };
+      });
 
-    const invoiceLines = invoiceRepartitionLines.map((line, index) => ({
-      repartition_type: convertToBackendType(line.repartition_type), factor_percent: parseFloat(line.factor_percent) || 0,
-      factor: (parseFloat(line.factor_percent) || 0) / 100, account: line.account, tax_group: line.tax_group || null,
-      document_type: 'invoice', sequence: (index + 1) * 10, company: activeEntity ? activeEntity.id : null
-    }));
-
-    const refundLines = refundRepartitionLines.map((line, index) => ({
-      repartition_type: convertToBackendType(line.repartition_type), factor_percent: parseFloat(line.factor_percent) || 0,
-      factor: (parseFloat(line.factor_percent) || 0) / 100, account: line.account, tax_group: line.tax_group || null,
-      document_type: 'refund', sequence: (index + 1) * 10, company: activeEntity ? activeEntity.id : null
-    }));
+    const refundLines = refundRepartitionLines
+      .filter(line => line.account || (line.account_label && line.account_label.trim() !== ''))
+      .map((line, index) => {
+        let accountId = cleanId(line.account);
+        if (!accountId && line.account_label?.trim()) {
+          const label = line.account_label.toLowerCase().trim();
+          const found = accounts.find(a => {
+            const fullLabel = `${a.code} - ${a.name}`.toLowerCase();
+            return fullLabel === label || a.name?.toLowerCase() === label || a.code?.toString() === label;
+          });
+          if (found) accountId = found.id;
+        }
+        
+        const taxGroupId = cleanId(line.tax_group);
+        let factorPercent = Math.abs(parseFloat(line.factor_percent) || 0);
+        if (line.repartition_type === 'base') {
+          factorPercent = 100;
+        }
+        
+        return {
+          repartition_type: convertToBackendType(line.repartition_type),
+          factor_percent: factorPercent,
+          account_id: accountId,
+          company_id: companyId,
+          tax_group_id: taxGroupId,
+          document_type: 'refund',
+          sequence: (index + 1) * 10,
+        };
+      });
 
     return { tax: taxData, invoice_lines: invoiceLines, refund_lines: refundLines };
-  }, [formData, activeEntity, invoiceRepartitionLines, refundRepartitionLines]);
+  }, [formData, activeEntity, invoiceRepartitionLines, refundRepartitionLines, accounts]);
 
   const handleSave = async (silent = false) => {
-    if (!activeEntity) { setError('Vous devez sélectionner une entité'); return false; }
+    if (!activeEntity) { 
+      setError('Vous devez sélectionner une entité'); 
+      return false; 
+    }
     
     const errors = validateForm();
-    if (errors.length > 0) { setError(errors.join('\n')); return false; }
+    if (errors.length > 0) { 
+      setError(errors.join('\n')); 
+      return false; 
+    }
     
     setIsSubmitting(true);
     if (!silent) setError(null);
     
     try {
       const apiData = prepareDataForApi();
+      
+      if (apiData.invoice_lines.length === 0) {
+        setError('❌ Au moins une ligne de répartition avec un compte est requise');
+        return false;
+      }
+      
       let result;
       if (taxId) {
         result = await apiClient.put(`/compta/taxes/${taxId}/`, apiData.tax);
       } else {
         result = await apiClient.post('/compta/taxes/', apiData.tax);
-        if (result && result.data && result.data.id) setTaxId(result.data.id);
+        if (result?.id) setTaxId(result.id);
       }
-      if (result && result.data && result.data.id) {
-        const taxIdValue = result.data.id;
-        await apiClient.delete(`/compta/tax-repartition-lines/?tax=${taxIdValue}`).catch(() => {});
+      
+      if (result?.id) {
+        const taxIdValue = result.id;
+        
+        const existingLines = await apiClient.get(`/compta/tax-repartition-lines/?tax=${taxIdValue}`)
+          .then(res => {
+            if (!res) return [];
+            if (Array.isArray(res)) return res;
+            if (res.results && Array.isArray(res.results)) return res.results;
+            if (res.data && Array.isArray(res.data)) return res.data;
+            return [];
+          })
+          .catch(() => []);
+        
+        for (const line of existingLines) {
+          if (line?.id) {
+            try {
+              await apiClient.delete(`/compta/tax-repartition-lines/${line.id}/`);
+            } catch (err) {
+              console.warn('⚠️ Échec suppression ligne', line.id, ':', err?.message);
+            }
+          }
+        }
+        
         const allLines = [...apiData.invoice_lines, ...apiData.refund_lines];
-        await Promise.all(allLines.map(line => apiClient.post('/compta/tax-repartition-lines/', { ...line, tax: taxIdValue })));
+        
+        for (const line of allLines) {
+          await apiClient.post('/compta/tax-repartition-lines/', { 
+            ...line, 
+            tax_id: taxIdValue 
+          });
+        }
       }
+      
       if (!silent) setSuccess('Taux fiscal enregistré avec succès !');
       setHasUnsavedChanges(false);
+      
       return true;
     } catch (err) {
       console.error('❌ Erreur enregistrement:', err);
-      const detail = err.response && err.response.data ? JSON.stringify(err.response.data, null, 2) : err.message;
+      const detail = err?.response?.data?.detail || err?.message || JSON.stringify(err);
       setError(`Erreur : ${detail}`);
       return false;
     } finally {
@@ -504,40 +864,65 @@ export default function TauxFiscauxCreate() {
   const handleDiscardChanges = () => setShowConfirmDialog(true);
   
   const confirmDiscardChanges = () => {
-    setFormData({ name: '', amount: '', amount_type: 'percent', type_tax_use: 'sale', tax_scope: '', fiscal_position: '', fiscal_position_label: '',
-      company: '', country: '', country_label: '', active: true, price_include: false, include_base_amount: false, tax_exigibility: 'on_invoice',
-      account: '', account_label: '', cash_basis_transition_account: '', cash_basis_transition_account_label: '', description: '',
-      tax_group: '', tax_group_label: '', refund_account: '', refund_account_label: '', hide_tax_exigibility: false, is_base_affected: true, analytic: false, sequence: 10, note: '' });
+    setFormData({ name: '', amount: '', amount_type: 'percent', type_tax_use: 'sale', tax_scope: '',
+      fiscal_position: '', fiscal_position_label: '', country: '', country_label: '',
+      active: true, price_include: false, include_base_amount: false, tax_exigibility: 'on_invoice',
+      account: '', account_label: '', cash_basis_transition_account: '', cash_basis_transition_account_label: '',
+      description: '', tax_group: '', tax_group_label: '', refund_account: '', refund_account_label: '',
+      hide_tax_exigibility: false, is_base_affected: true, analytic: false, sequence: 10, note: '' });
     setInvoiceRepartitionLines([
-      { id: `inv_${Date.now()}_1`, repartition_type: 'base', factor_percent: 100, account: '', account_label: '', tax_group: '', tax_group_label: '' },
-      { id: `inv_${Date.now()}_2`, repartition_type: 'tax_main', factor_percent: 100, account: '', account_label: '', tax_group: '', tax_group_label: '' }
+      { id: generateId(), repartition_type: 'base', factor_percent: 100, account: null, account_label: '', tax_group: null, tax_group_label: '' },
+      { id: generateId(), repartition_type: 'tax_main', factor_percent: 100, account: null, account_label: '', tax_group: null, tax_group_label: '' }
     ]);
     setRefundRepartitionLines([
-      { id: `ref_${Date.now()}_1`, repartition_type: 'base', factor_percent: 100, account: '', account_label: '', tax_group: '', tax_group_label: '' },
-      { id: `ref_${Date.now()}_2`, repartition_type: 'tax_main', factor_percent: 100, account: '', account_label: '', tax_group: '', tax_group_label: '' }
+      { id: generateId(), repartition_type: 'base', factor_percent: 100, account: null, account_label: '', tax_group: null, tax_group_label: '' },
+      { id: generateId(), repartition_type: 'tax_main', factor_percent: 100, account: null, account_label: '', tax_group: null, tax_group_label: '' }
     ]);
-    setTaxId(null); setHasUnsavedChanges(false); setShowConfirmDialog(false); setSuccess(null); setError(null);
+    setTaxId(null);
+    setHasUnsavedChanges(false);
+    setShowConfirmDialog(false);
+    setSuccess(null);
+    setError(null);
   };
 
-  const handleNewTax = () => { if (hasUnsavedChanges) setShowConfirmDialog(true); else navigate('/comptabilite/taux-fiscaux/create'); };
-  const handleGoToList = () => { if (hasUnsavedChanges) setShowConfirmDialog(true); else navigate('/comptabilite/taux-fiscaux'); };
-  const handleDuplicate = () => { setSuccess('Duplication à implémenter'); setShowActionsMenu(false); };
-  const handleDelete = () => { setSuccess('Suppression à implémenter'); setShowActionsMenu(false); };
-  const handleExtourner = () => { setSuccess("Extourne à implémenter"); setShowActionsMenu(false); };
+  const handleNewTax = () => { 
+    if (hasUnsavedChanges) {
+      setShowConfirmDialog(true);
+    } else {
+      navigate('/comptabilite/taux-fiscaux/create');
+      window.location.reload();
+    }
+  };
+  
+  const handleGoToList = () => { 
+    if (hasUnsavedChanges) {
+      setShowConfirmDialog(true);
+    } else {
+      navigate('/comptabilite/taux-fiscaux');
+    }
+  };
+  
+  const handleDuplicate = () => { 
+    setSuccess('Duplication à implémenter'); 
+    setShowActionsMenu(false); 
+  };
+  
+  const handleDelete = () => { 
+    setSuccess('Suppression à implémenter'); 
+    setShowActionsMenu(false); 
+  };
+  
+  const handleExtourner = () => { 
+    setSuccess("Extourne à implémenter"); 
+    setShowActionsMenu(false); 
+  };
 
-  if (!activeEntity) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-          <div className="border-b border-gray-300 px-4 py-3"><div className="text-lg font-bold text-gray-900">Créer un taux fiscal</div></div>
-          <div className="p-8">
-            <div className="bg-yellow-50 border border-yellow-200 rounded p-6 text-center">
-              <FiAlertCircle className="text-yellow-600 mx-auto mb-3" size={32} />
-              <p className="text-yellow-800 font-medium text-lg mb-3">Aucune entité sélectionnée</p>
-              <p className="text-sm text-gray-600 mb-4">Vous devez sélectionner une entité pour créer un taux fiscal.</p>
-              <p className="text-xs text-gray-500">Cliquez sur l'icône <FiBriefcase className="inline text-purple-600 mx-1" size={14} /> en haut à droite pour choisir une entité.</p>
-            </div>
-          </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement...</p>
         </div>
       </div>
     );
@@ -559,8 +944,9 @@ export default function TauxFiscauxCreate() {
               <div className="flex flex-col h-12 justify-center">
                 <div className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200" onClick={handleGoToList}>Taux fiscaux</div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-gray-600 font-medium">{formData.name ? `Taxe: ${formData.name}` : 'Nouveau taux fiscal'}</span>
-                  {/* ✅ AFFICHAGE DE L'ENTITÉ DANS L'EN-TÊTE */}
+                  <span className="text-xs text-gray-600 font-medium">
+                    {taxId ? `Taxe: ${formData.name || 'Modification'}` : (formData.name ? `Taxe: ${formData.name}` : 'Nouveau taux fiscal')}
+                  </span>
                   {activeEntity && (
                     <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded flex items-center gap-1">
                       <FiBriefcase size={10} />
@@ -602,6 +988,15 @@ export default function TauxFiscauxCreate() {
         {hasUnsavedChanges && (
           <div className="px-4 py-1 bg-blue-50 text-blue-700 text-xs border-b border-blue-200 flex items-center justify-between">
             <span>Modifications non sauvegardées</span>
+          </div>
+        )}
+
+        {(error || success) && (
+          <div className={`px-4 py-3 text-sm border-b border-gray-300 transition-all duration-300 ${error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+            <div className="flex items-start gap-2">
+              {error ? <FiAlertCircle size={14} className="mt-0.5 flex-shrink-0" /> : <FiCheck size={14} className="mt-0.5 flex-shrink-0" />}
+              <div className="whitespace-pre-wrap text-sm">{error || success}</div>
+            </div>
           </div>
         )}
 
@@ -698,9 +1093,10 @@ export default function TauxFiscauxCreate() {
               <div className="border border-gray-300">
                 <div className="flex">
                   {/* FACTURE */}
-                  <div className="w-1/2">
+                  <div className="w-1/2 border-r border-gray-300">
                     <div className="bg-gray-50 px-3 py-2 border-b border-gray-300">
                       <div className="text-sm font-semibold text-gray-800 truncate">Répartition sur une facture</div>
+                      <div className="text-xs text-green-600 mt-0.5">Équilibre requis : Taxe = De la taxe</div>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full border-collapse" ref={invoiceTableRef}>
@@ -711,14 +1107,20 @@ export default function TauxFiscauxCreate() {
                             <th className="border border-gray-300 px-2 py-1.5 font-medium text-gray-700 text-left" style={{ width: '140px', minWidth: '140px' }}>Compte</th>
                             <th className="border border-gray-300 px-2 py-1.5 font-medium text-gray-700 text-left" style={{ width: '110px', minWidth: '110px' }}>Groupe</th>
                             <th className="border border-gray-300 px-2 py-1.5 font-medium text-gray-700 text-center" style={{ width: '35px', minWidth: '35px' }}></th>
-                           </tr>
+                          </tr>
                         </thead>
                         <tbody>
                           {invoiceRepartitionLines.map((line, index) => (
-                            <RepartitionLineRow key={line.id} line={line} index={index} accounts={accounts} taxGroups={taxGroups} onChange={(field, value) => handleInvoiceLineChange(index, field, value)} onRemove={() => removeRepartitionLine(index)} isLast={index === invoiceRepartitionLines.length - 1} canDelete={index >= 1} onTabAtLastField={() => addRepartitionLine()} />
+                            <RepartitionLineRow key={line.id} line={line} index={index} accounts={accounts} taxGroups={taxGroups} 
+                              onChange={(field, value) => handleInvoiceLineChange(index, field, value)} 
+                              onRemove={() => removeRepartitionLine(index)} 
+                              isLast={index === invoiceRepartitionLines.length - 1} 
+                              canDelete={index >= 1} 
+                              onTabAtLastField={() => addRepartitionLine()}
+                              docType="invoice" />
                           ))}
                         </tbody>
-                       </table>
+                      </table>
                     </div>
                     <div className="px-2 pb-2"><RepartitionSummary lines={invoiceRepartitionLines} title="Facture" /></div>
                   </div>
@@ -727,6 +1129,7 @@ export default function TauxFiscauxCreate() {
                   <div className="w-1/2">
                     <div className="bg-gray-50 px-3 py-2 border-b border-gray-300">
                       <div className="text-sm font-semibold text-gray-800 truncate">Répartition sur un avoir</div>
+                      <div className="text-xs text-green-600 mt-0.5">Équilibre requis : Taxe = De la taxe</div>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full border-collapse">
@@ -737,14 +1140,20 @@ export default function TauxFiscauxCreate() {
                             <th className="border border-gray-300 px-2 py-1.5 font-medium text-gray-700 text-left" style={{ width: '140px', minWidth: '140px' }}>Compte</th>
                             <th className="border border-gray-300 px-2 py-1.5 font-medium text-gray-700 text-left" style={{ width: '110px', minWidth: '110px' }}>Groupe</th>
                             <th className="border border-gray-300 px-2 py-1.5 font-medium text-gray-700 text-center" style={{ width: '35px', minWidth: '35px' }}></th>
-                           </tr>
+                          </tr>
                         </thead>
                         <tbody>
                           {refundRepartitionLines.map((line, index) => (
-                            <RepartitionLineRow key={line.id} line={line} index={index} accounts={accounts} taxGroups={taxGroups} onChange={(field, value) => handleRefundLineChange(index, field, value)} onRemove={() => removeRepartitionLine(index)} isLast={index === refundRepartitionLines.length - 1} canDelete={index >= 1} onTabAtLastField={() => addRepartitionLine()} />
+                            <RepartitionLineRow key={line.id} line={line} index={index} accounts={accounts} taxGroups={taxGroups} 
+                              onChange={(field, value) => handleRefundLineChange(index, field, value)} 
+                              onRemove={() => removeRepartitionLine(index)} 
+                              isLast={index === refundRepartitionLines.length - 1} 
+                              canDelete={index >= 1} 
+                              onTabAtLastField={() => addRepartitionLine()}
+                              docType="refund" />
                           ))}
                         </tbody>
-                       </table>
+                      </table>
                     </div>
                     <div className="px-2 pb-2"><RepartitionSummary lines={refundRepartitionLines} title="Avoir" /></div>
                   </div>
@@ -767,7 +1176,6 @@ export default function TauxFiscauxCreate() {
                     <label className="text-xs text-gray-700 w-[160px] font-medium">Société</label>
                     <div className="flex-1 ml-2 px-2 py-1 bg-gray-100 border border-gray-300 text-xs text-gray-700 flex items-center gap-2 truncate" style={{ height: '26px' }}>
                       <FiBriefcase size={12} className="text-purple-600 flex-shrink-0" />
-                      {/* ✅ AFFICHAGE CORRIGÉ DE L'ENTITÉ - Compatible nom/name/raison_sociale */}
                       <span className="truncate">{getEntityName()}</span>
                     </div>
                   </div>
@@ -854,15 +1262,6 @@ export default function TauxFiscauxCreate() {
             </div>
           )}
         </div>
-
-        {(error || success) && (
-          <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-            <div className="flex items-center gap-2">
-              {error ? <FiAlertCircle size={14} /> : <FiCheck size={14} />}
-              <span className="truncate">{error || success}</span>
-            </div>
-          </div>
-        )}
       </div>
 
       {showConfirmDialog && (
@@ -872,7 +1271,7 @@ export default function TauxFiscauxCreate() {
             <p className="text-sm text-gray-600 mb-6">Voulez-vous enregistrer les modifications avant de quitter ?</p>
             <div className="flex justify-end gap-3">
               <button onClick={async () => { setShowConfirmDialog(false); const saved = await handleSave(true); if (saved) navigate('/comptabilite/taux-fiscaux'); }} className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 transition-all duration-200">Enregistrer</button>
-              <button onClick={() => { confirmDiscardChanges(); }} className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 transition-all duration-200">Ne pas enregistrer</button>
+              <button onClick={() => { confirmDiscardChanges(); navigate('/comptabilite/taux-fiscaux'); }} className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 transition-all duration-200">Ne pas enregistrer</button>
               <button onClick={() => setShowConfirmDialog(false)} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 transition-all duration-200">Annuler</button>
             </div>
           </div>

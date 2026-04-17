@@ -4,6 +4,151 @@ import { authService } from '../../services/authService';
 
 const API_PREFIX = 'compta/';
 
+// ============= SERVICE SÉQUENCES =============
+const sequencesService = {
+  /**
+   * Récupérer toutes les séquences
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Array>} Liste des séquences
+   */
+  getAll: async (entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get('/sequences/', { params });
+      
+      let sequencesData = [];
+      if (Array.isArray(response)) {
+        sequencesData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          sequencesData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          sequencesData = response.data;
+        }
+      }
+      
+      return sequencesData;
+    } catch (error) {
+      console.error('Erreur chargement séquences:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Récupérer une séquence par son ID
+   * @param {number} id - ID de la séquence
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Détails de la séquence
+   */
+  getById: async (id, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`/sequences/${id}/`, { params });
+      return response;
+    } catch (error) {
+      console.error(`Erreur chargement séquence ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Créer une nouvelle séquence
+   * @param {Object} data - Données de la séquence
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Séquence créée
+   */
+  create: async (data, entityId = null) => {
+    try {
+      const payload = entityId ? { ...data, company: entityId } : data;
+      const response = await apiClient.post('/sequences/', payload);
+      return response;
+    } catch (error) {
+      console.error('Erreur création séquence:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Mettre à jour une séquence
+   * @param {number} id - ID de la séquence
+   * @param {Object} data - Données à mettre à jour
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Séquence mise à jour
+   */
+  update: async (id, data, entityId = null) => {
+    try {
+      const payload = entityId ? { ...data, company: entityId } : data;
+      const response = await apiClient.put(`/sequences/${id}/`, payload);
+      return response;
+    } catch (error) {
+      console.error(`Erreur mise à jour séquence ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Supprimer une séquence
+   * @param {number} id - ID de la séquence
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<void>}
+   */
+  delete: async (id, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      await apiClient.delete(`/sequences/${id}/`, { params });
+    } catch (error) {
+      console.error(`Erreur suppression séquence ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Générer le prochain numéro d'une séquence
+   * @param {number} id - ID de la séquence
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Objet avec le prochain numéro
+   */
+  getNextNumber: async (id, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.post(`/sequences/${id}/next/`, {}, { params });
+      return response;
+    } catch (error) {
+      console.error(`Erreur génération prochain numéro séquence ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Formater le libellé d'une séquence pour l'affichage
+   * @param {Object} sequence - Objet séquence
+   * @returns {string} Libellé formaté
+   */
+  formatSequenceLabel: (sequence) => {
+    if (!sequence) return '';
+    const prefix = sequence.prefix || '';
+    const suffix = sequence.suffix || '';
+    const padding = sequence.padding || 5;
+    const currentNumber = sequence.current_number || 0;
+    const formattedNumber = String(currentNumber).padStart(padding, '0');
+    return `${prefix}${formattedNumber}${suffix}`;
+  },
+
+  /**
+   * Formater le modèle d'une séquence pour l'affichage
+   * @param {Object} sequence - Objet séquence
+   * @returns {string} Modèle formaté (ex: FACT-00000)
+   */
+  formatSequencePattern: (sequence) => {
+    if (!sequence) return '';
+    const prefix = sequence.prefix || '';
+    const suffix = sequence.suffix || '';
+    const padding = sequence.padding || 5;
+    const zeros = '0'.repeat(padding);
+    return `${prefix}${zeros}${suffix}`;
+  }
+};
+
 // ============= SERVICE PIÈCES =============
 const piecesService = {
   // === REQUÊTES API AVEC ENTITÉ ===
@@ -39,7 +184,7 @@ const piecesService = {
    */
   validate: (id, entityId = null) => {
     const params = entityId ? { company: entityId } : {};
-    return apiClient.post(`${API_PREFIX}moves/${id}/validate/`, {}, { params });
+    return apiClient.post(`${API_PREFIX}moves/${id}/post/`, {}, { params });
   },
   
   /**
@@ -99,9 +244,13 @@ const piecesService = {
     }
   },
   
+  /**
+   * Récupérer TOUS les comptes (racines + opérationnels)
+   * À utiliser pour la page liste des comptes
+   */
   getAccounts: async (entityId = null) => {
     try {
-      const params = entityId ? { company: entityId } : {};
+      const params = {};
       const response = await apiClient.get(`${API_PREFIX}accounts/`, { params });
       
       let accountsData = [];
@@ -115,10 +264,43 @@ const piecesService = {
         }
       }
       
+      console.log('📊 Comptes chargés (tous):', accountsData.length);
+      
       return accountsData;
       
     } catch (error) {
       console.error('Erreur chargement comptes:', error);
+      return [];
+    }
+  },
+  
+  /**
+   * ✅ NOUVEAU : Récupérer uniquement les comptes opérationnels (sans les racines)
+   * À utiliser pour les autocomplete (création pièce, journaux, etc.)
+   */
+  getOperationalAccounts: async (entityId = null) => {
+    try {
+      // ✅ Ajout du paramètre exclude_roots=true pour exclure les comptes racines
+      const params = { exclude_roots: true };
+      const response = await apiClient.get(`${API_PREFIX}accounts/`, { params });
+      
+      let accountsData = [];
+      if (Array.isArray(response)) {
+        accountsData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          accountsData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          accountsData = response.data;
+        }
+      }
+      
+      console.log('📊 Comptes opérationnels chargés (sans racines):', accountsData.length);
+      
+      return accountsData;
+      
+    } catch (error) {
+      console.error('Erreur chargement comptes opérationnels:', error);
       return [];
     }
   },
@@ -346,6 +528,7 @@ const piecesService = {
       { name: 'Devises', url: 'devises/' },
       { name: 'Taxes', url: `${API_PREFIX}taxes/` },
       { name: 'Positions fiscales', url: `${API_PREFIX}fiscal-positions/` },
+      { name: 'Séquences', url: '/sequences/' },
     ];
     
     const results = [];
@@ -446,8 +629,19 @@ const journauxService = {
 
 // ============= SERVICE COMPTES =============
 const comptesService = {
+  /**
+   * Récupérer TOUS les comptes (racines + opérationnels)
+   */
   getAll: (entityId = null, filters = {}) => {
-    const params = entityId ? { ...filters, company: entityId } : filters;
+    const params = { ...filters };
+    return apiClient.get(`${API_PREFIX}accounts/`, { params });
+  },
+  
+  /**
+   * ✅ NOUVEAU : Récupérer uniquement les comptes opérationnels
+   */
+  getOperationalAccounts: (entityId = null, filters = {}) => {
+    const params = { ...filters, exclude_roots: true };
     return apiClient.get(`${API_PREFIX}accounts/`, { params });
   },
   
@@ -546,7 +740,8 @@ export {
   comptesService,
   partenairesService,
   devisesService,
-  entreprisesService
+  entreprisesService,
+  sequencesService
 };
 
 export default piecesService;

@@ -124,10 +124,13 @@ export default function Show() {
     try {
       console.log('📊 Début chargement des comptes...');
       const response = await comptesService.getAll();
-      setAccounts(response || []);
-      console.log('📊 Comptes chargés avec succès:', response?.length || 0);
+      // ✅ Sécurisation des données
+      const accountsData = Array.isArray(response) ? response : [];
+      setAccounts(accountsData);
+      console.log('📊 Comptes chargés avec succès:', accountsData.length);
     } catch (err) {
       console.warn('⚠️ Erreur chargement comptes:', err);
+      setAccounts([]); // ✅ Initialiser à [] en cas d'erreur
     } finally {
       setLoadingAccounts(false);
     }
@@ -142,10 +145,12 @@ export default function Show() {
       console.log('🔢 Début chargement des séquences...');
       const response = await apiClient.get('/core/sequences/');
       const sequencesData = normalizeApiResponse(response);
-      setSequences(sequencesData);
+      // ✅ Sécurisation des données
+      setSequences(Array.isArray(sequencesData) ? sequencesData : []);
       console.log('🔢 Séquences chargées avec succès:', sequencesData.length);
     } catch (err) {
       console.warn('⚠️ Erreur chargement séquences:', err);
+      setSequences([]); // ✅ Initialiser à [] en cas d'erreur
     } finally {
       setLoadingSequences(false);
     }
@@ -181,21 +186,31 @@ export default function Show() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Créer un Map pour une recherche plus rapide des comptes
+  // ✅ CORRECTION 1: Créer un Map pour une recherche plus rapide des comptes
   const accountsMap = useMemo(() => {
     const map = new Map();
-    accounts.forEach(account => {
-      map.set(account.id, account);
-    });
+    // ✅ Vérifier que accounts est un tableau
+    if (Array.isArray(accounts) && accounts.length > 0) {
+      accounts.forEach(account => {
+        if (account && account.id) {
+          map.set(account.id, account);
+        }
+      });
+    }
     return map;
   }, [accounts]);
 
-  // Créer un Map pour les séquences
+  // ✅ CORRECTION 2: Créer un Map pour les séquences
   const sequencesMap = useMemo(() => {
     const map = new Map();
-    sequences.forEach(sequence => {
-      map.set(sequence.id, sequence);
-    });
+    // ✅ Vérifier que sequences est un tableau
+    if (Array.isArray(sequences) && sequences.length > 0) {
+      sequences.forEach(sequence => {
+        if (sequence && sequence.id) {
+          map.set(sequence.id, sequence);
+        }
+      });
+    }
     return map;
   }, [sequences]);
 

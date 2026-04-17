@@ -248,6 +248,7 @@ export default function Create() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const today = new Date().toISOString().split('T')[0];
+  const tableContainerRef = useRef(null);
 
   const actionsMenuRef = useRef(null);
 
@@ -348,7 +349,11 @@ export default function Create() {
       };
 
       setJournals(normalizeData(journalsData));
-      setAccounts(normalizeData(accountsData));
+      
+      const normalizedAccounts = normalizeData(accountsData);
+      console.log('📊 Comptes reçus de l\'API:', normalizedAccounts.length);
+      setAccounts(normalizedAccounts);
+      
       setPartners(normalizeData(partnersData));
       setDevises(normalizeData(devisesData));
       setTaxes(normalizeData(taxesData));
@@ -394,6 +399,34 @@ export default function Create() {
     markAsModified();
   };
 
+  // ✅ NOUVELLE FONCTION : Gère la saisie Débit/Crédit (un seul des deux)
+  const handleAmountChange = (index, type, value) => {
+    const numValue = value === '' ? '' : parseFloat(value);
+    
+    setFormData(prev => {
+      const newLines = [...prev.lines];
+      
+      if (type === 'debit') {
+        // Si on saisit un débit, on met le crédit à 0
+        newLines[index] = { 
+          ...newLines[index], 
+          debit: numValue === '' ? '' : numValue,
+          credit: ''  // Vide le crédit
+        };
+      } else {
+        // Si on saisit un crédit, on met le débit à 0
+        newLines[index] = { 
+          ...newLines[index], 
+          credit: numValue === '' ? '' : numValue,
+          debit: ''   // Vide le débit
+        };
+      }
+      
+      return { ...prev, lines: newLines };
+    });
+    markAsModified();
+  };
+
   const handleLineMultiChange = (index, fields) => {
     setFormData(prev => {
       const newLines = [...prev.lines];
@@ -410,6 +443,12 @@ export default function Create() {
       lines: [...prev.lines, { ...emptyLine(), name: firstName }]
     }));
     markAsModified();
+    
+    setTimeout(() => {
+      if (tableContainerRef.current) {
+        tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
+      }
+    }, 10);
   };
 
   const removeLine = (index) => {
@@ -422,6 +461,24 @@ export default function Create() {
       lines: prev.lines.filter((_, i) => i !== index)
     }));
     markAsModified();
+  };
+
+  const handleLastFieldTab = (e, lineIndex) => {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      const isLastLine = lineIndex === formData.lines.length - 1;
+      
+      if (isLastLine) {
+        e.preventDefault();
+        addLine();
+        
+        setTimeout(() => {
+          const newRow = document.querySelector(`tbody tr:last-child td:first-child input`);
+          if (newRow) {
+            newRow.focus();
+          }
+        }, 50);
+      }
+    }
   };
 
   const calculateTotals = () =>
@@ -440,20 +497,6 @@ export default function Create() {
     });
   };
 
-  const handleLastFieldTab = (e, lineIndex) => {
-    if (e.key === 'Tab' && !e.shiftKey && lineIndex === formData.lines.length - 1) {
-      e.preventDefault();
-      addLine();
-      setTimeout(() => {
-        const inputs = document.querySelectorAll(
-          `tr:nth-child(${formData.lines.length + 2}) input`
-        );
-        if (inputs.length > 0) inputs[0].focus();
-      }, 10);
-    }
-  };
-
-  // ✅ Validation MINIMALE pour sauvegarder un brouillon
   const canSaveDraft = () => {
     if (!formData.journal_id) return false;
     const lignesSansCompte = formData.lines.filter(l => !l.account_id);
@@ -461,7 +504,6 @@ export default function Create() {
     return true;
   };
 
-  // ✅ Validation COMPLÈTE pour comptabiliser
   const isReadyForValidation = () => {
     if (!formData.journal_id) return false;
     if (formData.lines.length === 0) return false;
@@ -471,15 +513,13 @@ export default function Create() {
     );
     if (!hasValidLines) return false;
     
-    const hasAmount = formData.lines.every(line => 
+    // Vérifier qu'au moins une ligne a un montant (débit ou crédit)
+    const hasAmount = formData.lines.some(line => 
       (parseFloat(line.debit) || 0) > 0 || (parseFloat(line.credit) || 0) > 0
     );
     if (!hasAmount) return false;
     
-    const hasPartner = formData.partner_id || 
-      formData.lines.some(line => line.partner_id);
-    
-    return hasPartner;
+    return true;
   };
 
   const prepareDataForApi = useCallback(() => {
@@ -629,7 +669,7 @@ export default function Create() {
     }
 
     if (!isReadyForValidation()) {
-      setError('Champs obligatoires manquants : journal, compte, libellé, partenaire et montant sont requis pour comptabiliser.');
+      setError('Champs obligatoires manquants : journal, compte, libellé et montant sont requis pour comptabiliser.');
       return;
     }
 
@@ -821,14 +861,14 @@ export default function Create() {
           </div>
         </div>
 
-        {/* En-tête ligne 2 - MODIFIÉ : affichage des erreurs à côté du bouton */}
+        {/* En-tête ligne 2 */}
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="flex flex-col">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Tooltip text={
                   !readyForValidation 
-                    ? "Remplissez tous les champs obligatoires (journal, compte, libellé, partenaire et montant)" 
+                    ? "Remplissez tous les champs obligatoires (journal, compte, libellé et montant)" 
                     : (isDraft ? "Valider la pièce" : "Déjà comptabilisé")
                 }>
                   <button
@@ -845,7 +885,6 @@ export default function Create() {
                   </button>
                 </Tooltip>
                 
-                {/* ✅ Affichage des erreurs ici à la place du message générique */}
                 {error ? (
                   <div className="flex items-center gap-1 text-xs text-red-600">
                     <FiAlertCircle size={14} />
@@ -854,7 +893,7 @@ export default function Create() {
                 ) : !readyForValidation && isDraft ? (
                   <div className="flex items-center gap-1 text-xs text-amber-600">
                     <FiInfo size={14} />
-                    <span>Complétez tous les champs pour comptabiliser</span>
+                    <span>Complétez journal, compte, libellé et montant</span>
                   </div>
                 ) : null}
               </div>
@@ -977,13 +1016,13 @@ export default function Create() {
         <div className="p-4">
           {activeTab === 'ecritures' ? (
             <>
-              <div className="border border-gray-300 mb-3 overflow-x-auto">
+              <div className="border border-gray-300 mb-3 overflow-x-auto" ref={tableContainerRef}>
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-gray-100">
                       <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Compte *</th>
                       <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Partenaire</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Libellé</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Libellé *</th>
                       <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Taxe</th>
                       <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">Débit</th>
                       <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">Crédit</th>
@@ -1047,25 +1086,27 @@ export default function Create() {
                             placeholder="TVA..."
                           />
                         </td>
+                        {/* ✅ DÉBIT - avec gestion d'exclusion mutuelle */}
                         <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
                           <input 
                             type="number" 
                             step="0.01" 
                             min="0" 
                             value={line.debit}
-                            onChange={(e) => handleLineChange(lineIndex, 'debit', e.target.value)}
+                            onChange={(e) => handleAmountChange(lineIndex, 'debit', e.target.value)}
                             className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
                             style={{ height: '26px' }} 
                             placeholder="0.00" 
                           />
                         </td>
+                        {/* ✅ CRÉDIT - avec gestion d'exclusion mutuelle */}
                         <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
                           <input 
                             type="number" 
                             step="0.01" 
                             min="0" 
                             value={line.credit}
-                            onChange={(e) => handleLineChange(lineIndex, 'credit', e.target.value)}
+                            onChange={(e) => handleAmountChange(lineIndex, 'credit', e.target.value)}
                             className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
                             style={{ height: '26px' }} 
                             placeholder="0.00" 
@@ -1110,6 +1151,7 @@ export default function Create() {
                             type="date" 
                             value={line.discount_date || ''}
                             onChange={(e) => handleLineChange(lineIndex, 'discount_date', e.target.value)}
+                            onKeyDown={(e) => handleLastFieldTab(e, lineIndex)}
                             className="w-full px-2 py-1 border-0 text-xs focus:ring-1 focus:ring-blue-500"
                             style={{ height: '26px' }} 
                           />
@@ -1141,7 +1183,7 @@ export default function Create() {
                   </button>
                 </Tooltip>
 
-                {!isBalanced && (
+                {!isBalanced && totals.debit > 0 && (
                   <div className="text-xs text-yellow-700 bg-yellow-50 px-3 py-1 rounded flex items-center gap-1 border border-yellow-200">
                     <FiAlertCircle size={12} />
                     ⚠ Différence de {difference} XOF
@@ -1156,8 +1198,8 @@ export default function Create() {
               </div>
 
               <div className="bg-green-50 border border-green-200 px-4 py-2 flex justify-end gap-8">
-                <div className="text-sm font-bold text-gray-900">{totals.debit.toFixed(2)} XOF</div>
-                <div className="text-sm font-bold text-gray-900">{totals.credit.toFixed(2)} XOF</div>
+                <div className="text-sm font-bold text-gray-900">Total Débit: {totals.debit.toFixed(2)} XOF</div>
+                <div className="text-sm font-bold text-gray-900">Total Crédit: {totals.credit.toFixed(2)} XOF</div>
               </div>
             </>
           ) : activeTab === 'notes' ? (
@@ -1229,7 +1271,7 @@ export default function Create() {
           )}
         </div>
 
-        {/* Messages - on peut le garder pour les erreurs backend */}
+        {/* Messages */}
         {(error && !error.includes('Champs obligatoires')) || success && (
           <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
             error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'

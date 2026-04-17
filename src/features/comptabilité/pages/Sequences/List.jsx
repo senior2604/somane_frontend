@@ -1,6 +1,5 @@
-// C:\Users\senio\Documents\somane_frontend\src\features\comptabilité\pages\TauxFiscaux\Index.jsx
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+// src/features/comptabilité/pages/Sequences/List.jsx
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FiPlus,
@@ -16,28 +15,29 @@ import {
   FiSettings,
   FiCopy,
   FiTrash2,
-  FiMoreHorizontal,
-  FiPercent,
-  FiTrendingUp,
-  FiShoppingCart,
-  FiTag,
-  FiEye,
   FiEdit,
-  FiBriefcase,
-  FiCheck
+  FiMoreHorizontal,
+  FiHash,
+  FiCheck,
+  FiLoader
 } from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
-import { apiClient } from '../../../../services/apiClient';
-import { authService } from '../../../../services/authService';
+import { sequencesService } from "../../services";
 
 // ==========================================
 // COMPOSANT TOOLTIP
 // ==========================================
 const Tooltip = ({ children, text, position = 'top' }) => {
   const [show, setShow] = useState(false);
+  
   return (
     <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>{children}</div>
+      <div
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        {children}
+      </div>
       {show && (
         <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
           position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
@@ -69,54 +69,22 @@ const SortIcon = ({ column, sortColumn, sortDirection }) => {
 };
 
 // ==========================================
-// COMPOSANT BADGE ÉTAT
-// ==========================================
-const StatusBadge = ({ active }) => {
-  return active ? (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-      Actif
-    </span>
-  ) : (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-      Inactif
-    </span>
-  );
-};
-
-// ==========================================
-// COMPOSANT TYPE BADGE
-// ==========================================
-const TypeBadge = ({ type }) => {
-  const config = {
-    sale: { bg: 'bg-green-100', text: 'text-green-800', label: 'Vente', icon: FiTrendingUp },
-    purchase: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Achat', icon: FiShoppingCart },
-    none: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Divers', icon: FiAlertCircle }
-  }[type] || { bg: 'bg-gray-100', text: 'text-gray-800', label: type || 'Divers', icon: FiAlertCircle };
-
-  const Icon = config.icon;
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-      <Icon size={10} />
-      {config.label}
-    </span>
-  );
-};
-
-// ==========================================
 // COMPOSANT PRINCIPAL
 // ==========================================
-export default function TauxFiscauxIndex() {
+export default function SequencesList() {
   const navigate = useNavigate();
   const { activeEntity } = useEntity();
-
-  const [taxes, setTaxes] = useState([]);
-  const [filteredTaxes, setFilteredTaxes] = useState([]);
+  
+  const [sequences, setSequences] = useState([]);
+  const [filteredSequences, setFilteredSequences] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedTaxIds, setSelectedTaxIds] = useState([]);
+  const [success, setSuccess] = useState(null);
+  const [selectedSequenceIds, setSelectedSequenceIds] = useState([]);
   const [activeRowId, setActiveRowId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   
   // États pour la recherche
   const [searchText, setSearchText] = useState('');
@@ -125,34 +93,23 @@ export default function TauxFiscauxIndex() {
   const [showColumnsMenu, setShowColumnsMenu] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [columnsMenuPosition, setColumnsMenuPosition] = useState({ top: 0, left: 0 });
-  const filterMenuRef = useRef(null);
-  const actionsMenuRef = useRef(null);
-  const searchContainerRef = useRef(null);
+  const filterMenuRef = React.useRef(null);
+  const actionsMenuRef = React.useRef(null);
+  const searchContainerRef = React.useRef(null);
   
   // États pour les colonnes visibles
   const [visibleColumns, setVisibleColumns] = useState({
-    nom: true,
-    montant: true,
-    type: true,
-    entreprise: true,
-    pays: true,
-    actif: true
+    code: true,
+    name: true,
+    format: true,
+    current_number: true,
+    increment: true,
+    active: true
   });
   
   // États pour le tri
-  const [sortColumn, setSortColumn] = useState('nom');
+  const [sortColumn, setSortColumn] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
-  
-  // États pour les référentiels
-  const [accountsMap, setAccountsMap] = useState({});
-  const [companiesMap, setCompaniesMap] = useState({});
-  const [paysMap, setPaysMap] = useState({});
-  const [referentialsLoaded, setReferentialsLoaded] = useState(false);
-
-  // Vérifier l'authentification
-  useEffect(() => {
-    const isAuthenticated = authService.isAuthenticated();
-  }, []);
 
   // Fermer les menus au clic extérieur
   useEffect(() => {
@@ -163,9 +120,9 @@ export default function TauxFiscauxIndex() {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
         setShowActionsMenu(false);
       }
-      const columnsMenuElement = document.getElementById('columns-menu-taxes');
+      const columnsMenuElement = document.getElementById('columns-menu-sequences');
       if (columnsMenuElement && !columnsMenuElement.contains(event.target)) {
-        const buttonElement = document.querySelector('.columns-menu-button-taxes');
+        const buttonElement = document.querySelector('.columns-menu-button');
         if (buttonElement && !buttonElement.contains(event.target)) {
           setShowColumnsMenu(false);
         }
@@ -175,124 +132,74 @@ export default function TauxFiscauxIndex() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Charger les référentiels
-  useEffect(() => {
-    if (!activeEntity) return;
-
-    const loadReferentials = async () => {
-      try {
-        const accountsRes = await apiClient.get(`/compta/accounts/?company=${activeEntity.id}`).catch(() => ({ data: [] }));
-        const accountsData = accountsRes.data?.results || accountsRes.data || [];
-        const accountsObj = {};
-        accountsData.forEach(a => { accountsObj[a.id] = a; });
-        setAccountsMap(accountsObj);
-
-        const companiesRes = await apiClient.get('/entites/').catch(() => ({ data: [] }));
-        const companiesData = companiesRes.data?.results || companiesRes.data || [];
-        const companiesObj = {};
-        companiesData.forEach(c => { companiesObj[c.id] = c; });
-        setCompaniesMap(companiesObj);
-
-        const paysRes = await apiClient.get('/pays/').catch(() => ({ data: [] }));
-        const paysData = paysRes.data?.results || paysRes.data || [];
-        const paysObj = {};
-        paysData.forEach(p => { paysObj[p.id] = p; });
-        setPaysMap(paysObj);
-
-        setReferentialsLoaded(true);
-      } catch (err) {
-        console.error('❌ Erreur chargement référentiels:', err);
-        setError('Erreur lors du chargement des référentiels');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadReferentials();
-  }, [activeEntity]);
-
-  // Charger les données
+  // Charger les séquences
   const loadData = useCallback(async () => {
-    if (!activeEntity || !referentialsLoaded) return;
-
+    if (!activeEntity) return;
+    
     try {
       setLoading(true);
       setError(null);
       
-      const response = await apiClient.get(`/compta/taxes/?company=${activeEntity.id}`);
-      
-      let taxesData = [];
-      if (response) {
-        if (Array.isArray(response)) {
-          taxesData = response;
-        } else if (response.data) {
-          if (Array.isArray(response.data)) {
-            taxesData = response.data;
-          } else if (response.data.results && Array.isArray(response.data.results)) {
-            taxesData = response.data.results;
-          } else if (response.data.data && Array.isArray(response.data.data)) {
-            taxesData = response.data.data;
-          }
-        }
-      }
-
-      const enrichedTaxes = taxesData.map(tax => ({
-        ...tax,
-        company_detail: tax.company ? (typeof tax.company === 'object' ? tax.company : companiesMap[tax.company]) : null,
-        country_detail: tax.country ? (typeof tax.country === 'object' ? tax.country : paysMap[tax.country]) : null,
-        account_detail: tax.account ? (typeof tax.account === 'object' ? tax.account : accountsMap[tax.account]) : null,
-      }));
-
-      setTaxes(enrichedTaxes);
-      setFilteredTaxes(enrichedTaxes);
-      setActiveRowId(null);
-      setCurrentPage(1);
+      const data = await sequencesService.getAll(activeEntity.id);
+      setSequences(data);
+      setFilteredSequences(data);
       
     } catch (err) {
-      console.error('❌ Erreur chargement taxes:', err);
-      setError('Impossible de charger les taux fiscaux.');
-      setTaxes([]);
-      setFilteredTaxes([]);
+      console.error('❌ Erreur chargement séquences:', err);
+      setError('Impossible de charger les séquences.');
     } finally {
       setLoading(false);
     }
-  }, [activeEntity, referentialsLoaded, accountsMap, companiesMap, paysMap]);
+  }, [activeEntity]);
 
   useEffect(() => {
-    if (referentialsLoaded && activeEntity) {
+    if (activeEntity) {
       loadData();
     }
-  }, [referentialsLoaded, activeEntity, loadData]);
+  }, [activeEntity, loadData]);
 
-  // Fonction de filtrage
-  const applyFiltersToTaxes = (taxesList, filters) => {
-    let filtered = [...taxesList];
+  // Formatage du modèle d'affichage
+  const formatPattern = (sequence) => {
+    const prefix = sequence.prefix || '';
+    const suffix = sequence.suffix || '';
+    const padding = sequence.padding || 5;
+    const zeros = '0'.repeat(padding);
+    return `${prefix}${zeros}${suffix}`;
+  };
+
+  const formatCurrentNumber = (sequence) => {
+    const prefix = sequence.prefix || '';
+    const suffix = sequence.suffix || '';
+    const padding = sequence.padding || 5;
+    const num = String(sequence.current_number || 0).padStart(padding, '0');
+    return `${prefix}${num}${suffix}`;
+  };
+
+  // ==========================================
+  // FONCTION DE FILTRAGE
+  // ==========================================
+  const applyFiltersToSequences = (sequencesList, filters) => {
+    let filtered = [...sequencesList];
     
     filters.forEach(filter => {
-      filtered = filtered.filter(tax => {
+      filtered = filtered.filter(seq => {
         let fieldValue = '';
         
         switch (filter.field) {
-          case 'nom':
-            fieldValue = tax.name || '';
+          case 'code':
+            fieldValue = seq.code || '';
             break;
-          case 'type':
-            fieldValue = tax.type_tax_use || '';
+          case 'name':
+            fieldValue = seq.name || '';
             break;
-          case 'montant_type':
-            fieldValue = tax.amount_type || '';
+          case 'format':
+            fieldValue = formatPattern(seq);
             break;
-          case 'entreprise':
-            fieldValue = tax.company_detail?.nom || tax.company_detail?.raison_sociale || tax.company_detail?.name || '';
-            break;
-          case 'pays':
-            fieldValue = tax.country_detail?.nom_fr || tax.country_detail?.nom || '';
-            break;
-          case 'actif':
-            fieldValue = tax.active ? 'actif' : 'inactif';
+          case 'active':
+            fieldValue = seq.active ? 'Actif' : 'Inactif';
             break;
           case 'recherche':
-            fieldValue = `${tax.name} ${tax.amount} ${tax.type_tax_use} ${tax.amount_type}`.toLowerCase();
+            fieldValue = `${seq.code} ${seq.name} ${seq.prefix || ''} ${seq.suffix || ''}`;
             break;
           default:
             fieldValue = '';
@@ -306,32 +213,32 @@ export default function TauxFiscauxIndex() {
   };
 
   // Fonction de tri
-  const getSortedTaxes = (taxesToSort, column, direction) => {
-    return [...taxesToSort].sort((a, b) => {
+  const getSortedSequences = (sequencesToSort, column, direction) => {
+    return [...sequencesToSort].sort((a, b) => {
       let aVal, bVal;
       
       switch (column) {
-        case 'nom':
+        case 'code':
+          aVal = a.code || '';
+          bVal = b.code || '';
+          break;
+        case 'name':
           aVal = a.name || '';
           bVal = b.name || '';
           break;
-        case 'montant':
-          aVal = a.amount || 0;
-          bVal = b.amount || 0;
+        case 'format':
+          aVal = formatPattern(a);
+          bVal = formatPattern(b);
           break;
-        case 'type':
-          aVal = a.type_tax_use || '';
-          bVal = b.type_tax_use || '';
+        case 'current_number':
+          aVal = a.current_number || 0;
+          bVal = b.current_number || 0;
           break;
-        case 'entreprise':
-          aVal = a.company_detail?.nom || a.company_detail?.raison_sociale || a.company_detail?.name || '';
-          bVal = b.company_detail?.nom || b.company_detail?.raison_sociale || b.company_detail?.name || '';
+        case 'increment':
+          aVal = a.number_increment || 1;
+          bVal = b.number_increment || 1;
           break;
-        case 'pays':
-          aVal = a.country_detail?.nom_fr || a.country_detail?.nom || '';
-          bVal = b.country_detail?.nom_fr || b.country_detail?.nom || '';
-          break;
-        case 'actif':
+        case 'active':
           aVal = a.active ? 1 : 0;
           bVal = b.active ? 1 : 0;
           break;
@@ -360,27 +267,25 @@ export default function TauxFiscauxIndex() {
     setSortColumn(newColumn);
     setSortDirection(newDirection);
     
-    const sorted = getSortedTaxes(filteredTaxes, newColumn, newDirection);
-    setFilteredTaxes(sorted);
+    const sorted = getSortedSequences(filteredSequences, newColumn, newDirection);
+    setFilteredSequences(sorted);
   };
 
   // Appliquer les filtres
   useEffect(() => {
-    if (taxes.length > 0) {
-      const filtered = applyFiltersToTaxes(taxes, activeFilters);
-      const sorted = getSortedTaxes(filtered, sortColumn, sortDirection);
-      setFilteredTaxes(sorted);
+    if (sequences.length > 0) {
+      const filtered = applyFiltersToSequences(sequences, activeFilters);
+      const sorted = getSortedSequences(filtered, sortColumn, sortDirection);
+      setFilteredSequences(sorted);
       setCurrentPage(1);
     }
-  }, [taxes, activeFilters, sortColumn, sortDirection]);
+  }, [sequences, activeFilters]);
 
-  // Re-appliquer le tri
+  // Re-appliquer le tri quand sortColumn/sortDirection change
   useEffect(() => {
-    if (filteredTaxes.length > 0 && (sortColumn || sortDirection)) {
-      const sorted = getSortedTaxes(filteredTaxes, sortColumn, sortDirection);
-      if (JSON.stringify(sorted) !== JSON.stringify(filteredTaxes)) {
-        setFilteredTaxes(sorted);
-      }
+    if (filteredSequences.length > 0) {
+      const sorted = getSortedSequences(filteredSequences, sortColumn, sortDirection);
+      setFilteredSequences(sorted);
     }
   }, [sortColumn, sortDirection]);
 
@@ -409,91 +314,123 @@ export default function TauxFiscauxIndex() {
     setSearchText('');
   };
 
-  // Actions groupées
-  const handleBulkDelete = async () => {
-    if (selectedTaxIds.length === 0) {
-      alert('Aucun taux sélectionné');
-      return;
-    }
-    if (!window.confirm(`Supprimer ${selectedTaxIds.length} taux fiscal/aux ?`)) return;
-    setShowActionsMenu(false);
+  // Suppression d'une séquence
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    
     try {
-      for (const id of selectedTaxIds) {
-        await apiClient.delete(`/compta/taxes/${id}/?company=${activeEntity.id}`);
-      }
-      setSelectedTaxIds([]);
+      await sequencesService.delete(deleteConfirm.id, activeEntity.id);
+      setSuccess(`Séquence "${deleteConfirm.name}" supprimée avec succès`);
+      loadData();
+      setSelectedSequenceIds([]);
+    } catch (err) {
+      setError(`Erreur lors de la suppression: ${err.message}`);
+    } finally {
+      setDeleteConfirm(null);
+      setTimeout(() => setSuccess(null), 3000);
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  // Duplication d'une séquence
+  const handleDuplicate = async (sequence) => {
+    try {
+      const newSequence = {
+        ...sequence,
+        id: undefined,
+        name: `${sequence.name} (copie)`,
+        code: `${sequence.code}_COPY`,
+        current_number: 0
+      };
+      await sequencesService.create(newSequence, activeEntity.id);
+      setSuccess(`Séquence dupliquée avec succès`);
       loadData();
     } catch (err) {
-      alert('Erreur suppression: ' + (err.message || 'Erreur inconnue'));
+      setError(`Erreur lors de la duplication: ${err.message}`);
+    } finally {
+      setTimeout(() => setSuccess(null), 3000);
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  // Actions groupées
+  const handleBulkDelete = async () => {
+    if (selectedSequenceIds.length === 0) {
+      alert('Aucune séquence sélectionnée');
+      return;
+    }
+    if (!window.confirm(`Supprimer ${selectedSequenceIds.length} séquence(s) ?`)) return;
+    setShowActionsMenu(false);
+    try {
+      for (const id of selectedSequenceIds) {
+        await sequencesService.delete(id, activeEntity.id);
+      }
+      setSelectedSequenceIds([]);
+      loadData();
+    } catch (err) {
+      alert('Erreur: ' + (err.response?.data?.detail || err.message));
     }
   };
 
   const handleBulkActivate = async () => {
-    if (selectedTaxIds.length === 0) return;
+    if (selectedSequenceIds.length === 0) return;
     setShowActionsMenu(false);
     try {
-      for (const id of selectedTaxIds) {
-        await apiClient.patch(`/compta/taxes/${id}/`, { active: true });
+      for (const id of selectedSequenceIds) {
+        const seq = sequences.find(s => s.id === id);
+        if (seq && !seq.active) {
+          await sequencesService.update(id, { ...seq, active: true }, activeEntity.id);
+        }
       }
       loadData();
+      setSelectedSequenceIds([]);
     } catch (err) {
-      alert('Erreur: ' + (err.message || 'Erreur inconnue'));
+      alert('Erreur: ' + (err.response?.data?.detail || err.message));
     }
   };
 
   const handleBulkDeactivate = async () => {
-    if (selectedTaxIds.length === 0) return;
+    if (selectedSequenceIds.length === 0) return;
     setShowActionsMenu(false);
     try {
-      for (const id of selectedTaxIds) {
-        await apiClient.patch(`/compta/taxes/${id}/`, { active: false });
-      }
-      loadData();
-    } catch (err) {
-      alert('Erreur: ' + (err.message || 'Erreur inconnue'));
-    }
-  };
-
-  const handleDuplicate = async () => {
-    if (selectedTaxIds.length === 0) {
-      alert('Aucun taux sélectionné');
-      return;
-    }
-    setShowActionsMenu(false);
-    try {
-      for (const id of selectedTaxIds) {
-        const original = taxes.find(t => t.id === id);
-        if (original) {
-          const newTax = {
-            ...original,
-            name: `${original.name} (Copie)`,
-            id: undefined,
-            created_at: undefined,
-            updated_at: undefined
-          };
-          await apiClient.post('/compta/taxes/', newTax);
+      for (const id of selectedSequenceIds) {
+        const seq = sequences.find(s => s.id === id);
+        if (seq && seq.active) {
+          await sequencesService.update(id, { ...seq, active: false }, activeEntity.id);
         }
       }
       loadData();
-      alert(`${selectedTaxIds.length} taux dupliqué(s) avec succès`);
+      setSelectedSequenceIds([]);
     } catch (err) {
-      alert('Erreur duplication: ' + (err.message || 'Erreur inconnue'));
+      alert('Erreur: ' + (err.response?.data?.detail || err.message));
     }
   };
 
-  // Pagination
-  const totalPages = Math.ceil(filteredTaxes.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredSequences.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTaxes = filteredTaxes.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedSequences = filteredSequences.slice(startIndex, startIndex + itemsPerPage);
 
-  // Définition des colonnes (sans Actions et sans Ordre)
+  // Badge actif/inactif
+  const ActiveBadge = ({ active }) => {
+    return active ? (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
+        Actif
+      </span>
+    ) : (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">
+        Inactif
+      </span>
+    );
+  };
+
+  // Définition des colonnes
   const columns = [
-    { id: 'nom', label: 'Nom', width: '200px' },
-    { id: 'montant', label: 'Montant', width: '120px', align: 'right' },
-    { id: 'type', label: 'Type', width: '100px' },
-    { id: 'entreprise', label: 'Entreprise', width: '160px' },
-    { id: 'pays', label: 'Pays', width: '120px' },
-    { id: 'actif', label: 'Statut', width: '80px' }
+    { id: 'code', label: 'Code', width: '100px' },
+    { id: 'name', label: 'Nom', width: '180px' },
+    { id: 'format', label: 'Format', width: '120px' },
+    { id: 'current_number', label: 'Numéro courant', width: '120px', align: 'center' },
+    { id: 'increment', label: 'Incrément', width: '80px', align: 'center' },
+    { id: 'active', label: 'Statut', width: '70px', align: 'center' }
   ];
 
   if (!activeEntity) {
@@ -501,13 +438,15 @@ export default function TauxFiscauxIndex() {
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-7xl mx-auto bg-white border border-gray-300">
           <div className="border-b border-gray-300 px-4 py-3">
-            <div className="text-lg font-bold text-gray-900">Taux Fiscaux</div>
+            <div className="text-lg font-bold text-gray-900">Séquences</div>
           </div>
           <div className="p-8">
             <div className="bg-yellow-50 border border-yellow-200 rounded p-6 text-center">
               <FiAlertCircle className="text-yellow-600 mx-auto mb-3" size={32} />
               <p className="text-yellow-800 font-medium text-lg mb-3">Aucune entité sélectionnée</p>
-              <p className="text-sm text-gray-600 mb-4">Veuillez sélectionner une entité pour voir les taux fiscaux.</p>
+              <p className="text-sm text-gray-600 mb-4">
+                Veuillez sélectionner une entité pour voir les séquences.
+              </p>
             </div>
           </div>
         </div>
@@ -515,16 +454,16 @@ export default function TauxFiscauxIndex() {
     );
   }
 
-  if (loading && taxes.length === 0) {
+  if (loading && sequences.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-7xl mx-auto bg-white border border-gray-300">
           <div className="border-b border-gray-300 px-4 py-3">
-            <div className="text-lg font-bold text-gray-900">Taux Fiscaux</div>
+            <div className="text-lg font-bold text-gray-900">Séquences</div>
           </div>
           <div className="p-8 flex items-center justify-center">
             <div className="text-center">
-              <div className="w-8 h-8 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <FiLoader className="animate-spin text-purple-600 mx-auto" size={32} />
               <p className="mt-4 text-gray-600 text-sm">Chargement...</p>
             </div>
           </div>
@@ -541,20 +480,21 @@ export default function TauxFiscauxIndex() {
         <div className="border-b border-gray-300 px-4 py-2">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-shrink-0">
-              <Tooltip text="Créer un nouveau taux fiscal">
+              <Tooltip text="Créer une nouvelle séquence">
                 <button
-                  onClick={() => navigate('/comptabilite/taux-fiscaux/create')}
+                  onClick={() => navigate('/comptabilite/sequences/create')}
                   className="h-8 px-3 bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 hover:scale-105 transition-all duration-200 rounded flex items-center gap-1"
                 >
-                  <FiPlus size={12} /> Nouveau taux
+                  <FiPlus size={12} /> Nouvelle séquence
                 </button>
               </Tooltip>
               <Tooltip text="Actualiser la liste">
                 <h1 
-                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
+                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200 flex items-center gap-2"
                   onClick={loadData}
                 >
-                  Taux Fiscaux
+                  <FiHash size={18} />
+                  Séquences
                 </h1>
               </Tooltip>
               
@@ -570,31 +510,23 @@ export default function TauxFiscauxIndex() {
                 </Tooltip>
                 {showActionsMenu && (
                   <div className="absolute left-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded z-50">
-                    <Tooltip text="Dupliquer les taux sélectionnés" position="right">
-                      <button
-                        onClick={handleDuplicate}
-                        className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        <FiCopy size={12} /> Dupliquer
-                      </button>
-                    </Tooltip>
-                    <Tooltip text="Activer les taux sélectionnés" position="right">
+                    <Tooltip text="Activer les séquences sélectionnées" position="right">
                       <button
                         onClick={handleBulkActivate}
-                        className="w-full px-3 py-2 text-xs text-left hover:bg-green-50 hover:text-green-600 flex items-center gap-2"
+                        className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
                       >
                         <FiCheck size={12} /> Activer
                       </button>
                     </Tooltip>
-                    <Tooltip text="Désactiver les taux sélectionnés" position="right">
+                    <Tooltip text="Désactiver les séquences sélectionnées" position="right">
                       <button
                         onClick={handleBulkDeactivate}
-                        className="w-full px-3 py-2 text-xs text-left hover:bg-yellow-50 hover:text-yellow-600 flex items-center gap-2"
+                        className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
                       >
                         <FiX size={12} /> Désactiver
                       </button>
                     </Tooltip>
-                    <Tooltip text="Supprimer les taux sélectionnés" position="right">
+                    <Tooltip text="Supprimer les séquences sélectionnées" position="right">
                       <button
                         onClick={handleBulkDelete}
                         className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 flex items-center gap-2"
@@ -619,17 +551,17 @@ export default function TauxFiscauxIndex() {
                         displayText = filter.value;
                         displayColor = 'bg-blue-100 text-blue-700';
                         break;
-                      case 'type':
-                        displayText = filter.value === 'sale' ? 'Vente' : filter.value === 'purchase' ? 'Achat' : filter.value;
-                        displayColor = filter.value === 'sale' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+                      case 'active':
+                        displayText = filter.value === 'Actif' ? 'Actif' : 'Inactif';
+                        displayColor = filter.value === 'Actif' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
                         break;
-                      case 'montant_type':
-                        displayText = filter.value === 'percent' ? 'Pourcentage' : 'Montant fixe';
-                        displayColor = 'bg-purple-100 text-purple-700';
+                      case 'code':
+                        displayText = `Code: ${filter.value}`;
+                        displayColor = 'bg-gray-100 text-gray-700';
                         break;
-                      case 'actif':
-                        displayText = filter.value === 'actif' ? 'Actif' : 'Inactif';
-                        displayColor = filter.value === 'actif' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700';
+                      case 'name':
+                        displayText = `Nom: ${filter.value}`;
+                        displayColor = 'bg-gray-100 text-gray-700';
                         break;
                       default:
                         displayText = `${filter.field}: ${filter.value}`;
@@ -654,7 +586,7 @@ export default function TauxFiscauxIndex() {
                         addSearchAsFilter();
                       }
                     }}
-                    placeholder="Rechercher par nom, montant..."
+                    placeholder="Rechercher..."
                     className="flex-1 px-2 py-1 text-sm focus:outline-none min-w-[120px]"
                   />
                   
@@ -674,45 +606,17 @@ export default function TauxFiscauxIndex() {
                           <p className="text-xs font-medium text-gray-700 mb-2">Ajouter un filtre</p>
                           <div className="space-y-2">
                             <button
-                              onClick={() => addFilter('type', 'sale')}
+                              onClick={() => addFilter('active', 'Actif')}
                               className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
                             >
-                              <span className="w-16">Type</span>
-                              <span className="text-green-600">= Vente</span>
-                            </button>
-                            <button
-                              onClick={() => addFilter('type', 'purchase')}
-                              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
-                            >
-                              <span className="w-16">Type</span>
-                              <span className="text-amber-600">= Achat</span>
-                            </button>
-                            <button
-                              onClick={() => addFilter('montant_type', 'percent')}
-                              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
-                            >
-                              <span className="w-16">Montant</span>
-                              <span className="text-purple-600">= Pourcentage</span>
-                            </button>
-                            <button
-                              onClick={() => addFilter('montant_type', 'fixed')}
-                              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
-                            >
-                              <span className="w-16">Montant</span>
-                              <span className="text-blue-600">= Montant fixe</span>
-                            </button>
-                            <button
-                              onClick={() => addFilter('actif', 'actif')}
-                              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
-                            >
-                              <span className="w-16">Statut</span>
+                              <span className="w-20">Statut</span>
                               <span className="text-green-600">= Actif</span>
                             </button>
                             <button
-                              onClick={() => addFilter('actif', 'inactif')}
+                              onClick={() => addFilter('active', 'Inactif')}
                               className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
                             >
-                              <span className="w-16">Statut</span>
+                              <span className="w-20">Statut</span>
                               <span className="text-gray-600">= Inactif</span>
                             </button>
                           </div>
@@ -753,10 +657,10 @@ export default function TauxFiscauxIndex() {
         </div>
 
         {/* Actions groupées */}
-        {selectedTaxIds.length > 0 && (
+        {selectedSequenceIds.length > 0 && (
           <div className="border-b border-gray-300 px-4 py-2 bg-gray-50 flex items-center gap-2">
-            <span className="text-xs text-gray-600">{selectedTaxIds.length} taux sélectionné(s)</span>
-            <Tooltip text="Activer les taux sélectionnés">
+            <span className="text-xs text-gray-600">{selectedSequenceIds.length} séquence(s) sélectionnée(s)</span>
+            <Tooltip text="Activer les séquences sélectionnées">
               <button
                 onClick={handleBulkActivate}
                 className="h-6 px-2 bg-green-600 text-white text-xs hover:bg-green-700 rounded"
@@ -764,15 +668,15 @@ export default function TauxFiscauxIndex() {
                 Activer
               </button>
             </Tooltip>
-            <Tooltip text="Désactiver les taux sélectionnés">
+            <Tooltip text="Désactiver les séquences sélectionnées">
               <button
                 onClick={handleBulkDeactivate}
-                className="h-6 px-2 bg-yellow-600 text-white text-xs hover:bg-yellow-700 rounded"
+                className="h-6 px-2 bg-gray-600 text-white text-xs hover:bg-gray-700 rounded"
               >
                 Désactiver
               </button>
             </Tooltip>
-            <Tooltip text="Supprimer les taux sélectionnés">
+            <Tooltip text="Supprimer les séquences sélectionnées">
               <button
                 onClick={handleBulkDelete}
                 className="h-6 px-2 bg-red-600 text-white text-xs hover:bg-red-700 rounded"
@@ -783,7 +687,21 @@ export default function TauxFiscauxIndex() {
           </div>
         )}
 
-        {/* Tableau */}
+        {/* Messages */}
+        {error && (
+          <div className="m-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+            <FiAlertCircle size={16} />
+            <span className="text-sm">{error}</span>
+          </div>
+        )}
+        {success && (
+          <div className="m-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
+            <FiCheck size={16} />
+            <span className="text-sm">{success}</span>
+          </div>
+        )}
+
+        {/* Tableau avec menu colonnes flottant */}
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
@@ -791,91 +709,87 @@ export default function TauxFiscauxIndex() {
                 <th className="border-r border-gray-300 px-2 py-1.5 w-8 text-center">
                   <input
                     type="checkbox"
-                    checked={selectedTaxIds.length === paginatedTaxes.length && paginatedTaxes.length > 0}
+                    checked={selectedSequenceIds.length === paginatedSequences.length && paginatedSequences.length > 0}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setSelectedTaxIds(paginatedTaxes.map(t => t.id));
+                        setSelectedSequenceIds(paginatedSequences.map(s => s.id));
                       } else {
-                        setSelectedTaxIds([]);
+                        setSelectedSequenceIds([]);
                       }
                     }}
                     className="w-3.5 h-3.5 cursor-pointer"
                   />
                 </th>
-                {visibleColumns.nom && (
-                  <th 
-                    className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[200px]"
-                    onClick={() => handleSort('nom')}
-                  >
-                    <div className="flex items-center gap-1">
-                      <FiTag size={12} />
-                      <span>Nom</span>
-                      <SortIcon column="nom" sortColumn={sortColumn} sortDirection={sortDirection} />
-                    </div>
-                  </th>
-                )}
-                {visibleColumns.montant && (
-                  <th 
-                    className="border-r border-gray-300 px-2 py-1.5 text-right text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[120px]"
-                    onClick={() => handleSort('montant')}
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      <FiPercent size={12} />
-                      <span>Montant</span>
-                      <SortIcon column="montant" sortColumn={sortColumn} sortDirection={sortDirection} />
-                    </div>
-                  </th>
-                )}
-                {visibleColumns.type && (
+                {visibleColumns.code && (
                   <th 
                     className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[100px]"
-                    onClick={() => handleSort('type')}
+                    onClick={() => handleSort('code')}
                   >
                     <div className="flex items-center gap-1">
-                      <span>Type</span>
-                      <SortIcon column="type" sortColumn={sortColumn} sortDirection={sortDirection} />
+                      <span>Code</span>
+                      <SortIcon column="code" sortColumn={sortColumn} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
-                {visibleColumns.entreprise && (
+                {visibleColumns.name && (
                   <th 
-                    className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[160px]"
-                    onClick={() => handleSort('entreprise')}
+                    className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[180px]"
+                    onClick={() => handleSort('name')}
                   >
                     <div className="flex items-center gap-1">
-                      <FiBriefcase size={12} />
-                      <span>Entreprise</span>
-                      <SortIcon column="entreprise" sortColumn={sortColumn} sortDirection={sortDirection} />
+                      <span>Nom</span>
+                      <SortIcon column="name" sortColumn={sortColumn} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
-                {visibleColumns.pays && (
+                {visibleColumns.format && (
                   <th 
                     className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[120px]"
-                    onClick={() => handleSort('pays')}
+                    onClick={() => handleSort('format')}
                   >
                     <div className="flex items-center gap-1">
-                      <span>Pays</span>
-                      <SortIcon column="pays" sortColumn={sortColumn} sortDirection={sortDirection} />
+                      <span>Format</span>
+                      <SortIcon column="format" sortColumn={sortColumn} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
-                {visibleColumns.actif && (
+                {visibleColumns.current_number && (
                   <th 
-                    className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[80px]"
-                    onClick={() => handleSort('actif')}
+                    className="border-r border-gray-300 px-2 py-1.5 text-center text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[120px]"
+                    onClick={() => handleSort('current_number')}
                   >
-                    <div className="flex items-center gap-1">
-                      <span>Statut</span>
-                      <SortIcon column="actif" sortColumn={sortColumn} sortDirection={sortDirection} />
+                    <div className="flex items-center justify-center gap-1">
+                      <span>Numéro courant</span>
+                      <SortIcon column="current_number" sortColumn={sortColumn} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
-                {/* Dernière colonne avec les trois points pour les colonnes (pas de colonne Actions) */}
+                {visibleColumns.increment && (
+                  <th 
+                    className="border-r border-gray-300 px-2 py-1.5 text-center text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[80px]"
+                    onClick={() => handleSort('increment')}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>Inc</span>
+                      <SortIcon column="increment" sortColumn={sortColumn} sortDirection={sortDirection} />
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.active && (
+                  <th 
+                    className="border-r border-gray-300 px-2 py-1.5 text-center text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[70px]"
+                    onClick={() => handleSort('active')}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>Statut</span>
+                      <SortIcon column="active" sortColumn={sortColumn} sortDirection={sortDirection} />
+                    </div>
+                  </th>
+                )}
                 <th className="border-l border-gray-300 px-2 py-1.5 w-10 text-center">
                   <Tooltip text="Choisir les colonnes à afficher">
                     <button
-                      className="columns-menu-button-taxes p-1 rounded hover:bg-gray-200"
+                      className="columns-menu-button p-1 rounded hover:bg-gray-200"
                       onClick={(e) => {
                         e.stopPropagation();
                         const rect = e.currentTarget.getBoundingClientRect();
@@ -899,91 +813,101 @@ export default function TauxFiscauxIndex() {
                     {error}
                   </td>
                 </tr>
-              ) : paginatedTaxes.length === 0 ? (
+              ) : paginatedSequences.length === 0 ? (
                 <tr>
                   <td colSpan={Object.values(visibleColumns).filter(v => v).length + 2} className="border border-gray-300 p-8 text-center text-gray-500 text-sm">
-                    {activeFilters.length > 0 ? 'Aucun résultat pour ces filtres' : 'Aucun taux fiscal'}
+                    {activeFilters.length > 0 ? 'Aucun résultat pour ces filtres' : 'Aucune séquence'}
                   </td>
                 </tr>
               ) : (
-                paginatedTaxes.map((tax) => (
+                paginatedSequences.map((sequence) => (
                   <tr
-                    key={tax.id}
-                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${activeRowId === tax.id ? 'bg-purple-50' : ''}`}
-                    onClick={() => setActiveRowId(tax.id)}
-                    onDoubleClick={() => navigate(`/comptabilite/taux-fiscaux/${tax.id}`)}
+                    key={sequence.id}
+                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${activeRowId === sequence.id ? 'bg-purple-50' : ''}`}
+                    onClick={() => setActiveRowId(sequence.id)}
+                    onDoubleClick={() => navigate(`/comptabilite/sequences/${sequence.id}`)}
                   >
                     <td className="border border-gray-300 px-2 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        checked={selectedTaxIds.includes(tax.id)}
+                        checked={selectedSequenceIds.includes(sequence.id)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedTaxIds([...selectedTaxIds, tax.id]);
+                            setSelectedSequenceIds([...selectedSequenceIds, sequence.id]);
                           } else {
-                            setSelectedTaxIds(selectedTaxIds.filter(id => id !== tax.id));
+                            setSelectedSequenceIds(selectedSequenceIds.filter(id => id !== sequence.id));
                           }
                         }}
                         className="w-3.5 h-3.5 cursor-pointer"
                       />
                     </td>
-                    {visibleColumns.nom && (
-                      <td className="border border-gray-300 px-2 py-1.5">
-                        <div className="flex items-center gap-2">
-                          <FiTag className="text-gray-400" size={14} />
-                          <div>
-                            <div className="text-xs font-semibold text-gray-900">{tax.name || '—'}</div>
-                            <div className="text-xs text-gray-500">
-                              {tax.amount_type === 'percent' ? 'Pourcentage' : 'Montant fixe'}
-                            </div>
-                          </div>
-                        </div>
+                    {visibleColumns.code && (
+                      <td className="border border-gray-300 px-2 py-1.5 text-xs font-mono text-gray-900">
+                        {sequence.code}
                       </td>
                     )}
-                    {visibleColumns.montant && (
-                      <td className="border border-gray-300 px-2 py-1.5 text-right">
-                        {tax.amount_type === 'percent' ? (
-                          <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full border border-purple-200 text-xs font-medium font-mono">
-                            {tax.amount}%
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full border border-green-200 text-xs font-medium">
-                            {tax.amount?.toLocaleString('fr-FR')} FCFA
-                          </span>
-                        )}
+                    {visibleColumns.name && (
+                      <td className="border border-gray-300 px-2 py-1.5 text-xs text-gray-700">
+                        {sequence.name}
                       </td>
                     )}
-                    {visibleColumns.type && (
-                      <td className="border border-gray-300 px-2 py-1.5">
-                        <TypeBadge type={tax.type_tax_use} />
+                    {visibleColumns.format && (
+                      <td className="border border-gray-300 px-2 py-1.5 text-xs font-mono text-purple-600">
+                        {formatPattern(sequence)}
                       </td>
                     )}
-                    {visibleColumns.entreprise && (
-                      <td className="border border-gray-300 px-2 py-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <FiBriefcase className="text-gray-400" size={12} />
-                          <span className="text-xs text-gray-900 truncate max-w-[120px]">
-                            {tax.company_detail?.nom || tax.company_detail?.raison_sociale || tax.company_detail?.name || '-'}
-                          </span>
-                        </div>
+                    {visibleColumns.current_number && (
+                      <td className="border border-gray-300 px-2 py-1.5 text-xs font-mono text-gray-900 text-center">
+                        {formatCurrentNumber(sequence)}
                       </td>
                     )}
-                    {visibleColumns.pays && (
-                      <td className="border border-gray-300 px-2 py-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-base">{tax.country_detail?.emoji || '🌍'}</span>
-                          <span className="text-xs text-gray-600 truncate max-w-[80px]">
-                            {tax.country_detail?.nom_fr || tax.country_detail?.nom || '-'}
-                          </span>
-                        </div>
+                    {visibleColumns.increment && (
+                      <td className="border border-gray-300 px-2 py-1.5 text-xs text-gray-700 text-center">
+                        +{sequence.number_increment || 1}
                       </td>
                     )}
-                    {visibleColumns.actif && (
-                      <td className="border border-gray-300 px-2 py-1.5">
-                        <StatusBadge active={tax.active} />
+                    {visibleColumns.active && (
+                      <td className="border border-gray-300 px-2 py-1.5 text-center">
+                        <ActiveBadge active={sequence.active} />
                       </td>
                     )}
-                    <td className="border border-gray-300 px-2 py-1.5"></td>
+                    <td className="border border-gray-300 px-2 py-1.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Tooltip text="Dupliquer">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicate(sequence);
+                            }}
+                            className="p-1 text-gray-400 hover:text-emerald-600 transition-colors"
+                          >
+                            <FiCopy size={14} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip text="Modifier">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/comptabilite/sequences/${sequence.id}`);
+                            }}
+                            className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                          >
+                            <FiEdit size={14} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip text="Supprimer">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm({ id: sequence.id, name: sequence.name });
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                          >
+                            <FiTrash2 size={14} />
+                          </button>
+                        </Tooltip>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -994,7 +918,7 @@ export default function TauxFiscauxIndex() {
         {/* Menu colonnes flottant */}
         {showColumnsMenu && (
           <div 
-            id="columns-menu-taxes"
+            id="columns-menu-sequences"
             className="fixed bg-white border border-gray-300 shadow-lg rounded z-50"
             style={{ top: columnsMenuPosition.top, left: columnsMenuPosition.left, width: '200px' }}
           >
@@ -1041,7 +965,7 @@ export default function TauxFiscauxIndex() {
         {totalPages > 1 && (
           <div className="border-t border-gray-300 px-4 py-2 flex items-center justify-between">
             <div className="text-xs text-gray-500">
-              Page {currentPage} sur {totalPages} ({filteredTaxes.length} total)
+              Page {currentPage} sur {totalPages}
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -1079,6 +1003,38 @@ export default function TauxFiscauxIndex() {
           </div>
         )}
       </div>
+
+      {/* Modal confirmation suppression */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-full">
+                <FiTrash2 className="text-red-600" size={20} />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Confirmer la suppression</h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Êtes-vous sûr de vouloir supprimer la séquence <span className="font-medium">"{deleteConfirm.name}"</span> ?
+              Cette action est irréversible.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

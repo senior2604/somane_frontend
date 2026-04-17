@@ -424,7 +424,6 @@ export default function JournauxCreate() {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [sequences, setSequences] = useState([]);
   
-  // État du formulaire - on garde TOUS les champs pour l'UI
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -463,7 +462,6 @@ export default function JournauxCreate() {
 
   const actionsMenuRef = useRef(null);
 
-  // Charger email de l'entité
   useEffect(() => {
     if (activeEntity?.email) {
       setFormData(prev => ({ ...prev, email: activeEntity.email }));
@@ -492,26 +490,19 @@ export default function JournauxCreate() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ==========================================
-  // CHARGEMENT DES DONNÉES
-  // ==========================================
   const loadOptions = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      console.log('🔍 Chargement des données...');
-      
       const typesResponse = await apiClient.get('/compta/journal-types/');
       const typesData = normalizeApiResponse(typesResponse);
       setJournalTypes(typesData);
-      console.log('✅ Types de journal chargés:', typesData.length);
       
       try {
         const accountsResponse = await apiClient.get('/compta/accounts/');
         const accountsData = normalizeApiResponse(accountsResponse);
         setAccounts(accountsData);
-        console.log('✅ Comptes chargés:', accountsData.length);
       } catch (err) {
         console.warn('⚠️ Comptes non disponibles:', err.message);
       }
@@ -520,42 +511,39 @@ export default function JournauxCreate() {
         const bankResponse = await apiClient.get('/banques-partenaires/');
         const bankData = normalizeApiResponse(bankResponse);
         setBankAccounts(bankData);
-        console.log('✅ Banques partenaires chargées:', bankData.length);
       } catch (err) {
-        console.log('ℹ️ Banques partenaires non disponibles (optionnel)');
+        console.log('ℹ️ Banques partenaires non disponibles');
       }
       
       try {
         const banksResponse = await apiClient.get('/banques/');
         const banksData = normalizeApiResponse(banksResponse);
         setBanks(banksData);
-        console.log('✅ Banques chargées:', banksData.length);
       } catch (err) {
-        console.log('ℹ️ Banques non disponibles (optionnel)');
+        console.log('ℹ️ Banques non disponibles');
       }
       
       try {
         const paymentResponse = await apiClient.get('/compta/payment-methods/');
         const paymentData = normalizeApiResponse(paymentResponse);
         setPaymentMethods(paymentData);
-        console.log('✅ Méthodes de paiement chargées:', paymentData.length);
       } catch (err) {
-        console.log('ℹ️ Méthodes de paiement non disponibles (optionnel)');
+        console.log('ℹ️ Méthodes de paiement non disponibles');
         setPaymentMethods([]);
       }
       
       try {
-        const sequencesResponse = await apiClient.get('/sequences/');
-        const sequencesData = normalizeApiResponse(sequencesResponse);
-        const filteredSequences = sequencesData.filter(s => 
-          !s.company || s.company === activeEntity?.id
-        );
-        setSequences(filteredSequences);
-        console.log('✅ Séquences chargées:', filteredSequences.length);
-      } catch (err) {
-        console.log('ℹ️ Séquences non disponibles (optionnel)');
-        setSequences([]);
-      }
+            const sequencesResponse = await apiClient.get('/sequences/');
+            const sequencesData = normalizeApiResponse(sequencesResponse);
+            const filteredSequences = sequencesData.filter(s => 
+            !s.company || s.company === activeEntity?.id
+           );
+      setSequences(filteredSequences);
+                  console.log('✅ Séquences chargées:', filteredSequences); 
+} catch (err) {
+  console.log('ℹ️ Séquences non disponibles', err); 
+  setSequences([]);
+}
       
     } catch (err) {
       console.error('❌ Erreur critique:', err);
@@ -565,7 +553,6 @@ export default function JournauxCreate() {
     }
   };
 
-  // Sauvegarde automatique
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (hasUnsavedChanges) {
@@ -599,7 +586,6 @@ export default function JournauxCreate() {
     markAsModified();
   };
 
-  // Gestion spéciale pour le changement de type
   const handleTypeChange = (typeId) => {
     const selectedType = journalTypes.find(t => t.id === typeId);
     
@@ -623,7 +609,6 @@ export default function JournauxCreate() {
     markAsModified();
   };
 
-  // Vérifier si le type est Banque
   const isBankType = () => {
     const bankCodes = ['BQ', 'BN', 'BAN', 'BANQUE'];
     return bankCodes.includes(formData.type_code) || 
@@ -633,7 +618,6 @@ export default function JournauxCreate() {
            formData.type_code?.startsWith('BN');
   };
 
-  // Vérifier si le type est Caisse
   const isCashType = () => {
     const cashCodes = ['CA', 'CS', 'CAI', 'CAISSE'];
     return cashCodes.includes(formData.type_code) || 
@@ -641,14 +625,6 @@ export default function JournauxCreate() {
            formData.type_code?.startsWith('CS');
   };
 
-  // Vérifier si le type est Banque ou Caisse (pour validation)
-  const isBankOrCashType = () => {
-    return isBankType() || isCashType();
-  };
-
-  // ==========================================
-  // FONCTION DE VALIDATION DU FORMULAIRE
-  // ==========================================
   const validateForm = (silent = false) => {
     if (!activeEntity) { 
       if (!silent) setError('Vous devez sélectionner une entité'); 
@@ -688,7 +664,6 @@ export default function JournauxCreate() {
         if (!silent) setError('La banque est obligatoire pour un journal de type Banque');
         return false;
       }
-      
     } else if (isCashType()) {
       if (!formData.default_account_id) {
         if (!silent) setError('Le compte d\'achat par défaut est obligatoire pour un journal de type Caisse');
@@ -706,44 +681,23 @@ export default function JournauxCreate() {
         if (!silent) setError('Le compte de perte est obligatoire pour un journal de type Caisse');
         return false;
       }
-      
-    } else {
-      if (!formData.default_account_id) {
-        if (!silent) setError('Le compte d\'achat par défaut est obligatoire');
-        return false;
-      }
     }
 
     return true;
   };
 
-  // ==========================================
-  // FONCTION POUR OBTENIR LES CHAMPS OBLIGATOIRES
-  // ==========================================
   const getRequiredFields = () => {
     if (!formData.type_id) return ['name', 'code', 'type_id'];
     
     if (isBankType()) {
-      return [
-        'name', 'code', 'type_id', 
-        'bank_account_id', 'bank_acc_number', 'bank_id'
-      ];
+      return ['name', 'code', 'type_id', 'bank_account_id', 'bank_acc_number', 'bank_id'];
     } else if (isCashType()) {
-      return [
-        'name', 'code', 'type_id',
-        'default_account_id', 'suspense_account_id', 
-        'profit_account_id', 'loss_account_id'
-      ];
+      return ['name', 'code', 'type_id', 'default_account_id', 'suspense_account_id', 'profit_account_id', 'loss_account_id'];
     } else {
-      return [
-        'name', 'code', 'type_id', 'default_account_id'
-      ];
+      return ['name', 'code', 'type_id'];
     }
   };
 
-  // ==========================================
-  // PRÉPARATION DES DONNÉES POUR L'API - MODIFIÉE
-  // ==========================================
   const prepareDataForApi = useCallback(() => {
     const apiData = {
       name: formData.name,
@@ -754,9 +708,6 @@ export default function JournauxCreate() {
       profit_account_id: formData.profit_account_id || null,
       loss_account_id: formData.loss_account_id || null,
       suspense_account_id: formData.suspense_account_id || null,
-      // ⚠️ Champs qui n'existent pas encore dans le backend - IGNORÉS
-      // suspense_in_account_id: formData.suspense_account_in_id || null,
-      // suspense_out_account_id: formData.suspense_account_out_id || null,
       bank_account_id: formData.bank_account_id || null,
       bank_acc_number: formData.bank_acc_number || null,
       bank_id: formData.bank_id || null,
@@ -772,94 +723,64 @@ export default function JournauxCreate() {
       outbound_payment_method_ids: formData.payment_method_out.length ? formData.payment_method_out : []
     };
     
-    // Nettoyer les valeurs vides
     Object.keys(apiData).forEach(key => {
       if (apiData[key] === undefined || apiData[key] === null || apiData[key] === '') {
         delete apiData[key];
       }
     });
     
-    // Optionnel : Sauvegarder les champs ignorés dans la note pour ne pas perdre l'info
-    if (formData.suspense_account_in_id || formData.suspense_account_out_id) {
-      const ignoredFields = {
-        suspense_in: formData.suspense_account_in_id,
-        suspense_out: formData.suspense_account_out_id
-      };
-      apiData.note = apiData.note 
-        ? apiData.note + '\n[Champs en attente backend] ' + JSON.stringify(ignoredFields)
-        : '[Champs en attente backend] ' + JSON.stringify(ignoredFields);
-    }
-    
     return apiData;
   }, [formData, activeEntity]);
 
   // ==========================================
-  // SAUVEGARDE
+  // SAUVEGARDE - VERSION CORRIGÉE
   // ==========================================
-  const handleSave = async (silent = false) => {
-    if (!validateForm(silent)) {
-      return false;
+const handleSave = async (silent = false) => {
+  if (!validateForm(silent)) {
+    return false;
+  }
+
+  setIsSubmitting(true);
+  if (!silent) setError(null);
+
+  try {
+    const apiData = prepareDataForApi();
+    const result = await apiClient.post('/compta/journals/', apiData);
+    
+    if (!silent) {
+      setSuccess('Journal créé avec succès !');
     }
-
-    setIsSubmitting(true);
-    if (!silent) setError(null);
-
-    try {
-      const apiData = prepareDataForApi();
-      console.log('📤 Données envoyées:', JSON.stringify(apiData, null, 2));
-      
-      const result = await apiClient.post('/compta/journals/', apiData);
-      
-      if (!silent) {
-        setSuccess('Journal créé avec succès !');
-      }
-      setHasUnsavedChanges(false);
-      
-      if (!silent) {
-        setTimeout(() => {
-          navigate('/comptabilite/journaux');
-        }, 1500);
-      }
-      
-      return true;
-      
-    } catch (err) {
-      console.error('❌ Erreur création:', err);
-      
-      if (err.response?.data) {
-        console.error('📄 Détails erreur serveur:', err.response.data);
-        if (!silent) {
-          const errorData = err.response.data;
-          let errorMsg = '';
-          
-          if (typeof errorData === 'object') {
-            const messages = [];
-            for (const [field, errors] of Object.entries(errorData)) {
-              if (Array.isArray(errors)) {
-                messages.push(`${field}: ${errors.join(', ')}`);
-              } else if (typeof errors === 'string') {
-                messages.push(`${field}: ${errors}`);
-              }
-            }
-            errorMsg = messages.join(' • ');
-          } else {
-            errorMsg = JSON.stringify(errorData);
-          }
-          
-          setError(`Erreur: ${errorMsg || 'Données invalides'}`);
-        }
-      } else {
-        if (!silent) setError(`Erreur: ${err.message}`);
-      }
-      return false;
-    } finally {
-      setIsSubmitting(false);
+    setHasUnsavedChanges(false);
+    
+    if (!silent) {
+      setTimeout(() => {
+        navigate('/comptabilite/journaux');
+      }, 1500);
     }
-  };
-
-  // ==========================================
-  // ACTIONS
-  // ==========================================
+    
+    return true;
+    
+  } catch (err) {
+    // Le message est dans err.data (pas err.response.data)
+    let errorMessage = "Erreur lors de la création";
+    
+    // Essaye différents endroits où le message pourrait être
+    if (err?.data?.code?.[0]) {
+      errorMessage = err.data.code[0];
+    } else if (err?.response?.data?.code?.[0]) {
+      errorMessage = err.response.data.code[0];
+    } else if (err?.data?.message) {
+      errorMessage = err.data.message;
+    } else if (err?.message) {
+      errorMessage = err.message;
+    }
+    
+    setError(errorMessage);
+    return false;
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   const handleDiscardChanges = () => setShowConfirmDialog(true);
   
   const confirmDiscardChanges = () => {
@@ -962,7 +883,6 @@ export default function JournauxCreate() {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto bg-white border border-gray-300">
 
-        {/* En-tête ligne 1 */}
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-start gap-3">
@@ -1033,7 +953,6 @@ export default function JournauxCreate() {
           </div>
         </div>
 
-        {/* En-tête ligne 2 */}
         <div className="border-b border-gray-300 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Tooltip text={formData.active ? "Désactiver le journal" : "Activer le journal"}>
@@ -1078,7 +997,6 @@ export default function JournauxCreate() {
           </div>
         </div>
 
-        {/* Indicateur modifications */}
         {hasUnsavedChanges && (
           <div className="px-4 py-1 bg-blue-50 text-blue-700 text-xs border-b border-blue-200 flex items-center justify-between">
             <span>Modifications non sauvegardées</span>
@@ -1086,7 +1004,6 @@ export default function JournauxCreate() {
           </div>
         )}
 
-        {/* Informations de base */}
         <div className="px-4 py-3 border-b border-gray-300">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center" style={{ height: '26px' }}>
@@ -1095,11 +1012,7 @@ export default function JournauxCreate() {
                 type="text"
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
-                className={`flex-1 px-2 py-1 border text-xs ml-2 hover:border-purple-400 focus:border-purple-600 transition-colors ${
-                  isFieldRequired('name') && !formData.name && formData.type_id 
-                    ? 'border-red-300 bg-red-50' 
-                    : 'border-gray-300'
-                }`}
+                className="flex-1 px-2 py-1 border text-xs ml-2 hover:border-purple-400 focus:border-purple-600 transition-colors border-gray-300"
                 style={{ height: '26px' }}
                 placeholder="Journal des achats"
                 maxLength="64"
@@ -1111,11 +1024,7 @@ export default function JournauxCreate() {
                 type="text"
                 value={formData.code}
                 onChange={(e) => handleChange('code', e.target.value.toUpperCase().slice(0, 8))}
-                className={`flex-1 px-2 py-1 border text-xs ml-2 hover:border-purple-400 focus:border-purple-600 transition-colors ${
-                  isFieldRequired('code') && !formData.code && formData.type_id 
-                    ? 'border-red-300 bg-red-50' 
-                    : 'border-gray-300'
-                }`}
+                className="flex-1 px-2 py-1 border text-xs ml-2 hover:border-purple-400 focus:border-purple-600 transition-colors border-gray-300"
                 style={{ height: '26px' }}
                 placeholder="ACH"
                 maxLength="8"
@@ -1146,7 +1055,6 @@ export default function JournauxCreate() {
           </div>
         </div>
 
-        {/* Onglets */}
         <div className="border-b border-gray-300">
           <div className="px-4 flex">
             {['comptable', 'avance', 'numerotation', 'notes'].map(tab => (
@@ -1167,7 +1075,6 @@ export default function JournauxCreate() {
           </div>
         </div>
 
-        {/* Contenu onglets */}
         <div className="p-4">
           {activeTab === 'comptable' && (
             <div className="space-y-3">
@@ -1180,19 +1087,34 @@ export default function JournauxCreate() {
 
               {formData.type_id ? (
                 <>
-                  {/* SECTION POUR TYPE BANQUE */}
                   {showBankSpecific && (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('bank_account_id')}>
-                            Compte bancaire lié
-                          </RequiredLabel>
-                          <div className={`flex-1 ml-2 border ${
-                            isFieldRequired('bank_account_id') && !formData.bank_account_id 
-                              ? 'border-red-300' 
-                              : 'border-gray-300 hover:border-purple-400'
-                          } transition-colors`} style={{ height: '26px' }}>
+                          <RequiredLabel required={false}>Compte d'achat par défaut</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                            <AutocompleteInput
+                              value={formData.default_account_name}
+                              selectedId={formData.default_account_id}
+                              onChange={(text) => handleChange('default_account_name', text)}
+                              onSelect={(id, label) => {
+                                handleChange('default_account_id', id);
+                                handleChange('default_account_name', label);
+                              }}
+                              options={accounts}
+                              getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                              placeholder="Compte d'achat par défaut (optionnel)"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('bank_account_id')}>Compte bancaire lié</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.bank_account_name}
                               selectedId={formData.bank_account_id}
@@ -1210,18 +1132,12 @@ export default function JournauxCreate() {
                         </div>
                         
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('bank_acc_number')}>
-                            Numéro de compte
-                          </RequiredLabel>
+                          <RequiredLabel required={isFieldRequired('bank_acc_number')}>Numéro de compte</RequiredLabel>
                           <input
                             type="text"
                             value={formData.bank_acc_number || ''}
                             onChange={(e) => handleChange('bank_acc_number', e.target.value)}
-                            className={`flex-1 ml-2 px-2 py-1 border text-xs hover:border-purple-400 focus:border-purple-600 transition-colors ${
-                              isFieldRequired('bank_acc_number') && !formData.bank_acc_number 
-                                ? 'border-red-300 bg-red-50' 
-                                : 'border-gray-300'
-                            }`}
+                            className="flex-1 ml-2 px-2 py-1 border text-xs hover:border-purple-400 focus:border-purple-600 transition-colors border-gray-300"
                             style={{ height: '26px' }}
                             placeholder="FR76 3000 4001 2300 0123 4567 89"
                           />
@@ -1230,14 +1146,8 @@ export default function JournauxCreate() {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('bank_id')}>
-                            Banque
-                          </RequiredLabel>
-                          <div className={`flex-1 ml-2 border ${
-                            isFieldRequired('bank_id') && !formData.bank_id 
-                              ? 'border-red-300' 
-                              : 'border-gray-300 hover:border-purple-400'
-                          } transition-colors`} style={{ height: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('bank_id')}>Banque</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.bank_name}
                               selectedId={formData.bank_id}
@@ -1255,9 +1165,7 @@ export default function JournauxCreate() {
                         </div>
                         
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={false}>
-                            Source des relevés
-                          </RequiredLabel>
+                          <RequiredLabel required={false}>Source des relevés</RequiredLabel>
                           <div className="flex-1 ml-2 relative">
                             <select
                               value={formData.bank_statements_source || 'manual'}
@@ -1275,9 +1183,7 @@ export default function JournauxCreate() {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={false}>
-                            Import relevés bancaires
-                          </RequiredLabel>
+                          <RequiredLabel required={false}>Import relevés bancaires</RequiredLabel>
                           <div className="flex-1 ml-2 flex items-center">
                             <input
                               type="checkbox"
@@ -1285,9 +1191,7 @@ export default function JournauxCreate() {
                               onChange={(e) => handleChange('import_bank_statements', e.target.checked)}
                               className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                             />
-                            <span className="ml-2 text-xs text-gray-600">
-                              Activer l'import automatique
-                            </span>
+                            <span className="ml-2 text-xs text-gray-600">Activer l'import automatique</span>
                           </div>
                         </div>
                         <div className="flex items-center" style={{ height: '26px' }}>
@@ -1297,25 +1201,18 @@ export default function JournauxCreate() {
                       <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200">
                         <p className="text-xs flex items-center gap-1 text-blue-700">
                           <FiInfo size={12} />
-                          Journal de type Banque - Les informations bancaires remplacent les comptes standard.
+                          Journal de type Banque - Les informations bancaires sont obligatoires. Le compte d'achat par défaut est optionnel.
                         </p>
                       </div>
                     </div>
                   )}
 
-                  {/* SECTION POUR TYPE CAISSE */}
                   {showCashSpecific && (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('default_account_id')}>
-                            Compte d'achat par défaut
-                          </RequiredLabel>
-                          <div className={`flex-1 ml-2 border ${
-                            isFieldRequired('default_account_id') && !formData.default_account_id 
-                              ? 'border-red-300' 
-                              : 'border-gray-300 hover:border-purple-400'
-                          } transition-colors`} style={{ height: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('default_account_id')}>Compte d'achat par défaut</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.default_account_name}
                               selectedId={formData.default_account_id}
@@ -1333,14 +1230,8 @@ export default function JournauxCreate() {
                         </div>
                         
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('suspense_account_id')}>
-                            Compte d'attente
-                          </RequiredLabel>
-                          <div className={`flex-1 ml-2 border ${
-                            isFieldRequired('suspense_account_id') && !formData.suspense_account_id 
-                              ? 'border-red-300' 
-                              : 'border-gray-300 hover:border-purple-400'
-                          } transition-colors`} style={{ height: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('suspense_account_id')}>Compte d'attente</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.suspense_account_name}
                               selectedId={formData.suspense_account_id}
@@ -1360,14 +1251,8 @@ export default function JournauxCreate() {
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('profit_account_id')}>
-                            Compte de profit
-                          </RequiredLabel>
-                          <div className={`flex-1 ml-2 border ${
-                            isFieldRequired('profit_account_id') && !formData.profit_account_id 
-                              ? 'border-red-300' 
-                              : 'border-gray-300 hover:border-purple-400'
-                          } transition-colors`} style={{ height: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('profit_account_id')}>Compte de profit</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.profit_account_name}
                               selectedId={formData.profit_account_id}
@@ -1384,14 +1269,8 @@ export default function JournauxCreate() {
                           </div>
                         </div>
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('loss_account_id')}>
-                            Compte de perte
-                          </RequiredLabel>
-                          <div className={`flex-1 ml-2 border ${
-                            isFieldRequired('loss_account_id') && !formData.loss_account_id 
-                              ? 'border-red-300' 
-                              : 'border-gray-300 hover:border-purple-400'
-                          } transition-colors`} style={{ height: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('loss_account_id')}>Compte de perte</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.loss_account_name}
                               selectedId={formData.loss_account_id}
@@ -1418,19 +1297,12 @@ export default function JournauxCreate() {
                     </div>
                   )}
 
-                  {/* SECTION POUR AUTRES TYPES */}
                   {!showBankSpecific && !showCashSpecific && (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('default_account_id')}>
-                            Compte d'achat par défaut
-                          </RequiredLabel>
-                          <div className={`flex-1 ml-2 border ${
-                            isFieldRequired('default_account_id') && !formData.default_account_id 
-                              ? 'border-red-300' 
-                              : 'border-gray-300 hover:border-purple-400'
-                          } transition-colors`} style={{ height: '26px' }}>
+                          <RequiredLabel required={false}>Compte d'achat par défaut</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.default_account_name}
                               selectedId={formData.default_account_id}
@@ -1441,8 +1313,7 @@ export default function JournauxCreate() {
                               }}
                               options={accounts}
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                              placeholder="Compte d'achat par défaut"
-                              required={isFieldRequired('default_account_id')}
+                              placeholder="Compte d'achat par défaut (optionnel)"
                             />
                           </div>
                         </div>
@@ -1454,7 +1325,7 @@ export default function JournauxCreate() {
                       <div className="mt-2 p-2 rounded bg-gray-50 border border-gray-200">
                         <p className="text-xs flex items-center gap-1 text-gray-600">
                           <FiInfo size={12} />
-                          Seul le compte d'achat par défaut est requis pour ce type de journal.
+                          Le compte d'achat par défaut est optionnel pour ce type de journal.
                         </p>
                       </div>
                     </div>
@@ -1549,7 +1420,6 @@ export default function JournauxCreate() {
                       getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                       placeholder="Compte suspens entrant (optionnel)"
                     />
-                    
                   </div>
                 </div>
                 
@@ -1568,7 +1438,6 @@ export default function JournauxCreate() {
                       getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                       placeholder="Compte suspens sortant (optionnel)"
                     />
-                    
                   </div>
                 </div>
               </div>

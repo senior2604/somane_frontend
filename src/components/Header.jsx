@@ -86,9 +86,10 @@ const MODULES_CONFIG = [
       {
         name: "Structure",
         items: [
-          { label: "Partenaires", path: "/comptabilite/partenaires" },
+          { label: "Partenaires", path: "/partners" },
           { label: "Plans comptables", path: "/comptabilite/plan-comptable" },
           { label: "Journaux", path: "/comptabilite/journaux" },
+          { label: "Séquences", path: "/comptabilite/sequences" },
           { label: "Devises", path: "/comptabilite/devises" },
           { label: "Taux Fiscaux", path: "/comptabilite/taux-fiscaux" },
           { label: "Positions fiscales", path: "/comptabilite/positions-fiscales" },
