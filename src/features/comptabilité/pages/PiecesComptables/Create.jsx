@@ -563,7 +563,7 @@ export default function Create() {
         journal_id: toNumberOrNull(formData.journal_id),
         company_id: activeEntity?.id || null,
         currency_id: toNumberOrNull(formData.currency_id),
-        tax_id: toNumberOrNull(line.tax_id),
+        tax_ids: line.tax_id ? [toNumberOrNull(line.tax_id)] : [],
         tax_base_amount: toNumber(line.tax_base_amount),
         debit: toNumber(line.debit),
         credit: toNumber(line.credit),
