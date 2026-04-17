@@ -1434,86 +1434,73 @@ function UserFormModal({ user, groupes, partenaires, entiteContexte, onClose, on
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
 
-    // Validation
-    if (!formData.partenaire) {
-      setError('Veuillez sélectionner un partenaire');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      // Récupérer les données du partenaire sélectionné
-      const partenaire = partenaires.find(p => p.id === parseInt(formData.partenaire));
-      
-      if (!partenaire) {
-        setError('Partenaire non trouvé');
-        setLoading(false);
-        return;
-      }
-
-      if (user) {
-        // MODIFICATION
-        const patchData = {
-          partenaire: parseInt(formData.partenaire),
-          entite_active: parseInt(entiteContexte),
-          statut: formData.statut,
-          groups: formData.groups,
-          is_active: formData.statut === 'actif',
-        };
-
-        console.log('📤 Données PATCH envoyées:', patchData);
-        
-        const response = await apiClient.patch(`/users/${user.id}/`, patchData);
-        console.log('✅ Réponse PATCH:', response);
-        onSuccess();
-        
-      } else {
-        // CRÉATION - Djoser avec données du partenaire
-        const userData = {
-          partenaire: parseInt(formData.partenaire),
-          entite: parseInt(entiteContexte),
-          email: partenaire.email || '',
-          first_name: partenaire.prenom || partenaire.first_name || '',
-          last_name: partenaire.nom || partenaire.last_name || '',
-          telephone: partenaire.telephone || '',
-          statut: formData.statut,
-          groups: formData.groups,
-          is_active: formData.statut === 'actif',
-        };
-
-        console.log('📤 Création utilisateur:', userData);
-        
-        const response = await apiClient.post('/users/', userData);
-        console.log('✅ Réponse création:', response);
-        onSuccess();
-      }
-      
-    } catch (err) {
-      console.error('❌ Erreur sauvegarde utilisateur:', err);
-      let errorMessage = 'Erreur lors de la sauvegarde';
-      if (err.response?.data) {
-        const errorData = err.response.data;
-        if (typeof errorData === 'object') {
-          errorMessage = Object.entries(errorData)
-            .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
-            .join('\n');
-        } else {
-          errorMessage = JSON.stringify(errorData);
+        if (!formData.partenaire) {
+            setError('Veuillez sélectionner un partenaire');
+            setLoading(false);
+            return;
         }
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+
+        try {
+            const partenaire = partenaires.find(p => p.id === parseInt(formData.partenaire));
+            if (!partenaire) {
+                setError('Partenaire non trouvé');
+                setLoading(false);
+                return;
+            }
+
+            if (user) {
+                // === MODIFICATION (reste inchangé ou adapté selon vos besoins) ===
+                const patchData = {
+                    statut: formData.statut,
+                    groups: formData.groups,
+                    is_active: formData.statut === 'actif',
+                };
+                await apiClient.patch(`/users/${user.id}/`, patchData);
+                onSuccess();
+            } else {
+                // === CRÉATION DEPUIS PARTENAIRE ===
+                const requestData = {
+                    partenaire: partenaire.id,
+                    first_name: partenaire.prenom || partenaire.first_name || '',
+                    last_name: partenaire.nom || partenaire.last_name || '',
+                    telephone: partenaire.telephone || '',
+                    groups: formData.groups,
+                    send_activation_email: true, // Active l'envoi automatique
+                    statut: formData.statut
+                };
+
+                console.log('📤 Création via endpoint custom:', requestData);
+                // ⚠️ APPEL À L'ENDPOINT PERSONNALISÉ
+                await apiClient.post('/users/create-from-partenaire/', requestData);
+                onSuccess();
+            }
+        } catch (err) {
+            console.error('❌ Erreur sauvegarde utilisateur:', err);
+            let errorMessage = 'Erreur lors de la sauvegarde';
+            if (err.response?.data) {
+                const errorData = err.response.data;
+                if (typeof errorData === 'object') {
+                    errorMessage = Object.entries(errorData)
+                        .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+                        .join('\n');
+                } else if (errorData?.detail || errorData?.error) {
+                    errorMessage = errorData.detail || errorData.error;
+                } else {
+                    errorMessage = JSON.stringify(errorData);
+                }
+            } else if (err.message) {
+                errorMessage = err.message;
+            }
+            setError(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+    };
 
   const handleChange = (field, value) => {
     setFormData(prev => ({

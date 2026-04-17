@@ -38,7 +38,6 @@ const ActivationPage = () => {
       setPasswordErrors(errors);
     }
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -47,8 +46,7 @@ const ActivationPage = () => {
       return;
     }
 
-    const errors = validatePassword(formData.password);
-    if (errors.length > 0) {
+    if (validatePassword(formData.password).length > 0) {
       setMessage('Le mot de passe ne respecte pas les exigences de securite');
       return;
     }
@@ -57,15 +55,14 @@ const ActivationPage = () => {
     setMessage('');
 
     try {
-      await authService.activateAccount(uid, token, formData.password);
+      // ÉTAPE 1 : Activer le compte
+      await authService.activateAccount(uid, token);
       
-      // ✅ REDIRECTION APRÈS SUCCÈS
-      setMessage('Compte active avec succes ! Redirection vers la page de connexion...');
+      // ÉTAPE 2 : Définir le mot de passe
+      await authService.setPasswordAfterActivation(uid, token, formData.password);
       
-      // Redirection après 2 secondes
-      setTimeout(() => {
-        navigate('/login'); // Redirection vers votre page de login
-      }, 2000);
+      setMessage('Compte activé avec succès ! Redirection...');
+      setTimeout(() => navigate('/login'), 2000);
       
     } catch (error) {
       setMessage(`Erreur: ${error.message}`);

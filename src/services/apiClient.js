@@ -52,33 +52,27 @@ class ApiClient {
     
     // Liste des endpoints qui nécessitent le préfixe 'core/'
     this.coreEndpoints = [
-      'utilisateurentites/',
-      'parametres/',
-      'journals/',
-      'taches/',
-      'informations/',
-      'modules/',
-      'permissions/',
-      'groupes/',
+      // 'utilisateurentites/',
+      // 'parametres/',
+      // 'journals/',
+      // 'taches/',
+      // 'informations/',
+      // 'modules/',
+      // 'permissions/',
+      // 'groupes/',
     ];
   }
 
   /**
    * Normalise l'URL de base pour qu'elle se termine par un slash
    */
-  normalizeBaseURL(url) {
-    let normalized = url;
-    
-    if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
-      normalized = 'http://' + normalized;
-    }
-    
-    if (!normalized.endsWith('/')) {
-      normalized = normalized + '/';
-    }
-    
+// Dans apiClient.js, remplacez normalizeBaseURL par :
+normalizeBaseURL(url) {
+    if (!url) return '/api/';
+    let normalized = url.replace(/\/+$/, '');
+    if (!normalized.endsWith('/')) normalized += '/';
     return normalized;
-  }
+}
 
   /**
    * Vérifie si un endpoint nécessite une entité

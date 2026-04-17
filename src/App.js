@@ -1,3 +1,4 @@
+// C:\python\django\somane_fronten\somane_frontend\src\App.js
 import AppRouter from "./routes/AppRouter";
 import { EntityProvider } from './context/EntityContext'; 
 
