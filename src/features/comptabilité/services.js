@@ -219,6 +219,154 @@ const piecesService = {
     return apiClient.post(`${API_PREFIX}moves/${id}/reverse/`, {}, { params });
   },
   
+  // === PIÈCES JOINTES ===
+  
+  /**
+   * Récupérer toutes les pièces jointes d'une pièce comptable
+   * @param {number} moveId - ID de la pièce comptable
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Array>} Liste des pièces jointes
+   */
+  getAttachments: async (moveId, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}moves/${moveId}/attachments/`, { params });
+      
+      let attachmentsData = [];
+      if (Array.isArray(response)) {
+        attachmentsData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          attachmentsData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          attachmentsData = response.data;
+        }
+      }
+      
+      return attachmentsData;
+    } catch (error) {
+      console.error('Erreur récupération pièces jointes:', error);
+      return [];
+    }
+  },
+  
+  /**
+   * Upload de pièces jointes
+   * ⚠️ IMPORTANT: Ne pas définir Content-Type manuellement avec FormData
+   * Le navigateur doit générer automatiquement la boundary
+   * @param {number} moveId - ID de la pièce comptable
+   * @param {FormData} formData - FormData contenant les fichiers
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Résultat de l'upload
+   */
+  uploadAttachments: async (moveId, formData, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      // ⚠️ NE PAS ajouter d'en-tête Content-Type ici
+      // Le navigateur le génère automatiquement avec la boundary correcte
+      const response = await apiClient.post(
+        `${API_PREFIX}moves/${moveId}/attachments/`,
+        formData,
+        { params }
+        // PAS de headers['Content-Type'] = 'multipart/form-data'
+      );
+      return response;
+    } catch (error) {
+      console.error('Erreur upload pièces jointes:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Télécharger une pièce jointe
+   * ✅ CORRIGÉ : Utilisation de apiClient.download pour éviter les problèmes de Content-Type
+   * @param {number} attachmentId - ID de la pièce jointe
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Blob>} Fichier sous forme de Blob
+   */
+  downloadAttachment: async (attachmentId, entityId = null) => {
+    try {
+      // Utiliser la méthode download qui ne force pas le Content-Type
+      const response = await apiClient.download(`${API_PREFIX}attachments/${attachmentId}/download/`);
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      return await response.blob();
+    } catch (error) {
+      console.error('Erreur téléchargement pièce jointe:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Supprimer une pièce jointe
+   * @param {number} moveId - ID de la pièce comptable
+   * @param {number} attachmentId - ID de la pièce jointe
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<void>}
+   */
+  deleteAttachment: async (moveId, attachmentId, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      await apiClient.delete(
+        `${API_PREFIX}moves/${moveId}/attachments/${attachmentId}/`,
+        { params }
+      );
+    } catch (error) {
+      console.error('Erreur suppression pièce jointe:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Créer une pièce avec des fichiers (upload simultané)
+   * ⚠️ IMPORTANT: Ne pas définir Content-Type manuellement avec FormData
+   * @param {FormData} formData - FormData contenant les données et les fichiers
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Pièce créée
+   */
+  createWithFiles: async (formData, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      // ⚠️ NE PAS ajouter d'en-tête Content-Type ici
+      const response = await apiClient.post(
+        `${API_PREFIX}moves/with-files/`,
+        formData,
+        { params }
+      );
+      return response;
+    } catch (error) {
+      console.error('Erreur création avec fichiers:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Mettre à jour une pièce avec des fichiers (upload simultané)
+   * ⚠️ IMPORTANT: Ne pas définir Content-Type manuellement avec FormData
+   * @param {number} id - ID de la pièce
+   * @param {FormData} formData - FormData contenant les données et les fichiers
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Pièce mise à jour
+   */
+  updateWithFiles: async (id, formData, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      // ⚠️ NE PAS ajouter d'en-tête Content-Type ici
+      const response = await apiClient.put(
+        `${API_PREFIX}moves/${id}/with-files/`,
+        formData,
+        { params }
+      );
+      return response;
+    } catch (error) {
+      console.error('Erreur mise à jour avec fichiers:', error);
+      throw error;
+    }
+  },
+  
   // === DONNÉES DE RÉFÉRENCE AVEC ENTITÉ ===
   getJournals: async (entityId = null) => {
     try {
@@ -280,7 +428,6 @@ const piecesService = {
    */
   getOperationalAccounts: async (entityId = null) => {
     try {
-      // ✅ Ajout du paramètre exclude_roots=true pour exclure les comptes racines
       const params = { exclude_roots: true };
       const response = await apiClient.get(`${API_PREFIX}accounts/`, { params });
       

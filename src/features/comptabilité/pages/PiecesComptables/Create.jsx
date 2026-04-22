@@ -10,13 +10,13 @@ import {
   FiUpload, 
   FiCopy, 
   FiRotateCcw, 
-  FiSave, 
   FiX, 
   FiAlertCircle, 
   FiBriefcase,
   FiUploadCloud,
   FiSettings,
-  FiInfo
+  FiInfo,
+  FiFile
 } from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
 import { piecesService } from "../../services";
@@ -225,6 +225,74 @@ const AutocompleteInput = ({
 };
 
 // ==========================================
+// COMPOSANT INPUT MONTANT AVEC SÉPARATEUR DE MILLIERS (ESPACES)
+// ==========================================
+const AmountInput = ({ value, onChange, placeholder = "0", className = "" }) => {
+  const [displayValue, setDisplayValue] = useState('');
+  const inputRef = useRef(null);
+
+  // Formater un nombre avec séparateur d'espace (ex: 1 000 000)
+  const formatNumberWithSpace = (num) => {
+    if (num === '' || num === null || num === undefined) return '';
+    const number = typeof num === 'string' ? parseFloat(num.replace(/\s/g, '')) : num;
+    if (isNaN(number)) return '';
+    return Math.round(number).toLocaleString('fr-FR');
+  };
+
+  useEffect(() => {
+    if (value !== '' && value !== null && value !== undefined) {
+      setDisplayValue(formatNumberWithSpace(value));
+    } else {
+      setDisplayValue('');
+    }
+  }, [value]);
+
+  const handleChange = (e) => {
+    let rawValue = e.target.value;
+    let cleanValue = rawValue.replace(/\s/g, '').replace(/[^\d,.-]/g, '');
+    cleanValue = cleanValue.replace(',', '.');
+    const numberMatch = cleanValue.match(/[\d.-]+/);
+    if (numberMatch) {
+      const number = parseFloat(numberMatch[0]);
+      if (!isNaN(number)) {
+        const formatted = formatNumberWithSpace(number);
+        setDisplayValue(formatted);
+        onChange(number);
+        return;
+      }
+    }
+    setDisplayValue('');
+    onChange('');
+  };
+
+  const handleBlur = () => {
+    if (value !== '' && value !== null && value !== undefined) {
+      setDisplayValue(formatNumberWithSpace(value));
+    }
+  };
+
+  const handleFocus = (e) => {
+    if (value !== '' && value !== null && value !== undefined) {
+      e.target.value = value.toString();
+    }
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={displayValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onFocus={handleFocus}
+      className={`w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500 ${className}`}
+      style={{ height: '26px' }}
+      placeholder={placeholder}
+    />
+  );
+};
+
+// ==========================================
 // COMPOSANT PRINCIPAL
 // ==========================================
 export default function Create() {
@@ -247,9 +315,11 @@ export default function Create() {
   const [pieceId, setPieceId] = useState(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [attachmentsList, setAttachmentsList] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  
   const today = new Date().toISOString().split('T')[0];
   const tableContainerRef = useRef(null);
-
   const actionsMenuRef = useRef(null);
 
   useEffect(() => {
@@ -298,7 +368,6 @@ export default function Create() {
     payment_reference: '',
     lines: [emptyLine()],
     notes: '',
-    attachments: []
   };
 
   const [formData, setFormData] = useState(initialFormData);
@@ -399,7 +468,6 @@ export default function Create() {
     markAsModified();
   };
 
-  // ✅ NOUVELLE FONCTION : Gère la saisie Débit/Crédit (un seul des deux)
   const handleAmountChange = (index, type, value) => {
     const numValue = value === '' ? '' : parseFloat(value);
     
@@ -407,18 +475,16 @@ export default function Create() {
       const newLines = [...prev.lines];
       
       if (type === 'debit') {
-        // Si on saisit un débit, on met le crédit à 0
         newLines[index] = { 
           ...newLines[index], 
           debit: numValue === '' ? '' : numValue,
-          credit: ''  // Vide le crédit
+          credit: ''
         };
       } else {
-        // Si on saisit un crédit, on met le débit à 0
         newLines[index] = { 
           ...newLines[index], 
           credit: numValue === '' ? '' : numValue,
-          debit: ''   // Vide le débit
+          debit: ''
         };
       }
       
@@ -433,6 +499,38 @@ export default function Create() {
       newLines[index] = { ...newLines[index], ...fields };
       return { ...prev, lines: newLines };
     });
+    markAsModified();
+  };
+
+  const handleAttachmentsChange = (files) => {
+    if (!files || files.length === 0) return;
+    
+    const fileArray = Array.from(files);
+    const validFiles = fileArray.filter(file => {
+      const maxSize = 10 * 1024 * 1024;
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      
+      if (file.size > maxSize) {
+        setError(`Le fichier ${file.name} dépasse la taille maximale de 10MB`);
+        return false;
+      }
+      
+      if (!allowedTypes.includes(file.type)) {
+        setError(`Le format du fichier ${file.name} n'est pas supporté`);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    if (validFiles.length > 0) {
+      setAttachmentsList(prev => [...prev, ...validFiles]);
+      markAsModified();
+    }
+  };
+
+  const removeAttachment = (index) => {
+    setAttachmentsList(prev => prev.filter((_, i) => i !== index));
     markAsModified();
   };
 
@@ -497,11 +595,9 @@ export default function Create() {
     });
   };
 
-  const canSaveDraft = () => {
-    if (!formData.journal_id) return false;
-    const lignesSansCompte = formData.lines.filter(l => !l.account_id);
-    if (lignesSansCompte.length > 0) return false;
-    return true;
+  const formatAmount = (amount) => {
+    if (!amount && amount !== 0) return '0';
+    return Math.round(amount).toLocaleString('fr-FR');
   };
 
   const isReadyForValidation = () => {
@@ -513,7 +609,6 @@ export default function Create() {
     );
     if (!hasValidLines) return false;
     
-    // Vérifier qu'au moins une ligne a un montant (débit ou crédit)
     const hasAmount = formData.lines.some(line => 
       (parseFloat(line.debit) || 0) > 0 || (parseFloat(line.credit) || 0) > 0
     );
@@ -575,29 +670,6 @@ export default function Create() {
     };
   }, [formData, activeEntity]);
 
-  const saveAutoDraft = useCallback(async () => {
-    if (!hasUnsavedChanges || isAutoSaving || !activeEntity) return;
-    setIsAutoSaving(true);
-    try {
-      const apiData = prepareDataForApi();
-      let result;
-      if (pieceId) {
-        result = await piecesService.update(pieceId, apiData, activeEntity.id);
-      } else {
-        result = await piecesService.create(apiData, activeEntity.id);
-        if (result?.id) {
-          setPieceId(result.id);
-          if (result.name) setFormData(prev => ({ ...prev, name: result.name }));
-        }
-      }
-      setHasUnsavedChanges(false);
-    } catch (err) {
-      console.error('❌ Erreur sauvegarde automatique:', err);
-    } finally {
-      setIsAutoSaving(false);
-    }
-  }, [hasUnsavedChanges, isAutoSaving, pieceId, activeEntity, prepareDataForApi]);
-
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (hasUnsavedChanges) {
@@ -631,34 +703,53 @@ export default function Create() {
     
     try {
       const apiData = prepareDataForApi();
-      console.log('📤 Données envoyées:', JSON.stringify(apiData, null, 2));
+      console.log('📤 Données envoyées pour création:', JSON.stringify(apiData, null, 2));
 
       let result;
+      
       if (pieceId) {
         result = await piecesService.update(pieceId, apiData, activeEntity.id);
       } else {
         result = await piecesService.create(apiData, activeEntity.id);
-        if (result?.id) {
-          setPieceId(result.id);
-          if (result.name) setFormData(prev => ({ ...prev, name: result.name }));
-        }
+      }
+
+      if (!result?.id) {
+        throw new Error('La création de la pièce a échoué');
+      }
+
+      const newPieceId = result.id;
+      setPieceId(newPieceId);
+      if (result.name) setFormData(prev => ({ ...prev, name: result.name }));
+
+      if (attachmentsList.length > 0) {
+        console.log(`📤 Upload de ${attachmentsList.length} fichier(s) pour la pièce ${newPieceId}`);
+        setUploadingFiles(true);
+        
+        const formDataToSend = new FormData();
+        attachmentsList.forEach((file) => {
+          formDataToSend.append('attachments', file);
+        });
+        
+        await piecesService.uploadAttachments(newPieceId, formDataToSend, activeEntity.id);
+        console.log('✅ Tous les fichiers ont été uploadés avec succès');
+        setAttachmentsList([]);
       }
 
       if (!silent) {
-        setSuccess('Pièce enregistrée comme brouillon avec succès !');
+        setSuccess('Pièce enregistrée avec succès !');
+        setTimeout(() => setSuccess(null), 3000);
       }
       setHasUnsavedChanges(false);
       return true;
       
     } catch (err) {
-      console.error('❌ Erreur enregistrement brouillon:', err);
-      
+      console.error('❌ Erreur enregistrement:', err);
       const errorMessage = err.response?.data || err.data || err.message || 'Erreur inconnue';
       setError(`Échec de l'enregistrement : ${JSON.stringify(errorMessage)}`);
-      
       return false;
     } finally {
       setLoading(false);
+      setUploadingFiles(false);
     }
   };
 
@@ -678,18 +769,37 @@ export default function Create() {
     setSuccess(null);
     try {
       const newState = formData.state === 'draft' ? 'posted' : 'draft';
-      const apiData  = { ...prepareDataForApi(), state: newState };
+      const apiData = { ...prepareDataForApi(), state: newState };
       console.log('📤 Données pour changement état:', JSON.stringify(apiData, null, 2));
 
       let result;
+      
       if (pieceId) {
         result = await piecesService.update(pieceId, apiData, activeEntity.id);
       } else {
         result = await piecesService.create(apiData, activeEntity.id);
-        if (result?.id) {
-          setPieceId(result.id);
-          if (result.name) setFormData(prev => ({ ...prev, name: result.name }));
-        }
+      }
+
+      if (!result?.id) {
+        throw new Error('La création/mise à jour de la pièce a échoué');
+      }
+
+      const newPieceId = result.id;
+      setPieceId(newPieceId);
+      if (result.name) setFormData(prev => ({ ...prev, name: result.name }));
+
+      if (attachmentsList.length > 0 && newState === 'posted') {
+        console.log(`📤 Upload de ${attachmentsList.length} fichier(s) pour la pièce ${newPieceId}`);
+        setUploadingFiles(true);
+        
+        const formDataToSend = new FormData();
+        attachmentsList.forEach((file) => {
+          formDataToSend.append('attachments', file);
+        });
+        
+        await piecesService.uploadAttachments(newPieceId, formDataToSend, activeEntity.id);
+        console.log('✅ Tous les fichiers ont été uploadés avec succès');
+        setAttachmentsList([]);
       }
 
       setFormData(prev => ({ ...prev, state: newState }));
@@ -697,13 +807,15 @@ export default function Create() {
         ? 'Pièce comptabilisée avec succès !'
         : 'Pièce remise en brouillon avec succès !');
       setHasUnsavedChanges(false);
+      if (newState === 'posted') setAttachmentsList([]);
+      
     } catch (err) {
       console.error('❌ Erreur changement état:', err);
-      
       const errorMessage = err.response?.data || err.data || err.message || 'Erreur inconnue';
       setError(`Échec de la comptabilisation : ${JSON.stringify(errorMessage)}`);
     } finally {
       setLoading(false);
+      setUploadingFiles(false);
     }
   };
 
@@ -715,6 +827,7 @@ export default function Create() {
     setFormData(initialFormData);
     setPieceId(null);
     setHasUnsavedChanges(false);
+    setAttachmentsList([]);
     setShowConfirmDialog(false);
     navigate('/comptabilite/pieces');
   };
@@ -1086,30 +1199,18 @@ export default function Create() {
                             placeholder="TVA..."
                           />
                         </td>
-                        {/* ✅ DÉBIT - avec gestion d'exclusion mutuelle */}
                         <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
-                          <input 
-                            type="number" 
-                            step="0.01" 
-                            min="0" 
+                          <AmountInput
                             value={line.debit}
-                            onChange={(e) => handleAmountChange(lineIndex, 'debit', e.target.value)}
-                            className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                            style={{ height: '26px' }} 
-                            placeholder="0.00" 
+                            onChange={(value) => handleAmountChange(lineIndex, 'debit', value)}
+                            placeholder="0"
                           />
                         </td>
-                        {/* ✅ CRÉDIT - avec gestion d'exclusion mutuelle */}
                         <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
-                          <input 
-                            type="number" 
-                            step="0.01" 
-                            min="0" 
+                          <AmountInput
                             value={line.credit}
-                            onChange={(e) => handleAmountChange(lineIndex, 'credit', e.target.value)}
-                            className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                            style={{ height: '26px' }} 
-                            placeholder="0.00" 
+                            onChange={(value) => handleAmountChange(lineIndex, 'credit', value)}
+                            placeholder="0"
                           />
                         </td>
                         <td className="border border-gray-300 p-1" style={{ minWidth: '120px' }}>
@@ -1122,15 +1223,10 @@ export default function Create() {
                           />
                         </td>
                         <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
-                          <input 
-                            type="number" 
-                            step="0.01" 
-                            min="0" 
-                            value={line.discount_amount_currency || ''}
-                            onChange={(e) => handleLineChange(lineIndex, 'discount_amount_currency', e.target.value)}
-                            className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                            style={{ height: '26px' }} 
-                            placeholder="0.00" 
+                          <AmountInput
+                            value={line.discount_amount_currency}
+                            onChange={(value) => handleLineChange(lineIndex, 'discount_amount_currency', value)}
+                            placeholder="0"
                           />
                         </td>
                         <td className="border border-gray-300 p-1" style={{ minWidth: '80px' }}>
@@ -1143,7 +1239,7 @@ export default function Create() {
                             onChange={(e) => handleLineChange(lineIndex, 'discount_percentage', e.target.value)}
                             className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
                             style={{ height: '26px' }} 
-                            placeholder="0.00" 
+                            placeholder="0" 
                           />
                         </td>
                         <td className="border border-gray-300 p-1" style={{ minWidth: '120px' }}>
@@ -1186,7 +1282,7 @@ export default function Create() {
                 {!isBalanced && totals.debit > 0 && (
                   <div className="text-xs text-yellow-700 bg-yellow-50 px-3 py-1 rounded flex items-center gap-1 border border-yellow-200">
                     <FiAlertCircle size={12} />
-                    ⚠ Différence de {difference} XOF
+                    ⚠ Différence de {formatAmount(difference)} XOF
                   </div>
                 )}
                 {isBalanced && totals.debit > 0 && (
@@ -1198,8 +1294,8 @@ export default function Create() {
               </div>
 
               <div className="bg-green-50 border border-green-200 px-4 py-2 flex justify-end gap-8">
-                <div className="text-sm font-bold text-gray-900">Total Débit: {totals.debit.toFixed(2)} XOF</div>
-                <div className="text-sm font-bold text-gray-900">Total Crédit: {totals.credit.toFixed(2)} XOF</div>
+                <div className="text-sm font-bold text-gray-900">Total Débit: {formatAmount(totals.debit)} XOF</div>
+                <div className="text-sm font-bold text-gray-900">Total Crédit: {formatAmount(totals.credit)} XOF</div>
               </div>
             </>
           ) : activeTab === 'notes' ? (
@@ -1255,24 +1351,83 @@ export default function Create() {
               />
             </div>
           ) : (
-            <div className="border border-gray-300 p-6">
-              <div className="text-center py-8">
-                <FiPaperclip className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                <div className="text-gray-500 text-xs mb-4">Aucune pièce jointe</div>
-                <input type="file" id="attachments" className="hidden" multiple
-                  onChange={(e) => handleChange('attachments', Array.from(e.target.files))} />
-                <label htmlFor="attachments"
-                  className="inline-flex items-center gap-2 h-8 px-3 bg-purple-600 text-white text-xs cursor-pointer hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200"
-                  style={{ height: '26px' }}>
-                  <FiUpload size={12} /><span>Télécharger</span>
-                </label>
-              </div>
+            <div className="border border-gray-300 p-6 rounded">
+              {isDraft && (
+                <div className="mb-6">
+                  <input 
+                    type="file" 
+                    id="attachments" 
+                    className="hidden" 
+                    multiple
+                    onChange={(e) => {
+                      handleAttachmentsChange(e.target.files);
+                      e.target.value = '';
+                    }}
+                    disabled={uploadingFiles}
+                  />
+                  <label htmlFor="attachments"
+                    className={`inline-flex items-center gap-2 h-8 px-3 text-white text-xs cursor-pointer transition-all duration-200 rounded ${
+                      uploadingFiles ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
+                    }`}
+                  >
+                    <FiUpload size={12} />
+                    <span>{uploadingFiles ? 'Upload en cours...' : 'Ajouter des fichiers'}</span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Formats acceptés : PDF, JPG, PNG, DOC (max 10MB par fichier)
+                  </p>
+                </div>
+              )}
+
+              {attachmentsList.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                    Fichiers à joindre ({attachmentsList.length})
+                  </h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {attachmentsList.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded">
+                        <div className="flex items-center gap-2 flex-1">
+                          <FiPaperclip className="text-gray-500 flex-shrink-0" size={14} />
+                          <span className="text-xs text-gray-700 truncate flex-1">{file.name}</span>
+                          <span className="text-xs text-gray-500 flex-shrink-0">
+                            {(file.size / 1024).toFixed(1)} KB
+                          </span>
+                        </div>
+                        {isDraft && (
+                          <button
+                            onClick={() => removeAttachment(index)}
+                            className="text-red-600 hover:text-red-800 transition-colors ml-2 flex-shrink-0"
+                            title="Supprimer"
+                          >
+                            <FiTrash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {attachmentsList.length === 0 && (
+                <div className="text-center py-8">
+                  <FiPaperclip className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                  <div className="text-gray-500 text-xs">
+                    Aucune pièce jointe sélectionnée
+                  </div>
+                  {!isDraft && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      Les pièces jointes ne peuvent être ajoutées qu'en mode brouillon
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Messages */}
-        {(error && !error.includes('Champs obligatoires')) || success && (
+        {(error || success) && (
           <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
             error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
           }`}>

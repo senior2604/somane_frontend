@@ -1,11 +1,12 @@
 // src/features/comptabilité/pages/PiecesComptables/Show.jsx
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   FiTrash2, FiCheck, FiX, FiRefreshCw,
   FiPrinter, FiCopy, FiAlertCircle,
   FiRotateCcw, FiPlus, FiUploadCloud, FiSettings,
-  FiBriefcase, FiPaperclip, FiInfo
+  FiBriefcase, FiPaperclip, FiInfo, FiFile, FiDownload, FiUpload
 } from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
 import { piecesService } from "../../services";
@@ -205,6 +206,72 @@ const AutocompleteInput = ({
 };
 
 // ==========================================
+// COMPOSANT INPUT MONTANT AVEC SÉPARATEUR DE MILLIERS
+// ==========================================
+const AmountInput = ({ value, onChange, placeholder = "0", className = "", disabled = false }) => {
+  const [displayValue, setDisplayValue] = useState('');
+
+  const formatNumberWithSeparator = (num) => {
+    if (num === '' || num === null || num === undefined) return '';
+    const number = typeof num === 'string' ? parseFloat(num.replace(/\s/g, '')) : num;
+    if (isNaN(number)) return '';
+    return Math.round(number).toLocaleString('fr-FR');
+  };
+
+  useEffect(() => {
+    if (value !== '' && value !== null && value !== undefined && value !== 0) {
+      setDisplayValue(formatNumberWithSeparator(value));
+    } else {
+      setDisplayValue('');
+    }
+  }, [value]);
+
+  const handleChange = (e) => {
+    let rawValue = e.target.value;
+    let cleanValue = rawValue.replace(/[^\d,.-]/g, '');
+    cleanValue = cleanValue.replace(',', '.');
+    const numberMatch = cleanValue.match(/[\d.-]+/);
+    if (numberMatch) {
+      const number = parseFloat(numberMatch[0]);
+      if (!isNaN(number)) {
+        const formatted = formatNumberWithSeparator(number);
+        setDisplayValue(formatted);
+        onChange(number);
+        return;
+      }
+    }
+    setDisplayValue('');
+    onChange('');
+  };
+
+  const handleBlur = () => {
+    if (value !== '' && value !== null && value !== undefined && value !== 0) {
+      setDisplayValue(formatNumberWithSeparator(value));
+    }
+  };
+
+  const handleFocus = (e) => {
+    if (value !== '' && value !== null && value !== undefined && value !== 0) {
+      e.target.value = value.toString();
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={displayValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onFocus={handleFocus}
+      disabled={disabled}
+      className={`w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500 ${className} ${disabled ? 'bg-gray-50' : ''}`}
+      style={{ height: '26px' }}
+      placeholder={placeholder}
+    />
+  );
+};
+
+// ==========================================
 // COMPOSANT CELL
 // ==========================================
 const Cell = ({ children, className = "", align = "left" }) => {
@@ -293,7 +360,7 @@ const getTaxDisplay = (line, taxesMap, taxesMapRef) => {
   return null;
 };
 
-// ✅ Fonction pour formater les montants sans décimales avec séparateur d'espace
+// Fonction pour formater les montants avec séparateur de milliers
 const formatAmount = (value) => {
   if (!value && value !== 0) return null;
   const num = parseFloat(value);
@@ -310,6 +377,7 @@ export default function Show() {
   const [formData, setFormData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [activeTab, setActiveTab] = useState('ecritures');
@@ -319,6 +387,10 @@ export default function Show() {
   const [validationSuccess, setValidationSuccess] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
   const [isLoadingReferentials, setIsLoadingReferentials] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  
+  // États pour les pièces jointes
+  const [attachments, setAttachments] = useState([]);
   
   const [journals, setJournals] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -447,6 +519,123 @@ export default function Show() {
     }
   };
 
+  // ==========================================
+  // GESTION DES PIÈCES JOINTES
+  // ==========================================
+  
+  const loadAttachments = async (moveId = null) => {
+    const targetId = moveId || piece?.id;
+    if (!targetId || !activeEntity) {
+      console.log('⚠️ [DEBUG] loadAttachments: pas de targetId ou activeEntity');
+      return;
+    }
+    
+    console.log('🔍 [DEBUG] Chargement des pièces jointes pour la pièce:', targetId);
+    try {
+      const data = await piecesService.getAttachments(targetId, activeEntity.id);
+      console.log('✅ [DEBUG] Pièces jointes chargées:', data.length, data);
+      setAttachments(data);
+    } catch (err) {
+      console.error('❌ [DEBUG] Erreur chargement pièces jointes:', err);
+    }
+  };
+
+  const handleUploadAttachments = async (files) => {
+    if (!files || files.length === 0 || !piece || !activeEntity) return;
+    
+    console.log('🚀 [DEBUG] === DÉBUT UPLOAD ===');
+    console.log('📎 [DEBUG] Fichiers sélectionnés:', files.length);
+    console.log('📎 [DEBUG] Noms des fichiers:', Array.from(files).map(f => f.name));
+    console.log('📎 [DEBUG] Tailles des fichiers:', Array.from(files).map(f => `${f.name}: ${(f.size / 1024).toFixed(2)} KB`));
+    console.log('📎 [DEBUG] Types MIME:', Array.from(files).map(f => `${f.name}: ${f.type}`));
+    console.log('📎 [DEBUG] piece.id:', piece.id);
+    console.log('📎 [DEBUG] activeEntity.id:', activeEntity.id);
+    
+    setUploadingFiles(true);
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach((file, index) => {
+        console.log(`📎 [DEBUG] Ajout du fichier ${index}:`, file.name, file.size, file.type);
+        formData.append('attachments', file);
+      });
+      
+      console.log('📤 [DEBUG] FormData créé, envoi à l\'API...');
+      console.log('📤 [DEBUG] URL appelée:', `compta/moves/${piece.id}/attachments/`);
+      
+      const response = await piecesService.uploadAttachments(piece.id, formData, activeEntity.id);
+      
+      console.log('✅ [DEBUG] Réponse API succès:', response);
+      console.log('✅ [DEBUG] Status:', response.status);
+      console.log('✅ [DEBUG] Data:', response.data);
+      
+      await loadAttachments(piece.id);
+      setSuccess(`${files.length} fichier(s) ajouté(s) avec succès`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('❌ [DEBUG] ERREUR DÉTAILLÉE UPLOAD:');
+      console.error('❌ [DEBUG] Message:', err.message);
+      console.error('❌ [DEBUG] Response status:', err.response?.status);
+      console.error('❌ [DEBUG] Response statusText:', err.response?.statusText);
+      console.error('❌ [DEBUG] Response data:', err.response?.data);
+      console.error('❌ [DEBUG] Response headers:', err.response?.headers);
+      console.error('❌ [DEBUG] Config URL:', err.config?.url);
+      console.error('❌ [DEBUG] Config method:', err.config?.method);
+      console.error('❌ [DEBUG] Config headers:', err.config?.headers);
+      
+      let errorMessage = 'Erreur lors de l\'upload des fichiers';
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      console.error('❌ [DEBUG] Message d\'erreur affiché à l\'utilisateur:', errorMessage);
+      setError(errorMessage);
+    } finally {
+      setUploadingFiles(false);
+      console.log('🏁 [DEBUG] === FIN UPLOAD ===');
+    }
+  };
+
+  const handleDownloadAttachment = async (attachment) => {
+    console.log('📥 [DEBUG] Téléchargement de la pièce jointe:', attachment.id, attachment.name);
+    try {
+      const blob = await piecesService.downloadAttachment(attachment.id, activeEntity.id);
+      console.log('✅ [DEBUG] Fichier récupéré, taille:', blob.size, 'bytes');
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.name || attachment.file?.split('/').pop() || 'document';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      console.log('✅ [DEBUG] Téléchargement terminé');
+    } catch (err) {
+      console.error('❌ [DEBUG] Erreur téléchargement:', err);
+      setError('Erreur lors du téléchargement');
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    if (!piece?.id || !activeEntity) return;
+    console.log('🗑️ [DEBUG] Suppression de la pièce jointe:', attachmentId);
+    try {
+      await piecesService.deleteAttachment(piece.id, attachmentId, activeEntity.id);
+      console.log('✅ [DEBUG] Pièce jointe supprimée');
+      await loadAttachments(piece.id);
+      setSuccess('Pièce jointe supprimée avec succès');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('❌ [DEBUG] Erreur suppression:', err);
+      setError('Erreur lors de la suppression');
+    }
+  };
+
   useEffect(() => {
     if (!activeEntity) {
       setError('Veuillez sélectionner une entité pour voir la pièce comptable');
@@ -470,7 +659,6 @@ export default function Show() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Auto-clear validation success message after 5 seconds
   useEffect(() => {
     if (validationSuccess) {
       const timer = setTimeout(() => {
@@ -480,10 +668,8 @@ export default function Show() {
     }
   }, [validationSuccess]);
 
-  const loadReferentials = async () => {
-    // ✅ Empêcher les appels multiples
-    if (isLoadingReferentials) {
-      console.log('⏭️ Chargement référentiels déjà en cours, ignoré');
+  const loadReferentials = useCallback(async () => {
+    if (isLoadingReferentials || !activeEntity) {
       return;
     }
     
@@ -503,7 +689,7 @@ export default function Show() {
         fiscalPositionsData
       ] = await Promise.all([
         piecesService.getJournals(activeEntity.id),
-        piecesService.getAccounts(activeEntity.id),
+        piecesService.getOperationalAccounts(activeEntity.id),
         piecesService.getPartners(activeEntity.id),
         piecesService.getDevises(activeEntity.id),
         piecesService.getTaxes?.(activeEntity.id) || Promise.resolve([]),
@@ -565,12 +751,7 @@ export default function Show() {
       normalizedFiscalPositions.forEach(f => { fiscalPositionsObj[f.id] = f; });
       setFiscalPositionsMap(fiscalPositionsObj);
 
-      console.log('✅ [DEBUG] Référentiels chargés:', {
-        journaux: normalizedJournals.length,
-        comptes: normalizedAccounts.length,
-        partenaires: normalizedPartners.length,
-        taxes: normalizedTaxes.length
-      });
+      console.log('✅ [DEBUG] Référentiels chargés');
 
       await loadPiece({
         taxesMap: taxesObj,
@@ -585,24 +766,23 @@ export default function Show() {
       setIsLoadingReferentials(false);
       setLoading(false);
     }
-  };
+  }, [activeEntity, isLoadingReferentials]);
 
   const loadPiece = async (resolvedMaps = {}) => {
     try {
       console.log('🔍 [DEBUG] Chargement de la pièce ID:', id);
       const data = await piecesService.getById(id, activeEntity.id);
+      
       console.log('📋 [DEBUG] Pièce chargée:', {
         id: data.id,
         name: data.name,
         state: data.state,
-        journal: data.journal?.id,
-        journal_code: data.journal?.code,
-        journal_sequence_id: data.journal?.sequence_id,
-        move_type: data.move_type,
         lines: data.lines?.length
       });
       
       setPiece(data);
+      
+      await loadAttachments(data.id);
       
       const tMap = resolvedMaps.taxesMap || taxesMapRef.current;
       const aMap = resolvedMaps.accountsMap || accountsMap;
@@ -753,12 +933,9 @@ export default function Show() {
       };
     });
 
-    // ✅ Récupérer l'ID de la séquence
     const sequenceId = piece?.journal?.sequence?.id || 
                        piece?.journal?.sequence_id || 
                        null;
-
-    console.log('🔑 [DEBUG] Séquence ID envoyée:', sequenceId);
 
     return {
       name: piece?.name || `BROUILLON-${Date.now()}`,
@@ -778,7 +955,6 @@ export default function Show() {
       payment_reference: piece?.payment_reference || '',
       notes: formData?.notes || '',
       lines_write: linesWrite,
-      // ✅ AJOUT IMPORTANT: Envoyer l'ID de la séquence
       sequence_id: sequenceId,
     };
   }, [formData, piece, activeEntity]);
@@ -803,11 +979,11 @@ export default function Show() {
       
       if (result) {
         setPiece(result);
-        await loadPiece();
       }
 
       if (!silent) {
-        setError(null);
+        setSuccess('Pièce sauvegardée avec succès');
+        setTimeout(() => setSuccess(null), 3000);
       }
       setHasUnsavedChanges(false);
       return true;
@@ -843,11 +1019,9 @@ export default function Show() {
   const handleValidate = async () => {
     if (!piece) return;
     
-    // ✅ VÉRIFICATION DE LA SÉQUENCE AVANT L'APPEL
     const journalHasSequence = piece.journal?.sequence || piece.journal?.sequence_id;
     
     if (!journalHasSequence) {
-      console.warn('⚠️ [DEBUG] Le journal n\'a pas de séquence');
       setError('❌ Ce journal n\'a pas de séquence configurée. Impossible de générer le numéro.');
       setDebugInfo({
         type: 'error',
@@ -857,79 +1031,25 @@ export default function Show() {
       return;
     }
     
-    console.log('🚀 [DEBUG] === COMPTABILISATION DÉMARRÉE ===');
-    console.log('📋 [DEBUG] Pièce avant validation:', {
-      id: piece.id,
-      name: piece.name,
-      state: piece.state,
-      journal_id: piece.journal?.id,
-      journal_code: piece.journal?.code,
-      journal_sequence: piece.journal?.sequence,
-      journal_sequence_id: piece.journal?.sequence_id
-    });
-    
     setActionInProgress(true);
     setError(null);
     setValidationSuccess(null);
     setDebugInfo(null);
     
     try {
-      // 🔍 Vérifier si le journal a une séquence
-      if (piece.journal) {
-        const journalId = piece.journal.id || piece.journal;
-        console.log(`🔍 [DEBUG] Journal ID: ${journalId}`);
-        
-        // Récupérer les détails du journal pour voir les séquences
-        try {
-          const journalDetails = await piecesService.getJournals(activeEntity.id);
-          const currentJournal = journalDetails.find(j => j.id === journalId);
-          if (currentJournal) {
-            console.log('📊 [DEBUG] Détails du journal:', {
-              code: currentJournal.code,
-              name: currentJournal.name,
-              sequence_id: currentJournal.sequence?.id || currentJournal.sequence_id,
-              sequence_details: currentJournal.sequence,
-              refund_sequence_id: currentJournal.refund_sequence?.id || currentJournal.refund_sequence_id,
-              has_sequence: !!(currentJournal.sequence?.id || currentJournal.sequence_id)
-            });
-            
-            if (!currentJournal.sequence && !currentJournal.sequence_id) {
-              setDebugInfo({
-                type: 'warning',
-                message: '⚠️ Ce journal n\'a pas de séquence configurée. Le numéro ne pourra pas être généré automatiquement.',
-                suggestion: 'Allez dans Comptabilité → Journaux → Modifier ce journal → Onglet "Numérotation" → Sélectionnez une séquence'
-              });
-            }
-          }
-        } catch (err) {
-          console.warn('⚠️ [DEBUG] Impossible de récupérer les détails du journal:', err);
-        }
-      }
-      
-      console.log('📤 [DEBUG] Appel API POST /post/...');
       const result = await piecesService.validate(id, activeEntity.id);
-      
-      console.log('✅ [DEBUG] Réponse API:', {
-        status: result?.status || 'success',
-        id: result?.id,
-        name: result?.name,
-        state: result?.state,
-        full_response: result
-      });
       
       if (result) {
         setPiece(prev => ({ ...prev, ...result }));
         
         if (result.name && !result.name.startsWith('BROUILLON-')) {
           setValidationSuccess(`✅ Pièce comptabilisée avec succès ! Numéro généré : ${result.name}`);
-          console.log('🎉 [DEBUG] SUCCÈS - Nouveau numéro généré:', result.name);
         } else if (result.name && result.name.startsWith('BROUILLON-')) {
-          setValidationSuccess(`⚠️ Pièce comptabilisée mais le numéro n'a PAS été généré (reste: ${result.name})`);
-          console.warn('⚠️ [DEBUG] Le numéro n\'a pas été généré - vérifiez que le journal a une séquence');
+          setValidationSuccess(`⚠️ Pièce comptabilisée mais le numéro n'a PAS été généré`);
           setDebugInfo({
             type: 'error',
             message: '❌ Le numéro n\'a pas été généré automatiquement.',
-            suggestion: 'Vérifiez que le journal utilisé a bien une séquence configurée dans l\'onglet "Numérotation"'
+            suggestion: 'Vérifiez que le journal utilisé a bien une séquence configurée'
           });
         } else {
           setValidationSuccess('Pièce comptabilisée avec succès !');
@@ -940,22 +1060,9 @@ export default function Show() {
       setHasUnsavedChanges(false);
       
     } catch (err) {
-      console.error('❌ [DEBUG] Erreur lors de la validation:', err);
-      console.error('📄 [DEBUG] Détails erreur:', {
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
-        message: err.message
-      });
-      
+      console.error('❌ Erreur lors de la validation:', err);
       const errorMessage = err.response?.data?.detail || err.response?.data?.message || err.message || 'Erreur inconnue';
       setError(`Erreur lors de la validation : ${errorMessage}`);
-      
-      setDebugInfo({
-        type: 'error',
-        message: `Erreur API: ${errorMessage}`,
-        suggestion: 'Vérifiez la console réseau (F12) pour plus de détails'
-      });
     } finally {
       setActionInProgress(false);
     }
@@ -1044,6 +1151,20 @@ export default function Show() {
     return new Date(dateString).toLocaleString('fr-FR');
   };
 
+  // Variables pour l'affichage
+  const isDraft = piece?.state === 'draft';
+  const isPosted = piece?.state === 'posted';
+  const isCancelled = piece?.state === 'cancel';
+
+  // Calcul des totaux
+  const totals = (formData?.lines || piece?.lines || []).reduce((acc, line) => ({
+    debit: acc.debit + (parseFloat(line.debit) || 0),
+    credit: acc.credit + (parseFloat(line.credit) || 0)
+  }), { debit: 0, credit: 0 });
+
+  const difference = Math.abs(totals.debit - totals.credit).toFixed(2);
+  const isBalanced = difference === '0.00' || difference === '0';
+
   if (!activeEntity) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -1106,163 +1227,104 @@ export default function Show() {
     );
   }
 
-  const isDraft = (piece.state || piece.status) === 'draft';
-  const isCancelled = (piece.state || piece.status) === 'cancel' || (piece.state || piece.status) === 'canceled';
-  const isPosted = (piece.state || piece.status) === 'posted';
-  
-  const totals = piece?.lines?.reduce((acc, line) => ({
-    debit: acc.debit + (parseFloat(line.debit) || 0),
-    credit: acc.credit + (parseFloat(line.credit) || 0)
-  }), { debit: 0, credit: 0 }) || { debit: 0, credit: 0 };
-  
-  const difference = Math.abs(totals.debit - totals.credit).toFixed(2);
-  const isBalanced = difference === '0.00' || difference === '0';
-
-  // Vérifier si le journal a une séquence pour afficher un avertissement
-  const journalHasSequence = piece.journal?.sequence || piece.journal?.sequence_id;
-  const journalCode = piece.journal?.code || piece.journal;
-
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto bg-white border border-gray-300">
         {/* En-tête */}
         <div className="border-b border-gray-300 px-4 py-3">
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex items-start gap-3">
-              <Tooltip text="Créer une nouvelle pièce">
-                <button onClick={handleNewPiece} className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 flex items-center justify-center font-medium border-0">
-                  <FiPlus size={16} className="mr-1" /><span>Nouveau</span>
-                </button>
-              </Tooltip>
-              <div className="flex flex-col h-12 justify-center">
-                <div className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600" onClick={handleGoToList}>Pièces comptables</div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-gray-600 font-medium">N° {piece.name || `Pièce #${piece.id}`}</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button onClick={handleNewPiece} className="h-10 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 rounded flex items-center">
+                <FiPlus size={16} className="mr-1" />
+                <span>Nouveau</span>
+              </button>
+              <div>
+                <div className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600" onClick={handleGoToList}>
+                  Pièces comptables
                 </div>
+                <div className="text-xs text-gray-500">N° {piece.name || `Pièce #${piece.id}`}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <div className="relative" ref={actionsMenuRef}>
-                <Tooltip text="Menu des actions">
-                  <button onClick={() => setShowActionsMenu(!showActionsMenu)} className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1">
-                    <FiSettings size={12} /><span>Actions</span>
-                  </button>
-                </Tooltip>
+                <button onClick={() => setShowActionsMenu(!showActionsMenu)} className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 rounded flex items-center gap-1">
+                  <FiSettings size={12} /><span>Actions</span>
+                </button>
                 {showActionsMenu && (
-                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
-                    <button onClick={() => { loadReferentials(); setShowActionsMenu(false); }} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"><FiRefreshCw size={12} /><span>Actualiser</span></button>
-                    <button onClick={() => { handleDuplicate(); setShowActionsMenu(false); }} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"><FiCopy size={12} /><span>Dupliquer</span></button>
-                    {isPosted && <button onClick={() => { handleReverse(); setShowActionsMenu(false); }} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"><FiRotateCcw size={12} /><span>Extourner</span></button>}
-                    <button onClick={() => window.print()} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"><FiPrinter size={12} /><span>Imprimer</span></button>
-                    <button onClick={() => { handleDelete(); setShowActionsMenu(false); }} className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 flex items-center gap-2 text-red-600"><FiTrash2 size={12} /><span>Supprimer</span></button>
+                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded z-50">
+                    <button onClick={() => { loadReferentials(); setShowActionsMenu(false); }} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"><FiRefreshCw size={12} /> Actualiser</button>
+                    <button onClick={() => { handleDuplicate(); setShowActionsMenu(false); }} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"><FiCopy size={12} /> Dupliquer</button>
+                    {isPosted && <button onClick={() => { handleReverse(); setShowActionsMenu(false); }} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"><FiRotateCcw size={12} /> Extourner</button>}
+                    <button onClick={() => window.print()} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"><FiPrinter size={12} /> Imprimer</button>
+                    <button onClick={() => { handleDelete(); setShowActionsMenu(false); }} className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 flex items-center gap-2 text-red-600"><FiTrash2 size={12} /> Supprimer</button>
                   </div>
                 )}
               </div>
-              <Tooltip text={!isDraft ? "Impossible de modifier" : "Enregistrer"}>
-                <button onClick={() => handleSave()} disabled={actionInProgress || !isDraft} className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${!isDraft ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700 hover:scale-110'}`}><FiUploadCloud size={16} /></button>
-              </Tooltip>
-              <Tooltip text={!isDraft ? "Impossible d'annuler" : "Annuler"}>
-                <button onClick={handleDiscardChanges} disabled={actionInProgress || !isDraft} className={`w-8 h-8 rounded-full flex items-center justify-center ${!isDraft ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-black text-white hover:bg-gray-800 hover:scale-110'}`}><FiX size={16} /></button>
-              </Tooltip>
+              <button onClick={() => handleSave()} disabled={actionInProgress || !isDraft} className={`w-8 h-8 rounded-full flex items-center justify-center ${!isDraft ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}>
+                <FiUploadCloud size={16} />
+              </button>
+              <button onClick={handleDiscardChanges} disabled={actionInProgress || !isDraft} className={`w-8 h-8 rounded-full flex items-center justify-center ${!isDraft ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-black text-white hover:bg-gray-800'}`}>
+                <FiX size={16} />
+              </button>
             </div>
           </div>
         </div>
 
         {/* État */}
         <div className="border-b border-gray-300 px-4 py-3">
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {isDraft ? (
-                  <Tooltip text="Valider la pièce">
-                    <button
-                      onClick={handleValidate}
-                      disabled={actionInProgress}
-                      className="h-8 px-4 bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center border-0"
-                    >
-                      Comptabiliser
-                    </button>
-                  </Tooltip>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Tooltip text="Remettre en brouillon">
-                      <button
-                        onClick={handleDraft}
-                        disabled={actionInProgress}
-                        className="h-8 px-3 text-xs font-medium border border-amber-300 bg-amber-100 text-amber-700 hover:bg-amber-200 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center"
-                      >
-                        REMETTRE EN BROUILLON
-                      </button>
-                    </Tooltip>
-                  </div>
-                )}
-                {error && <div className="flex items-center gap-1 text-xs text-red-600"><FiAlertCircle size={14} /><span>{error}</span></div>}
-                {validationSuccess && (
-                  <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
-                    <FiCheck size={14} />
-                    <span>{validationSuccess}</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`h-8 px-3 text-xs font-medium border flex items-center ${isDraft ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>Brouillon</div>
-                <div className={`h-8 px-3 text-xs font-medium border flex items-center ${isPosted ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>Comptabilisé</div>
-                {isCancelled && <div className="h-8 px-3 text-xs font-medium border bg-red-100 text-red-700 border-red-300 flex items-center">Annulé</div>}
-              </div>
-            </div>
-            {hasUnsavedChanges && isDraft && <div className="mt-2 flex items-center gap-2 text-xs text-amber-600"><FiInfo size={14} /><span>Modifications non sauvegardées</span></div>}
-            
-            {/* 🔍 Avertissement si le journal n'a pas de séquence */}
-            {isDraft && piece.journal && !journalHasSequence && (
-              <div className="mt-2 flex items-center gap-2 text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
-                <FiAlertCircle size={14} />
-                <span>⚠️ Le journal "{journalCode}" n'a pas de séquence configurée. Le numéro ne sera pas généré automatiquement à la comptabilisation.</span>
-                <button 
-                  onClick={() => navigate(`/comptabilite/journaux/${piece.journal.id}/edit`)}
-                  className="ml-auto text-purple-600 hover:text-purple-700 underline"
-                >
-                  Configurer
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {isDraft ? (
+                <button onClick={handleValidate} disabled={actionInProgress} className="h-8 px-4 bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 rounded">
+                  Comptabiliser
                 </button>
-              </div>
-            )}
-            
-            {/* 🔍 Message de debug */}
-            {debugInfo && (
-              <div className={`mt-2 flex items-center gap-2 text-xs p-2 rounded border ${debugInfo.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
-                <FiAlertCircle size={14} />
-                <span>{debugInfo.message}</span>
-                {debugInfo.suggestion && (
-                  <span className="ml-2 text-gray-500">💡 {debugInfo.suggestion}</span>
-                )}
-              </div>
-            )}
+              ) : (
+                <button onClick={handleDraft} disabled={actionInProgress} className="h-8 px-3 text-xs font-medium border border-amber-300 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded">
+                  REMETTRE EN BROUILLON
+                </button>
+              )}
+              {error && <div className="text-xs text-red-600">{error}</div>}
+              {validationSuccess && <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">{validationSuccess}</div>}
+              {success && <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">{success}</div>}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={`h-8 px-3 text-xs font-medium border flex items-center rounded ${isDraft ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>Brouillon</div>
+              <div className={`h-8 px-3 text-xs font-medium border flex items-center rounded ${isPosted ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>Comptabilisé</div>
+            </div>
           </div>
+          {hasUnsavedChanges && isDraft && <div className="mt-2 text-xs text-amber-600">⚠️ Modifications non sauvegardées</div>}
         </div>
 
-        {/* Infos pièce */}
+        {/* Informations pièce */}
         <div className="px-4 py-3 border-b border-gray-300">
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Date comptable</label>
-                {isDraft ? <input type="date" value={formData?.date || ''} onChange={(e) => handleChange('date', e.target.value)} className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2" style={{ height: '26px' }} />
-                  : <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center" style={{ height: '26px' }}>{formatDateForDisplay(piece.date) || '—'}</div>}
+            <div>
+              <div className="flex items-center mb-2">
+                <label className="text-xs text-gray-700 w-32">Date comptable</label>
+                {isDraft ? (
+                  <input type="date" value={formData?.date || ''} onChange={(e) => handleChange('date', e.target.value)} className="flex-1 px-2 py-1 border border-gray-300 text-xs rounded" />
+                ) : (
+                  <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs rounded">{formatDateForDisplay(piece.date) || '—'}</div>
+                )}
               </div>
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Référence</label>
-                {isDraft ? <input type="text" value={formData?.ref || ''} onChange={(e) => handleChange('ref', e.target.value)} className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2" style={{ height: '26px' }} placeholder="SCMI/002/2026" />
-                  : <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center" style={{ height: '26px' }}>{piece.ref || '—'}</div>}
+              <div className="flex items-center">
+                <label className="text-xs text-gray-700 w-32">Référence</label>
+                {isDraft ? (
+                  <input type="text" value={formData?.ref || ''} onChange={(e) => handleChange('ref', e.target.value)} className="flex-1 px-2 py-1 border border-gray-300 text-xs rounded" placeholder="SCMI/002/2026" />
+                ) : (
+                  <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs rounded">{piece.ref || '—'}</div>
+                )}
               </div>
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Date enregistrement</label>
-                <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center" style={{ height: '26px' }}>{formatDateForDisplay(piece.create_date || piece.date) || '—'}</div>
+            <div>
+              <div className="flex items-center mb-2">
+                <label className="text-xs text-gray-700 w-32">Date enregistrement</label>
+                <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs rounded">{formatDateForDisplay(piece.create_date || piece.date) || '—'}</div>
               </div>
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Journal</label>
+              <div className="flex items-center">
+                <label className="text-xs text-gray-700 w-32">Journal</label>
                 {isDraft ? (
-                  <div className="flex-1 ml-2">
+                  <div className="flex-1">
                     <AutocompleteInput 
                       value={formData?.journal_label || ''} 
                       selectedId={formData?.journal_id || ''} 
@@ -1271,263 +1333,183 @@ export default function Show() {
                       options={journals} 
                       getOptionLabel={(o) => `${o.code} - ${o.name}`} 
                       placeholder="Sélectionner un journal" 
-                      required={true} 
                     />
                   </div>
-                ) : <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center" style={{ height: '26px' }}>{getJournalLabel(piece.journal)}</div>}
+                ) : (
+                  <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs rounded">{getJournalLabel(piece.journal)}</div>
+                )}
               </div>
             </div>
           </div>
         </div>
 
         {/* Onglets */}
-        <div className="border-b border-gray-300">
-          <div className="px-4 flex">
-            <button onClick={() => setActiveTab('ecritures')} className={`px-4 py-2 text-xs font-medium border-b-2 transition-all duration-200 ${activeTab === 'ecritures' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Écritures comptables</button>
-            <button onClick={() => setActiveTab('notes')} className={`px-4 py-2 text-xs font-medium border-b-2 transition-all duration-200 ${activeTab === 'notes' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Notes</button>
-            <button onClick={() => setActiveTab('pieces-jointes')} className={`px-4 py-2 text-xs font-medium border-b-2 transition-all duration-200 ${activeTab === 'pieces-jointes' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Pièces jointes</button>
+        <div className="border-b border-gray-300 px-4">
+          <div className="flex gap-4">
+            <button onClick={() => setActiveTab('ecritures')} className={`py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === 'ecritures' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'}`}>Écritures comptables</button>
+            <button onClick={() => setActiveTab('notes')} className={`py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === 'notes' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'}`}>Notes</button>
+            <button onClick={() => setActiveTab('pieces-jointes')} className={`py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === 'pieces-jointes' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'}`}>Pièces jointes</button>
           </div>
         </div>
 
-        {/* Contenu onglet Écritures */}
+        {/* Contenu des onglets */}
         <div className="p-4">
+          {/* Onglet Écritures - Toutes les colonnes visibles */}
           {activeTab === 'ecritures' && (
-            <>
+            <div>
               <div className="border border-gray-300 mb-3 overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Compte</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Partenaire</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Libellé</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Taxe</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">Débit</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">Crédit</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Date échéance</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">Montant remise</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-right">% remise</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-left">Date remise</th>
-                      <th className="border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 text-center">•••</th>
+                <table className="w-full border-collapse text-xs">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="border border-gray-300 px-2 py-1.5 text-left">Compte</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-left">Partenaire</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-left">Libellé</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-left">Taxe</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-right">Débit</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-right">Crédit</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-left">Date échéance</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-right">Montant remise</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-right">% remise</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-left">Date remise</th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-center">•••</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(isDraft ? formData?.lines : piece?.lines)?.map((line, lineIndex) => {
-                      if (isDraft) {
-                        return (
-                          <tr key={lineIndex} className="hover:bg-gray-50">
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '150px' }}>
-                              <AutocompleteInput 
-                                value={line.account_label} 
-                                selectedId={line.account_id} 
-                                onChange={(text) => handleLineChange(lineIndex, 'account_label', text)} 
-                                onSelect={(id, label) => handleLineMultiChange(lineIndex, { account_id: id, account_label: label })} 
-                                options={accounts} 
-                                getOptionLabel={(o) => `${o.code} - ${o.name}`} 
-                                placeholder="Compte" 
-                                required={true} 
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '120px' }}>
-                              <AutocompleteInput 
-                                value={line.partner_label} 
-                                selectedId={line.partner_id} 
-                                onChange={(text) => handleLineChange(lineIndex, 'partner_label', text)} 
-                                onSelect={(id, label) => handleLineMultiChange(lineIndex, { partner_id: id, partner_label: label })} 
-                                options={partners} 
-                                getOptionLabel={(o) => o.nom || o.name || o.raison_sociale || ''} 
-                                placeholder="Partenaire" 
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '150px' }}>
-                              <input 
-                                type="text" 
-                                value={line.name}
-                                onChange={(e) => handleLineChange(lineIndex, 'name', e.target.value)}
-                                onKeyDown={(e) => handleTabOnLastLine(e, lineIndex, false)}
-                                className="w-full px-2 py-1 border-0 text-xs focus:ring-1 focus:ring-blue-500"
-                                style={{ height: '26px' }} 
-                                placeholder="Libellé"
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
-                              <AutocompleteInput 
-                                value={line.tax_label} 
-                                selectedId={line.tax_id} 
-                                onChange={(text) => handleLineChange(lineIndex, 'tax_label', text)}
-                                onSelect={(id, label) => {
-                                  handleLineMultiChange(lineIndex, { 
-                                    tax_id: id, 
-                                    tax_label: label 
-                                  });
-                                }}
-                                options={taxes} 
-                                getOptionLabel={(t) => `${t.name} (${t.amount}%)`} 
-                                placeholder="TVA..." 
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
-                              <input 
-                                type="number" 
-                                step="1" 
-                                min="0" 
-                                value={Math.round(parseFloat(line.debit) || 0)}
-                                onChange={(e) => handleLineChange(lineIndex, 'debit', e.target.value)}
-                                onKeyDown={(e) => handleTabOnLastLine(e, lineIndex, false)}
-                                className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                                style={{ height: '26px' }} 
-                                placeholder="0" 
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
-                              <input 
-                                type="number" 
-                                step="1" 
-                                min="0" 
-                                value={Math.round(parseFloat(line.credit) || 0)}
-                                onChange={(e) => handleLineChange(lineIndex, 'credit', e.target.value)}
-                                onKeyDown={(e) => handleTabOnLastLine(e, lineIndex, false)}
-                                className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                                style={{ height: '26px' }} 
-                                placeholder="0" 
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '120px' }}>
-                              <input 
-                                type="date" 
-                                value={line.date_maturity || ''}
-                                onChange={(e) => handleLineChange(lineIndex, 'date_maturity', e.target.value)}
-                                onKeyDown={(e) => handleTabOnLastLine(e, lineIndex, false)}
-                                className="w-full px-2 py-1 border-0 text-xs focus:ring-1 focus:ring-blue-500"
-                                style={{ height: '26px' }} 
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '100px' }}>
-                              <input 
-                                type="number" 
-                                step="1" 
-                                min="0" 
-                                value={Math.round(parseFloat(line.discount_amount_currency) || 0)}
-                                onChange={(e) => handleLineChange(lineIndex, 'discount_amount_currency', e.target.value)}
-                                onKeyDown={(e) => handleTabOnLastLine(e, lineIndex, false)}
-                                className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                                style={{ height: '26px' }} 
-                                placeholder="0" 
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '80px' }}>
-                              <input 
-                                type="number" 
-                                step="0.01" 
-                                min="0" 
-                                max="100" 
-                                value={line.discount_percentage || ''}
-                                onChange={(e) => handleLineChange(lineIndex, 'discount_percentage', e.target.value)}
-                                onKeyDown={(e) => handleTabOnLastLine(e, lineIndex, false)}
-                                className="w-full px-2 py-1 border-0 text-xs text-right focus:ring-1 focus:ring-blue-500"
-                                style={{ height: '26px' }} 
-                                placeholder="0" 
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1" style={{ minWidth: '120px' }}>
-                              <input 
-                                type="date" 
-                                value={line.discount_date || ''}
-                                onChange={(e) => handleLineChange(lineIndex, 'discount_date', e.target.value)}
-                                onKeyDown={(e) => handleTabOnLastLine(e, lineIndex, true)}
-                                className="w-full px-2 py-1 border-0 text-xs focus:ring-1 focus:ring-blue-500"
-                                style={{ height: '26px' }} 
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-1 w-[40px]">
-                              <button 
-                                onClick={() => removeLine(lineIndex)} 
-                                tabIndex="0"
-                                className="w-full flex items-center justify-center p-1 text-gray-400 hover:text-red-600 transition-colors"
-                                style={{ height: '26px' }} 
-                                title="Supprimer"
-                              >
-                                <FiTrash2 size={14} />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      } else {
-                        const account = getAccountLabel(line.account);
-                        const linePartner = line.partner ? getPartnerName(line.partner) : null;
-                        const lineTax = getTaxDisplay(line, taxesMap, taxesMapRef);
-                        
-                        return (
-                          <tr key={line.id || lineIndex} className="hover:bg-gray-50">
-                            <td className="border border-gray-300 p-1">{account ? <div className="px-2 py-1 text-xs"><span className="font-medium">{account.code}</span>{account.name && <span className="text-gray-500 ml-1">({account.name})</span>}</div> : <Cell>—</Cell>}</td>
-                            <td className="border border-gray-300 p-1"><Cell>{linePartner}</Cell></td>
-                            <td className="border border-gray-300 p-1"><Cell>{line.name}</Cell></td>
-                            <td className="border border-gray-300 p-1"><Cell>{lineTax}</Cell></td>
-                            <td className="border border-gray-300 p-1"><Cell align="right">{formatAmount(line.debit)}</Cell></td>
-                            <td className="border border-gray-300 p-1"><Cell align="right">{formatAmount(line.credit)}</Cell></td>
-                            <td className="border border-gray-300 p-1"><Cell>{line.date_maturity ? formatDateForDisplay(line.date_maturity) : null}</Cell></td>
-                            <td className="border border-gray-300 p-1"><Cell align="right">{formatAmount(line.discount_amount_currency)}</Cell></td>
-                            <td className="border border-gray-300 p-1"><Cell align="right">{line.discount_percentage ? parseFloat(line.discount_percentage).toFixed(2) + '%' : null}</Cell></td>
-                            <td className="border border-gray-300 p-1"><Cell>{line.discount_date ? formatDateForDisplay(line.discount_date) : null}</Cell></td>
-                            <td className="border border-gray-300 p-1 w-[40px]"></td>
-                          </tr>
-                        );
-                      }
-                    })}
+                    {(isDraft ? formData?.lines : piece?.lines)?.map((line, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="border border-gray-300 p-1">
+                          {isDraft ? (
+                            <AutocompleteInput 
+                              value={line.account_label} 
+                              selectedId={line.account_id} 
+                              onChange={(text) => handleLineChange(idx, 'account_label', text)} 
+                              onSelect={(id, label) => handleLineMultiChange(idx, { account_id: id, account_label: label })} 
+                              options={accounts} 
+                              getOptionLabel={(o) => `${o.code} - ${o.name}`} 
+                              placeholder="Compte" 
+                            />
+                          ) : (
+                            <div>{line.account?.code} - {line.account?.name}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1">
+                          {isDraft ? (
+                            <AutocompleteInput 
+                              value={line.partner_label} 
+                              selectedId={line.partner_id} 
+                              onChange={(text) => handleLineChange(idx, 'partner_label', text)} 
+                              onSelect={(id, label) => handleLineMultiChange(idx, { partner_id: id, partner_label: label })} 
+                              options={partners} 
+                              getOptionLabel={(o) => o.nom || o.name || o.raison_sociale || ''} 
+                              placeholder="Partenaire" 
+                            />
+                          ) : (
+                            <div>{line.partner?.raison_sociale || line.partner?.nom || '—'}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1">
+                          {isDraft ? (
+                            <input type="text" value={line.name} onChange={(e) => handleLineChange(idx, 'name', e.target.value)} className="w-full px-1 py-0.5 border-0 focus:ring-1 focus:ring-blue-500 rounded" placeholder="Libellé" />
+                          ) : (
+                            <div>{line.name}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1">
+                          {isDraft ? (
+                            <AutocompleteInput 
+                              value={line.tax_label} 
+                              selectedId={line.tax_id} 
+                              onChange={(text) => handleLineChange(idx, 'tax_label', text)} 
+                              onSelect={(id, label) => handleLineMultiChange(idx, { tax_id: id, tax_label: label })} 
+                              options={taxes} 
+                              getOptionLabel={(t) => `${t.name} (${t.amount}%)`} 
+                              placeholder="TVA..." 
+                            />
+                          ) : (
+                            <div>{line.tax_ids?.[0]?.name || '—'}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1 text-right">
+                          {isDraft ? (
+                            <AmountInput value={line.debit} onChange={(value) => handleLineChange(idx, 'debit', value)} placeholder="0" />
+                          ) : (
+                            <div>{formatAmount(line.debit)}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1 text-right">
+                          {isDraft ? (
+                            <AmountInput value={line.credit} onChange={(value) => handleLineChange(idx, 'credit', value)} placeholder="0" />
+                          ) : (
+                            <div>{formatAmount(line.credit)}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1">
+                          {isDraft ? (
+                            <input type="date" value={line.date_maturity || ''} onChange={(e) => handleLineChange(idx, 'date_maturity', e.target.value)} className="w-full px-1 py-0.5 border-0 focus:ring-1 focus:ring-blue-500 rounded" />
+                          ) : (
+                            <div>{line.date_maturity ? formatDateForDisplay(line.date_maturity) : '—'}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1 text-right">
+                          {isDraft ? (
+                            <AmountInput value={line.discount_amount_currency} onChange={(value) => handleLineChange(idx, 'discount_amount_currency', value)} placeholder="0" />
+                          ) : (
+                            <div>{formatAmount(line.discount_amount_currency)}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1 text-right">
+                          {isDraft ? (
+                            <input type="number" step="0.01" min="0" max="100" value={line.discount_percentage || ''} onChange={(e) => handleLineChange(idx, 'discount_percentage', e.target.value)} className="w-full px-1 py-0.5 border-0 text-right focus:ring-1 focus:ring-blue-500 rounded" placeholder="0" />
+                          ) : (
+                            <div>{line.discount_percentage ? parseFloat(line.discount_percentage).toFixed(2) + '%' : '—'}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1">
+                          {isDraft ? (
+                            <input type="date" value={line.discount_date || ''} onChange={(e) => handleLineChange(idx, 'discount_date', e.target.value)} onKeyDown={(e) => handleTabOnLastLine(e, idx, true)} className="w-full px-1 py-0.5 border-0 focus:ring-1 focus:ring-blue-500 rounded" />
+                          ) : (
+                            <div>{line.discount_date ? formatDateForDisplay(line.discount_date) : '—'}</div>
+                          )}
+                        </td>
+                        <td className="border border-gray-300 p-1 w-[40px] text-center">
+                          {isDraft && (
+                            <button onClick={() => removeLine(idx)} className="text-gray-400 hover:text-red-600 transition-colors" title="Supprimer">
+                              <FiTrash2 size={14} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-
               {isDraft && (
-                <div className="mb-3 flex items-center gap-4">
-                  <button onClick={addLine} className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 flex items-center gap-1"><FiPlus size={12} /><span>Ajouter une ligne</span></button>
-                  {!isBalanced && totals.debit > 0 && (
-                    <div className="text-xs text-yellow-700 bg-yellow-50 px-3 py-1 rounded flex items-center gap-1 border border-yellow-200">
-                      <FiAlertCircle size={12} />
-                      ⚠ Différence de {formatAmount(difference)} XOF
-                    </div>
-                  )}
-                  {isBalanced && totals.debit > 0 && (
-                    <div className="text-xs text-green-700 bg-green-50 px-3 py-1 rounded flex items-center gap-1 border border-green-200">
-                      <FiCheck size={12} />
-                      ✓ Écriture équilibrée
-                    </div>
-                  )}
-                </div>
+                <button onClick={addLine} className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 rounded flex items-center gap-1 mb-3">
+                  <FiPlus size={12} /> Ajouter une ligne
+                </button>
               )}
-
-              {!isDraft && (
-                <div className="mb-3 flex items-center gap-4">
-                  {!isBalanced && totals.debit > 0 && (
-                    <div className="text-xs text-yellow-700 bg-yellow-50 px-3 py-1 rounded flex items-center gap-1 border border-yellow-200">
-                      <FiAlertCircle size={12} />
-                      ⚠ Différence de {formatAmount(difference)} XOF
-                    </div>
-                  )}
-                  {isBalanced && totals.debit > 0 && (
-                    <div className="text-xs text-green-700 bg-green-50 px-3 py-1 rounded flex items-center gap-1 border border-green-200">
-                      <FiCheck size={12} />
-                      ✓ Écriture équilibrée
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="bg-green-50 border border-green-200 px-4 py-2 flex justify-end gap-8">
-                <div className="text-sm font-bold text-gray-900">{formatAmount(totals.debit)} XOF</div>
-                <div className="text-sm font-bold text-gray-900">{formatAmount(totals.credit)} XOF</div>
+              <div className="bg-green-50 border border-green-200 px-4 py-2 flex justify-end gap-8 rounded">
+                <div className="text-sm font-bold">Total Débit: {formatAmount(totals.debit)} XOF</div>
+                <div className="text-sm font-bold">Total Crédit: {formatAmount(totals.credit)} XOF</div>
               </div>
-            </>
+              {!isBalanced && totals.debit > 0 && (
+                <div className="mt-2 text-xs text-yellow-700 bg-yellow-50 px-3 py-1 rounded inline-flex items-center gap-1">
+                  <FiAlertCircle size={12} /> Différence de {formatAmount(difference)} XOF
+                </div>
+              )}
+            </div>
           )}
 
+          {/* Onglet Notes */}
           {activeTab === 'notes' && (
-            <div className="border border-gray-300">
-              <div className="grid grid-cols-3 bg-gray-100 border-b border-gray-300">
-                <div className="border-r border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700">Devise</div>
-                <div className="border-r border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700">Position fiscale</div>
-                <div className="px-2 py-1.5 text-xs font-medium text-gray-700">Entité</div>
+            <div className="border border-gray-300 rounded">
+              <div className="grid grid-cols-3 bg-gray-100 border-b">
+                <div className="border-r px-2 py-1 text-xs font-medium">Devise</div>
+                <div className="border-r px-2 py-1 text-xs font-medium">Position fiscale</div>
+                <div className="px-2 py-1 text-xs font-medium">Entité</div>
               </div>
-              <div className="grid grid-cols-3 border-b border-gray-300">
-                <div className="border-r border-gray-300 p-1">
+              <div className="grid grid-cols-3 border-b">
+                <div className="border-r p-1">
                   {isDraft ? (
                     <AutocompleteInput 
                       value={formData?.currency_label || ''} 
@@ -1539,12 +1521,10 @@ export default function Show() {
                       placeholder="Sélectionner une devise" 
                     />
                   ) : (
-                    <div className="w-full px-2 py-1 text-xs text-gray-700 bg-gray-50 flex items-center" style={{ height: '26px' }}>
-                      {getDeviseLabel(piece.currency)}
-                    </div>
+                    <div className="px-2 py-1 text-xs">{getDeviseLabel(piece.currency)}</div>
                   )}
                 </div>
-                <div className="border-r border-gray-300 p-1">
+                <div className="border-r p-1">
                   {isDraft ? (
                     <AutocompleteInput 
                       value={formData?.fiscal_position_label || ''} 
@@ -1556,15 +1536,13 @@ export default function Show() {
                       placeholder="Sélectionner une position" 
                     />
                   ) : (
-                    <div className="w-full px-2 py-1 text-xs text-gray-700 bg-gray-50 flex items-center" style={{ height: '26px' }}>
-                      {getFiscalPositionLabel(piece.fiscal_position)}
-                    </div>
+                    <div className="px-2 py-1 text-xs">{getFiscalPositionLabel(piece.fiscal_position)}</div>
                   )}
                 </div>
                 <div className="p-1">
-                  <div className="w-full px-2 py-1 text-xs text-gray-700 bg-gray-50 flex items-center" style={{ height: '26px' }}>
-                    <FiBriefcase className="mr-1 text-purple-600 flex-shrink-0" size={12} />
-                    <span className="truncate">{activeEntity?.nom || activeEntity?.name || activeEntity?.raison_sociale || 'Entité sélectionnée'}</span>
+                  <div className="px-2 py-1 text-xs flex items-center gap-1">
+                    <FiBriefcase className="text-purple-600" size={12} />
+                    {activeEntity?.nom || activeEntity?.name || activeEntity?.raison_sociale}
                   </div>
                 </div>
               </div>
@@ -1572,35 +1550,114 @@ export default function Show() {
                 <textarea 
                   value={formData?.notes || ''}
                   onChange={(e) => handleChange('notes', e.target.value)}
-                  className="w-full h-48 px-3 py-2 border-0 text-xs focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-32 px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 rounded-b"
                   placeholder="Ajouter des notes complémentaires..." 
                 />
               ) : (
                 <textarea 
                   value={piece.notes || ''}
                   readOnly
-                  className="w-full h-48 px-3 py-2 border-0 text-xs bg-gray-50 cursor-default resize-none"
+                  className="w-full h-32 px-3 py-2 text-xs bg-gray-50 cursor-default rounded-b resize-none"
                   placeholder="Aucune note"
                 />
               )}
             </div>
           )}
 
+          {/* Onglet Pièces jointes */}
           {activeTab === 'pieces-jointes' && (
-            <div className="border border-gray-300 p-6">
-              <div className="text-center py-8">
-                <FiPaperclip className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                <div className="text-gray-500 text-xs mb-4">Aucune pièce jointe</div>
-                <p className="text-xs text-gray-400">Cette pièce comptable n'a pas de documents joints</p>
-              </div>
+            <div className="border border-gray-300 p-6 rounded">
+              {isDraft && (
+                <div className="mb-6">
+                  <input 
+                    type="file" 
+                    id="attachments" 
+                    className="hidden" 
+                    multiple
+                    onChange={(e) => {
+                      handleUploadAttachments(e.target.files);
+                      e.target.value = '';
+                    }}
+                    disabled={uploadingFiles}
+                  />
+                  <label htmlFor="attachments"
+                    className={`inline-flex items-center gap-2 h-8 px-3 text-white text-xs cursor-pointer transition-all duration-200 rounded ${
+                      uploadingFiles ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
+                    }`}
+                  >
+                    <FiUpload size={12} />
+                    <span>{uploadingFiles ? 'Upload en cours...' : 'Ajouter des fichiers'}</span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Formats acceptés : PDF, JPG, PNG, DOC (max 10MB par fichier)
+                  </p>
+                </div>
+              )}
+
+              {attachments.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                    Documents joints ({attachments.length})
+                  </h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {attachments.map((attachment) => (
+                      <div key={attachment.id} className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded">
+                        <div className="flex items-center gap-2 flex-1">
+                          <FiPaperclip className="text-gray-500 flex-shrink-0" size={14} />
+                          <span className="text-xs text-gray-700 truncate flex-1">
+                            {attachment.name || attachment.file?.split('/').pop() || 'Document'}
+                          </span>
+                          {attachment.file_size && (
+                            <span className="text-xs text-gray-500 flex-shrink-0">
+                              {(attachment.file_size / 1024).toFixed(1)} KB
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => handleDownloadAttachment(attachment)}
+                            className="text-green-600 hover:text-green-800 transition-colors"
+                            title="Télécharger"
+                          >
+                            <FiDownload size={14} />
+                          </button>
+                          {isDraft && (
+                            <button
+                              onClick={() => handleDeleteAttachment(attachment.id)}
+                              className="text-red-600 hover:text-red-800 transition-colors"
+                              title="Supprimer"
+                            >
+                              <FiTrash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {attachments.length === 0 && (
+                <div className="text-center py-8">
+                  <FiPaperclip className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                  <div className="text-gray-500 text-xs">
+                    Aucune pièce jointe
+                  </div>
+                  {!isDraft && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      Les pièces jointes ne peuvent être ajoutées qu'en mode brouillon
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Pied de page */}
         <div className="border-t border-gray-300 px-4 py-2 bg-gray-50 text-xs text-gray-500 flex justify-between">
-          <div>Créé le {piece.create_date ? formatDateTimeForDisplay(piece.create_date) : '—'}{piece.create_uid && ` par ${typeof piece.create_uid === 'object' ? piece.create_uid.username || piece.create_uid : piece.create_uid}`}</div>
-          <div>Modifié le {piece.write_date ? formatDateTimeForDisplay(piece.write_date) : '—'}{piece.write_uid && ` par ${typeof piece.write_uid === 'object' ? piece.write_uid.username || piece.write_uid : piece.write_uid}`}</div>
+          <div>Créé le {piece.create_date ? formatDateTimeForDisplay(piece.create_date) : '—'}</div>
+          <div>Modifié le {piece.write_date ? formatDateTimeForDisplay(piece.write_date) : '—'}</div>
         </div>
       </div>
 
