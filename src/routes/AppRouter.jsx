@@ -8,7 +8,11 @@ import BanksPage from "../pages/Banks/BanksPage";
 import CountriesPage from "../pages/Countries/CountriesPage";
 import CurrenciesPage from "../pages/Currencies/CurrenciesPage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
-import EntitiesPage from "../pages/Entities/EntitiesPage";
+// import EntitiesPage from "../pages/Entities/EntitiesPage";
+import EntitiesCreate  from "../pages/Entities/Create.jsx";
+import EntitiesShow  from "../pages/Entities/Show.jsx";
+import EntitiesList   from "../pages/Entities/List.jsx";
+
 import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
 import GroupesPage from "../pages/Groupes/GroupesPage";
 import JournalPage from "../pages/Journal/JournalPage";
@@ -17,13 +21,23 @@ import LoginPage from "../pages/Login/LoginPage";
 import ModulesPage from "../pages/Modules/ModulesPage";
 import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage";
 import PartnersPage from "../pages/Partners/PartnersPage";
+import PartnersCreate from "../pages/Partners/Create.jsx";
+import PartnersShow from "../pages/Partners/Show.jsx";
+import PartnersList from "../pages/Partners/List.jsx";
+
 import PermissionsPage from "../pages/Permissions/PermissionsPage";
 import SettingsPage from "../pages/Settings/SettingsPage";
 import StatesPage from "../pages/States/StatesPage";
 import SystemPage from "../pages/System/SystemPage";
 import TasksPage from "../pages/Tasks/TasksPage";
 import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
-import UsersPage from "../pages/Users/UsersPage";
+// import UsersPage from "../pages/Users/UsersPage";
+// Imports
+import SecurityList from "../pages/Users/List.jsx";
+import SecurityCreate from "../pages/Users/Create.jsx";
+import SecurityShow from "../pages/Users/Show.jsx";
+
+
 
 // NOUVELLES PAGES D'ENTITÉ
 import NoEntitePage from "../pages/Entities/NoEntitePage";
@@ -117,6 +131,7 @@ import ImportPage from "../features/financial-reports/pages/ImportData.jsx";
 import FinancialReportsList from "../features/financial-reports/pages/index.jsx";
 import NewReportPage from "../features/financial-reports/pages/new/page.jsx";
 import SettingPage from "../features/financial-reports/pages/SettingsPage.jsx";
+import FinancialReportConfig from "../features/financial-reports/pages/FinancialReportConfig.jsx";
 
 // COMPOSANT DE CHARGEMENT POUR SUSPENSE
 const LoadingFallback = () => (
@@ -171,9 +186,22 @@ export default function AppRouter() {
         {/* ROUTES PROTÉGÉES PRINCIPALES */}
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/entities" element={<EntitiesPage />} />
-          <Route path="/partners" element={<PartnersPage />} />
-          <Route path="/users" element={<UsersPage />} />
+          {/* <Route path="/entities" element={<EntitiesPage />} /> */}
+          <Route path="/entities/create" element={<EntitiesCreate />} />
+          <Route path="/entities" element={<EntitiesList />} />
+          <Route path="/entities/:id" element={<EntitiesShow />} />
+          <Route path="/partner" element={<PartnersPage />} />
+          <Route path="/partners/create" element={<PartnersCreate />} />
+          <Route path="/partners" element={<PartnersList />} />
+          <Route path="/partners/:id" element={<PartnersShow />} />
+
+
+          {/* <Route path="/user" element={<UsersPage />} /> */}
+          // Routes
+          <Route path="/UsersGestions" element={<SecurityList />} />
+          <Route path="/security/create" element={<SecurityCreate />} />
+          <Route path="/security/:type/:id" element={<SecurityShow />} />
+
           <Route path="/userentities" element={<UserEntitiesPage />} />
           <Route path="/groupes" element={<GroupesPage />} />
           <Route path="/permissions" element={<PermissionsPage />} />
@@ -315,6 +343,7 @@ export default function AppRouter() {
           <Route path="/financial-reports/settings" element={<SettingPage />} />
           <Route path="/financial-reports/Periods" element={<PeriodSelectorPage />} />
           <Route path="/financial-reports/lignes" element={<Indexpages />} /> 
+          <Route path="/financial-reports/config" element={<FinancialReportConfig />} />
         </Route>
 
         {/* REDIRECTIONS */}

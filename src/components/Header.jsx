@@ -185,6 +185,9 @@ const MODULES_CONFIG = [
         name: "Paramètres",
         items: [
           { label: "Configuration", path: "/financial-reports/settings" },
+          
+          { label: "etat financier", path: "/financial-reports/config" },
+
         ]
       }
     ]

@@ -144,7 +144,7 @@ export default function Sidebar() {
         { name: "Partenaires", path: "/partners", icon: <FiUserPlus /> },
         { 
           name: "Gestion des utilisateurs", 
-          path: "/users", 
+          path: "/UsersGestions", 
           icon: <FiUsers />,
         },
         { name: "Utilisateurs & Entités", path: "/userentities", icon: <FiLink /> },

@@ -1,3 +1,4 @@
+// C:\python\django\somane_fronten\somane_frontend\src\features\financial-reports\pages\dashboard.jsx
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../../services/apiClient';
