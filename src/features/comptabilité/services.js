@@ -1,11 +1,173 @@
-// src/features/comptabilité/services.js
+// src/features/comptabilite/services.js
 import { apiClient } from '../../services/apiClient';
 import { authService } from '../../services/authService'; 
 
 const API_PREFIX = 'compta/';
 
+// ==============================================================================
+// ============= SERVICE TABLEAU DE BORD COMPTABLE ===============================
+// ==============================================================================
+export const dashboardService = {
+  /**
+   * Recuperer les indicateurs du tableau de bord comptable
+   */
+  getSummary: async (entityId = null, filters = {}) => {
+    try {
+      const params = entityId
+        ? { ...filters, company: entityId, entity_id: entityId }
+        : filters;
+      const query = new URLSearchParams(
+        Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
+      ).toString();
+      const endpoint = query ? `${API_PREFIX}dashboard/?${query}` : `${API_PREFIX}dashboard/`;
+
+      const response = await apiClient.get(endpoint);
+
+      if (response?.data && typeof response.data === 'object') return response.data;
+      return response;
+    } catch (error) {
+      console.error('Erreur chargement dashboard comptable:', error);
+      throw error;
+    }
+  }
+};
+
+// ==============================================================================
+// ============= SERVICE PAIEMENTS (AJOUTÉ ICI) ================================
+// ==============================================================================
+export const paymentService = {
+  /**
+   * Récupérer la liste des paiements
+   */
+  getAll: async (entityId = null, filters = {}) => {
+    try {
+      const params = entityId ? { ...filters, company: entityId } : filters;
+      const response = await apiClient.get(`${API_PREFIX}payments/`, { params });
+      
+      let data = [];
+      if (Array.isArray(response)) data = response;
+      else if (response?.results) data = response.results;
+      else if (response?.data) data = response.data;
+      
+      return data;
+    } catch (error) {
+      console.error('Erreur chargement paiements:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Créer un nouveau paiement
+   */
+  create: async (data, entityId = null) => {
+    try {
+      const payload = entityId ? { ...data, company: entityId } : data;
+      // S'assurer que le montant est un nombre
+      if (payload.amount) payload.amount = parseFloat(payload.amount);
+      
+      const response = await apiClient.post(`${API_PREFIX}payments/`, payload);
+      return response;
+    } catch (error) {
+      console.error('Erreur création paiement:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Récupérer un paiement par ID
+   */
+  getById: async (id, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}payments/${id}/`, { params });
+      return response;
+    } catch (error) {
+      console.error(`Erreur chargement paiement ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Valider un paiement (Passer à l'état 'posted')
+   */
+  validate: async (id, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      return await apiClient.post(`${API_PREFIX}payments/${id}/validate/`, {}, { params });
+    } catch (error) {
+      console.error('Erreur validation paiement:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Annuler un paiement
+   */
+  cancel: async (id, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      return await apiClient.post(`${API_PREFIX}payments/${id}/cancel/`, {}, { params });
+    } catch (error) {
+      console.error('Erreur annulation paiement:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Récupérer les journaux de type Banque ou Caisse uniquement
+   */
+  getCashJournals: async (entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}journals/`, { params });
+      
+      let journals = [];
+      if (Array.isArray(response)) journals = response;
+      else if (response?.results) journals = response.results;
+      else if (response?.data) journals = response.data;
+
+      // Filtrer pour ne garder que Banque et Caisse
+      return journals.filter(j => {
+        const typeCode = j.type?.code || j.type_code || '';
+        return ['BAN', 'CAI', 'BANQUE', 'CAISSE', 'CASH', 'BANK'].includes(typeCode.toUpperCase());
+      });
+    } catch (error) {
+      console.error('Erreur chargement journaux trésorerie:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Récupérer les factures impayées d'un partenaire
+   */
+  getOpenInvoices: async (partnerId, entityId = null) => {
+    if (!partnerId) return [];
+    try {
+      const params = {
+        partner_id: partnerId,
+        move_type__in: ['out_invoice', 'in_invoice', 'out_refund', 'in_refund'],
+        state: 'posted',
+        amount_residual__gt: 0
+      };
+      if (entityId) params.company = entityId;
+
+      const response = await apiClient.get(`${API_PREFIX}moves/`, { params });
+      
+      let moves = [];
+      if (Array.isArray(response)) moves = response;
+      else if (response?.results) moves = response.results;
+      else if (response?.data) moves = response.data;
+      
+      return moves;
+    } catch (error) {
+      console.error('Erreur chargement factures impayées:', error);
+      return [];
+    }
+  }
+};
+
 // ============= SERVICE SÉQUENCES =============
-const sequencesService = {
+export const sequencesService = {
   /**
    * Récupérer toutes les séquences
    * @param {number|null} entityId - ID de l'entité (optionnel)
@@ -149,8 +311,273 @@ const sequencesService = {
   }
 };
 
+// ============= SERVICE LETTRAGE =============
+export const lettrageService = {
+  // === LIGNES À LETTRER (Show/List) ===
+  
+  /**
+   * Récupérer les lignes non lettrées (éligibles au lettrage)
+   * @param {number|null} entityId - ID de l'entité
+   * @param {Object} filters - Filtres optionnels (date, partenaire, compte, montant)
+   * @returns {Promise<Array>} Liste des lignes AccountMoveLine
+   */
+  getUnreconciledLines: async (entityId = null, filters = {}) => {
+    try {
+      const params = {
+        reconciled: 'false',
+        ...(entityId && { company: entityId }),
+        ...filters
+      };
+      const response = await apiClient.get(`${API_PREFIX}move-lines/unreconciled/`, { params });
+      
+      let linesData = [];
+      if (Array.isArray(response)) {
+        linesData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          linesData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          linesData = response.data;
+        }
+      }
+      return linesData;
+    } catch (error) {
+      console.error('Erreur chargement lignes non lettrées:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Récupérer les candidats potentiels pour une ligne donnée
+   * (mêmes compte/partenaire, solde opposé, même journal optionnel)
+   * @param {number} lineId - ID de la ligne source
+   * @param {number|null} entityId - ID de l'entité
+   * @returns {Promise<Array>} Liste des lignes candidates
+   */
+  getCandidatesForLine: async (lineId, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}move-lines/${lineId}/candidates/`, { params });
+      
+      let candidatesData = [];
+      if (Array.isArray(response)) {
+        candidatesData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          candidatesData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          candidatesData = response.data;
+        }
+      }
+      return candidatesData;
+    } catch (error) {
+      console.error(`Erreur chargement candidats pour ligne ${lineId}:`, error);
+      return [];
+    }
+  },
+
+  // === CRÉATION & GESTION DU LETTRAGE (Create) ===
+  
+  /**
+   * Créer un nouveau lettrage (partiel ou total)
+   * @param {Object} data - Payload de lettrage
+   * @param {number|null} entityId - ID de l'entité
+   * @returns {Promise<Object>} Lettrage créé
+   * 
+   * Payload attendu :
+   * {
+   *   line_ids: number[],        // IDs des AccountMoveLine à lettrer
+   *   reconcile_type: 'partial' | 'full',
+   *   amount?: number,           // Requis si type='partial'
+   *   comment?: string,
+   *   auto_writeoff?: boolean    // Optionnel : arrondir les écarts < seuil
+   * }
+   */
+  create: async (data, entityId = null) => {
+    try {
+      const payload = entityId ? { ...data, company: entityId } : data;
+      const response = await apiClient.post(`${API_PREFIX}reconciliations/`, payload);
+      return response;
+    } catch (error) {
+      console.error('Erreur création lettrage:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Récupérer un lettrage par son ID (pour Show/Edit)
+   * @param {number} id - ID du lettrage
+   * @param {number|null} entityId - ID de l'entité
+   * @returns {Promise<Object>} Détails du lettrage
+   */
+  getById: async (id, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}reconciliations/${id}/`, { params });
+      return response;
+    } catch (error) {
+      console.error(`Erreur chargement lettrage ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Mettre à jour un lettrage (commentaire, type, montant partiel)
+   * @param {number} id - ID du lettrage
+   * @param {Object} data - Données à mettre à jour
+   * @param {number|null} entityId - ID de l'entité
+   * @returns {Promise<Object>} Lettrage mis à jour
+   */
+  update: async (id, data, entityId = null) => {
+    try {
+      const payload = entityId ? { ...data, company: entityId } : data;
+      const response = await apiClient.put(`${API_PREFIX}reconciliations/${id}/`, payload);
+      return response;
+    } catch (error) {
+      console.error(`Erreur mise à jour lettrage ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Annuler/Supprimer un lettrage (pour débogage ou correction)
+   * @param {number} id - ID du lettrage
+   * @param {number|null} entityId - ID de l'entité
+   * @returns {Promise<void>}
+   */
+  delete: async (id, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      await apiClient.delete(`${API_PREFIX}reconciliations/${id}/`, { params });
+    } catch (error) {
+      console.error(`Erreur suppression lettrage ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // === HISTORIQUE & AUDIT ===
+  
+  /**
+   * Récupérer l'historique des lettrages d'une ligne comptable
+   * @param {number} lineId - ID de la ligne AccountMoveLine
+   * @param {number|null} entityId - ID de l'entité
+   * @returns {Promise<Array>} Liste des lettrages appliqués à cette ligne
+   */
+  getLineHistory: async (lineId, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}move-lines/${lineId}/reconciliation-history/`, { params });
+      
+      let historyData = [];
+      if (Array.isArray(response)) {
+        historyData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          historyData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          historyData = response.data;
+        }
+      }
+      return historyData;
+    } catch (error) {
+      console.error(`Erreur chargement historique ligne ${lineId}:`, error);
+      return [];
+    }
+  },
+
+  // === RÈGLES AUTOMATIQUES (Bonus V2) ===
+  
+  /**
+   * Récupérer les modèles de lettrage automatique disponibles
+   * @param {number|null} entityId - ID de l'entité
+   * @returns {Promise<Array>} Liste des AccountReconcileModel
+   */
+  getReconcileModels: async (entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}reconcile-models/`, { params });
+      
+      let modelsData = [];
+      if (Array.isArray(response)) {
+        modelsData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          modelsData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          modelsData = response.data;
+        }
+      }
+      return modelsData;
+    } catch (error) {
+      console.error('Erreur chargement modèles de lettrage:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Appliquer un modèle de lettrage automatique sur une ligne
+   * @param {number} modelId - ID du modèle AccountReconcileModel
+   * @param {number} lineId - ID de la ligne à traiter
+   * @param {number|null} entityId - ID de l'entité
+   * @returns {Promise<Object>} Résultat de l'application (propositions de lettrage)
+   */
+  applyModel: async (modelId, lineId, entityId = null) => {
+    try {
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.post(
+        `${API_PREFIX}reconcile-models/${modelId}/apply/`,
+        { line_id: lineId },
+        { params }
+      );
+      return response;
+    } catch (error) {
+      console.error(`Erreur application modèle ${modelId} sur ligne ${lineId}:`, error);
+      throw error;
+    }
+  },
+
+  // === UTILITAIRES ===
+  
+  /**
+   * Formater le montant d'un lettrage pour l'affichage
+   * @param {Object} reconciliation - Objet lettrage
+   * @param {string} locale - Locale pour Intl.NumberFormat (défaut: 'fr-FR')
+   * @returns {string} Montant formaté avec devise
+   */
+  formatAmount: (reconciliation, locale = 'fr-FR') => {
+    if (!reconciliation) return '0,00';
+    const amount = reconciliation.amount || reconciliation.debit || reconciliation.credit || 0;
+    const currency = reconciliation.currency_code || 'XOF';
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency,
+      minimumFractionDigits: 2
+    }).format(Math.abs(amount));
+  },
+
+  /**
+   * Déterminer le type de lettrage pour affichage (badge)
+   * @param {Object} reconciliation - Objet lettrage
+   * @returns {{ label: string, color: string }} Label et classe Tailwind pour le badge
+   */
+  getTypeBadge: (reconciliation) => {
+    if (!reconciliation) return { label: 'Inconnu', color: 'bg-gray-100 text-gray-700' };
+    
+    if (reconciliation.reconcile_type === 'full') {
+      return { label: 'Total', color: 'bg-green-100 text-green-700' };
+    }
+    if (reconciliation.reconcile_type === 'partial') {
+      return { label: 'Partiel', color: 'bg-amber-100 text-amber-700' };
+    }
+    if (reconciliation.is_auto) {
+      return { label: 'Auto', color: 'bg-blue-100 text-blue-700' };
+    }
+    return { label: 'Manuel', color: 'bg-purple-100 text-purple-700' };
+  }
+};
+
 // ============= SERVICE PIÈCES =============
-const piecesService = {
+export const piecesService = {
   // === REQUÊTES API AVEC ENTITÉ ===
   getAll: (entityId = null, filters = {}) => {
     const params = entityId ? { ...filters, company: entityId } : filters;
@@ -576,7 +1003,31 @@ const piecesService = {
       return [];
     }
   },
-  
+
+  // ✅ NOUVEAU : RETENUES À LA SOURCE
+  getWithholdingTaxes: async (entityId = null) => {
+    try {
+      const params = entityId ? { company_id: entityId } : {};
+      const response = await apiClient.get(`${API_PREFIX}withholding-taxes/`, { params });
+      
+      let taxesData = [];
+      if (Array.isArray(response)) {
+        taxesData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          taxesData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          taxesData = response.data;
+        }
+      }
+      
+      return taxesData;
+    } catch (error) {
+      console.error('Erreur chargement retenues à la source:', error);
+      return [];
+    }
+  },
+    
   // === ENTREPRISES/ENTITES ===
   getCompanies: async () => {
     try {
@@ -742,7 +1193,7 @@ const piecesService = {
 };
 
 // ============= SERVICE JOURNAUX =============
-const journauxService = {
+export const journauxService = {
   getAll: (entityId = null, filters = {}) => {
     const params = entityId ? { ...filters, company: entityId } : filters;
     return apiClient.get(`${API_PREFIX}journals/`, { params });
@@ -775,7 +1226,7 @@ const journauxService = {
 };
 
 // ============= SERVICE COMPTES =============
-const comptesService = {
+export const comptesService = {
   /**
    * Récupérer TOUS les comptes (racines + opérationnels)
    */
@@ -814,7 +1265,7 @@ const comptesService = {
 };
 
 // ============= SERVICE PARTENAIRES =============
-const partenairesService = {
+export const partenairesService = {
   getAll: (entityId = null, filters = {}) => {
     const params = entityId ? { ...filters, company: entityId } : filters;
     return apiClient.get('partenaires/', { params });
@@ -842,7 +1293,7 @@ const partenairesService = {
 };
 
 // ============= SERVICE DEVISES =============
-const devisesService = {
+export const devisesService = {
   getAll: (entityId = null, filters = {}) => {
     const params = entityId ? { ...filters, company: entityId } : filters;
     return apiClient.get('devises/', { params });
@@ -870,7 +1321,7 @@ const devisesService = {
 };
 
 // ============= SERVICE ENTREPRISES =============
-const entreprisesService = {
+export const entreprisesService = {
   getAll: (filters = {}) => apiClient.get('entites/', { params: filters }),
   getById: (id) => apiClient.get(`entites/${id}/`),
   create: (data) => apiClient.post('entites/', data),
@@ -879,16 +1330,12 @@ const entreprisesService = {
 };
 
 // ============= EXPORTS =============
+// Note: apiClient, authService sont déjà exportés en tant que named exports depuis leurs fichiers respectifs
+// On les ré-exporte ici pour faciliter l'import
 export { 
   apiClient,
-  authService, 
-  journauxService,
-  piecesService,
-  comptesService,
-  partenairesService,
-  devisesService,
-  entreprisesService,
-  sequencesService
+  authService
 };
 
+// Export par défaut pour la rétrocompatibilité
 export default piecesService;
