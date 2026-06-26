@@ -331,7 +331,7 @@ const getBankAccountLabel = (bankAccount) => {
   if (!bankAccount) return '';
   
   let bankName = '';
-  let accountNumber = bankAccount.numero_compte || '';
+  let accountNumber = bankAccount.numero_compte || bankAccount.account_number || bankAccount.iban || bankAccount.rib || bankAccount.bank_acc_number || '';
   
   if (bankAccount.banque && typeof bankAccount.banque === 'object') {
     bankName = bankAccount.banque.nom || 
@@ -372,6 +372,66 @@ const getBankAccountLabel = (bankAccount) => {
   return label;
 };
 
+const getBankAccountNumber = (bankAccount) =>
+  bankAccount?.numero_compte ||
+  bankAccount?.account_number ||
+  bankAccount?.iban ||
+  bankAccount?.rib ||
+  bankAccount?.bank_acc_number ||
+  '';
+
+const getBankFromBankAccount = (bankAccount) => {
+  if (!bankAccount) return null;
+
+  if (bankAccount.banque_details) {
+    return {
+      ...bankAccount.banque_details,
+      id: bankAccount.banque_details.id || bankAccount.banque,
+      nom: bankAccount.banque_details.nom || bankAccount.banque_details.name || bankAccount.banque_details.raison_sociale,
+    };
+  }
+
+  if (bankAccount.banque && typeof bankAccount.banque === 'object') {
+    return {
+      ...bankAccount.banque,
+      id: bankAccount.banque.id,
+      nom: bankAccount.banque.nom || bankAccount.banque.name || bankAccount.banque.raison_sociale,
+    };
+  }
+
+  if (bankAccount.bank && typeof bankAccount.bank === 'object') {
+    return {
+      ...bankAccount.bank,
+      id: bankAccount.bank.id,
+      nom: bankAccount.bank.nom || bankAccount.bank.name || bankAccount.bank.raison_sociale,
+    };
+  }
+
+  const bankId = bankAccount.banque || bankAccount.banque_id || bankAccount.bank_id;
+  const bankName = bankAccount.banque_nom || bankAccount.nom_banque || bankAccount.bank_name;
+  if (bankId || bankName) {
+    return { id: bankId || bankName, nom: bankName || `Banque #${bankId}` };
+  }
+
+  return null;
+};
+
+const mergeBanks = (...bankLists) => {
+  const merged = [];
+  const seen = new Set();
+
+  bankLists.flat().filter(Boolean).forEach(bank => {
+    const label = getBankLabel(bank);
+    const key = bank.id ? `id:${bank.id}` : `name:${label}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(bank);
+    }
+  });
+
+  return merged;
+};
+
 // ==========================================
 // FORMATAGE LIBELLÉ SÉQUENCE
 // ==========================================
@@ -388,6 +448,116 @@ const getSequenceLabel = (sequence) => {
 const getBankLabel = (bank) => {
   if (!bank) return '';
   return bank.nom || bank.name || 'Banque sans nom';
+};
+
+const normalizeText = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const getAccountDescriptor = (account) => {
+  if (!account) return '';
+  const type = account.type || account.account_type || account.nature || {};
+  const group = account.group || account.internal_group || type.internal_group || {};
+  return normalizeText([
+    account.name,
+    account.label,
+    account.note,
+    account.internal_type,
+    account.kind,
+    account.category,
+    account.account_kind,
+    account.functional_type,
+    type.code,
+    type.name,
+    type.internal_type,
+    type.kind,
+    type.category,
+    group.code,
+    group.name,
+  ].filter(Boolean).join(' '));
+};
+
+const accountMatchesRole = (account, keywords) => {
+  const descriptor = getAccountDescriptor(account);
+  return keywords.some(keyword => descriptor.includes(keyword));
+};
+
+const isTreasuryAccount = (account) =>
+  accountMatchesRole(account, [
+    'tresorerie',
+    'liquidite',
+    'liquidity',
+    'cash',
+    'caisse',
+    'banque',
+    'bank',
+    'compte bancaire',
+  ]);
+
+const isSuspenseAccount = (account) =>
+  accountMatchesRole(account, [
+    'attente',
+    'suspens',
+    'suspense',
+    'clearing',
+    'transitoire',
+  ]);
+
+const isProfitAccount = (account) =>
+  accountMatchesRole(account, [
+    'profit',
+    'gain',
+    'produit',
+    'income',
+    'revenu',
+  ]);
+
+const isLossAccount = (account) =>
+  accountMatchesRole(account, [
+    'perte',
+    'loss',
+    'charge',
+    'expense',
+  ]);
+
+const isOperationalAccount = (account) => {
+  if (!account) return false;
+  if (account.is_root === true || account.is_root_account === true) return false;
+  if (String(account.account_type || '').toLowerCase() === 'root') return false;
+  return true;
+};
+
+const getAccountFrameworkId = (account) => {
+  const framework = account?.framework;
+  if (framework && typeof framework === 'object') return framework.id;
+  return framework || account?.framework_id || 'default';
+};
+
+const getAccountCodeLength = (account) => {
+  const explicitLength = Number(account?.length || account?.code_length);
+  if (Number.isFinite(explicitLength) && explicitLength > 0) return explicitLength;
+  return String(account?.code || '').trim().length;
+};
+
+const filterOperationalAccounts = (accountsList) => {
+  if (!Array.isArray(accountsList)) return [];
+  const targetLengthByFramework = accountsList.reduce((acc, account) => {
+    const frameworkId = getAccountFrameworkId(account);
+    const codeLength = getAccountCodeLength(account);
+    if (!codeLength) return acc;
+    acc[frameworkId] = Math.max(acc[frameworkId] || 0, codeLength);
+    return acc;
+  }, {});
+
+  return accountsList.filter(account => {
+    if (!isOperationalAccount(account)) return false;
+    const frameworkId = getAccountFrameworkId(account);
+    const targetLength = targetLengthByFramework[frameworkId];
+    if (!targetLength) return true;
+    return getAccountCodeLength(account) === targetLength;
+  });
 };
 
 // ==========================================
@@ -429,6 +599,7 @@ export default function JournauxCreate() {
     code: '',
     type_id: '',
     type_code: '',
+    type_name: '',
     default_account_id: '',
     default_account_name: '',
     profit_account_id: '',
@@ -457,10 +628,78 @@ export default function JournauxCreate() {
     sequence_name: '',
     refund_sequence_id: '',
     refund_sequence_name: '',
-    import_bank_statements: false
+    import_bank_statements: false,
+    counterpart_per_line: false
   });
 
   const actionsMenuRef = useRef(null);
+
+  const getAccountById = useCallback((id) => {
+    if (!id) return null;
+    return accounts.find(account => String(account.id) === String(id)) || null;
+  }, [accounts]);
+
+  const filterAccountsByRole = useCallback((predicate) => {
+    const filtered = accounts.filter(predicate);
+    return filtered.length ? filtered : accounts;
+  }, [accounts]);
+
+  const treasuryAccounts = filterAccountsByRole(isTreasuryAccount);
+  const suspenseAccounts = filterAccountsByRole(isSuspenseAccount);
+  const profitAccounts = filterAccountsByRole(isProfitAccount);
+  const lossAccounts = filterAccountsByRole(isLossAccount);
+  const filteredBankAccounts = formData.bank_id
+    ? bankAccounts.filter(item => {
+        const linkedBank = getBankFromBankAccount(item);
+        return String(linkedBank?.id || item.banque || item.banque_id || '') === String(formData.bank_id);
+      })
+    : bankAccounts;
+
+  const hasSelectedOption = (id, name) => Boolean(id) || !String(name || '').trim();
+
+  const getJournalApiErrorMessage = (err) => {
+    const data = err?.data || err?.response?.data || {};
+    const nonFieldError = Array.isArray(data.non_field_errors)
+      ? data.non_field_errors[0]
+      : data.non_field_errors;
+
+    if (nonFieldError) {
+      if (String(nonFieldError).toLowerCase().includes('suspense_account')) {
+        return "Le journal ne peut pas etre cree : le compte d'attente est obligatoire pour ce type de journal.";
+      }
+      return `Le journal ne peut pas etre cree : ${nonFieldError}`;
+    }
+
+    if (data.code?.[0]) return data.code[0];
+    if (data.name?.[0]) return data.name[0];
+    if (data.type_id?.[0]) return data.type_id[0];
+    if (data.suspense_account_id?.[0]) return `Compte d'attente : ${data.suspense_account_id[0]}`;
+    if (data.message) return data.message;
+    return err?.message || 'Erreur lors de la creation du journal.';
+  };
+
+  const validateSelectedAccountRole = (fieldId, label, predicate, silent) => {
+    const selected = getAccountById(formData[fieldId]);
+    if (!selected) return true;
+    if (predicate(selected)) return true;
+    if (!silent) {
+      setError(`${label} : le compte choisi n'a pas la nature attendue.`);
+    }
+    return false;
+  };
+
+  const fetchFirstAvailable = async (urls) => {
+    let lastError = null;
+    for (const url of urls) {
+      try {
+        const response = await apiClient.get(url);
+        return normalizeApiResponse(response);
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError;
+  };
 
   useEffect(() => {
     if (activeEntity?.email) {
@@ -500,25 +739,33 @@ export default function JournauxCreate() {
       setJournalTypes(typesData);
       
       try {
-        const accountsResponse = await apiClient.get('/compta/accounts/');
+        const accountsResponse = await apiClient.get('/compta/accounts/', {
+          params: { company: activeEntity.id, exclude_roots: true }
+        });
         const accountsData = normalizeApiResponse(accountsResponse);
-        setAccounts(accountsData);
+        setAccounts(filterOperationalAccounts(accountsData));
       } catch (err) {
         console.warn('⚠️ Comptes non disponibles:', err.message);
       }
       
       try {
-        const bankResponse = await apiClient.get('/banques-partenaires/');
-        const bankData = normalizeApiResponse(bankResponse);
+        const bankData = await fetchFirstAvailable([
+          '/banques-partenaires/',
+          '/api/banques-partenaires/',
+        ]);
         setBankAccounts(bankData);
+        const derivedBanks = bankData.map(getBankFromBankAccount).filter(Boolean);
+        setBanks(prev => mergeBanks(prev, derivedBanks));
       } catch (err) {
         console.log('ℹ️ Banques partenaires non disponibles');
       }
       
       try {
-        const banksResponse = await apiClient.get('/banques/');
-        const banksData = normalizeApiResponse(banksResponse);
-        setBanks(banksData);
+        const banksData = await fetchFirstAvailable([
+          '/banques/',
+          '/api/banques/',
+        ]);
+        setBanks(prev => mergeBanks(banksData, prev));
       } catch (err) {
         console.log('ℹ️ Banques non disponibles');
       }
@@ -586,13 +833,42 @@ export default function JournauxCreate() {
     markAsModified();
   };
 
+  const handleBankAccountSelect = (id, label) => {
+    const selectedBankAccount = bankAccounts.find(item => String(item.id) === String(id));
+    const linkedBank = getBankFromBankAccount(selectedBankAccount);
+    const accountNumber = getBankAccountNumber(selectedBankAccount);
+
+    setFormData(prev => ({
+      ...prev,
+      bank_account_id: id || '',
+      bank_account_name: label || '',
+      bank_acc_number: accountNumber || prev.bank_acc_number || '',
+      bank_id: linkedBank?.id || prev.bank_id || '',
+      bank_name: linkedBank ? getBankLabel(linkedBank) : prev.bank_name || '',
+    }));
+    markAsModified();
+  };
+
+  const handleBankSelect = (id, label) => {
+    setFormData(prev => ({
+      ...prev,
+      bank_id: id || '',
+      bank_name: label || '',
+      bank_account_id: '',
+      bank_account_name: '',
+      bank_acc_number: '',
+    }));
+    markAsModified();
+  };
+
   const handleTypeChange = (typeId) => {
-    const selectedType = journalTypes.find(t => t.id === typeId);
+    const selectedType = journalTypes.find(t => String(t.id) === String(typeId));
     
     setFormData(prev => ({ 
       ...prev, 
       type_id: typeId,
       type_code: selectedType?.code || '',
+      type_name: selectedType?.name || '',
       default_account_id: '',
       default_account_name: '',
       profit_account_id: '',
@@ -610,19 +886,41 @@ export default function JournauxCreate() {
   };
 
   const isBankType = () => {
-    const bankCodes = ['BQ', 'BN', 'BAN', 'BANQUE'];
-    return bankCodes.includes(formData.type_code) || 
-           formData.type_code === 'BAN' ||
-           formData.type_code === 'BANQUE' ||
-           formData.type_code?.startsWith('BQ') ||
-           formData.type_code?.startsWith('BN');
+    const bankCodes = ['BQ', 'BN', 'BAN', 'BANQUE', 'BANK'];
+    const typeCode = String(formData.type_code || '').toUpperCase();
+    const selectedType = journalTypes.find(t => String(t.id) === String(formData.type_id));
+    const typeText = normalizeText([
+      formData.type_code,
+      formData.type_name,
+      selectedType?.code,
+      selectedType?.name,
+      selectedType?.label,
+      selectedType?.libelle,
+    ].filter(Boolean).join(' '));
+    return bankCodes.includes(typeCode) ||
+           typeCode.startsWith('BQ') ||
+           typeCode.startsWith('BN') ||
+           typeText.includes('banque') ||
+           typeText.includes('bank');
   };
 
   const isCashType = () => {
-    const cashCodes = ['CA', 'CS', 'CAI', 'CAISSE'];
-    return cashCodes.includes(formData.type_code) || 
-           formData.type_code?.startsWith('CA') ||
-           formData.type_code?.startsWith('CS');
+    const cashCodes = ['CA', 'CS', 'CAI', 'CAISSE', 'CASH'];
+    const typeCode = String(formData.type_code || '').toUpperCase();
+    const selectedType = journalTypes.find(t => String(t.id) === String(formData.type_id));
+    const typeText = normalizeText([
+      formData.type_code,
+      formData.type_name,
+      selectedType?.code,
+      selectedType?.name,
+      selectedType?.label,
+      selectedType?.libelle,
+    ].filter(Boolean).join(' '));
+    return cashCodes.includes(typeCode) ||
+           typeCode.startsWith('CA') ||
+           typeCode.startsWith('CS') ||
+           typeText.includes('caisse') ||
+           typeText.includes('cash');
   };
 
   const validateForm = (silent = false) => {
@@ -652,6 +950,17 @@ export default function JournauxCreate() {
     }
 
     if (isBankType()) {
+      if (!formData.default_account_id) {
+        if (!silent) setError('Le compte de tresorerie est obligatoire pour un journal de type Banque');
+        return false;
+      }
+      if (!validateSelectedAccountRole('default_account_id', 'Compte de tresorerie', isTreasuryAccount, silent)) {
+        return false;
+      }
+      if (!formData.suspense_account_id) {
+        if (!silent) setError("Le compte d'attente est obligatoire pour un journal de type Banque. Le journal ne peut pas etre cree sans ce compte.");
+        return false;
+      }
       if (!formData.bank_account_id) {
         if (!silent) setError('Le compte bancaire lié est obligatoire pour un journal de type Banque');
         return false;
@@ -666,21 +975,48 @@ export default function JournauxCreate() {
       }
     } else if (isCashType()) {
       if (!formData.default_account_id) {
-        if (!silent) setError('Le compte d\'achat par défaut est obligatoire pour un journal de type Caisse');
+        if (!silent) setError('Le compte de tresorerie est obligatoire pour un journal de type Caisse');
+        return false;
+      }
+      if (!validateSelectedAccountRole('default_account_id', 'Compte de tresorerie', isTreasuryAccount, silent)) {
         return false;
       }
       if (!formData.suspense_account_id) {
-        if (!silent) setError('Le compte d\'attente est obligatoire pour un journal de type Caisse');
+        if (!silent) setError("Le compte d'attente est obligatoire pour un journal de type Caisse. Le journal ne peut pas etre cree sans ce compte.");
         return false;
       }
       if (!formData.profit_account_id) {
-        if (!silent) setError('Le compte de profit est obligatoire pour un journal de type Caisse');
+        if (!silent) setError('Le compte de profit est obligatoire pour un journal de type Caisse.');
         return false;
       }
       if (!formData.loss_account_id) {
-        if (!silent) setError('Le compte de perte est obligatoire pour un journal de type Caisse');
+        if (!silent) setError('Le compte de perte est obligatoire pour un journal de type Caisse.');
         return false;
       }
+    }
+
+    if (!hasSelectedOption(formData.default_account_id, formData.default_account_name)) {
+      if (!silent) setError('Selectionnez le compte par defaut dans la liste.');
+      return false;
+    }
+    if (!hasSelectedOption(formData.suspense_account_id, formData.suspense_account_name)) {
+      if (!silent) setError('Selectionnez le compte d\'attente dans la liste.');
+      return false;
+    }
+    if (!hasSelectedOption(formData.profit_account_id, formData.profit_account_name)) {
+      if (!silent) setError('Selectionnez le compte de profit dans la liste.');
+      return false;
+    }
+    if (!hasSelectedOption(formData.loss_account_id, formData.loss_account_name)) {
+      if (!silent) setError('Selectionnez le compte de perte dans la liste.');
+      return false;
+    }
+
+    if (formData.profit_account_id && !validateSelectedAccountRole('profit_account_id', 'Compte de profit', isProfitAccount, silent)) {
+      return false;
+    }
+    if (formData.loss_account_id && !validateSelectedAccountRole('loss_account_id', 'Compte de perte', isLossAccount, silent)) {
+      return false;
     }
 
     return true;
@@ -690,7 +1026,7 @@ export default function JournauxCreate() {
     if (!formData.type_id) return ['name', 'code', 'type_id'];
     
     if (isBankType()) {
-      return ['name', 'code', 'type_id', 'bank_account_id', 'bank_acc_number', 'bank_id'];
+      return ['name', 'code', 'type_id', 'default_account_id', 'suspense_account_id', 'bank_account_id', 'bank_acc_number', 'bank_id'];
     } else if (isCashType()) {
       return ['name', 'code', 'type_id', 'default_account_id', 'suspense_account_id', 'profit_account_id', 'loss_account_id'];
     } else {
@@ -719,8 +1055,9 @@ export default function JournauxCreate() {
       sequence_id: formData.sequence_id || null,
       refund_sequence_id: formData.refund_sequence_id || null,
       import_bank_statements: formData.import_bank_statements || false,
-      inbound_payment_method_ids: formData.payment_method_in.length ? formData.payment_method_in : [],
-      outbound_payment_method_ids: formData.payment_method_out.length ? formData.payment_method_out : []
+      counterpart_per_line: formData.counterpart_per_line || false,
+      inbound_payment_method_ids: formData.payment_method_in.map(Number).filter(Boolean),
+      outbound_payment_method_ids: formData.payment_method_out.map(Number).filter(Boolean)
     };
     
     Object.keys(apiData).forEach(key => {
@@ -762,7 +1099,7 @@ const handleSave = async (silent = false) => {
     
   } catch (err) {
     // Le message est dans err.data (pas err.response.data)
-    let errorMessage = "Erreur lors de la création";
+    let errorMessage = getJournalApiErrorMessage(err);
     
     // Essaye différents endroits où le message pourrait être
     if (err?.data?.code?.[0]) {
@@ -789,6 +1126,7 @@ const handleSave = async (silent = false) => {
       code: '',
       type_id: '',
       type_code: '',
+      type_name: '',
       default_account_id: '',
       default_account_name: '',
       profit_account_id: '',
@@ -817,7 +1155,8 @@ const handleSave = async (silent = false) => {
       sequence_name: '',
       refund_sequence_id: '',
       refund_sequence_name: '',
-      import_bank_statements: false
+      import_bank_statements: false,
+      counterpart_per_line: false
     });
     setHasUnsavedChanges(false);
     setShowConfirmDialog(false);
@@ -889,7 +1228,7 @@ const handleSave = async (silent = false) => {
               <Tooltip text="Créer un nouveau journal">
                 <button 
                   onClick={handleNewJournal}
-                  className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                  className="h-8 px-3 border border-purple-600 bg-purple-600 text-white text-xs hover:bg-purple-700 hover:border-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
                 >
                   <FiPlus size={12} /><span>Nouveau</span>
                 </button>
@@ -1091,7 +1430,7 @@ const handleSave = async (silent = false) => {
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={false}>Compte d'achat par défaut</RequiredLabel>
+                          <RequiredLabel required={isFieldRequired('default_account_id')}>Compte de tresorerie</RequiredLabel>
                           <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.default_account_name}
@@ -1101,15 +1440,30 @@ const handleSave = async (silent = false) => {
                                 handleChange('default_account_id', id);
                                 handleChange('default_account_name', label);
                               }}
-                              options={accounts}
+                              options={treasuryAccounts}
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                              placeholder="Compte d'achat par défaut (optionnel)"
+                              placeholder="Compte de tresorerie"
+                              required={isFieldRequired('default_account_id')}
                             />
                           </div>
                         </div>
                         <div className="flex items-center" style={{ height: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('bank_id')}>Banque</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                            <AutocompleteInput
+                              value={formData.bank_name}
+                              selectedId={formData.bank_id}
+                              onChange={(text) => handleChange('bank_name', text)}
+                              onSelect={handleBankSelect}
+                              options={banks}
+                              getOptionLabel={getBankLabel}
+                              placeholder="Selectionner une banque (obligatoire)"
+                              required={isFieldRequired('bank_id')}
+                            />
+                          </div>
                         </div>
                       </div>
+                      
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
@@ -1119,11 +1473,8 @@ const handleSave = async (silent = false) => {
                               value={formData.bank_account_name}
                               selectedId={formData.bank_account_id}
                               onChange={(text) => handleChange('bank_account_name', text)}
-                              onSelect={(id, label) => {
-                                handleChange('bank_account_id', id);
-                                handleChange('bank_account_name', label);
-                              }}
-                              options={bankAccounts}
+                              onSelect={handleBankAccountSelect}
+                              options={filteredBankAccounts}
                               getOptionLabel={getBankAccountLabel}
                               placeholder="Compte bancaire (obligatoire)"
                               required={isFieldRequired('bank_account_id')}
@@ -1143,9 +1494,32 @@ const handleSave = async (silent = false) => {
                           />
                         </div>
                       </div>
+                      
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
+                          <RequiredLabel required={isFieldRequired('suspense_account_id')}>Compte d'attente</RequiredLabel>
+                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
+                            <AutocompleteInput
+                              value={formData.suspense_account_name}
+                              selectedId={formData.suspense_account_id}
+                              onChange={(text) => handleChange('suspense_account_name', text)}
+                              onSelect={(id, label) => {
+                                handleChange('suspense_account_id', id);
+                                handleChange('suspense_account_name', label);
+                              }}
+                              options={suspenseAccounts}
+                              getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
+                              placeholder="Compte d'attente"
+                              required={isFieldRequired('suspense_account_id')}
+                            />
+                          </div>
+                        </div>                        <div className="flex items-center" style={{ height: '26px' }}>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="hidden" style={{ height: '26px' }}>
                           <RequiredLabel required={isFieldRequired('bank_id')}>Banque</RequiredLabel>
                           <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
@@ -1198,10 +1572,27 @@ const handleSave = async (silent = false) => {
                         </div>
                       </div>
 
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                          <RequiredLabel required={false}>Contrepartie par ligne</RequiredLabel>
+                          <div className="flex-1 ml-2 flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={formData.counterpart_per_line}
+                              onChange={(e) => handleChange('counterpart_per_line', e.target.checked)}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                            />
+                            <span className="ml-2 text-xs text-gray-600">Creer une contrepartie pour chaque ligne</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                        </div>
+                      </div>
+
                       <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200">
                         <p className="text-xs flex items-center gap-1 text-blue-700">
                           <FiInfo size={12} />
-                          Journal de type Banque - Les informations bancaires sont obligatoires. Le compte d'achat par défaut est optionnel.
+                          Journal de type Banque - Les informations bancaires et le compte de tresorerie sont obligatoires.
                         </p>
                       </div>
                     </div>
@@ -1211,7 +1602,7 @@ const handleSave = async (silent = false) => {
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('default_account_id')}>Compte d'achat par défaut</RequiredLabel>
+                          <RequiredLabel required={isFieldRequired('default_account_id')}>Compte de tresorerie</RequiredLabel>
                           <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.default_account_name}
@@ -1221,9 +1612,9 @@ const handleSave = async (silent = false) => {
                                 handleChange('default_account_id', id);
                                 handleChange('default_account_name', label);
                               }}
-                              options={accounts}
+                              options={treasuryAccounts}
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                              placeholder="Compte d'achat par défaut"
+                              placeholder="Compte de tresorerie"
                               required={isFieldRequired('default_account_id')}
                             />
                           </div>
@@ -1240,7 +1631,7 @@ const handleSave = async (silent = false) => {
                                 handleChange('suspense_account_id', id);
                                 handleChange('suspense_account_name', label);
                               }}
-                              options={accounts}
+                              options={suspenseAccounts}
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte d'attente"
                               required={isFieldRequired('suspense_account_id')}
@@ -1248,7 +1639,6 @@ const handleSave = async (silent = false) => {
                           </div>
                         </div>
                       </div>
-                      
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
                           <RequiredLabel required={isFieldRequired('profit_account_id')}>Compte de profit</RequiredLabel>
@@ -1261,7 +1651,7 @@ const handleSave = async (silent = false) => {
                                 handleChange('profit_account_id', id);
                                 handleChange('profit_account_name', label);
                               }}
-                              options={accounts}
+                              options={profitAccounts}
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de profit"
                               required={isFieldRequired('profit_account_id')}
@@ -1279,7 +1669,7 @@ const handleSave = async (silent = false) => {
                                 handleChange('loss_account_id', id);
                                 handleChange('loss_account_name', label);
                               }}
-                              options={accounts}
+                              options={lossAccounts}
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de perte"
                               required={isFieldRequired('loss_account_id')}
@@ -1288,10 +1678,27 @@ const handleSave = async (silent = false) => {
                         </div>
                       </div>
 
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                          <RequiredLabel required={false}>Contrepartie par ligne</RequiredLabel>
+                          <div className="flex-1 ml-2 flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={formData.counterpart_per_line}
+                              onChange={(e) => handleChange('counterpart_per_line', e.target.checked)}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                            />
+                            <span className="ml-2 text-xs text-gray-600">Creer une contrepartie pour chaque ligne</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center" style={{ height: '26px' }}>
+                        </div>
+                      </div>
+
                       <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200">
                         <p className="text-xs flex items-center gap-1 text-blue-700">
                           <FiInfo size={12} />
-                          Tous les comptes sont obligatoires pour les journaux de type Caisse.
+                          Le compte de tresorerie est obligatoire. Les autres comptes restent optionnels selon votre parametrage.
                         </p>
                       </div>
                     </div>
@@ -1301,7 +1708,7 @@ const handleSave = async (silent = false) => {
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={false}>Compte d'achat par défaut</RequiredLabel>
+                          <RequiredLabel required={false}>Compte par defaut</RequiredLabel>
                           <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
                             <AutocompleteInput
                               value={formData.default_account_name}
@@ -1313,7 +1720,7 @@ const handleSave = async (silent = false) => {
                               }}
                               options={accounts}
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                              placeholder="Compte d'achat par défaut (optionnel)"
+                              placeholder="Compte par defaut (optionnel)"
                             />
                           </div>
                         </div>
@@ -1325,7 +1732,7 @@ const handleSave = async (silent = false) => {
                       <div className="mt-2 p-2 rounded bg-gray-50 border border-gray-200">
                         <p className="text-xs flex items-center gap-1 text-gray-600">
                           <FiInfo size={12} />
-                          Le compte d'achat par défaut est optionnel pour ce type de journal.
+                          Le compte par defaut est optionnel pour ce type de journal.
                         </p>
                       </div>
                     </div>
@@ -1416,7 +1823,7 @@ const handleSave = async (silent = false) => {
                         handleChange('suspense_account_in_id', id);
                         handleChange('suspense_account_in_name', label);
                       }}
-                      options={accounts}
+                      options={suspenseAccounts}
                       getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                       placeholder="Compte suspens entrant (optionnel)"
                     />
@@ -1434,7 +1841,7 @@ const handleSave = async (silent = false) => {
                         handleChange('suspense_account_out_id', id);
                         handleChange('suspense_account_out_name', label);
                       }}
-                      options={accounts}
+                      options={suspenseAccounts}
                       getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                       placeholder="Compte suspens sortant (optionnel)"
                     />

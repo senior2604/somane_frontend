@@ -17,6 +17,7 @@ import {
   FiCopy,
   FiTrash2,
   FiRotateCcw,
+  FiCalendar,
   FiMoreHorizontal
 } from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
@@ -61,12 +62,12 @@ const Tooltip = ({ children, text, position = 'top' }) => {
 // ==========================================
 const SortIcon = ({ column, sortColumn, sortDirection }) => {
   if (sortColumn !== column) return null;
-  return sortDirection === 'asc' ? 
+  return sortDirection === 'asc' ?
     <FiArrowUp size={12} className="ml-1 inline" /> : 
     <FiArrowDown size={12} className="ml-1 inline" />;
 };
 
-// ✅ Fonction pour formater les montants sans décimales avec séparateur d'espace
+// Fonction pour formater les montants sans décimales avec séparateur d'espace
 const formatAmount = (value) => {
   if (!value && value !== 0) return '0';
   const num = parseFloat(value);
@@ -74,56 +75,156 @@ const formatAmount = (value) => {
   return Math.round(num).toLocaleString('fr-FR');
 };
 
-// ✅ Fonction pour extraire le montant de la taxe d'une ligne (identique à Show.jsx)
-const extractTaxAmount = (line, taxesMap) => {
-  if (!line) return 0;
-  
-  // 1. Si tax_base_amount existe, l'utiliser directement
-  if (line.tax_base_amount && parseFloat(line.tax_base_amount) > 0) {
-    return parseFloat(line.tax_base_amount);
+const formatListDate = (value) => {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const getRegistrationDate = (piece) => (
+  piece?.registration_date ||
+  piece?.create_date ||
+  piece?.created_at ||
+  piece?.date_created ||
+  piece?.write_date ||
+  ''
+);
+
+const getPieceDateByMode = (piece, mode) => (
+  mode === 'registration' ? getRegistrationDate(piece) : (piece?.date || '')
+);
+
+const normalizeText = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '');
+
+const getLineSignedAmount = (line) => {
+  const debit = parseFloat(line?.debit) || 0;
+  const credit = parseFloat(line?.credit) || 0;
+  return Math.abs(debit) >= Math.abs(credit) ? debit : credit;
+};
+
+const hasLineTaxes = (line) => Array.isArray(line?.tax_ids) && line.tax_ids.length > 0;
+
+const isGeneratedTaxLine = (line) => {
+  const text = normalizeText(`${line?.name || ''} ${line?.tax_line_name || ''} ${line?.account_name || ''}`);
+  const accountCode = String(line?.account_code || '').trim();
+  return Boolean(
+    line?.tax_line ||
+    line?.tax_line_name ||
+    line?.tax_repartition_line ||
+    text.includes('tva') ||
+    (accountCode.startsWith('442') && !text.includes('retenue'))
+  );
+};
+
+const isGeneratedWithholdingLine = (line) => {
+  const text = normalizeText(`${line?.name || ''} ${line?.withholding_tax_name || ''}`);
+  return text.includes('retenue');
+};
+
+const isCounterpartLine = (line) => {
+  const text = normalizeText(line?.name);
+  return Boolean(line?.is_counterpart || text.includes('contrepartie'));
+};
+
+const getTaxRate = (tax, taxesMap) => {
+  if (!tax) return 0;
+  if (typeof tax === 'object') return parseFloat(tax.amount) || 0;
+  const mappedTax = taxesMap?.[tax] || taxesMap?.[parseInt(tax, 10)];
+  return parseFloat(mappedTax?.amount) || 0;
+};
+
+const calculateTaxFromBaseLines = (lines, taxesMap) => lines.reduce((total, line) => {
+  if (!hasLineTaxes(line)) return total;
+  const signedAmount = getLineSignedAmount(line);
+  const sign = signedAmount < 0 ? -1 : 1;
+  const baseAmount = Math.abs(parseFloat(line.tax_base_amount) || signedAmount || 0);
+  const lineTaxAmount = line.tax_ids.reduce((lineTotal, tax) => {
+    const rate = getTaxRate(tax, taxesMap);
+    return lineTotal + ((baseAmount * rate) / 100);
+  }, 0);
+  return total + (lineTaxAmount * sign);
+}, 0);
+
+const normalizeMoveState = (state) => {
+  const value = String(state || 'draft')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (['posted', 'post', 'valid', 'valide', 'validee', 'validated'].includes(value) || value.includes('comptabilis')) {
+    return 'posted';
   }
-  
-  // 2. Chercher dans tax_ids
-  if (line.tax_ids && Array.isArray(line.tax_ids) && line.tax_ids.length > 0) {
-    const firstTax = line.tax_ids[0];
-    let taxRate = 0;
-    
-    // Cas 1: c'est un objet avec amount
-    if (typeof firstTax === 'object' && firstTax !== null) {
-      taxRate = parseFloat(firstTax.amount) || 0;
-    }
-    // Cas 2: c'est un ID
-    else if (typeof firstTax === 'number' && taxesMap && taxesMap[firstTax]) {
-      taxRate = parseFloat(taxesMap[firstTax].amount) || 0;
-    }
-    // Cas 3: c'est une string numérique
-    else if (typeof firstTax === 'string' && !isNaN(firstTax) && taxesMap && taxesMap[parseInt(firstTax, 10)]) {
-      taxRate = parseFloat(taxesMap[parseInt(firstTax, 10)].amount) || 0;
-    }
-    
-    if (taxRate > 0) {
-      const amount = Math.max(parseFloat(line.debit) || 0, parseFloat(line.credit) || 0);
-      return (amount * taxRate) / 100;
-    }
+  if (['cancel', 'cancelled', 'canceled', 'annule', 'annulee'].includes(value)) {
+    return 'cancel';
   }
-  
-  // 3. Chercher dans tax_line
-  if (line.tax_line) {
-    let taxRate = 0;
-    
-    if (typeof line.tax_line === 'object' && line.tax_line !== null) {
-      taxRate = parseFloat(line.tax_line.amount) || 0;
-    } else if (typeof line.tax_line === 'number' && taxesMap && taxesMap[line.tax_line]) {
-      taxRate = parseFloat(taxesMap[line.tax_line].amount) || 0;
-    }
-    
-    if (taxRate > 0) {
-      const amount = Math.max(parseFloat(line.debit) || 0, parseFloat(line.credit) || 0);
-      return (amount * taxRate) / 100;
-    }
+  if (['deleted', 'delete', 'supprime', 'supprimee'].includes(value)) {
+    return 'deleted';
   }
-  
-  return 0;
+  if (['draft', 'brouillon'].includes(value)) {
+    return 'draft';
+  }
+  return value || 'draft';
+};
+
+const getActionErrorMessage = (err, fallback) => {
+  const data = err?.response?.data || err?.data;
+  if (typeof data === 'string') return data;
+  if (data?.detail) return data.detail;
+  if (data) return JSON.stringify(data);
+  return err?.message || fallback;
+};
+
+const getPieceTraceabilityLogs = (piece) => {
+  const rawLogs =
+    piece?.traceability ||
+    piece?.module_traceability ||
+    piece?.moduleTraceability ||
+    piece?.audit_logs ||
+    piece?.auditLogs ||
+    piece?.history ||
+    piece?.activity_logs ||
+    piece?.activityLogs ||
+    piece?.logs ||
+    [];
+  return Array.isArray(rawLogs) ? rawLogs : (rawLogs?.results || []);
+};
+
+const getPieceBusinessStatuses = (piece) => {
+  const name = String(piece?.name || '').toLowerCase();
+  const ref = String(piece?.ref || '').toLowerCase();
+  const logs = getPieceTraceabilityLogs(piece);
+  const traceText = logs.map(log => [
+    log.action,
+    log.description,
+    log.object_label,
+    log.objectLabel,
+    log.metadata?.source_move_name,
+  ].filter(Boolean).join(' ')).join(' ').toLowerCase();
+  const searchable = `${name} ${ref} ${traceText}`;
+
+  const statuses = [];
+  if (searchable.includes('création par duplication') || searchable.includes('creation par duplication') || searchable.includes('(copie)')) {
+    statuses.push('duplicated');
+  }
+  if (searchable.includes('création par extourne') || searchable.includes('creation par extourne') || name.startsWith('extourne de')) {
+    statuses.push('reversal');
+  }
+  if (searchable.includes('extourne créée') || searchable.includes('extourne creee') || searchable.includes('extourne créée:') || searchable.includes('extourne creee:')) {
+    statuses.push('reversed');
+  }
+  return statuses;
+};
+
+const businessStatusConfig = {
+  duplicated: { text: 'Dupliquée', cls: 'bg-blue-100 text-blue-700' },
+  reversal: { text: 'Extourne', cls: 'bg-purple-100 text-purple-700' },
+  reversed: { text: 'Extournée', cls: 'bg-indigo-100 text-indigo-700' },
 };
 
 // ==========================================
@@ -137,6 +238,7 @@ export default function PiecesComptablesList() {
   const [filteredPieces, setFilteredPieces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [actionLoading, setActionLoading] = useState(null);
   const [selectedPieceIds, setSelectedPieceIds] = useState([]);
   const [activeRowId, setActiveRowId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -148,9 +250,12 @@ export default function PiecesComptablesList() {
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showColumnsMenu, setShowColumnsMenu] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showDateModeMenu, setShowDateModeMenu] = useState(false);
+  const [dateDisplayMode, setDateDisplayMode] = useState('accounting');
   const [columnsMenuPosition, setColumnsMenuPosition] = useState({ top: 0, left: 0 });
   const filterMenuRef = React.useRef(null);
   const actionsMenuRef = React.useRef(null);
+  const dateModeMenuRef = React.useRef(null);
   const searchContainerRef = React.useRef(null);
   
   // États pour les colonnes visibles
@@ -187,6 +292,9 @@ export default function PiecesComptablesList() {
       }
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
         setShowActionsMenu(false);
+      }
+      if (dateModeMenuRef.current && !dateModeMenuRef.current.contains(event.target)) {
+        setShowDateModeMenu(false);
       }
       const columnsMenuElement = document.getElementById('columns-menu');
       if (columnsMenuElement && !columnsMenuElement.contains(event.target)) {
@@ -239,7 +347,7 @@ export default function PiecesComptablesList() {
         currencies.forEach(c => { currenciesObj[c.id] = c; });
         setCurrenciesMap(currenciesObj);
         
-        // ✅ Charger les taxes pour pouvoir calculer les montants
+        // Charger les taxes pour pouvoir calculer les montants
         const taxes = await piecesService.getTaxes?.(activeEntity.id) || [];
         const taxesObj = {};
         taxes.forEach(t => { taxesObj[t.id] = t; });
@@ -248,7 +356,7 @@ export default function PiecesComptablesList() {
         setReferentialsLoaded(true);
         
       } catch (err) {
-        console.error('❌ Erreur chargement référentiels:', err);
+        console.error('Erreur chargement référentiels:', err);
         setError('Erreur lors du chargement des référentiels');
       } finally {
         setLoading(false);
@@ -258,33 +366,40 @@ export default function PiecesComptablesList() {
     loadReferentials();
   }, [activeEntity]);
 
-  // ✅ Fonction CORRIGÉE pour calculer les montants HT, Taxes, TTC
+  // Fonction CORRIGÉE pour calculer les montants HT, Taxes, TTC
   const calculateAmounts = useCallback((piece) => {
     if (!piece.lines || piece.lines.length === 0) {
       return { amount_untaxed: 0, amount_tax: 0, amount_total: 0 };
     }
-    
-    let totalDebit = 0;
-    let totalCredit = 0;
-    let taxAmount = 0;
-    
-    piece.lines.forEach(line => {
-      const debit = parseFloat(line.debit) || 0;
-      const credit = parseFloat(line.credit) || 0;
-      totalDebit += debit;
-      totalCredit += credit;
-      
-      // ✅ Utiliser la fonction extractTaxAmount pour récupérer le montant de la taxe
-      taxAmount += extractTaxAmount(line, taxesMap);
+
+    const lines = piece.lines || [];
+    const taxLines = lines.filter(isGeneratedTaxLine);
+    const commercialLines = lines.filter(line =>
+      !isGeneratedTaxLine(line) &&
+      !isGeneratedWithholdingLine(line) &&
+      !isCounterpartLine(line)
+    );
+
+    const taxAmount = taxLines.length > 0
+      ? taxLines.reduce((total, line) => total + getLineSignedAmount(line), 0)
+      : calculateTaxFromBaseLines(commercialLines, taxesMap);
+
+    let baseDebit = 0;
+    let baseCredit = 0;
+
+    commercialLines.forEach(line => {
+      baseDebit += parseFloat(line.debit) || 0;
+      baseCredit += parseFloat(line.credit) || 0;
     });
-    
-    // Le HT est le total des débits (ou crédits, ils doivent être égaux)
-    const amountUntaxed = Math.max(totalDebit, totalCredit);
+
+    const amountUntaxed = Math.abs(baseDebit) >= Math.abs(baseCredit)
+      ? baseDebit
+      : baseCredit;
     
     return {
-      amount_untaxed: amountUntaxed,           // HT
-      amount_tax: taxAmount,                    // Taxes
-      amount_total: amountUntaxed + taxAmount   // TTC = HT + Taxes
+      amount_untaxed: amountUntaxed,
+      amount_tax: taxAmount,
+      amount_total: amountUntaxed + taxAmount
     };
   }, [taxesMap]);
 
@@ -323,22 +438,27 @@ export default function PiecesComptablesList() {
       setLoading(true);
       setError(null);
       
-      const piecesData = await piecesService.getAll(activeEntity.id);
+      const rawPiecesData = await piecesService.getAll(activeEntity.id);
+      const piecesData = Array.isArray(rawPiecesData) ? rawPiecesData : (rawPiecesData?.results || []);
       
       const enrichedPieces = piecesData.map(piece => {
-        let partnerId = piece.partner;
+        const getId = (value) => value && typeof value === 'object' ? value.id : value;
+        let partnerId = getId(piece.partner);
         if (!partnerId && piece.lines && piece.lines.length > 0) {
           const lineWithPartner = piece.lines.find(l => l.partner);
-          partnerId = lineWithPartner?.partner;
+          partnerId = getId(lineWithPartner?.partner);
         }
+        const journalId = getId(piece.journal);
+        const currencyId = getId(piece.currency);
         
         const calculatedAmounts = calculateAmounts(piece);
         
         return {
           ...piece,
+          state: normalizeMoveState(piece.state),
           partner_detail: partnerId ? partnersMap[partnerId] : null,
-          journal_detail: piece.journal ? journalsMap[piece.journal] : null,
-          currency_detail: piece.currency ? currenciesMap[piece.currency] : null,
+          journal_detail: journalId ? journalsMap[journalId] : null,
+          currency_detail: currencyId ? currenciesMap[currencyId] : null,
           lines: piece.lines || [],
           amount_untaxed: calculatedAmounts.amount_untaxed,
           amount_tax: calculatedAmounts.amount_tax,
@@ -352,7 +472,7 @@ export default function PiecesComptablesList() {
       setCurrentPage(1);
       
     } catch (err) {
-      console.error('❌ Erreur chargement pièces:', err);
+      console.error('Erreur chargement pièces:', err);
       setError('Impossible de charger les pièces comptables.');
     } finally {
       setLoading(false);
@@ -377,7 +497,7 @@ export default function PiecesComptablesList() {
         
         switch (filter.field) {
           case 'date':
-            fieldValue = piece.date || '';
+            fieldValue = getPieceDateByMode(piece, dateDisplayMode);
             break;
           case 'numero':
             fieldValue = piece.name || '';
@@ -401,7 +521,10 @@ export default function PiecesComptablesList() {
             fieldValue = piece.amount_total.toString();
             break;
           case 'etat':
-            fieldValue = piece.state || '';
+            fieldValue = [
+              normalizeMoveState(piece.state),
+              ...getPieceBusinessStatuses(piece),
+            ].join(' ');
             break;
           case 'paiement':
             fieldValue = piece.payment_state || '';
@@ -427,8 +550,8 @@ export default function PiecesComptablesList() {
       
       switch (column) {
         case 'date':
-          aVal = a.date || '';
-          bVal = b.date || '';
+          aVal = getPieceDateByMode(a, dateDisplayMode);
+          bVal = getPieceDateByMode(b, dateDisplayMode);
           break;
         case 'numero':
           aVal = a.name || '';
@@ -503,7 +626,7 @@ export default function PiecesComptablesList() {
       setFilteredPieces(sorted);
       setCurrentPage(1);
     }
-  }, [pieces, activeFilters]);
+  }, [pieces, activeFilters, dateDisplayMode]);
 
   // Re-appliquer le tri quand sortColumn/sortDirection change
   useEffect(() => {
@@ -545,29 +668,51 @@ export default function PiecesComptablesList() {
   // Actions groupées
   const handleBulkValidate = async () => {
     if (selectedPieceIds.length === 0) return;
+    const selectedIds = new Set(selectedPieceIds.map(value => String(value)));
+    const selectedPieces = pieces.filter(piece => selectedIds.has(String(piece.id)));
+    const notDraft = selectedPieces.filter(piece => normalizeMoveState(piece.state) !== 'draft');
+    if (notDraft.length > 0) {
+      alert('Seules les pièces en brouillon peuvent être validées.');
+      return;
+    }
     if (!window.confirm(`Valider ${selectedPieceIds.length} pièce(s) ?`)) return;
+    setActionLoading('validate');
     try {
+      const { apiClient } = await import('../../services');
       for (const id of selectedPieceIds) {
-        await piecesService.validate(id, activeEntity.id);
+        await apiClient.post(`compta/moves/${id}/post/`, {});
       }
       setSelectedPieceIds([]);
-      loadData();
+      await loadData();
     } catch (err) {
-      alert('Erreur: ' + (err.response?.data?.detail || err.message));
+      alert('Erreur: ' + getActionErrorMessage(err, 'Validation impossible'));
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleBulkCancel = async () => {
     if (selectedPieceIds.length === 0) return;
+    const selectedIds = new Set(selectedPieceIds.map(value => String(value)));
+    const selectedPieces = pieces.filter(piece => selectedIds.has(String(piece.id)));
+    const invalid = selectedPieces.filter(piece => !['draft', 'posted'].includes(normalizeMoveState(piece.state)));
+    if (invalid.length > 0) {
+      alert('Seules les pièces brouillon ou comptabilisées peuvent être annulées.');
+      return;
+    }
     if (!window.confirm(`Annuler ${selectedPieceIds.length} pièce(s) ?`)) return;
+    setActionLoading('cancel');
     try {
+      const { apiClient } = await import('../../services');
       for (const id of selectedPieceIds) {
-        await piecesService.cancel(id, activeEntity.id);
+        await apiClient.post(`compta/moves/${id}/cancel/`, {});
       }
       setSelectedPieceIds([]);
-      loadData();
+      await loadData();
     } catch (err) {
-      alert('Erreur: ' + (err.response?.data?.detail || err.message));
+      alert('Erreur: ' + getActionErrorMessage(err, 'Annulation impossible'));
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -576,8 +721,28 @@ export default function PiecesComptablesList() {
       alert('Aucune pièce sélectionnée');
       return;
     }
+    const selectedIds = new Set(selectedPieceIds.map(value => String(value)));
+    const selectedPieces = pieces.filter(piece => selectedIds.has(String(piece.id)));
+    const deletedPieces = selectedPieces.filter(piece => normalizeMoveState(piece.state) === 'deleted');
+    if (deletedPieces.length > 0) {
+      alert('Une pièce supprimée ne peut pas être dupliquée.');
+      return;
+    }
+    if (!window.confirm(`Dupliquer ${selectedPieceIds.length} pièce(s) ?`)) return;
     setShowActionsMenu(false);
-    alert('Duplication à implémenter');
+    setActionLoading('duplicate');
+    try {
+      const { apiClient } = await import('../../services');
+      for (const id of selectedPieceIds) {
+        await apiClient.post(`compta/moves/${id}/duplicate/`, {});
+      }
+      setSelectedPieceIds([]);
+      await loadData();
+    } catch (err) {
+      alert('Erreur duplication: ' + getActionErrorMessage(err, 'Duplication impossible'));
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleDelete = async () => {
@@ -585,16 +750,31 @@ export default function PiecesComptablesList() {
       alert('Aucune pièce sélectionnée');
       return;
     }
-    if (!window.confirm(`Supprimer ${selectedPieceIds.length} pièce(s) ?`)) return;
+    const selectedIds = new Set(selectedPieceIds.map(value => String(value)));
+    const selectedPieces = pieces.filter(piece => selectedIds.has(String(piece.id)));
+    const alreadyDeleted = selectedPieces.filter(piece => normalizeMoveState(piece.state) === 'deleted');
+    if (alreadyDeleted.length > 0) {
+      alert('Certaines pièces sélectionnées sont déjà supprimées.');
+      return;
+    }
+    if (!window.confirm(`Supprimer ${selectedPieceIds.length} pièce(s) ? Elles resteront consultables dans le filtre Supprimée.`)) return;
     setShowActionsMenu(false);
+    setActionLoading('delete');
     try {
+      const { apiClient } = await import('../../services');
       for (const id of selectedPieceIds) {
-        await piecesService.delete(id, activeEntity.id);
+        if (piecesService.delete) {
+          await piecesService.delete(id, activeEntity.id);
+        } else {
+          await apiClient.delete(`compta/moves/${id}/`);
+        }
       }
       setSelectedPieceIds([]);
-      loadData();
+      await loadData();
     } catch (err) {
-      alert('Erreur: ' + (err.response?.data?.detail || err.message));
+      alert('Erreur suppression: ' + getActionErrorMessage(err, 'Suppression impossible'));
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -603,8 +783,34 @@ export default function PiecesComptablesList() {
       alert('Aucune pièce sélectionnée');
       return;
     }
+    const selectedIds = new Set(selectedPieceIds.map(value => String(value)));
+    const selectedPieces = pieces.filter(piece => selectedIds.has(String(piece.id)));
+    const notPosted = selectedPieces.filter(piece => normalizeMoveState(piece.state) !== 'posted');
+    if (notPosted.length > 0) {
+      alert("Seules les pièces comptabilisées peuvent être extournées.");
+      return;
+    }
+    const reason = window.prompt(
+      "Motif de l'extourne",
+      selectedPieceIds.length === 1
+        ? `Extourne de ${selectedPieces[0]?.name || 'la pièce'}`
+        : `Extourne de ${selectedPieceIds.length} pièces`
+    );
+    if (reason === null) return;
     setShowActionsMenu(false);
-    alert('Extourné à implémenter');
+    setActionLoading('reverse');
+    try {
+      const { apiClient } = await import('../../services');
+      for (const id of selectedPieceIds) {
+        await apiClient.post(`compta/moves/${id}/reverse/`, { reason });
+      }
+      setSelectedPieceIds([]);
+      await loadData();
+    } catch (err) {
+      alert("Erreur extourne: " + getActionErrorMessage(err, "Extourne impossible"));
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   // Composants d'affichage
@@ -618,16 +824,30 @@ export default function PiecesComptablesList() {
     );
   };
 
-  const StateBadge = ({ state }) => {
+  const StateBadge = ({ piece }) => {
+    const normalizedState = normalizeMoveState(piece?.state);
     const config = {
       posted: { text: 'Comptabilisé', cls: 'bg-green-100 text-green-700' },
       draft: { text: 'Brouillon', cls: 'bg-amber-100 text-amber-700' },
-      cancel: { text: 'Annulé', cls: 'bg-red-100 text-red-700' }
-    }[state] || { text: state || 'Inconnu', cls: 'bg-gray-100 text-gray-700' };
+      cancel: { text: 'Annulé', cls: 'bg-red-100 text-red-700' },
+      deleted: { text: 'Supprimée', cls: 'bg-slate-200 text-slate-700' }
+    }[normalizedState] || { text: piece?.state || 'Inconnu', cls: 'bg-gray-100 text-gray-700' };
+    const businessStatuses = getPieceBusinessStatuses(piece);
     return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${config.cls}`}>
-        {config.text}
-      </span>
+      <div className="flex flex-wrap gap-1">
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${config.cls}`}>
+          {config.text}
+        </span>
+        {businessStatuses.map(status => {
+          const item = businessStatusConfig[status];
+          if (!item) return null;
+          return (
+            <span key={status} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${item.cls}`}>
+              {item.text}
+            </span>
+          );
+        })}
+      </div>
     );
   };
 
@@ -646,7 +866,7 @@ export default function PiecesComptablesList() {
 
   // Définition des colonnes
   const columns = [
-    { id: 'date', label: 'Date', width: '85px' },
+    { id: 'date', label: dateDisplayMode === 'registration' ? "Date d'enreg." : 'Date comptable', width: '100px' },
     { id: 'numero', label: 'N° Pièce', width: '130px' },
     { id: 'type_journal', label: 'Journal', width: '70px' },
     { id: 'reference', label: 'Référence', width: '90px' },
@@ -737,7 +957,8 @@ export default function PiecesComptablesList() {
                     <Tooltip text="Dupliquer les pièces sélectionnées" position="right">
                       <button
                         onClick={handleDuplicate}
-                        className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
+                        disabled={!!actionLoading}
+                        className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
                       >
                         <FiCopy size={12} /> Dupliquer
                       </button>
@@ -745,7 +966,8 @@ export default function PiecesComptablesList() {
                     <Tooltip text="Supprimer les pièces sélectionnées" position="right">
                       <button
                         onClick={handleDelete}
-                        className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 flex items-center gap-2"
+                        disabled={!!actionLoading}
+                        className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 flex items-center gap-2 disabled:opacity-50"
                       >
                         <FiTrash2 size={12} /> Supprimer
                       </button>
@@ -753,7 +975,8 @@ export default function PiecesComptablesList() {
                     <Tooltip text="Extourner les pièces sélectionnées" position="right">
                       <button
                         onClick={handleReverse}
-                        className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
+                        disabled={!!actionLoading}
+                        className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
                       >
                         <FiRotateCcw size={12} /> Extourner
                       </button>
@@ -776,8 +999,24 @@ export default function PiecesComptablesList() {
                         displayColor = 'bg-blue-100 text-blue-700';
                         break;
                       case 'etat':
-                        displayText = filter.value === 'draft' ? 'Brouillon' : 'Comptabilisé';
-                        displayColor = 'bg-amber-100 text-amber-700';
+                        displayText = ({
+                          draft: 'Brouillon',
+                          posted: 'Comptabilisé',
+                          cancel: 'Annulé',
+                          deleted: 'Supprimée',
+                          duplicated: 'Dupliquée',
+                          reversal: 'Extourne',
+                          reversed: 'Extournée',
+                        })[filter.value] || filter.value;
+                        displayColor = ({
+                          draft: 'bg-amber-100 text-amber-700',
+                          posted: 'bg-green-100 text-green-700',
+                          cancel: 'bg-red-100 text-red-700',
+                          deleted: 'bg-slate-200 text-slate-700',
+                          duplicated: 'bg-blue-100 text-blue-700',
+                          reversal: 'bg-purple-100 text-purple-700',
+                          reversed: 'bg-indigo-100 text-indigo-700',
+                        })[filter.value] || 'bg-gray-100 text-gray-700';
                         break;
                       case 'paiement':
                         displayText = filter.value === 'paid' ? 'Payé' : 'Non payé';
@@ -842,6 +1081,41 @@ export default function PiecesComptablesList() {
                             >
                               <span className="w-20">État</span>
                               <span className="text-green-600">= Comptabilisé</span>
+                            </button>
+                            <button
+                              onClick={() => addFilter('etat', 'cancel')}
+                              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
+                            >
+                              <span className="w-20">État</span>
+                              <span className="text-red-600">= Annulé</span>
+                            </button>
+                            <button
+                              onClick={() => addFilter('etat', 'deleted')}
+                              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
+                            >
+                              <span className="w-20">État</span>
+                              <span className="text-slate-600">= Supprimée</span>
+                            </button>
+                            <button
+                              onClick={() => addFilter('etat', 'duplicated')}
+                              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
+                            >
+                              <span className="w-20">Statut</span>
+                              <span className="text-blue-600">= Dupliquée</span>
+                            </button>
+                            <button
+                              onClick={() => addFilter('etat', 'reversal')}
+                              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
+                            >
+                              <span className="w-20">Statut</span>
+                              <span className="text-purple-600">= Extourne</span>
+                            </button>
+                            <button
+                              onClick={() => addFilter('etat', 'reversed')}
+                              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded flex items-center gap-2"
+                            >
+                              <span className="w-20">Statut</span>
+                              <span className="text-indigo-600">= Extournée</span>
                             </button>
                             <button
                               onClick={() => addFilter('paiement', 'paid')}
@@ -915,7 +1189,8 @@ export default function PiecesComptablesList() {
             <Tooltip text="Valider les pièces sélectionnées">
               <button
                 onClick={handleBulkValidate}
-                className="h-6 px-2 bg-green-600 text-white text-xs hover:bg-green-700 rounded"
+                disabled={!!actionLoading}
+                className="h-6 px-2 bg-green-600 text-white text-xs hover:bg-green-700 rounded disabled:opacity-50"
               >
                 Valider
               </button>
@@ -923,7 +1198,8 @@ export default function PiecesComptablesList() {
             <Tooltip text="Annuler les pièces sélectionnées">
               <button
                 onClick={handleBulkCancel}
-                className="h-6 px-2 bg-red-600 text-white text-xs hover:bg-red-700 rounded"
+                disabled={!!actionLoading}
+                className="h-6 px-2 bg-red-600 text-white text-xs hover:bg-red-700 rounded disabled:opacity-50"
               >
                 Annuler
               </button>
@@ -952,12 +1228,60 @@ export default function PiecesComptablesList() {
                 </th>
                 {visibleColumns.date && (
                   <th 
-                    className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[85px]"
+                    className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[120px]"
                     onClick={() => handleSort('date')}
                   >
-                    <div className="flex items-center gap-1">
-                      <span>Date</span>
-                      <SortIcon column="date" sortColumn={sortColumn} sortDirection={sortDirection} />
+                    <div className="relative flex items-center justify-between gap-2" ref={dateModeMenuRef}>
+                      <div className="flex items-center gap-1">
+                        <span>Date</span>
+                        <SortIcon column="date" sortColumn={sortColumn} sortDirection={sortDirection} />
+                      </div>
+                      <button
+                        type="button"
+                        title={dateDisplayMode === 'registration' ? "Date d'enregistrement" : 'Date comptable'}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowDateModeMenu(prev => !prev);
+                        }}
+                        className={`p-1 rounded border transition-colors ${
+                          dateDisplayMode === 'registration'
+                            ? 'bg-purple-50 border-purple-300 text-purple-700'
+                            : 'bg-white border-gray-300 text-gray-500 hover:text-purple-700'
+                        }`}
+                      >
+                        <FiCalendar size={12} />
+                      </button>
+                      {showDateModeMenu && (
+                        <div
+                          className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-300 shadow-lg rounded z-50"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDateDisplayMode('accounting');
+                              setShowDateModeMenu(false);
+                            }}
+                            className={`w-full px-3 py-2 text-xs text-left hover:bg-gray-50 ${
+                              dateDisplayMode === 'accounting' ? 'text-purple-700 font-medium bg-purple-50' : 'text-gray-700'
+                            }`}
+                          >
+                            Date comptable
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDateDisplayMode('registration');
+                              setShowDateModeMenu(false);
+                            }}
+                            className={`w-full px-3 py-2 text-xs text-left hover:bg-gray-50 border-t border-gray-100 ${
+                              dateDisplayMode === 'registration' ? 'text-purple-700 font-medium bg-purple-50' : 'text-gray-700'
+                            }`}
+                          >
+                            Date d'enregistrement
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </th>
                 )}
@@ -1118,7 +1442,7 @@ export default function PiecesComptablesList() {
                     </td>
                     {visibleColumns.date && (
                       <td className="border border-gray-300 px-2 py-1.5 text-xs text-gray-700">
-                        {piece.date ? new Date(piece.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
+                        {formatListDate(getPieceDateByMode(piece, dateDisplayMode))}
                       </td>
                     )}
                     {visibleColumns.numero && (
@@ -1144,21 +1468,21 @@ export default function PiecesComptablesList() {
                         <PartnerDisplay partner={getPartnerDisplay(piece)} />
                       </td>
                     )}
-                    {/* ✅ HT formaté sans virgules */}
+                    {/* HT formaté sans virgules */}
                     {visibleColumns.montant_ht && (
                       <td className="border border-gray-300 px-2 py-1.5 text-right text-xs">
                         {formatAmount(piece.amount_untaxed)}
                         <span className="text-gray-400 text-[10px] ml-1">{getCurrencyCode(piece)}</span>
                       </td>
                     )}
-                    {/* ✅ Taxes formatées sans virgules */}
+                    {/* Taxes formatées sans virgules */}
                     {visibleColumns.montant_taxes && (
                       <td className="border border-gray-300 px-2 py-1.5 text-right text-xs text-blue-600">
                         {formatAmount(piece.amount_tax)}
                         <span className="text-gray-400 text-[10px] ml-1">{getCurrencyCode(piece)}</span>
                       </td>
                     )}
-                    {/* ✅ TTC formaté sans virgules */}
+                    {/* TTC formaté sans virgules */}
                     {visibleColumns.montant_ttc && (
                       <td className="border border-gray-300 px-2 py-1.5 text-right text-xs text-red-600">
                         {formatAmount(piece.amount_total)}
@@ -1167,7 +1491,7 @@ export default function PiecesComptablesList() {
                     )}
                     {visibleColumns.etat && (
                       <td className="border border-gray-300 px-2 py-1.5">
-                        <StateBadge state={piece.state} />
+                        <StateBadge piece={piece} />
                       </td>
                     )}
                     {visibleColumns.paiement && (

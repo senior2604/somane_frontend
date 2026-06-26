@@ -31,20 +31,30 @@ const MODULES_CONFIG = [
       {
         name: "Commandes",
         items: [
-          { label: "Commandes Client", path: "/vente/commandes-client" },
-          { label: "Lignes Commande", path: "/vente/lignes-commande-client" }
+          { label: "Tableau de bord", path: "/vente/dashboard" },
+          { label: "Commandes Client", path: "/vente/commandes" },
+          { label: "Lignes de Commande", path: "/vente/lignes-commandes" }
         ]
       },
       {
-        name: "Analyse",
+        name: "Configuration",
         items: [
-          { label: "Reporting Ventes", path: "/vente/reporting-ventes" }
+          { label: "Produits", path: "/vente/produits" },
+          { label: "Listes de prix", path: "/vente/pricelists" },
+          { label: "Options", path: "/vente/options" }
         ]
       },
       {
-        name: "Équipes",
+        name: "Organisation",
         items: [
-          { label: "Équipes Commerciales", path: "/vente/equipes-commerciales" }
+          { label: "Équipes Commerciales", path: "/vente/equipes" }
+        ]
+      },
+      {
+        name: "Suivi",
+        items: [
+          { label: "Reporting", path: "/vente/reporting" },
+          { label: "Historique Facturation", path: "/vente/facturation" }
         ]
       }
     ]
@@ -86,43 +96,43 @@ const MODULES_CONFIG = [
       {
         name: "Structure",
         items: [
+          { label: "Tableau de bord", path: "/comptabilite/dashboard" },
           { label: "Partenaires", path: "/partners" },
-          { label: "Plans comptables", path: "/comptabilite/plan-comptable" },
           { label: "Journaux", path: "/comptabilite/journaux" },
-          { label: "Séquences", path: "/comptabilite/sequences" },
-          { label: "Devises", path: "/comptabilite/devises" },
-          { label: "Taux Fiscaux", path: "/comptabilite/taux-fiscaux" },
+          { label: "Taux fiscaux", path: "/comptabilite/taux-fiscaux" },
+          { label: "Groupes de taxes", path: "/comptabilite/tax-groups" },
+          { label: "Retenues à la Source", path: "/comptabilite/withholding-taxes" },
           { label: "Positions fiscales", path: "/comptabilite/positions-fiscales" },
-          { label: "Réimputations", path: "/comptabilite/reimputations" },
-          { label: "Verrouillage des journaux", path: "/comptabilite/verrouillage" },
-          { label: "Relevés bancaires", path: "/comptabilite/releves-bancaires" },
-          { label: "Exercices", path: "/comptabilite/exercices" }
+          { label: "Séquences", path: "/comptabilite/sequences" }
         ]
       },
-      
-    {
-      name: "Plans comptable",
-      items: [
-
-        { label: "parametrage", path: "/comptabilite/parametrage/longueur-compte" },
-        { label: "plans comptable", path: "/comptabilite/accounts/new" },
-        { label: "compte ", path: "/comptabilite/accounts/" },
-        { label: "framework ", path: "/comptabilite/frameworks/" },
-        { label: "groupe ", path: "/comptabilite/groups/" },
-        { label: "types ", path: "/comptabilite/types/" },
-        { label: "Plans comptable", path: "/comptabilite/plans" }, // ← NOUVEAU LIEN VERS TA PAGE
-      ]
-    },
-
-
+      {
+        name: "Plans comptables",
+        items: [
+          { label: "Plan comptable", path: "/comptabilite/plans" },
+          { label: "Liste des comptes", path: "/comptabilite/accounts" },
+          { label: "Nouveau compte", path: "/comptabilite/accounts/new" },
+          { label: "Frameworks", path: "/comptabilite/frameworks" },
+          { label: "Groupes", path: "/comptabilite/groups" },
+          { label: "Types", path: "/comptabilite/types" },
+          { label: "Paramétrage", path: "/comptabilite/parametrage/longueur-compte" }
+        ]
+      },
+      {
+        name: "Trésorerie & Paiements",
+        items: [
+          { label: "Paiements", path: "/comptabilite/paiements" },
+          { label: "Conditions de paiement", path: "/comptabilite/conditions-paiement" },
+          { label: "Méthodes de paiement", path: "/comptabilite/methodes-paiement" }
+        ]
+      },
       {
         name: "Traitements",
         items: [
           { label: "Pièces comptables", path: "/comptabilite/pieces" },
+          { label: "Nouvelle pièce", path: "/comptabilite/pieces/create" },
           { label: "Lettrage des comptes", path: "/comptabilite/lettrage" },
-          { label: "Immobilisation", path: "/comptabilite/immobilisation" },
-          { label: "Emprunts", path: "/comptabilite/emprunts" },
-          { label: "État de rapprochement", path: "/comptabilite/rapprochement" }
+          { label: "Balance générale", path: "/comptabilite/balance" }
         ]
       },
       {
@@ -133,9 +143,6 @@ const MODULES_CONFIG = [
           { label: "Balance générale", path: "/comptabilite/balance" },
           { label: "Balance des partenaires", path: "/comptabilite/balance-partenaires" },
           { label: "Balance âgée", path: "/comptabilite/balance-agee" },
-          { label: "Analyse des emprunts", path: "/comptabilite/analyse-emprunts" },
-          { label: "Analyse déclaration TVA", path: "/comptabilite/analyse-tva" },
-          { label: "Tableaux des amortissements", path: "/comptabilite/amortissements" },
           { label: "Bilan", path: "/comptabilite/bilan" },
           { label: "Compte de résultat", path: "/comptabilite/compte-resultat" },
           { label: "Flux de trésorerie", path: "/comptabilite/flux-tresorerie" }
@@ -144,8 +151,10 @@ const MODULES_CONFIG = [
       {
         name: "Paramètres",
         items: [
-          { label: "Paramètres généraux", path: "/comptabilite/parametres" },
-          { label: "Configuration", path: "/comptabilite/configuration" }
+          { label: "Configuration comptes", path: "/comptabilite/parametrage/longueur-compte" },
+          { label: "Frameworks", path: "/comptabilite/frameworks" },
+          { label: "Groupes", path: "/comptabilite/groups" },
+          { label: "Types", path: "/comptabilite/types" }
         ]
       }
     ]
@@ -156,10 +165,10 @@ const MODULES_CONFIG = [
     path: "/financial-reports",
     color: "indigo",
     navigation: [
-            {
-        name: "dashboard",
+      {
+        name: "Dashboard",
         items: [
-          { label: "dashboard", path: "/financial-reports/dashboard" },
+          { label: "Vue d'ensemble", path: "/financial-reports/dashboard" },
         ]
       },
       {
