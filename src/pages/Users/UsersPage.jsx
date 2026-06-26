@@ -3548,7 +3548,7 @@ function AssociationModal({
                 ) : (
                   <>
                     <FiCheck size={14} />
-                    <span>Enregistrer</span>
+                    <span>Enregistre</span>
                   </>
                 )}
               </button>

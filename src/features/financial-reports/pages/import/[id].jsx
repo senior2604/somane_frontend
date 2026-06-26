@@ -36,42 +36,44 @@ function parseNumberForSave(value) {
   return isNaN(num) ? 0 : num;
 }
 
+function normalizeAccountCode(value) {
+  return String(value ?? '').trim();
+}
+
 // ============================================================================
 // AFFICHAGE DES ERREURS — badges R1 / R2 / R3 / R4 / R5 / R6 / ERR
 // ============================================================================
 
 const BADGE_CONFIG = {
-  prefixe:          { label: 'R1', bg: 'bg-orange-100', text: 'text-orange-700' },
-  intangibilite:    { label: 'R2', bg: 'bg-red-100',    text: 'text-red-700' },
-  solde_unique:     { label: 'R3', bg: 'bg-yellow-100', text: 'text-yellow-700' },
-  equilibre_global: { label: 'R4', bg: 'bg-pink-100',   text: 'text-pink-700' },
+  prefixe:            { label: 'R1', bg: 'bg-orange-100', text: 'text-orange-700' },
+  intangibilite:      { label: 'R2', bg: 'bg-red-100',    text: 'text-red-700' },
+  solde_unique:       { label: 'R3', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  equilibre_global:   { label: 'R4', bg: 'bg-pink-100',   text: 'text-pink-700' },
   resultat_ouverture: { label: 'R5', bg: 'bg-purple-100', text: 'text-purple-700' },
-  equilibre_ligne:  { label: 'R6', bg: 'bg-blue-100',   text: 'text-blue-700' },
-  error:            { label: 'ERR', bg: 'bg-gray-100',  text: 'text-gray-600' },
+  equilibre_ligne:    { label: 'R6', bg: 'bg-blue-100',   text: 'text-blue-700' },
+  error:              { label: 'ERR', bg: 'bg-gray-100',  text: 'text-gray-600' },
+  duplicate_account:  { label: 'DUP', bg: 'bg-red-100',text: 'text-red-700' },
 };
 
 function ErrorCell({ errorDetails }) {
-  if (!errorDetails) 
+  if (!errorDetails)
     return <span className="text-gray-400 text-xs">—</span>;
 
   let details = errorDetails;
 
-  // Si c'est une string JSON
   if (typeof details === 'string') {
-    try { 
-      details = JSON.parse(details); 
+    try {
+      details = JSON.parse(details);
     } catch {
       return <span className="text-red-600 text-xs">{details}</span>;
     }
   }
 
-  // Si c'est un objet vide ou invalide
-  if (!details || typeof details !== 'object' || Object.keys(details).length === 0) {
+  if (!details || typeof details !== 'object' || Object.keys(details).length === 0)
     return <span className="text-gray-400 text-xs">—</span>;
-  }
 
   const parts = Object.entries(BADGE_CONFIG)
-    .filter(([key]) => details[key] != null && details[key] !== '')  // ignorer les valeurs vides
+    .filter(([key]) => details[key] != null && details[key] !== '')
     .map(([key, cfg]) => (
       <div key={key} className="flex items-start gap-1.5 mb-1 last:mb-0">
         <span className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${cfg.bg} ${cfg.text}`}>
@@ -81,9 +83,25 @@ function ErrorCell({ errorDetails }) {
       </div>
     ));
 
-  return parts.length > 0 
-    ? <div>{parts}</div> 
+  return parts.length > 0
+    ? <div>{parts}</div>
     : <span className="text-gray-400 text-xs">—</span>;
+}
+
+// ============================================================================
+// INDICATEUR DE VÉRIFICATION EN COURS (spinner discret sur la ligne)
+// ============================================================================
+
+function ValidatingIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] text-blue-500 font-medium animate-pulse">
+      <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+      </svg>
+      Vérif…
+    </span>
+  );
 }
 
 // ============================================================================
@@ -159,10 +177,11 @@ export default function ImportDetail() {
   const [successMessage, setSuccessMessage] = useState('');
   const [checkResult, setCheckResult]       = useState(null);
 
-  const [activeCell, setActiveCell] = useState(null);
-  const [editValue, setEditValue]   = useState('');
-  const [savingCell, setSavingCell] = useState(null);
-  const [bilanData, setBilanData] = useState(null);
+  const [activeCell, setActiveCell]   = useState(null);
+  const [editValue, setEditValue]     = useState('');
+  const [savingCell, setSavingCell]   = useState(null);
+  const [validatingLines, setValidatingLines] = useState(new Set());
+  const [bilanData, setBilanData]     = useState(null);
   const [loadingBilan, setLoadingBilan] = useState(false);
   const isEditingRef = useRef(false);
 
@@ -202,14 +221,52 @@ export default function ImportDetail() {
   ];
   const FIELDS = ['account_code', 'account_label', ...NUMERIC];
 
+  // Totaux globaux
   const totals = NUMERIC.reduce((acc, field) => {
     acc[field] = stagingLines.reduce((sum, l) => sum + (parseFloat(l[field]) || 0), 0);
     return acc;
   }, {});
 
-  // Déséquilibre ouverture (R4) — affiché dans le footer
   const desequilibreOuverture = Math.abs(totals.opening_debit - totals.opening_credit);
   const desequilibreCloture   = Math.abs(totals.closing_debit - totals.closing_credit);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 🆕 Totaux par catégorie de comptes (Bilan vs Gestion)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  const lignesBilan = stagingLines.filter(l => {
+    const code = String(l.account_code || '').trim();
+    return code && ['1','2','3','4','5'].includes(code[0]);
+  });
+
+  const lignesGestion = stagingLines.filter(l => {
+    const code = String(l.account_code || '').trim();
+    return code && ['6','7','8','9'].includes(code[0]);
+  });
+
+  const sumField = (lines, field) => 
+    lines.reduce((sum, l) => sum + (parseFloat(l[field]) || 0), 0);
+  const totalsBilan = {
+    opening_debit:   sumField(lignesBilan, 'opening_debit'),
+    opening_credit:  sumField(lignesBilan, 'opening_credit'),
+    movement_debit:  sumField(lignesBilan, 'movement_debit'),
+    movement_credit: sumField(lignesBilan, 'movement_credit'),
+    closing_debit:   sumField(lignesBilan, 'closing_debit'),
+    closing_credit:  sumField(lignesBilan, 'closing_credit'),
+  };
+  const desequilibreBilan        = Math.abs(totalsBilan.opening_debit  - totalsBilan.opening_credit);
+  const desequilibreBilanCloture = Math.abs(totalsBilan.closing_debit  - totalsBilan.closing_credit);
+
+  const totalsGestion = {
+    opening_debit:   sumField(lignesGestion, 'opening_debit'),
+    opening_credit:  sumField(lignesGestion, 'opening_credit'),
+    movement_debit:  sumField(lignesGestion, 'movement_debit'),
+    movement_credit: sumField(lignesGestion, 'movement_credit'),
+    closing_debit:   sumField(lignesGestion, 'closing_debit'),
+    closing_credit:  sumField(lignesGestion, 'closing_credit'),
+  };
+  const desequilibreGestion        = Math.abs(totalsGestion.opening_debit  - totalsGestion.opening_credit);
+  const desequilibreGestionCloture = Math.abs(totalsGestion.closing_debit  - totalsGestion.closing_credit);
 
   // ── Cellules ─────────────────────────────────────────────────────────────
   const handleCellClick = (lineId, field, val) => {
@@ -219,54 +276,84 @@ export default function ImportDetail() {
     isEditingRef.current = true;
   };
 
-const saveCell = async (lineId, field, newVal, oldVal) => {
-  const line = stagingLines.find(l => l.id === lineId);
-  if (!line) return;
-
-  const toSave = NUMERIC.includes(field) 
-    ? parseNumberForSave(newVal) 
-    : newVal;
-
-  const orig = NUMERIC.includes(field) 
-    ? (oldVal ?? 0) 
-    : oldVal;
-
-  if (toSave === orig) return;
-
-  setSavingCell({ lineId, field });
-
-  try {
-    // ── Toujours passer par update_line pour avoir les vérifications R1/R3/R5/R6
-    const resp = await apiClient.patch(
-      `financial-reports/staging/${lineId}/update_line/`,
-      { [field]: toSave }
-    );
-
-    setStagingLines(prev => 
-      prev.map(l => l.id === lineId ? { ...l, ...resp } : l)
-    );
-
-    setSuccessMessage('Cellule mise à jour');
-
-    setTimeout(async () => {
+  // ── Vérification complète d'une ligne après modification ─────────────────
+  const validateLine = useCallback(async (lineId) => {
+    setValidatingLines(prev => new Set(prev).add(lineId));
+    try {
+      const updated = await apiClient.post(
+        `financial-reports/staging/${lineId}/validate_line/`
+      );
+      setStagingLines(prev =>
+        prev.map(l => l.id === lineId ? { ...l, ...updated } : l)
+      );
+    } catch (err) {
       try {
-        const r = await apiClient.get(`financial-reports/raw-imports/${id}/staging_lines/`);
-        const lines = r.results || r || [];
-        setStagingLines(Array.from(new Map(lines.map(l => [l.id, l])).values()));
+        const refreshed = await apiClient.get(`financial-reports/staging/${lineId}/`);
+        setStagingLines(prev =>
+          prev.map(l => l.id === lineId ? { ...l, ...refreshed } : l)
+        );
       } catch {
-        await fetchData();
+        // Silencieux
       }
-      setSuccessMessage('');
-    }, 400);
+    } finally {
+      setValidatingLines(prev => {
+        const next = new Set(prev);
+        next.delete(lineId);
+        return next;
+      });
+    }
+  }, []);
 
-  } catch (err) {
-    console.error(err);
-    setError(`Erreur : ${err.response?.data?.detail || err.message || 'Erreur inconnue'}`);
-    await fetchData();
-  } finally {
-    setSavingCell(null);
-  }
-};
+  const validateDuplicateGroups = useCallback(async (editedLineId, oldCode, newCode) => {
+    const codes = new Set(
+      [oldCode, newCode]
+        .map(normalizeAccountCode)
+        .filter(Boolean)
+    );
+
+    if (codes.size === 0) return;
+
+    const relatedLineIds = stagingLines
+      .filter(line =>
+        line.id !== editedLineId &&
+        codes.has(normalizeAccountCode(line.account_code))
+      )
+      .map(line => line.id);
+
+    if (relatedLineIds.length === 0) return;
+
+    await Promise.all(relatedLineIds.map(validateLine));
+  }, [stagingLines, validateLine]);
+
+  const saveCell = async (lineId, field, newVal, oldVal) => {
+    const line = stagingLines.find(l => l.id === lineId);
+    if (!line) return;
+
+    const toSave = NUMERIC.includes(field) ? parseNumberForSave(newVal) : newVal;
+    const orig   = NUMERIC.includes(field) ? (oldVal ?? 0) : oldVal;
+    if (toSave === orig) return;
+
+    setSavingCell({ lineId, field });
+    try {
+      const resp = await apiClient.patch(
+        `financial-reports/staging/${lineId}/update_line/`,
+        { [field]: toSave }
+      );
+      setStagingLines(prev =>
+        prev.map(l => l.id === lineId ? { ...l, ...resp } : l)
+      );
+      if (field === 'account_code') {
+        await validateDuplicateGroups(lineId, oldVal, toSave);
+      }
+      setSuccessMessage('Cellule mise à jour');
+      setTimeout(() => setSuccessMessage(''), 2000);
+    } catch (err) {
+      setError(`Erreur : ${err.response?.data?.detail || err.message}`);
+      await fetchData();
+    } finally {
+      setSavingCell(null);
+    }
+  };
 
   const exitEditMode = (save = true) => {
     if (!activeCell) return;
@@ -302,7 +389,7 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
     }
   };
 
-  // ── Actions ────────────────────────────────────────────────────────────── bilan
+  // ── Actions ───────────────────────────────────────────────────────────────
   const handleValidateImport = async () => {
     if (!window.confirm("Valider cet import ?")) return;
     setProcessing(true); setError(null);
@@ -343,15 +430,12 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
     } finally { setChecking(false); }
   };
 
-    const handleLoadBilan = async () => {
+  const handleLoadBilan = async () => {
     if (!importData || importData.state !== 'validated') {
       setError("Le Bilan n'est disponible que pour les imports validés.");
       return;
     }
-
-    setLoadingBilan(true);
-    setError(null);
-
+    setLoadingBilan(true); setError(null);
     try {
       const response = await apiClient.get(`financial-reports/raw-imports/${id}/bilan/`);
       setBilanData(response);
@@ -359,9 +443,7 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       setError(err.response?.data?.detail || "Impossible de charger le Bilan");
-    } finally {
-      setLoadingBilan(false);
-    }
+    } finally { setLoadingBilan(false); }
   };
 
   const handleGoImportN1 = () => {
@@ -384,11 +466,11 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
 
   const hasErrors   = stats.error > 0;
   const hasWarning  = importData?.opening_balance_warning === true;
-  const canValidate = !processing && 
-                      !hasErrors && 
-                      !hasWarning && 
+  const canValidate = !processing &&
+                      !hasErrors &&
+                      !hasWarning &&
                       stagingLines.length > 0 &&
-                      (stats.pending === 0 || stats.error === 0); // ← changer ici
+                      (stats.pending === 0 || stats.error === 0);
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) return (
@@ -424,7 +506,7 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
         </div>
       )}
 
-      {/* ── Résultat vérification ────────────────────────────────────────── */}
+      {/* ── Résultat vérification intangibilité ─────────────────────────── */}
       {checkResult && (
         <div className={`mb-4 p-4 rounded-lg border flex items-start gap-3 ${
           checkResult.skipped          ? 'bg-blue-50 border-blue-200 text-blue-800' :
@@ -585,6 +667,47 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
         ))}
       </div>
 
+      {/* ── Indicateurs rapides Bilan / Gestion / Global ───────────────── */}
+      {stagingLines.length > 0 && (
+        <div className="flex gap-3 mb-4 flex-wrap">
+          <div className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 ${
+            desequilibreBilan < 0.01 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+          }`}>
+            <span className="font-bold">📊 Bilan</span>
+            <span className="tabular-nums">
+              {formatNumberDisplay(totalsBilan.opening_debit)} / {formatNumberDisplay(totalsBilan.opening_credit)}
+            </span>
+            {desequilibreBilan > 0.005 && (
+              <span className="text-red-600 font-bold">⚠ {formatNumberDisplay(desequilibreBilan)}</span>
+            )}
+          </div>
+
+          <div className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 ${
+            desequilibreGestion < 0.01 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+          }`}>
+            <span className="font-bold">📈 Gestion</span>
+            <span className="tabular-nums">
+              {formatNumberDisplay(totalsGestion.opening_debit)} / {formatNumberDisplay(totalsGestion.opening_credit)}
+            </span>
+            {desequilibreGestion > 0.005 && (
+              <span className="text-red-600 font-bold">⚠ {formatNumberDisplay(desequilibreGestion)}</span>
+            )}
+          </div>
+
+          <div className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 ${
+            desequilibreOuverture < 0.01 ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
+          }`}>
+            <span className="font-bold">🧮 Global</span>
+            <span className="tabular-nums">
+              {formatNumberDisplay(totals.opening_debit)} / {formatNumberDisplay(totals.opening_credit)}
+            </span>
+            {desequilibreOuverture > 0.005 && (
+              <span className="text-red-600 font-bold">⚠ {formatNumberDisplay(desequilibreOuverture)}</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Tableau Excel ─────────────────────────────────────────────────── */}
       <div className="bg-white rounded-lg shadow-lg border border-gray-300 overflow-hidden">
         <div className="overflow-x-auto">
@@ -628,6 +751,8 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
                 </tr>
               ) : (
                 stagingLines.map((line, li) => {
+                  const isValidating = validatingLines.has(line.id);
+
                   const cp = (field, fi, type = 'text', align = 'left', mw) => ({
                     line, field, lineIndex: li, fieldIndex: fi, type, align, maxWidth: mw,
                     isActive:  activeCell?.lineId === line.id && activeCell?.field === field,
@@ -635,19 +760,20 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
                     editValue: activeCell?.lineId === line.id && activeCell?.field === field ? editValue : '',
                     onEditChange: setEditValue,
                     onBlur: () => {
-                      // Petit délai pour laisser le temps au click de se propager si besoin
                       setTimeout(() => {
-                        if (isEditingRef.current) {
-                          exitEditMode(true);
-                        }
+                        if (isEditingRef.current) exitEditMode(true);
                       }, 150);
                     },
                     onKeyDown: handleKeyDown,
                     onClick: handleCellClick,
                   });
+
                   return (
                     <tr key={line.id}
-                      className={`hover:bg-gray-50 ${line.validation_status === 'error' ? 'bg-red-50/30' : ''}`}>
+                      className={`hover:bg-gray-50 ${
+                        isValidating            ? 'bg-blue-50/40' :
+                        line.validation_status === 'error' ? 'bg-red-50/30' : ''
+                      }`}>
                       <ExcelCell {...cp('account_code',    0)} />
                       <ExcelCell {...cp('account_label',   1, 'text',   'left',  '100px')} />
                       <ExcelCell {...cp('opening_debit',   2, 'number', 'right')} />
@@ -656,20 +782,33 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
                       <ExcelCell {...cp('movement_credit', 5, 'number', 'right')} />
                       <ExcelCell {...cp('closing_debit',   6, 'number', 'right')} />
                       <ExcelCell {...cp('closing_credit',  7, 'number', 'right')} />
-                      <td className="px-4 py-2.5 text-center border-r border-b border-gray-300">
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
-                          line.validation_status === 'validated' ? 'bg-green-100 text-green-800' :
-                          line.validation_status === 'error'     ? 'bg-red-100 text-red-800' :
-                          line.validation_status === 'warning'   ? 'bg-orange-100 text-orange-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {line.validation_status === 'pending'   ? 'En attente' :
-                           line.validation_status === 'validated' ? 'Validé' :
-                           line.validation_status === 'warning'   ? 'Avert.' : 'Erreur'}
-                        </span>
+
+                      {/* ── Statut ───────────────────────────────────── */}
+                      <td className="px-4 py-2.5 text-center border-r border-b border-gray-300"
+                          style={{ minWidth: 100, maxWidth: 100 }}>
+                        {isValidating ? (
+                          <ValidatingIndicator />
+                        ) : (
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
+                            line.validation_status === 'validated' ? 'bg-green-100 text-green-800' :
+                            line.validation_status === 'error'     ? 'bg-red-100 text-red-800' :
+                            line.validation_status === 'warning'   ? 'bg-orange-100 text-orange-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {line.validation_status === 'pending'   ? 'En attente' :
+                             line.validation_status === 'validated' ? 'Validé' :
+                             line.validation_status === 'warning'   ? 'Avert.' : 'Erreur'}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-4 py-2.5 border-b border-gray-300" style={{ minWidth: 260, maxWidth: 260 }}>
-                        <ErrorCell errorDetails={line.error_details} />
+
+                      {/* ── Erreurs ──────────────────────────────────── */}
+                      <td className="px-4 py-2.5 border-b border-gray-300"
+                          style={{ minWidth: 260, maxWidth: 260 }}>
+                        {isValidating
+                          ? <span className="text-blue-400 text-xs animate-pulse">Vérification en cours…</span>
+                          : <ErrorCell errorDetails={line.error_details} />
+                        }
                       </td>
                     </tr>
                   );
@@ -677,27 +816,124 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
               )}
             </tbody>
 
-            {/* ── Pied de tableau — totaux ─────────────────────────────── */}
+            {/* ── Pied de tableau — TOTAUX PAR CATÉGORIE ─────────────────── */}
             {stagingLines.length > 0 && (
               <tfoot>
-                <tr className="bg-gray-800 border-t-2 border-gray-600">
-                  {/* Code — sticky */}
-                  <td className="px-4 py-3 text-xs font-bold text-white border-r border-gray-600 sticky left-0 bg-gray-800 z-20 whitespace-nowrap">
-                    TOTAL
+                {/* ── LIGNE 1 : COMPTES DE BILAN (1-5) ─────────────────── */}
+                <tr className="bg-emerald-900 border-t-2 border-emerald-600">
+                  <td className="px-4 py-2.5 text-xs font-bold text-emerald-100 border-r border-emerald-700 sticky left-0 bg-emerald-900 z-20 whitespace-nowrap">
+                    📊 BILAN (1-5)
                   </td>
-                  {/* Libellé — nb lignes */}
-                  <td className="px-4 py-3 border-r border-gray-600 text-xs text-gray-400 whitespace-nowrap"
+                  <td className="px-4 py-2.5 border-r border-emerald-700 text-xs text-emerald-200 whitespace-nowrap"
+                      style={{ minWidth: 100, maxWidth: 100 }}>
+                    {lignesBilan.length} compte{lignesBilan.length > 1 ? 's' : ''}
+                  </td>
+
+                  <td className={`px-4 py-2.5 border-r border-emerald-700 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
+                    desequilibreBilan > 0.005 ? 'text-red-300' : 'text-emerald-100'
+                  }`} style={{ minWidth: 110, maxWidth: 110 }}>
+                    {formatNumberDisplay(totalsBilan.opening_debit)}
+                  </td>
+                  <td className={`px-4 py-2.5 border-r border-emerald-700 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
+                    desequilibreBilan > 0.005 ? 'text-red-300' : 'text-emerald-100'
+                  }`} style={{ minWidth: 110, maxWidth: 110 }}>
+                    <div>{formatNumberDisplay(totalsBilan.opening_credit)}</div>
+                    {desequilibreBilan > 0.005 && (
+                      <div className="text-red-300 text-[10px] font-normal mt-0.5">
+                        Écart : {formatNumberDisplay(desequilibreBilan)}
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Mvt Débit */}
+                  <td className="px-4 py-2.5 border-r border-emerald-700 text-right text-xs font-bold text-emerald-100 tabular-nums whitespace-nowrap"
+                      style={{ minWidth: 110, maxWidth: 110 }}>
+                    {formatNumberDisplay(totalsBilan.movement_debit)}
+                  </td>
+
+                  {/* Mvt Crédit */}
+                  <td className="px-4 py-2.5 border-r border-emerald-700 text-right text-xs font-bold text-emerald-100 tabular-nums whitespace-nowrap"
+                      style={{ minWidth: 110, maxWidth: 110 }}>
+                    {formatNumberDisplay(totalsBilan.movement_credit)}
+                  </td>
+
+                  {/* Clôt. Débit */}
+                  <td className={`px-4 py-2.5 border-r border-emerald-700 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
+                      desequilibreBilanCloture > 0.005 ? 'text-red-300' : 'text-emerald-100'}`}
+                      style={{ minWidth: 110, maxWidth: 110 }}>
+                    {formatNumberDisplay(totalsBilan.closing_debit)}
+                  </td>
+
+                  {/* Clôt. Crédit */}
+                  <td className={`px-4 py-2.5 border-r border-emerald-700 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
+                      desequilibreBilanCloture > 0.005 ? 'text-red-300' : 'text-emerald-100'}`}
+                      style={{ minWidth: 110, maxWidth: 110 }}>
+                    <div>{formatNumberDisplay(totalsBilan.closing_credit)}</div>
+                    {desequilibreBilanCloture > 0.005 && (
+                      <div className="text-red-300 text-[10px] font-normal mt-0.5">
+                        Écart : {formatNumberDisplay(desequilibreBilanCloture)}
+                      </div>
+                    )}
+                  </td>
+
+                  <td className="px-4 py-2.5 border-r border-emerald-700" style={{ minWidth: 100, maxWidth: 100 }} />
+                  <td className="px-4 py-2.5" style={{ minWidth: 260 }} />
+                </tr>
+
+                {/* ── LIGNE 2 : COMPTES DE GESTION (6-9) ───────────────── */}
+                <tr className="bg-blue-900 border-t border-blue-700">
+                  <td className="px-4 py-2.5 text-xs font-bold text-blue-100 border-r border-blue-700 sticky left-0 bg-blue-900 z-20 whitespace-nowrap">
+                    📈 GESTION (6-9)
+                  </td>
+                  <td className="px-4 py-2.5 border-r border-blue-700 text-xs text-blue-200 whitespace-nowrap"
+                      style={{ minWidth: 100, maxWidth: 100 }}>
+                    {lignesGestion.length} compte{lignesGestion.length > 1 ? 's' : ''}
+                  </td>
+
+                  <td className={`px-4 py-2.5 border-r border-blue-700 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
+                    desequilibreGestion > 0.005 ? 'text-red-300' : 'text-blue-100'
+                  }`} style={{ minWidth: 110, maxWidth: 110 }}>
+                    {formatNumberDisplay(totalsGestion.opening_debit)}
+                  </td>
+                  <td className={`px-4 py-2.5 border-r border-blue-700 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
+                    desequilibreGestion > 0.005 ? 'text-red-300' : 'text-blue-100'
+                  }`} style={{ minWidth: 110, maxWidth: 110 }}>
+                    <div>{formatNumberDisplay(totalsGestion.opening_credit)}</div>
+                    {desequilibreGestion > 0.005 && (
+                      <div className="text-red-300 text-[10px] font-normal mt-0.5">
+                        Écart : {formatNumberDisplay(desequilibreGestion)}
+                      </div>
+                    )}
+                  </td>
+
+                  <td className="px-4 py-2.5 border-r border-blue-700 text-right text-xs text-blue-300 tabular-nums whitespace-nowrap"
+                      style={{ minWidth: 110, maxWidth: 110 }}>—</td>
+                  <td className="px-4 py-2.5 border-r border-blue-700 text-right text-xs text-blue-300 tabular-nums whitespace-nowrap"
+                      style={{ minWidth: 110, maxWidth: 110 }}>—</td>
+                  <td className="px-4 py-2.5 border-r border-blue-700 text-right text-xs text-blue-300 tabular-nums whitespace-nowrap"
+                      style={{ minWidth: 110, maxWidth: 110 }}>—</td>
+                  <td className="px-4 py-2.5 border-r border-blue-700 text-right text-xs text-blue-300 tabular-nums whitespace-nowrap"
+                      style={{ minWidth: 110, maxWidth: 110 }}>—</td>
+
+                  <td className="px-4 py-2.5 border-r border-blue-700" style={{ minWidth: 100, maxWidth: 100 }} />
+                  <td className="px-4 py-2.5" style={{ minWidth: 260 }} />
+                </tr>
+
+                {/* ── LIGNE 3 : TOTAL GÉNÉRAL ──────────────────────────── */}
+                <tr className="bg-gray-800 border-t-4 border-gray-500">
+                  <td className="px-4 py-3 text-xs font-bold text-white border-r border-gray-600 sticky left-0 bg-gray-800 z-20 whitespace-nowrap">
+                    🧮 TOTAL GÉNÉRAL
+                  </td>
+                  <td className="px-4 py-3 border-r border-gray-600 text-xs text-gray-300 whitespace-nowrap"
                       style={{ minWidth: 100, maxWidth: 100 }}>
                     {stagingLines.length} ligne{stagingLines.length > 1 ? 's' : ''}
                   </td>
 
-                  {/* opening_debit */}
                   <td className={`px-4 py-3 border-r border-gray-600 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
                     desequilibreOuverture > 0.005 ? 'text-red-400' : 'text-white'
                   }`} style={{ minWidth: 110, maxWidth: 110 }}>
                     {formatNumberDisplay(totals.opening_debit)}
                   </td>
-                  {/* opening_credit */}
                   <td className={`px-4 py-3 border-r border-gray-600 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
                     desequilibreOuverture > 0.005 ? 'text-red-400' : 'text-white'
                   }`} style={{ minWidth: 110, maxWidth: 110 }}>
@@ -709,22 +945,20 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
                     )}
                   </td>
 
-                  {/* movement_debit / movement_credit */}
-                  {['movement_debit', 'movement_credit'].map(field => (
-                    <td key={field}
-                      className="px-4 py-3 border-r border-gray-600 text-right text-xs font-bold text-white tabular-nums whitespace-nowrap"
+                  <td className="px-4 py-3 border-r border-gray-600 text-right text-xs font-bold text-white tabular-nums whitespace-nowrap"
                       style={{ minWidth: 110, maxWidth: 110 }}>
-                      {formatNumberDisplay(totals[field])}
-                    </td>
-                  ))}
+                    {formatNumberDisplay(totals.movement_debit)}
+                  </td>
+                  <td className="px-4 py-3 border-r border-gray-600 text-right text-xs font-bold text-white tabular-nums whitespace-nowrap"
+                      style={{ minWidth: 110, maxWidth: 110 }}>
+                    {formatNumberDisplay(totals.movement_credit)}
+                  </td>
 
-                  {/* closing_debit */}
                   <td className={`px-4 py-3 border-r border-gray-600 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
                     desequilibreCloture > 0.005 ? 'text-red-400' : 'text-white'
                   }`} style={{ minWidth: 110, maxWidth: 110 }}>
                     {formatNumberDisplay(totals.closing_debit)}
                   </td>
-                  {/* closing_credit */}
                   <td className={`px-4 py-3 border-r border-gray-600 text-right text-xs font-bold tabular-nums whitespace-nowrap ${
                     desequilibreCloture > 0.005 ? 'text-red-400' : 'text-white'
                   }`} style={{ minWidth: 110, maxWidth: 110 }}>
@@ -736,7 +970,6 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
                     )}
                   </td>
 
-                  {/* Statut + Erreurs — vides */}
                   <td className="px-4 py-3 border-r border-gray-600" style={{ minWidth: 100, maxWidth: 100 }} />
                   <td className="px-4 py-3" style={{ minWidth: 260 }} />
                 </tr>
@@ -745,7 +978,8 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
           </table>
         </div>
       </div>
-                  {/* ====================== AFFICHAGE DU BILAN ====================== */}
+
+      {/* ====================== AFFICHAGE DU BILAN ====================== */}
       {bilanData && (
         <div className="mt-8 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 text-white">
@@ -756,15 +990,12 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
           </div>
 
           <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* ACTIF */}
             <div>
               <h3 className="text-lg font-semibold text-emerald-700 mb-4 border-b pb-2">ACTIF</h3>
               {Object.entries(bilanData.actif).map(([key, item]) => (
                 <div key={key} className="flex justify-between py-2 border-b last:border-0">
                   <span className="text-gray-700">{item.libelle}</span>
-                  <span className="font-medium tabular-nums">
-                    {item.solde.toLocaleString('fr-FR')} FCFA
-                  </span>
+                  <span className="font-medium tabular-nums">{item.solde.toLocaleString('fr-FR')} FCFA</span>
                 </div>
               ))}
               <div className="flex justify-between py-3 mt-4 font-bold text-lg border-t border-emerald-200">
@@ -773,23 +1004,18 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
               </div>
             </div>
 
-            {/* PASSIF */}
             <div>
               <h3 className="text-lg font-semibold text-red-700 mb-4 border-b pb-2">PASSIF</h3>
               {Object.entries(bilanData.passif).map(([key, item]) => (
                 <div key={key} className="flex justify-between py-2 border-b last:border-0">
                   <span className="text-gray-700">{item.libelle}</span>
-                  <span className="font-medium tabular-nums">
-                    {item.solde.toLocaleString('fr-FR')} FCFA
-                  </span>
+                  <span className="font-medium tabular-nums">{item.solde.toLocaleString('fr-FR')} FCFA</span>
                 </div>
               ))}
               <div className="flex justify-between py-3 mt-4 font-bold text-lg border-t border-red-200">
                 <span>Total Passif</span>
                 <span>{bilanData.total_passif.toLocaleString('fr-FR')} FCFA</span>
               </div>
-
-              {/* Résultat Net */}
               <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                 <div className="flex justify-between text-lg">
                   <span className="font-medium">Résultat Net de l'exercice</span>
@@ -802,15 +1028,16 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
           </div>
 
           <div className="bg-gray-50 px-6 py-3 text-center text-sm text-gray-500 border-t">
-            {bilanData.est_equilibre 
-              ? "✅ Bilan équilibré" 
+            {bilanData.est_equilibre
+              ? "✅ Bilan équilibré"
               : "⚠️ Bilan non équilibré — vérifiez les données"}
           </div>
         </div>
       )}
-      {/* Instructions */}
+
+      {/* ── Instructions ─────────────────────────────────────────────────── */}
       <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 flex flex-wrap gap-x-4 gap-y-1 items-center">
-        <span><strong>💡 Navigation :</strong> Cliquez pour éditer</span>
+        <span><strong>💡 Navigation :</strong> Cliquez pour éditer — les règles R1/R3/R5/R6 sont vérifiées automatiquement après chaque modification</span>
         <span>
           <kbd className="mx-0.5 px-1.5 py-0.5 bg-white border border-blue-300 rounded text-xs font-mono">Tab</kbd>
           <kbd className="mx-0.5 px-1.5 py-0.5 bg-white border border-blue-300 rounded text-xs font-mono">Enter</kbd>
@@ -824,18 +1051,19 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
               {cfg.label}
             </span>
             <span className="text-xs text-gray-600">{
-              key === 'prefixe'           ? 'Préfixe invalide' :
-              key === 'intangibilite'     ? 'Intangibilité N-1' :
-              key === 'solde_unique'      ? 'Solde double sens' :
-              key === 'equilibre_global'  ? 'Déséquilibre global' :
-              key === 'resultat_ouverture'? 'Ouv. résultat non nul' :
-              key === 'equilibre_ligne'   ? 'Déséquilibre ligne' : ''
+              key === 'prefixe'            ? 'Préfixe invalide' :
+              key === 'intangibilite'      ? 'Intangibilité N-1' :
+              key === 'solde_unique'       ? 'Solde double sens' :
+              key === 'equilibre_global'   ? 'Déséquilibre global' :
+              key === 'resultat_ouverture' ? 'Ouv. résultat non nul' :
+              key === 'equilibre_ligne'    ? 'Déséquilibre ligne' : 
+              key === 'duplicate_account'  ? 'Compte répété' : ''
             }</span>
           </span>
         ))}
       </div>
 
-      {/* Actions bas de page */}
+      {/* ── Actions bas de page ───────────────────────────────────────────── */}
       <div className="flex justify-between items-center pt-6">
         <button onClick={() => navigate('/financial-reports/import')}
           className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm text-sm">
@@ -862,11 +1090,11 @@ const saveCell = async (lineId, field, newVal, oldVal) => {
           )}
           {importData.state === 'validated' && (
             <>
-              <button onClick={() => navigate(`/financial-reports/statements/${id}`)}
+              <button onClick={() => navigate(`/financial-reports/${id}`)}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium">
                 📊 États financiers
               </button>
-              <button onClick={() => navigate(`/financial-reports/statements-syscohada/${id}`)}
+              <button onClick={() => navigate(`/financial-reports/${id}`)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 text-sm font-medium">
                 📄 Format SYSCOHADA
               </button>

@@ -2,42 +2,54 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedLayout from "../components/Layout/ProtectedLayout";
+import ActivationPage from "../pages/Auth/ActivationPage";
+import ConfirmResetPage from "../pages/Auth/ConfirmResetPage";
+import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
+import BanksPage from "../pages/Banks/BanksPage";
+import CountriesPage from "../pages/Countries/CountriesPage";
+import CurrenciesPage from "../pages/Currencies/CurrenciesPage";
+import DashboardPage from "../pages/Dashboard/DashboardPage";
+// import EntitiesPage from "../pages/Entities/EntitiesPage";
+import EntitiesCreate  from "../pages/Entities/Create.jsx";
+import EntitiesShow  from "../pages/Entities/Show.jsx";
+import EntitiesList   from "../pages/Entities/List.jsx";
 
-// ========== PAGES GENERALES ==========
-import ActivationPage from "../pages/Auth/ActivationPage.jsx";
-import ConfirmResetPage from "../pages/Auth/ConfirmResetPage.jsx";
-import ResetPasswordPage from "../pages/Auth/ResetPasswordPage.jsx";
-import BanksPage from "../pages/Banks/BanksPage.jsx";
-import CountriesPage from "../pages/Countries/CountriesPage.jsx";
-import CurrenciesPage from "../pages/Currencies/CurrenciesPage.jsx";
-import DashboardPage from "../pages/Dashboard/DashboardPage.jsx";
-import EntitiesPage from "../pages/Entities/EntitiesPage.jsx";
-import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages.jsx";
-import GroupesPage from "../pages/Groupes/GroupesPage.jsx";
-import JournalPage from "../pages/Journal/JournalPage.jsx";
-import LanguagesPage from "../pages/Languages/LanguagesPage.jsx";
-import LoginPage from "../pages/Login/LoginPage.jsx";
-import ModulesPage from "../pages/Modules/ModulesPage.jsx";
-import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage.jsx";
-import PartnersPage from "../pages/Partners/PartnersPage.jsx";
-import PermissionsPage from "../pages/Permissions/PermissionsPage.jsx";
-import SettingsPage from "../pages/Settings/SettingsPage.jsx";
-import StatesPage from "../pages/States/StatesPage.jsx";
-import SystemPage from "../pages/System/SystemPage.jsx";
-import TasksPage from "../pages/Tasks/TasksPage.jsx";
-import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage.jsx";
-import UsersPage from "../pages/Users/UsersPage.jsx";
+import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
+import GroupesPage from "../pages/Groupes/GroupesPage";
+import JournalPage from "../pages/Journal/JournalPage";
+import LanguagesPage from "../pages/Languages/LanguagesPage";
+import LoginPage from "../pages/Login/LoginPage";
+import ModulesPage from "../pages/Modules/ModulesPage";
+import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage";
+import PartnersPage from "../pages/Partners/PartnersPage";
+import PartnersCreate from "../pages/Partners/Create.jsx";
+import PartnersShow from "../pages/Partners/Show.jsx";
+import PartnersList from "../pages/Partners/List.jsx";
 
-// Pages d'entite
-import NoEntitePage from "../pages/Entities/NoEntitePage.jsx";
-import SelectEntitePage from "../pages/Entities/SelectEntitePage.jsx";
+import PermissionsPage from "../pages/Permissions/PermissionsPage";
+import SettingsPage from "../pages/Settings/SettingsPage";
+import StatesPage from "../pages/States/StatesPage";
+import SystemPage from "../pages/System/SystemPage";
+import TasksPage from "../pages/Tasks/TasksPage";
+import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
+// import UsersPage from "../pages/Users/UsersPage";
+// Imports
+import SecurityList from "../pages/Users/List.jsx";
+import SecurityCreate from "../pages/Users/Create.jsx";
+import SecurityShow from "../pages/Users/Show.jsx";
 
-// ========== MODULE COMPTABILITE ==========
-import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout.jsx";
-import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage.jsx";
-import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage.jsx";
 
-// Positions Fiscales
+
+// NOUVELLES PAGES D'ENTITÉ
+import NoEntitePage from "../pages/Entities/NoEntitePage";
+import SelectEntitePage from "../pages/Entities/SelectEntitePage";
+
+// IMPORTS DU MODULE COMPTABILITÉ
+import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout";
+import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
+import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage";
+
+// IMPORTS DES PAGES POSITIONS FISCALES
 import PositionsFiscalesIndex from "../features/comptabilité/pages/PositionsFiscales/index.jsx";
 import PositionsFiscalesCreate from "../features/comptabilité/pages/PositionsFiscales/create.jsx";
 import PositionsFiscalesShow from "../features/comptabilité/pages/PositionsFiscales/show.jsx";
@@ -160,6 +172,7 @@ import ImportPage from "../features/financial-reports/pages/ImportData.jsx";
 import FinancialReportsList from "../features/financial-reports/pages/index.jsx";
 import NewReportPage from "../features/financial-reports/pages/new/page.jsx";
 import SettingPage from "../features/financial-reports/pages/SettingsPage.jsx";
+import FinancialReportConfig from "../features/financial-reports/pages/FinancialReportConfig.jsx";
 
 // ========== COMPOSANTS UTILITAIRES ==========
 const LoadingFallback = () => (
@@ -245,9 +258,22 @@ export default function AppRouter() {
         {/* ROUTES PROTEGEES PRINCIPALES */}
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/entities" element={<EntitiesPage />} />
-          <Route path="/partners" element={<PartnersPage />} />
-          <Route path="/users" element={<UsersPage />} />
+          {/* <Route path="/entities" element={<EntitiesPage />} /> */}
+          <Route path="/entities/create" element={<EntitiesCreate />} />
+          <Route path="/entities" element={<EntitiesList />} />
+          <Route path="/entities/:id" element={<EntitiesShow />} />
+          <Route path="/partner" element={<PartnersPage />} />
+          <Route path="/partners/create" element={<PartnersCreate />} />
+          <Route path="/partners" element={<PartnersList />} />
+          <Route path="/partners/:id" element={<PartnersShow />} />
+
+
+          {/* <Route path="/user" element={<UsersPage />} /> */}
+          // Routes
+          <Route path="/UsersGestions" element={<SecurityList />} />
+          <Route path="/security/create" element={<SecurityCreate />} />
+          <Route path="/security/:type/:id" element={<SecurityShow />} />
+
           <Route path="/userentities" element={<UserEntitiesPage />} />
           <Route path="/groupes" element={<GroupesPage />} />
           <Route path="/permissions" element={<PermissionsPage />} />
@@ -460,7 +486,8 @@ export default function AppRouter() {
           <Route path="/financial-reports/statements-syscohada/:id" element={<StatementsSyscohadaPage />} />
           <Route path="/financial-reports/settings" element={<SettingPage />} />
           <Route path="/financial-reports/Periods" element={<PeriodSelectorPage />} />
-          <Route path="/financial-reports/lignes" element={<Indexpages />} />
+          <Route path="/financial-reports/lignes" element={<Indexpages />} /> 
+          <Route path="/financial-reports/config" element={<FinancialReportConfig />} />
         </Route>
 
         {/* REDIRECTIONS & 404 */}
