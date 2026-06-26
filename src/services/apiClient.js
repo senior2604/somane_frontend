@@ -21,7 +21,7 @@ class ApiClient {
       'villes/',
       'langues/',
       'banques/',
-      'banques-partenaires/',      // ✅ Maintenant sans core/
+      'banques-partenaires/',
       'taux-change/',
       'groupes/',
       'modules/',
@@ -47,7 +47,7 @@ class ApiClient {
       'core/banque-partenaires/': 'core/banques-partenaires/',
       'core/banque/': 'core/banques/',
       'compta/journal/': 'compta/journals/',
-      'banque-partenaires/': 'banques-partenaires/',     // ✅ Corrigé : sans core/
+      'banque-partenaires/': 'banques-partenaires/',
     };
     
     // Liste des endpoints qui nécessitent le préfixe 'core/'
@@ -66,13 +66,12 @@ class ApiClient {
   /**
    * Normalise l'URL de base pour qu'elle se termine par un slash
    */
-// Dans apiClient.js, remplacez normalizeBaseURL par :
-normalizeBaseURL(url) {
+  normalizeBaseURL(url) {
     if (!url) return '/api/';
     let normalized = url.replace(/\/+$/, '');
     if (!normalized.endsWith('/')) normalized += '/';
     return normalized;
-}
+  }
 
   /**
    * Vérifie si un endpoint nécessite une entité
@@ -123,6 +122,7 @@ normalizeBaseURL(url) {
 
   /**
    * Méthode générique pour effectuer des requêtes HTTP
+   * ✅ CORRIGÉ : Gestion correcte de FormData (ne pas définir Content-Type)
    */
   async request(endpoint, options = {}) {
     // Sauvegarder l'original pour les logs
@@ -148,11 +148,15 @@ normalizeBaseURL(url) {
     // Récupérer le token actuel
     let token = authService.getToken();
     
+    // ✅ CORRECTION CRITIQUE : Vérifier si le body est un FormData
+    const isFormData = options.body instanceof FormData;
+    
     // Configuration de la requête
+    // ✅ NE PAS définir Content-Type pour FormData (le navigateur le génère automatiquement avec la boundary)
     const config = {
-      method: 'GET',
+      method: options.method || 'GET',
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...options.headers,
       },
       ...options,
@@ -263,6 +267,22 @@ normalizeBaseURL(url) {
               message: `Ressource non trouvée: ${endpoint}`,
               endpoint: endpoint,
               url: url
+            };
+            
+          case 405:
+            console.error(`⚠️ 405 Method Not Allowed sur ${endpoint}`);
+            console.error('📄 Méthode:', config.method);
+            console.error('📄 URL:', url);
+            console.error('📄 Headers:', config.headers);
+            if (isFormData) {
+              console.error('📄 FormData détecté - Vérifiez que le backend accepte POST sur cette route');
+            }
+            throw {
+              status: 405,
+              message: `Méthode ${config.method} non autorisée pour ${endpoint}`,
+              endpoint: endpoint,
+              url: url,
+              method: config.method
             };
             
           case 500:
@@ -397,19 +417,33 @@ normalizeBaseURL(url) {
     return this.request(endpoint, { ...options, method: 'GET' });
   }
 
+  /**
+   * ✅ CORRIGÉ : Méthode post avec gestion automatique de FormData
+   */
   post(endpoint, data, options = {}) {
+    // Si data est un FormData, on ne le stringifie pas
+    const isFormData = data instanceof FormData;
+    const body = isFormData ? data : JSON.stringify(data);
+    
     return this.request(endpoint, {
       ...options,
       method: 'POST',
-      body: JSON.stringify(data),
+      body: body,
     });
   }
 
+  /**
+   * ✅ CORRIGÉ : Méthode put avec gestion automatique de FormData
+   */
   put(endpoint, data, options = {}) {
+    // Si data est un FormData, on ne le stringifie pas
+    const isFormData = data instanceof FormData;
+    const body = isFormData ? data : JSON.stringify(data);
+    
     return this.request(endpoint, {
       ...options,
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: body,
     });
   }
 
@@ -425,6 +459,9 @@ normalizeBaseURL(url) {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
 
+  /**
+   * ✅ CORRIGÉ : Méthode upload dédiée pour FormData
+   */
   upload(endpoint, formData, options = {}) {
     const config = {
       ...options,
@@ -435,10 +472,14 @@ normalizeBaseURL(url) {
       body: formData,
     };
     
+    // ✅ Supprimer Content-Type pour que le navigateur le génère avec la boundary
     delete config.headers['Content-Type'];
     return this.request(endpoint, config);
   }
 
+  /**
+   * ✅ CORRIGÉ : Méthode download avec injection de l'entité active
+   */
   download(endpoint, options = {}) {
     const config = {
       ...options,
@@ -448,16 +489,31 @@ normalizeBaseURL(url) {
       },
     };
     
+    // ✅ Ajouter le token JWT
     const token = authService.getToken();
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
+      console.log('🔑 Token JWT ajouté au téléchargement');
     }
     
+    // ✅ AJOUTER l'entité active (crucial pour la permission)
+    const activeEntity = getActiveEntity();
+    if (activeEntity) {
+      config.headers['X-Entity-ID'] = activeEntity.id;
+      console.log(`🏢 Entité active injectée pour téléchargement: ${activeEntity.id}`);
+    } else {
+      console.warn(`⚠️ Téléchargement sans entité active - risque de 403`);
+    }
+    
+    // Nettoyer l'endpoint
     if (endpoint.startsWith('/')) {
       endpoint = endpoint.substring(1);
     }
     
-    return fetch(`${this.baseURL}${endpoint}`, config);
+    const url = `${this.baseURL}${endpoint}`;
+    console.log(`📥 Téléchargement: ${url}`);
+    
+    return fetch(url, config);
   }
   
   async testConnection() {

@@ -1,5 +1,3 @@
-// C:\Users\senio\Documents\somane_frontend\src\features\comptabilité\pages\TauxFiscaux\Create.jsx
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -85,6 +83,7 @@ const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, get
   }, []);
 
   const handleInputChange = (e) => {
+    if (disabled) return;
     setInputValue(e.target.value);
     setIsOpen(true);
     setHighlightedIndex(0);
@@ -93,6 +92,7 @@ const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, get
   };
 
   const handleSelectOption = (option) => {
+    if (disabled) return;
     const label = getOptionLabel(option);
     const id = option.id;
     setInputValue(label);
@@ -101,6 +101,7 @@ const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, get
   };
 
   const handleKeyDown = (e) => {
+    if (disabled) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setIsOpen(true); setHighlightedIndex(prev => prev < filteredOptions.length - 1 ? prev + 1 : prev); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0); }
     else if (e.key === 'Enter' && isOpen && filteredOptions.length > 0) { e.preventDefault(); handleSelectOption(filteredOptions[highlightedIndex]); }
@@ -111,11 +112,11 @@ const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, get
   return (
     <>
       <input ref={inputRef} type="text" value={inputValue} onChange={handleInputChange} onKeyDown={handleKeyDown}
-        onFocus={() => { setIsOpen(true); updateDropdownPosition(); }} placeholder={placeholder} disabled={disabled}
-        className="w-full px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none"
+        onFocus={() => { if(!disabled) { setIsOpen(true); updateDropdownPosition(); } }} placeholder={placeholder} disabled={disabled}
+        className={`w-full px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
         style={{ height: '26px', border: 'none', backgroundColor: 'transparent' }} autoComplete="off"
       />
-      {isOpen && filteredOptions.length > 0 && (
+      {isOpen && !disabled && filteredOptions.length > 0 && (
         <div ref={dropdownRef} className="bg-white border border-gray-300 shadow-lg" style={dropdownStyle}>
           {filteredOptions.map((option, index) => (
             <div key={option.id} className={`px-2 py-1 text-xs cursor-pointer ${index === highlightedIndex ? 'bg-purple-100 text-purple-700' : 'hover:bg-purple-50'} ${option.id === selectedId ? 'bg-purple-50' : ''}`}
@@ -172,7 +173,6 @@ const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemo
   };
 
   const isBase = line.repartition_type === 'base';
-  const isRefund = docType === 'refund';
 
   // Valeur affichée : toujours positive
   const displayValue = isBase ? 100 : Math.abs(line.factor_percent || 0);
@@ -209,6 +209,8 @@ const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemo
           </div>
         )}
       </td>
+      
+      {/* COLONNE COMPTE : DÉSACTIVÉE SI BASE */}
       <td className="border border-gray-300 p-1" style={{ width: '140px', minWidth: '140px' }}>
         <div style={{ height: '26px' }}>
           <AutocompleteInput 
@@ -222,9 +224,12 @@ const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemo
             options={accounts} 
             getOptionLabel={(a) => `${a.code} - ${a.name}`} 
             placeholder="Compte"
+            disabled={isBase} // <-- GRISER ET DÉSACTIVER SI BASE
           />
         </div>
       </td>
+
+      {/* COLONNE GROUPE : DÉSACTIVÉE SI BASE */}
       <td className="border border-gray-300 p-1" style={{ width: '110px', minWidth: '110px' }}>
         <div style={{ height: '26px' }}>
           <AutocompleteInput 
@@ -238,10 +243,12 @@ const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemo
             options={taxGroups} 
             getOptionLabel={(g) => g.name} 
             placeholder="Groupe"
+            disabled={isBase} // <-- GRISER ET DÉSACTIVER SI BASE
             onKeyDown={(e) => { if (e.key === 'Tab' && !e.shiftKey && isLast) { e.preventDefault(); onTabAtLastField(); } }}
           />
         </div>
       </td>
+
       <td className="border border-gray-300 p-1" style={{ width: '35px', minWidth: '35px' }}>
         {canDelete ? (
           <button onClick={onRemove} className="w-full flex items-center justify-center p-1 text-gray-400 hover:text-red-600 transition-colors" style={{ height: '26px' }} title="Supprimer"><FiTrash2 size={12} /></button>
@@ -257,8 +264,6 @@ const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemo
 // COMPOSANT RÉCAPITULATIF
 // ==========================================
 const RepartitionSummary = ({ lines, title }) => {
-  const isRefund = title === 'Avoir';
-  
   let baseTotal = 0;
   let taxMainTotal = 0;
   let taxSplitTotal = 0;
@@ -279,9 +284,9 @@ const RepartitionSummary = ({ lines, title }) => {
   const isBalanced = Math.abs(taxMainTotal - taxSplitTotal) <= 0.01;
   const isValid = !isSplitUsed || isBalanced;
 
-  const bgColor = isRefund ? 'bg-green-50' : 'bg-blue-50';
-  const borderColor = isRefund ? 'border-green-200' : 'border-blue-200';
-  const textColor = isRefund ? 'text-green-700' : 'text-blue-700';
+  const bgColor = title === 'Avoir' ? 'bg-green-50' : 'bg-blue-50';
+  const borderColor = title === 'Avoir' ? 'border-green-200' : 'border-blue-200';
+  const textColor = title === 'Avoir' ? 'text-green-700' : 'text-blue-700';
 
   return (
     <div className={`${bgColor} border ${borderColor} px-3 py-1.5 flex flex-col gap-1 mt-2`}>
@@ -484,7 +489,7 @@ export default function TauxFiscauxCreate() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Synchronisation des lignes de répartition
+  // Synchronisation des lignes de répartition (COMPLETE : Structure + Comptes)
   useEffect(() => {
     setRefundRepartitionLines(prev => 
       prev.map((refundLine, index) => {
@@ -637,7 +642,9 @@ export default function TauxFiscauxCreate() {
     if (invoiceBaseLines.length === 0) errors.push("❌ Facture : Au moins une ligne de type 'Base' est requise");
     if (invoiceTaxMainLines.length === 0) errors.push("❌ Facture : Au moins une ligne de type 'Taxe' est requise");
     
+    // MODIFICATION: On exclut les lignes 'base' de la vérification de compte
     const invoiceLinesWithoutAccount = invoiceRepartitionLines.filter(l => 
+      l.repartition_type !== 'base' && // <-- EXCLUSION BASE
       (!l.account || l.account === '' || l.account === null) && 
       (!l.account_label || l.account_label.trim() === '')
     );
@@ -665,7 +672,9 @@ export default function TauxFiscauxCreate() {
     if (refundBaseLines.length === 0) errors.push("❌ Avoir : Au moins une ligne de type 'Base' est requise");
     if (refundTaxMainLines.length === 0) errors.push("❌ Avoir : Au moins une ligne de type 'Taxe' est requise");
     
+    // MODIFICATION: On exclut les lignes 'base' de la vérification de compte
     const refundLinesWithoutAccount = refundRepartitionLines.filter(l => 
+       l.repartition_type !== 'base' && // <-- EXCLUSION BASE
       (!l.account || l.account === '' || l.account === null) && 
       (!l.account_label || l.account_label.trim() === '')
     );
@@ -721,10 +730,12 @@ export default function TauxFiscauxCreate() {
     };
 
     const invoiceLines = invoiceRepartitionLines
-      .filter(line => line.account || (line.account_label && line.account_label.trim() !== ''))
+      .filter(line => line.account || (line.account_label && line.account_label.trim() !== '') || line.repartition_type === 'base')
       .map((line, index) => {
-        let accountId = cleanId(line.account);
-        if (!accountId && line.account_label?.trim()) {
+        // MODIFICATION: Force null account for base
+        let accountId = line.repartition_type === 'base' ? null : cleanId(line.account);
+        
+        if (!accountId && line.repartition_type !== 'base' && line.account_label?.trim()) {
           const label = line.account_label.toLowerCase().trim();
           const found = accounts.find(a => {
             const fullLabel = `${a.code} - ${a.name}`.toLowerCase();
@@ -733,7 +744,7 @@ export default function TauxFiscauxCreate() {
           if (found) accountId = found.id;
         }
         
-        const taxGroupId = cleanId(line.tax_group);
+        const taxGroupId = line.repartition_type === 'base' ? null : cleanId(line.tax_group);
         let factorPercent = Math.abs(parseFloat(line.factor_percent) || 0);
         if (line.repartition_type === 'base') {
           factorPercent = 100;
@@ -751,10 +762,12 @@ export default function TauxFiscauxCreate() {
       });
 
     const refundLines = refundRepartitionLines
-      .filter(line => line.account || (line.account_label && line.account_label.trim() !== ''))
+      .filter(line => line.account || (line.account_label && line.account_label.trim() !== '') || line.repartition_type === 'base')
       .map((line, index) => {
-        let accountId = cleanId(line.account);
-        if (!accountId && line.account_label?.trim()) {
+        // MODIFICATION: Force null account for base
+        let accountId = line.repartition_type === 'base' ? null : cleanId(line.account);
+        
+        if (!accountId && line.repartition_type !== 'base' && line.account_label?.trim()) {
           const label = line.account_label.toLowerCase().trim();
           const found = accounts.find(a => {
             const fullLabel = `${a.code} - ${a.name}`.toLowerCase();
@@ -763,7 +776,7 @@ export default function TauxFiscauxCreate() {
           if (found) accountId = found.id;
         }
         
-        const taxGroupId = cleanId(line.tax_group);
+        const taxGroupId = line.repartition_type === 'base' ? null : cleanId(line.tax_group);
         let factorPercent = Math.abs(parseFloat(line.factor_percent) || 0);
         if (line.repartition_type === 'base') {
           factorPercent = 100;
@@ -801,9 +814,10 @@ export default function TauxFiscauxCreate() {
     try {
       const apiData = prepareDataForApi();
       
-      if (apiData.invoice_lines.length === 0) {
-        setError('❌ Au moins une ligne de répartition avec un compte est requise');
-        return false;
+      const hasValidLine = apiData.invoice_lines.some(l => l.repartition_type !== 'base' && l.account_id);
+      if (!hasValidLine) {
+         setError('❌ Au moins une ligne de taxe (non-base) avec un compte est requise');
+         return false;
       }
       
       let result;
@@ -839,12 +853,13 @@ export default function TauxFiscauxCreate() {
         
         const allLines = [...apiData.invoice_lines, ...apiData.refund_lines];
         
-        for (const line of allLines) {
-          await apiClient.post('/compta/tax-repartition-lines/', { 
-            ...line, 
-            tax_id: taxIdValue 
-          });
-        }
+        const linePromises = allLines.map(line => 
+           apiClient.post('/compta/tax-repartition-lines/', { 
+             ...line, 
+             tax_id: taxIdValue 
+           })
+        );
+        await Promise.all(linePromises);
       }
       
       if (!silent) setSuccess('Taux fiscal enregistré avec succès !');
