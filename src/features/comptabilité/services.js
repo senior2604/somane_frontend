@@ -646,6 +646,17 @@ export const piecesService = {
     return apiClient.post(`${API_PREFIX}moves/${id}/reverse/`, {}, { params });
   },
   
+
+  getGrandLivre: async (entityId = null, filters = {}) => {
+  try {
+    const params = entityId ? { ...filters, company: entityId } : filters;
+    const response = await apiClient.get(`${API_PREFIX}move-lines/grand-livre/`, { params });
+    return response?.data || response;
+  } catch (error) {
+    console.error('Erreur chargement grand livre:', error);
+    throw error;
+  }
+  },
   // === PIÈCES JOINTES ===
   
   /**

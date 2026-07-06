@@ -390,6 +390,7 @@ function StatusPair({ active }) {
 export function SecurityForm({ type, formData, setField, errors, data }) {
   if (type === 'users') {
     const partnerOptions = data.eligiblePartenaires?.length ? data.eligiblePartenaires : data.partenaires;
+
     return (
       <div className="space-y-4">
         <Section title="Utilisateur">
@@ -404,9 +405,10 @@ export function SecurityForm({ type, formData, setField, errors, data }) {
                 </select>
               </FormField>
               <p className="ml-[148px] text-[11px] text-gray-500">
-                {partnerOptions.length} partenaire(s) éligible(s) (avec au moins une entité)
+                {partnerOptions.length} partenaire(s) éligible(s)
               </p>
             </div>
+
             <div className="space-y-2">
               <FormField label="Statut">
                 <select value={formData.statut} onChange={(e) => setField('statut', e.target.value)} className={inputClass()} style={{ height: 26 }}>
@@ -434,10 +436,12 @@ export function SecurityForm({ type, formData, setField, errors, data }) {
               <FormField label="Nom" required error={errors.name}>
                 <input value={formData.name} onChange={(e) => setField('name', e.target.value)} className={inputClass(errors.name)} style={{ height: 26 }} />
               </FormField>
+
               <FormField label="Catégorie">
                 <input value={formData.category} onChange={(e) => setField('category', e.target.value)} className={inputClass()} style={{ height: 26 }} />
               </FormField>
             </div>
+
             <div className="space-y-2">
               <FormField label="Description">
                 <textarea value={formData.description} onChange={(e) => setField('description', e.target.value)} className={inputClass()} rows={2} />
@@ -449,9 +453,11 @@ export function SecurityForm({ type, formData, setField, errors, data }) {
         <Section title="Membres">
           <CheckList items={data.users} value={formData.members} onChange={(value) => setField('members', value)} getLabel={getUserName} />
         </Section>
+
         <Section title="Permissions">
           <CheckList items={data.permissions} value={formData.permissions} onChange={(value) => setField('permissions', value)} getLabel={(p) => p.name || p.acces || `Permission ${p.id}`} />
         </Section>
+
         <Section title="Groupes hérités">
           <CheckList
             items={data.groups.filter((g) => g.id !== formData.id)}
@@ -464,6 +470,48 @@ export function SecurityForm({ type, formData, setField, errors, data }) {
     );
   }
 
+const selectedModule = data.modules.find((m) => String(m.id) === String(formData.module));
+
+const normalizeText = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace('modules.', '')
+    .replace(/\s+/g, '_');
+
+const selectedModuleKeys = selectedModule
+  ? [
+      selectedModule.nom,
+      selectedModule.name,
+      selectedModule.nom_affiche,
+    ]
+      .map(normalizeText)
+      .filter(Boolean)
+  : [];
+
+const filteredModels = selectedModule && selectedModuleKeys.length
+  ? data.models.filter((model) => {
+      const modelPath = normalizeText(model.model);
+      return selectedModuleKeys.some((key) =>
+        modelPath === key ||
+        modelPath.startsWith(`${key}.`) ||
+        modelPath.includes(`.${key}.`)
+      );
+    })
+  : data.models;
+
+  const actionFields = [
+    ['perm_read', 'Lire'],
+    ['perm_create', 'Créer'],
+    ['perm_write', 'Modifier'],
+    ['perm_unlink', 'Supprimer'],
+    ['perm_validate', 'Valider'],
+    ['perm_cancel', 'Annuler'],
+    ['perm_export', 'Exporter'],
+    ['perm_import', 'Importer'],
+    ['perm_print', 'Imprimer'],
+  ];
+
   return (
     <div className="space-y-4">
       <Section title="Permission">
@@ -472,31 +520,63 @@ export function SecurityForm({ type, formData, setField, errors, data }) {
             <FormField label="Nom">
               <input value={formData.name} onChange={(e) => setField('name', e.target.value)} className={inputClass()} style={{ height: 26 }} />
             </FormField>
+
             <FormField label="Groupe" required error={errors.groupe}>
               <select value={formData.groupe} onChange={(e) => setField('groupe', e.target.value)} className={inputClass(errors.groupe)} style={{ height: 26 }}>
                 <option value="">Sélectionner un groupe</option>
-                {data.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                {data.groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
               </select>
             </FormField>
+
             <FormField label="Module" required error={errors.module}>
-              <select value={formData.module} onChange={(e) => setField('module', e.target.value)} className={inputClass(errors.module)} style={{ height: 26 }}>
+              <select
+                value={formData.module}
+                onChange={(e) => {
+                  setField('module', e.target.value);
+                  setField('model_id', '');
+                }}
+                className={inputClass(errors.module)}
+                style={{ height: 26 }}
+              >
                 <option value="">Sélectionner un module</option>
-                {data.modules.map((m) => <option key={m.id} value={m.id}>{m.nom_affiche || m.name}</option>)}
+                {data.modules.map((m) => (
+                  <option key={m.id} value={m.id}>{m.nom_affiche || m.nom || m.name}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Modèle / Table" required error={errors.model_id}>
+              <select value={formData.model_id} onChange={(e) => setField('model_id', e.target.value)} className={inputClass(errors.model_id)} style={{ height: 26 }}>
+                <option value="">Sélectionner un modèle</option>
+                {filteredModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name || model.model} ({model.model})
+                  </option>
+                ))}
               </select>
             </FormField>
           </div>
+
           <div className="space-y-2">
             <FormField label="Entité">
               <select value={formData.entite} onChange={(e) => setField('entite', e.target.value)} className={inputClass()} style={{ height: 26 }}>
                 <option value="">Toutes les entités</option>
-                {data.entites.map((e) => <option key={e.id} value={e.id}>{e.raison_sociale || e.name}</option>)}
+                {data.entites.map((e) => (
+                  <option key={e.id} value={e.id}>{e.raison_sociale || e.name}</option>
+                ))}
               </select>
             </FormField>
-            <FormField label="Accès" required error={errors.acces}>
+
+            <FormField label="Accès">
               <select value={formData.acces} onChange={(e) => setField('acces', e.target.value)} className={inputClass(errors.acces)} style={{ height: 26 }}>
-                {ACCESS_TYPES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                {ACCESS_TYPES.map((a) => (
+                  <option key={a.value} value={a.value}>{a.label}</option>
+                ))}
               </select>
             </FormField>
+
             <FormField label="Statut">
               <select value={String(formData.statut)} onChange={(e) => setField('statut', e.target.value === 'true')} className={inputClass()} style={{ height: 26 }}>
                 <option value="true">Actif</option>
@@ -504,6 +584,17 @@ export function SecurityForm({ type, formData, setField, errors, data }) {
               </select>
             </FormField>
           </div>
+        </div>
+      </Section>
+
+      <Section title="Droits">
+        <div className="grid grid-cols-3 gap-2">
+          {actionFields.map(([field, label]) => (
+            <label key={field} className="flex items-center gap-2 border border-gray-200 px-3 py-2 text-xs hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" checked={!!formData[field]} onChange={(e) => setField(field, e.target.checked)} />
+              <span>{label}</span>
+            </label>
+          ))}
         </div>
       </Section>
     </div>

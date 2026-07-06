@@ -97,7 +97,7 @@ export default function PartnerCreate() {
       setHasUnsavedChanges(false);
       if (!silent) {
         setSuccess('Partenaire créé avec succès !');
-        navigate(response?.id ? `../${response.id}` : '..');
+        navigate(response?.id ? `..partners/${response.id}` : '..');
       }
       return true;
     } catch (err) {

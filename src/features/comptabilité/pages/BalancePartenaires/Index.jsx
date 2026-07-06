@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  FiBarChart2,
   FiCalendar,
   FiChevronDown,
   FiChevronRight,
@@ -11,6 +10,7 @@ import {
   FiPrinter,
   FiRefreshCw,
   FiSearch,
+  FiUsers,
   FiX,
 } from 'react-icons/fi';
 import { apiClient } from '../../../../services/apiClient';
@@ -42,10 +42,7 @@ const toNumber = (value) => {
 const debitPart = (value) => Math.max(toNumber(value), 0);
 const creditPart = (value) => Math.max(-toNumber(value), 0);
 
-const formatAmount = (value) => {
-  const rounded = Math.round(toNumber(value));
-  return rounded.toLocaleString('fr-FR');
-};
+const formatAmount = (value) => Math.round(toNumber(value)).toLocaleString('fr-FR');
 
 const formatDate = (value) => {
   if (!value) return '-';
@@ -58,32 +55,32 @@ const formatDate = (value) => {
   });
 };
 
-const getDebit = (account) => (
-  account.total_debit ??
-  account.movement_debit ??
-  account.debit ??
+const getPartnerDebit = (partner) => (
+  partner.total_debit ??
+  partner.movement_debit ??
+  partner.debit ??
   0
 );
 
-const getCredit = (account) => (
-  account.total_credit ??
-  account.movement_credit ??
-  account.credit ??
+const getPartnerCredit = (partner) => (
+  partner.total_credit ??
+  partner.movement_credit ??
+  partner.credit ??
   0
 );
 
-const getOpeningBalance = (account) => (
-  account.opening_balance ??
-  account.initial_balance ??
-  account.balance_initial ??
+const getOpeningBalance = (partner) => (
+  partner.opening_balance ??
+  partner.initial_balance ??
+  partner.balance_initial ??
   0
 );
 
-const getClosingBalance = (account) => (
-  account.balance ??
-  account.closing_balance ??
-  account.current_balance ??
-  (toNumber(getOpeningBalance(account)) + toNumber(getDebit(account)) - toNumber(getCredit(account)))
+const getClosingBalance = (partner) => (
+  partner.balance ??
+  partner.closing_balance ??
+  partner.current_balance ??
+  (toNumber(getOpeningBalance(partner)) + toNumber(getPartnerDebit(partner)) - toNumber(getPartnerCredit(partner)))
 );
 
 const AmountCell = ({ value, strong = false }) => {
@@ -95,19 +92,21 @@ const AmountCell = ({ value, strong = false }) => {
   );
 };
 
-export default function BalanceGenerale() {
+export default function BalancePartenaires() {
   const { activeEntity } = useEntity();
 
   const [filters, setFilters] = useState({
     date_from: getYearStart(),
     date_to: getYearEnd(),
+    partner: '',
     account_code: '',
     state: 'all',
     show_zero: false,
     show_details: false,
   });
-  const [accounts, setAccounts] = useState([]);
-  const [expandedAccounts, setExpandedAccounts] = useState({});
+  const [partners, setPartners] = useState([]);
+  const [partnerOptions, setPartnerOptions] = useState([]);
+  const [expandedPartners, setExpandedPartners] = useState({});
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState({
     initialMovement: true,
@@ -118,6 +117,7 @@ export default function BalanceGenerale() {
   });
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingRefs, setLoadingRefs] = useState(false);
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
@@ -128,12 +128,29 @@ export default function BalanceGenerale() {
     { key: 'period', label: 'Solde période' },
     { key: 'closing', label: 'Solde final' },
   ];
-  const tableColumnCount = 2 + columnGroups.filter((column) => columnVisibility[column.key]).length * 2;
+  const tableColumnCount = 1 + columnGroups.filter((column) => columnVisibility[column.key]).length * 2;
+
+  const loadPartnerOptions = useCallback(async () => {
+    if (!activeEntity?.id) return;
+
+    try {
+      setLoadingRefs(true);
+      const response = await apiClient.get('partenaires/', {
+        params: { company: activeEntity.id },
+      });
+      setPartnerOptions(normalizeList(response?.data || response));
+    } catch (err) {
+      console.error('Erreur chargement partenaires:', err);
+      setPartnerOptions([]);
+    } finally {
+      setLoadingRefs(false);
+    }
+  }, [activeEntity]);
 
   const loadBalance = useCallback(async () => {
     if (!activeEntity?.id) {
       setError('Veuillez selectionner une entite.');
-      setAccounts([]);
+      setPartners([]);
       return;
     }
 
@@ -148,24 +165,25 @@ export default function BalanceGenerale() {
         state: filters.state,
       };
 
+      if (filters.partner) params.partner = filters.partner;
       if (filters.account_code) params.account_code = filters.account_code;
 
-      const response = await apiClient.get('/compta/move-lines/grand-livre/', { params });
+      const response = await apiClient.get('/compta/move-lines/grand-livre-partenaires/', { params });
       const data = response?.data || response;
       const results = normalizeList(data?.results || data)
-        .map((account) => {
-          const lines = normalizeList(account.lines);
-          const openingBalance = toNumber(getOpeningBalance(account));
-          const movementDebit = toNumber(getDebit(account));
-          const movementCredit = toNumber(getCredit(account));
-          const initialMovementDebit = toNumber(account.initial_movement_debit ?? account.opening_movement_debit ?? account.previous_debit ?? 0);
-          const initialMovementCredit = toNumber(account.initial_movement_credit ?? account.opening_movement_credit ?? account.previous_credit ?? 0);
-          const closingBalance = toNumber(getClosingBalance(account));
+        .map((partner) => {
+          const lines = normalizeList(partner.lines);
+          const openingBalance = toNumber(getOpeningBalance(partner));
+          const movementDebit = toNumber(getPartnerDebit(partner));
+          const movementCredit = toNumber(getPartnerCredit(partner));
+          const initialMovementDebit = toNumber(partner.initial_movement_debit ?? partner.opening_movement_debit ?? partner.previous_debit ?? 0);
+          const initialMovementCredit = toNumber(partner.initial_movement_credit ?? partner.opening_movement_credit ?? partner.previous_credit ?? 0);
+          const closingBalance = toNumber(getClosingBalance(partner));
 
           return {
-            id: account.account_id || account.id || account.account_code,
-            account_code: account.account_code || account.code || '',
-            account_name: account.account_name || account.name || '',
+            id: partner.partner_id || partner.id || partner.partner_name || 'no_partner',
+            partner_id: partner.partner_id || partner.id || null,
+            partner_name: partner.partner_name || partner.name || 'Sans partenaire',
             opening_debit: debitPart(openingBalance),
             opening_credit: creditPart(openingBalance),
             initial_movement_debit: initialMovementDebit,
@@ -180,78 +198,82 @@ export default function BalanceGenerale() {
             lines,
           };
         })
-        .filter((account) => (
+        .filter((partner) => (
           filters.show_zero ||
-          account.opening_debit !== 0 ||
-          account.opening_credit !== 0 ||
-          account.initial_movement_debit !== 0 ||
-          account.initial_movement_credit !== 0 ||
-          account.movement_debit !== 0 ||
-          account.movement_credit !== 0 ||
-          account.period_debit !== 0 ||
-          account.period_credit !== 0 ||
-          account.closing_debit !== 0 ||
-          account.closing_credit !== 0
+          partner.opening_debit !== 0 ||
+          partner.opening_credit !== 0 ||
+          partner.initial_movement_debit !== 0 ||
+          partner.initial_movement_credit !== 0 ||
+          partner.movement_debit !== 0 ||
+          partner.movement_credit !== 0 ||
+          partner.period_debit !== 0 ||
+          partner.period_credit !== 0 ||
+          partner.closing_debit !== 0 ||
+          partner.closing_credit !== 0
         ))
-        .sort((a, b) => String(a.account_code).localeCompare(String(b.account_code), 'fr'));
+        .sort((a, b) => String(a.partner_name).localeCompare(String(b.partner_name), 'fr'));
 
       const nextExpanded = {};
-      results.forEach((account) => {
-        nextExpanded[account.id] = filters.show_details && account.lines.length > 0;
+      results.forEach((partner) => {
+        nextExpanded[partner.id] = filters.show_details && partner.lines.length > 0;
       });
 
-      setAccounts(results);
-      setExpandedAccounts(nextExpanded);
+      setPartners(results);
+      setExpandedPartners(nextExpanded);
     } catch (err) {
-      console.error('Erreur chargement balance:', err);
-      setError('Impossible de charger la balance.');
-      setAccounts([]);
+      console.error('Erreur chargement balance partenaires:', err);
+      setError('Impossible de charger la balance des partenaires.');
+      setPartners([]);
     } finally {
       setLoading(false);
     }
   }, [activeEntity, filters]);
 
   useEffect(() => {
+    loadPartnerOptions();
+  }, [loadPartnerOptions]);
+
+  useEffect(() => {
     loadBalance();
   }, [loadBalance]);
 
-  const filteredAccounts = useMemo(() => {
+  const filteredPartners = useMemo(() => {
     const query = normalizeText(searchText);
-    if (!query) return accounts;
+    if (!query) return partners;
 
-    return accounts
-      .map((account) => {
-        const accountText = normalizeText(`${account.account_code} ${account.account_name}`);
-        const lines = accountText.includes(query)
-          ? account.lines
-          : account.lines.filter((line) => normalizeText([
+    return partners
+      .map((partner) => {
+        const partnerText = normalizeText(partner.partner_name);
+        const lines = partnerText.includes(query)
+          ? partner.lines
+          : partner.lines.filter((line) => normalizeText([
               line.date,
               line.move_name,
               line.journal_code,
-              line.partner_name,
+              line.account_code,
               line.label,
-              line.name,
+              line.matching_number,
             ].filter(Boolean).join(' ')).includes(query));
 
-        if (accountText.includes(query) || lines.length) return { ...account, lines };
+        if (partnerText.includes(query) || lines.length) return { ...partner, lines };
         return null;
       })
       .filter(Boolean);
-  }, [accounts, searchText]);
+  }, [partners, searchText]);
 
-  const totals = useMemo(() => filteredAccounts.reduce(
-    (acc, account) => ({
-      opening_debit: acc.opening_debit + account.opening_debit,
-      opening_credit: acc.opening_credit + account.opening_credit,
-      initial_movement_debit: acc.initial_movement_debit + account.initial_movement_debit,
-      initial_movement_credit: acc.initial_movement_credit + account.initial_movement_credit,
-      movement_debit: acc.movement_debit + account.movement_debit,
-      movement_credit: acc.movement_credit + account.movement_credit,
-      period_debit: acc.period_debit + account.period_debit,
-      period_credit: acc.period_credit + account.period_credit,
-      closing_debit: acc.closing_debit + account.closing_debit,
-      closing_credit: acc.closing_credit + account.closing_credit,
-      line_count: acc.line_count + account.line_count,
+  const totals = useMemo(() => filteredPartners.reduce(
+    (acc, partner) => ({
+      opening_debit: acc.opening_debit + partner.opening_debit,
+      opening_credit: acc.opening_credit + partner.opening_credit,
+      initial_movement_debit: acc.initial_movement_debit + partner.initial_movement_debit,
+      initial_movement_credit: acc.initial_movement_credit + partner.initial_movement_credit,
+      movement_debit: acc.movement_debit + partner.movement_debit,
+      movement_credit: acc.movement_credit + partner.movement_credit,
+      period_debit: acc.period_debit + partner.period_debit,
+      period_credit: acc.period_credit + partner.period_credit,
+      closing_debit: acc.closing_debit + partner.closing_debit,
+      closing_credit: acc.closing_credit + partner.closing_credit,
+      line_count: acc.line_count + partner.line_count,
     }),
     {
       opening_debit: 0,
@@ -266,7 +288,7 @@ export default function BalanceGenerale() {
       closing_credit: 0,
       line_count: 0,
     }
-  ), [filteredAccounts]);
+  ), [filteredPartners]);
 
   const handleFilterChange = (name, value) => {
     setFilters((prev) => ({ ...prev, [name]: value }));
@@ -276,6 +298,7 @@ export default function BalanceGenerale() {
     setFilters({
       date_from: getYearStart(),
       date_to: getYearEnd(),
+      partner: '',
       account_code: '',
       state: 'all',
       show_zero: false,
@@ -284,8 +307,8 @@ export default function BalanceGenerale() {
     setSearchText('');
   };
 
-  const toggleAccount = (accountId) => {
-    setExpandedAccounts((prev) => ({ ...prev, [accountId]: !prev[accountId] }));
+  const togglePartner = (partnerId) => {
+    setExpandedPartners((prev) => ({ ...prev, [partnerId]: !prev[partnerId] }));
   };
 
   const toggleColumn = (columnKey) => {
@@ -294,25 +317,24 @@ export default function BalanceGenerale() {
 
   const expandAll = () => {
     const nextExpanded = {};
-    filteredAccounts.forEach((account) => {
-      nextExpanded[account.id] = true;
+    filteredPartners.forEach((partner) => {
+      nextExpanded[partner.id] = true;
     });
-    setExpandedAccounts(nextExpanded);
+    setExpandedPartners(nextExpanded);
   };
 
   const collapseAll = () => {
     const nextExpanded = {};
-    filteredAccounts.forEach((account) => {
-      nextExpanded[account.id] = false;
+    filteredPartners.forEach((partner) => {
+      nextExpanded[partner.id] = false;
     });
-    setExpandedAccounts(nextExpanded);
+    setExpandedPartners(nextExpanded);
   };
 
   const exportCsv = (withDetails = false) => {
     const rows = [
       [
-        'Compte',
-        'Libelle',
+        'Partenaire',
         'Solde initial debit',
         'Solde initial credit',
         'Mouvement initial debit',
@@ -325,24 +347,22 @@ export default function BalanceGenerale() {
         'Solde credit',
         'Nb mouvements',
       ],
-      ...filteredAccounts.map((account) => [
-        account.account_code,
-        account.account_name,
-        account.opening_debit,
-        account.opening_credit,
-        account.initial_movement_debit,
-        account.initial_movement_credit,
-        account.movement_debit,
-        account.movement_credit,
-        account.period_debit,
-        account.period_credit,
-        account.closing_debit,
-        account.closing_credit,
-        account.line_count,
+      ...filteredPartners.map((partner) => [
+        partner.partner_name,
+        partner.opening_debit,
+        partner.opening_credit,
+        partner.initial_movement_debit,
+        partner.initial_movement_credit,
+        partner.movement_debit,
+        partner.movement_credit,
+        partner.period_debit,
+        partner.period_credit,
+        partner.closing_debit,
+        partner.closing_credit,
+        partner.line_count,
       ]),
       [
         'TOTAUX',
-        '',
         totals.opening_debit,
         totals.opening_credit,
         totals.initial_movement_debit,
@@ -360,15 +380,17 @@ export default function BalanceGenerale() {
     if (withDetails) {
       rows.push([]);
       rows.push(['Details mouvements']);
-      rows.push(['Compte', 'Date', 'Piece', 'Journal', 'Partenaire', 'Libelle', 'Debit', 'Credit', 'Solde courant']);
-      filteredAccounts.forEach((account) => {
-        account.lines.forEach((line) => {
+      rows.push(['Partenaire', 'Date', 'Piece', 'Journal', 'Compte', 'Echeance', 'Lettrage', 'Libelle', 'Debit', 'Credit', 'Solde courant']);
+      filteredPartners.forEach((partner) => {
+        partner.lines.forEach((line) => {
           rows.push([
-            account.account_code,
+            partner.partner_name,
             line.date || '',
             line.move_name || '',
             line.journal_code || '',
-            line.partner_name || '',
+            line.account_code || '',
+            line.date_maturity || '',
+            line.matching_number || '',
             line.label || line.name || '',
             toNumber(line.debit),
             toNumber(line.credit),
@@ -386,7 +408,7 @@ export default function BalanceGenerale() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `balance-${withDetails ? 'detaillee' : 'generale'}-${filters.date_from}-${filters.date_to}.csv`;
+    link.download = `balance-partenaires-${withDetails ? 'detaillee' : 'generale'}-${filters.date_from}-${filters.date_to}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -397,8 +419,8 @@ export default function BalanceGenerale() {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="bg-white border border-gray-300 p-8 text-center">
-          <FiBarChart2 className="mx-auto mb-3 text-gray-400" size={34} />
-          <h1 className="text-lg font-bold text-gray-900">Balance generale</h1>
+          <FiUsers className="mx-auto mb-3 text-gray-400" size={34} />
+          <h1 className="text-lg font-bold text-gray-900">Balance des partenaires</h1>
           <p className="mt-2 text-sm text-gray-600">Veuillez selectionner une entite.</p>
         </div>
       </div>
@@ -412,8 +434,8 @@ export default function BalanceGenerale() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-                <FiBarChart2 className="text-purple-600" />
-                Balance generale
+                <FiUsers className="text-purple-600" />
+                Balance des partenaires
               </h1>
               <p className="mt-1 text-sm text-gray-600">
                 Solde initial, mouvements et solde final du {formatDate(filters.date_from)} au {formatDate(filters.date_to)}
@@ -473,8 +495,19 @@ export default function BalanceGenerale() {
                 <input type="date" value={filters.date_to} onChange={(event) => handleFilterChange('date_to', event.target.value)} className="mt-1 h-10 w-full border border-gray-300 bg-white px-3 text-sm" />
               </label>
               <label className="text-xs font-medium text-gray-700">
+                Partenaire
+                <select value={filters.partner} onChange={(event) => handleFilterChange('partner', event.target.value)} disabled={loadingRefs} className="mt-1 h-10 w-full border border-gray-300 bg-white px-3 text-sm">
+                  <option value="">Tous</option>
+                  {partnerOptions.map((partner) => (
+                    <option key={partner.id} value={partner.id}>
+                      {partner.raison_sociale || partner.display_name || partner.name || partner.nom || `Partenaire ${partner.id}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-medium text-gray-700">
                 Compte
-                <input type="text" value={filters.account_code} onChange={(event) => handleFilterChange('account_code', event.target.value)} placeholder="Ex: 411" className="mt-1 h-10 w-full border border-gray-300 bg-white px-3 text-sm" />
+                <input type="text" value={filters.account_code} onChange={(event) => handleFilterChange('account_code', event.target.value)} placeholder="Ex: 411 ou 401" className="mt-1 h-10 w-full border border-gray-300 bg-white px-3 text-sm" />
               </label>
               <label className="text-xs font-medium text-gray-700">
                 Etat
@@ -484,16 +517,10 @@ export default function BalanceGenerale() {
                   <option value="draft">Brouillons</option>
                 </select>
               </label>
-              <div className="flex items-end">
+              <div className="flex items-end gap-2">
                 <label className="flex h-10 items-center gap-2 text-sm text-gray-700">
                   <input type="checkbox" checked={filters.show_zero} onChange={(event) => handleFilterChange('show_zero', event.target.checked)} />
                   Soldes nuls
-                </label>
-              </div>
-              <div className="flex items-end gap-2">
-                <label className="flex h-10 items-center gap-2 text-sm text-gray-700">
-                  <input type="checkbox" checked={filters.show_details} onChange={(event) => handleFilterChange('show_details', event.target.checked)} />
-                  Details ouverts
                 </label>
                 <button type="button" onClick={resetFilters} className="h-10 border border-gray-300 px-3 text-sm text-gray-700 hover:bg-white" title="Reinitialiser">
                   <FiX size={15} />
@@ -507,7 +534,7 @@ export default function BalanceGenerale() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <label className="relative w-full max-w-md">
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input type="text" value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Rechercher compte, piece, partenaire..." className="h-10 w-full border border-gray-300 pl-10 pr-3 text-sm" />
+              <input type="text" value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Rechercher partenaire, piece, compte..." className="h-10 w-full border border-gray-300 pl-10 pr-3 text-sm" />
             </label>
             <div className="flex flex-wrap gap-5 text-sm">
               <span>Initial D <strong>{formatAmount(totals.opening_debit)}</strong></span>
@@ -527,11 +554,10 @@ export default function BalanceGenerale() {
         {error && <div className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700">{error}</div>}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1420px] border-collapse">
+          <table className="w-full min-w-[1320px] border-collapse">
             <thead>
               <tr className="border-b border-gray-300 bg-gray-100 text-sm text-gray-700">
-                <th rowSpan="2" className="border-r border-gray-300 px-3 py-2 text-left font-semibold">Compte</th>
-                <th rowSpan="2" className="border-r border-gray-300 px-3 py-2 text-left font-semibold">Libelle</th>
+                <th rowSpan="2" className="border-r border-gray-300 px-3 py-2 text-left font-semibold">Partenaire</th>
                 {columnVisibility.initialMovement && <th colSpan="2" className="border-r border-gray-300 px-3 py-2 text-center font-semibold">Mouvement initial</th>}
                 {columnVisibility.movement && <th colSpan="2" className="border-r border-gray-300 px-3 py-2 text-center font-semibold">Mouvement</th>}
                 {columnVisibility.opening && <th colSpan="2" className="border-r border-gray-300 px-3 py-2 text-center font-semibold">Solde initial</th>}
@@ -549,53 +575,52 @@ export default function BalanceGenerale() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={tableColumnCount} className="px-4 py-10 text-center text-sm text-gray-500">Chargement de la balance...</td></tr>
-              ) : filteredAccounts.length === 0 ? (
+                <tr><td colSpan={tableColumnCount} className="px-4 py-10 text-center text-sm text-gray-500">Chargement de la balance des partenaires...</td></tr>
+              ) : filteredPartners.length === 0 ? (
                 <tr><td colSpan={tableColumnCount} className="px-4 py-10 text-center text-sm text-gray-500">Aucune donnee pour ces criteres.</td></tr>
               ) : (
-                filteredAccounts.map((account) => {
-                  const isExpanded = expandedAccounts[account.id] === true;
+                filteredPartners.map((partner) => {
+                  const isExpanded = expandedPartners[partner.id] === true;
                   return (
-                    <React.Fragment key={account.id}>
+                    <React.Fragment key={partner.id}>
                       <tr className="border-b border-gray-200 hover:bg-purple-50">
                         <td className="border-r border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900">
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => toggleAccount(account.id)} className="inline-flex h-7 w-7 items-center justify-center text-gray-500 hover:text-purple-700" title="Voir les mouvements">
+                            <button type="button" onClick={() => togglePartner(partner.id)} className="inline-flex h-7 w-7 items-center justify-center text-gray-500 hover:text-purple-700" title="Voir les mouvements">
                               {isExpanded ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
                             </button>
-                            <span>{account.account_code}</span>
-                            <span className="rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-normal text-gray-500">{account.line_count} mvt</span>
+                            <span className="truncate">{partner.partner_name}</span>
+                            <span className="shrink-0 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-normal text-gray-500">{partner.line_count} mvt</span>
                           </div>
                         </td>
-                        <td className="border-r border-gray-200 px-3 py-2 text-sm text-gray-700">{account.account_name}</td>
                         {columnVisibility.initialMovement && (
                           <>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={account.initial_movement_debit} /></td>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={account.initial_movement_credit} /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={partner.initial_movement_debit} /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={partner.initial_movement_credit} /></td>
                           </>
                         )}
                         {columnVisibility.movement && (
                           <>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={account.movement_debit} /></td>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={account.movement_credit} /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={partner.movement_debit} /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={partner.movement_credit} /></td>
                           </>
                         )}
                         {columnVisibility.opening && (
                           <>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={account.opening_debit} /></td>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={account.opening_credit} /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={partner.opening_debit} /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={partner.opening_credit} /></td>
                           </>
                         )}
                         {columnVisibility.period && (
                           <>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm bg-purple-50"><AmountCell value={account.period_debit} strong /></td>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm bg-purple-50"><AmountCell value={account.period_credit} strong /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm bg-purple-50"><AmountCell value={partner.period_debit} strong /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm bg-purple-50"><AmountCell value={partner.period_credit} strong /></td>
                           </>
                         )}
                         {columnVisibility.closing && (
                           <>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={account.closing_debit} strong /></td>
-                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={account.closing_credit} strong /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={partner.closing_debit} strong /></td>
+                            <td className="border-r border-gray-200 px-3 py-2 text-right text-sm"><AmountCell value={partner.closing_credit} strong /></td>
                           </>
                         )}
                       </tr>
@@ -603,17 +628,19 @@ export default function BalanceGenerale() {
                       {isExpanded && (
                         <tr className="border-b border-gray-200 bg-gray-50">
                           <td colSpan={tableColumnCount} className="px-6 py-3">
-                            {account.lines.length === 0 ? (
+                            {partner.lines.length === 0 ? (
                               <div className="text-sm text-gray-500">Aucune ecriture detaillee.</div>
                             ) : (
                               <div className="overflow-x-auto border border-gray-200 bg-white">
-                                <table className="w-full min-w-[900px] border-collapse text-xs">
+                                <table className="w-full min-w-[980px] border-collapse text-xs">
                                   <thead>
                                     <tr className="border-b border-gray-200 bg-gray-100 text-gray-600">
                                       <th className="px-3 py-2 text-left font-medium">Date</th>
                                       <th className="px-3 py-2 text-left font-medium">Piece</th>
                                       <th className="px-3 py-2 text-left font-medium">Journal</th>
-                                      <th className="px-3 py-2 text-left font-medium">Partenaire</th>
+                                      <th className="px-3 py-2 text-left font-medium">Compte</th>
+                                      <th className="px-3 py-2 text-left font-medium">Echeance</th>
+                                      <th className="px-3 py-2 text-left font-medium">Lettrage</th>
                                       <th className="px-3 py-2 text-left font-medium">Libelle</th>
                                       <th className="px-3 py-2 text-right font-medium">Debit</th>
                                       <th className="px-3 py-2 text-right font-medium">Credit</th>
@@ -621,12 +648,14 @@ export default function BalanceGenerale() {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {account.lines.map((line, index) => (
+                                    {partner.lines.map((line, index) => (
                                       <tr key={line.id || index} className="border-b border-gray-100 hover:bg-gray-50">
                                         <td className="px-3 py-2 text-gray-700">{formatDate(line.date)}</td>
                                         <td className="px-3 py-2 font-medium text-gray-800">{line.move_name || '-'}</td>
                                         <td className="px-3 py-2 text-gray-700">{line.journal_code || '-'}</td>
-                                        <td className="px-3 py-2 text-gray-700">{line.partner_name || '-'}</td>
+                                        <td className="px-3 py-2 text-gray-700">{line.account_code || '-'}</td>
+                                        <td className="px-3 py-2 text-gray-700">{formatDate(line.date_maturity)}</td>
+                                        <td className="px-3 py-2 text-gray-700">{line.matching_number || '-'}</td>
                                         <td className="px-3 py-2 text-gray-700">{line.label || line.name || '-'}</td>
                                         <td className="px-3 py-2 text-right"><AmountCell value={line.debit} /></td>
                                         <td className="px-3 py-2 text-right"><AmountCell value={line.credit} /></td>
@@ -647,10 +676,10 @@ export default function BalanceGenerale() {
                 })
               )}
             </tbody>
-            {filteredAccounts.length > 0 && (
+            {filteredPartners.length > 0 && (
               <tfoot>
                 <tr className="border-t border-gray-300 bg-gray-100 text-sm font-bold text-gray-900">
-                  <td colSpan="2" className="border-r border-gray-300 px-3 py-3">TOTAUX</td>
+                  <td className="border-r border-gray-300 px-3 py-3">TOTAUX</td>
                   {columnVisibility.initialMovement && (
                     <>
                       <td className="border-r border-gray-300 px-3 py-3 text-right">{formatAmount(totals.initial_movement_debit)}</td>
@@ -690,7 +719,7 @@ export default function BalanceGenerale() {
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-300 bg-gray-50 px-5 py-3 text-sm text-gray-600">
           <span className="flex items-center gap-2">
             <FiFileText size={15} />
-            {filteredAccounts.length} comptes affiches, {totals.line_count} mouvements
+            {filteredPartners.length} partenaires affiches, {totals.line_count} mouvements
           </span>
           <span className="flex items-center gap-2">
             <FiCalendar size={15} />

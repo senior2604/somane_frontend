@@ -16,7 +16,6 @@ export const RESOURCE_TYPES = [
   { value: 'permissions', label: 'Permission', plural: 'Permissions' },
 ];
 
-// Route de la liste, vers laquelle pointent tous les boutons "Retour" / "Annuler".
 export const SECURITY_LIST_ROUTE = '/UsersGestions';
 
 export const parseResponse = (response) => {
@@ -42,7 +41,8 @@ export const getPermissionName = (permission, groups = [], modules = []) => {
   if (permission?.name) return permission.name;
   const group = findById(groups, permission?.groupe);
   const module = findById(modules, permission?.module);
-  return `${group?.name || 'Groupe'} - ${module?.nom_affiche || module?.name || 'Module'}`;
+  const model = permission?.model_details?.model || permission?.model_name || '';
+  return `${group?.name || 'Groupe'} - ${module?.nom_affiche || module?.nom || module?.name || 'Module'}${model ? ` - ${model}` : ''}`;
 };
 
 export const findById = (items, value) => {
@@ -50,8 +50,6 @@ export const findById = (items, value) => {
   return items.find((item) => String(item.id) === String(id));
 };
 
-// Un partenaire n'est proposable a la creation d'utilisateur que s'il a au
-// moins une entite rattachee.
 export const getEligiblePartenaires = (partenaires = [], entites = []) => {
   return partenaires.filter((partenaire) =>
     entites.some((entite) => (entite.partenaire?.id ?? entite.partenaire) === partenaire.id)
@@ -79,13 +77,24 @@ export const initialForms = {
     groupe: '',
     module: '',
     entite: '',
-    acces: 'lecture',
+    model_id: '',
+    acces: 'personnalise',
+    perm_read: false,
+    perm_create: false,
+    perm_write: false,
+    perm_unlink: false,
+    perm_validate: false,
+    perm_cancel: false,
+    perm_export: false,
+    perm_import: false,
+    perm_print: false,
     statut: true,
   },
 };
 
 export function itemToForm(type, item) {
   if (!item) return initialForms[type] || {};
+
   if (type === 'users') {
     return {
       partenaire: item.partenaire?.id || item.partenaire || '',
@@ -93,6 +102,7 @@ export function itemToForm(type, item) {
       groups: item.groups?.map((group) => group.id ?? group) || [],
     };
   }
+
   if (type === 'groups') {
     return {
       name: item.name || '',
@@ -103,31 +113,48 @@ export function itemToForm(type, item) {
       inherited_groups: item.inherited_groups?.map((group) => group.id ?? group) || [],
     };
   }
+
   return {
     name: item.name || '',
     groupe: item.groupe?.id || item.groupe || '',
     module: item.module?.id || item.module || '',
     entite: item.entite?.id || item.entite || '',
-    acces: item.acces || 'lecture',
+    model_id: item.model_id?.id || item.model_id || '',
+    acces: item.acces || 'personnalise',
+    perm_read: !!item.perm_read,
+    perm_create: !!item.perm_create,
+    perm_write: !!item.perm_write,
+    perm_unlink: !!item.perm_unlink,
+    perm_validate: !!item.perm_validate,
+    perm_cancel: !!item.perm_cancel,
+    perm_export: !!item.perm_export,
+    perm_import: !!item.perm_import,
+    perm_print: !!item.perm_print,
     statut: item.statut !== undefined ? item.statut : true,
   };
 }
 
 export function validateSecurityForm(type, form) {
   const errors = {};
-  if (type === 'users' && !form.partenaire) errors.partenaire = 'Le partenaire est obligatoire';
-  if (type === 'groups' && !form.name?.trim()) errors.name = 'Le nom du groupe est obligatoire';
+
+  if (type === 'users' && !form.partenaire) {
+    errors.partenaire = 'Le partenaire est obligatoire';
+  }
+
+  if (type === 'groups' && !form.name?.trim()) {
+    errors.name = 'Le nom du groupe est obligatoire';
+  }
+
   if (type === 'permissions') {
     if (!form.groupe) errors.groupe = 'Le groupe est obligatoire';
     if (!form.module) errors.module = 'Le module est obligatoire';
+    if (!form.model_id) errors.model_id = 'Le modèle est obligatoire';
     if (!form.acces) errors.acces = "Le type d'acces est obligatoire";
   }
+
   return errors;
 }
 
-// IMPORTANT : ce payload "utilisateur en edition" est volontairement partiel
-// (statut / groupes uniquement). Il doit toujours partir avec un PATCH, jamais
-// un PUT, sinon l'API risque d'ecraser les champs non envoyes (email, nom...).
 export function buildPayload(type, form, item = null, partenaires = []) {
   if (type === 'users') {
     if (item) {
@@ -137,7 +164,9 @@ export function buildPayload(type, form, item = null, partenaires = []) {
         is_active: form.statut === 'actif',
       };
     }
+
     const partenaire = findById(partenaires, form.partenaire);
+
     return {
       partenaire: Number(form.partenaire),
       first_name: partenaire?.prenom || partenaire?.first_name || '',
@@ -162,10 +191,21 @@ export function buildPayload(type, form, item = null, partenaires = []) {
 
   return {
     name: form.name?.trim() || '',
-    groupe: Number(form.groupe),
+    groupe: form.groupe ? Number(form.groupe) : null,
     module: Number(form.module),
     entite: form.entite ? Number(form.entite) : null,
-    acces: form.acces,
+    model_id: Number(form.model_id),
+    acces: form.acces || 'personnalise',
+    perm_read: !!form.perm_read,
+    perm_create: !!form.perm_create,
+    perm_write: !!form.perm_write,
+    perm_unlink: !!form.perm_unlink,
+    perm_validate: !!form.perm_validate,
+    perm_cancel: !!form.perm_cancel,
+    perm_export: !!form.perm_export,
+    perm_import: !!form.perm_import,
+    perm_print: !!form.perm_print,
+    active: !!form.statut,
     statut: !!form.statut,
   };
 }
@@ -176,29 +216,35 @@ export function useSecurityData() {
     groups: [],
     permissions: [],
     modules: [],
+    models: [],
     entites: [],
     partenaires: [],
   });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
+
     try {
-      const [users, groups, permissions, modules, entites, partenaires] = await Promise.all([
+      const [users, groups, permissions, modules, models, entites, partenaires] = await Promise.all([
         apiClient.get('/users/'),
         apiClient.get('/groupes/'),
         apiClient.get('/permissions/'),
         apiClient.get('/modules/'),
+        apiClient.get('/ir-models/'),
         apiClient.get('/entites/'),
         apiClient.get('/partenaires/'),
       ]);
+
       setData({
         users: parseResponse(users),
         groups: parseResponse(groups),
         permissions: parseResponse(permissions),
         modules: parseResponse(modules),
+        models: parseResponse(models),
         entites: parseResponse(entites),
         partenaires: parseResponse(partenaires),
       });
@@ -218,9 +264,6 @@ export function useSecurityData() {
   return { ...data, eligiblePartenaires, loading, error, fetchData };
 }
 
-// ==========================================
-// TOOLTIP (identique a la version PartnerShared)
-// ==========================================
 export const Tooltip = ({ children, text, position = 'top' }) => {
   const [show, setShow] = useState(false);
 
@@ -253,9 +296,6 @@ export const Tooltip = ({ children, text, position = 'top' }) => {
   );
 };
 
-// ==========================================
-// Gabarit de champ "libelle a gauche / champ a droite", identique aux pages Partenaires
-// ==========================================
 export function FormField({ label, required, error, children }) {
   return (
     <div>

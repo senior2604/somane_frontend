@@ -15,6 +15,7 @@ class ApiClient {
       'auth/',
       'login/',
       'register/',
+      'security/me/',
       'pays/',
       'devises/',
       'subdivisions/',

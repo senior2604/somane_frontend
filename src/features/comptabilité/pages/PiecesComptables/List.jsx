@@ -1,7 +1,7 @@
 // C:\Users\IBM\Documents\somane_frontend\src\features\comptabilité\pages\PiecesComptables\List.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FiPlus,
   FiFilter,
@@ -232,6 +232,7 @@ const businessStatusConfig = {
 // ==========================================
 export default function PiecesComptablesList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { activeEntity } = useEntity();
   
   const [pieces, setPieces] = useState([]);
@@ -485,6 +486,34 @@ export default function PiecesComptablesList() {
     }
   }, [referentialsLoaded, activeEntity, loadData]);
 
+
+
+
+  // ajout de filtre 
+
+const getLineAccountCode = (line) => (
+  line?.account_code ||
+  line?.account?.code ||
+  line?.account_id_label ||
+  ''
+);
+
+const pieceHasAccountCode = (piece, accountCode) => {
+  if (!accountCode) return true;
+  const normalizedAccount = String(accountCode).trim();
+  return (piece?.lines || []).some((line) => (
+    String(getLineAccountCode(line)).startsWith(normalizedAccount)
+  ));
+};
+
+const pieceHasAccountingDateBetween = (piece, dateFrom, dateTo) => {
+  const pieceDate = piece?.date || '';
+  if (dateFrom && pieceDate < dateFrom) return false;
+  if (dateTo && pieceDate > dateTo) return false;
+  return true;
+};
+
+
   // ==========================================
   // FONCTION DE FILTRAGE
   // ==========================================
@@ -495,7 +524,19 @@ export default function PiecesComptablesList() {
       filtered = filtered.filter(piece => {
         let fieldValue = '';
         
-        switch (filter.field) {
+      switch (filter.field) {
+        case 'account_code':
+          return pieceHasAccountCode(piece, filter.value);
+
+        case 'date_from':
+          return pieceHasAccountingDateBetween(piece, filter.value, null);
+
+        case 'date_to':
+          return pieceHasAccountingDateBetween(piece, null, filter.value);
+
+        case 'date':
+          fieldValue = getPieceDateByMode(piece, dateDisplayMode);
+          break;
           case 'date':
             fieldValue = getPieceDateByMode(piece, dateDisplayMode);
             break;
@@ -532,6 +573,7 @@ export default function PiecesComptablesList() {
           case 'recherche':
             fieldValue = `${piece.name} ${piece.ref} ${getJournalCode(piece)} ${getPartnerDisplay(piece)?.displayName || ''}`;
             break;
+            
           default:
             fieldValue = '';
         }
@@ -542,6 +584,47 @@ export default function PiecesComptablesList() {
     
     return filtered;
   };
+
+
+  useEffect(() => {
+  if (!pieces.length) return;
+
+  const params = new URLSearchParams(location.search);
+  const urlFilters = [];
+
+  const accountCode = params.get('account_code');
+  const dateFrom = params.get('date_from');
+  const dateTo = params.get('date_to');
+  const state = params.get('state');
+
+  if (accountCode) {
+    urlFilters.push({ field: 'account_code', value: accountCode });
+  }
+  if (dateFrom) {
+    urlFilters.push({ field: 'date_from', value: dateFrom });
+  }
+  if (dateTo) {
+    urlFilters.push({ field: 'date_to', value: dateTo });
+  }
+  if (state && state !== 'all') {
+    urlFilters.push({ field: 'etat', value: state });
+  }
+
+  if (!urlFilters.length) return;
+
+  setActiveFilters((prev) => {
+    const withoutUrlFilters = prev.filter((filter) => ![
+      'account_code',
+      'date_from',
+      'date_to',
+    ].includes(filter.field));
+
+    return [...withoutUrlFilters, ...urlFilters];
+  });
+
+  setFilteredPieces(applyFiltersToPieces(pieces, urlFilters));
+  setCurrentPage(1);
+}, [location.search, pieces]);
 
   // Fonction de tri
   const getSortedPieces = (piecesToSort, column, direction) => {
@@ -994,6 +1077,20 @@ export default function PiecesComptablesList() {
                     let displayText = '';
                     let displayColor = '';
                     switch (filter.field) {
+                      case 'account_code':
+                      displayText = `Compte: ${filter.value}`;
+                      displayColor = 'bg-purple-100 text-purple-700';
+                      break;
+
+                    case 'date_from':
+                      displayText = `Depuis: ${filter.value}`;
+                      displayColor = 'bg-gray-100 text-gray-700';
+                      break;
+
+                    case 'date_to':
+                      displayText = `Jusqu'au: ${filter.value}`;
+                      displayColor = 'bg-gray-100 text-gray-700';
+                      break;
                       case 'recherche':
                         displayText = filter.value;
                         displayColor = 'bg-blue-100 text-blue-700';
@@ -1022,6 +1119,7 @@ export default function PiecesComptablesList() {
                         displayText = filter.value === 'paid' ? 'Payé' : 'Non payé';
                         displayColor = filter.value === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
                         break;
+
                       case 'partenaire':
                         displayText = `Partenaire: ${filter.value}`;
                         displayColor = 'bg-gray-100 text-gray-700';
@@ -1030,6 +1128,7 @@ export default function PiecesComptablesList() {
                         displayText = `${filter.field}: ${filter.value}`;
                         displayColor = 'bg-gray-100 text-gray-700';
                     }
+                    
                     return (
                       <span key={index} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${displayColor} m-0.5`}>
                         {displayText}
