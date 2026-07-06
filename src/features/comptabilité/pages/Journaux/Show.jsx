@@ -21,7 +21,7 @@ import {
   FiSave,
   FiHome
 } from "react-icons/fi";
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
 
@@ -72,7 +72,9 @@ const AutocompleteInput = ({
   placeholder = "",
   className = "",
   disabled = false,
-  required = false
+  required = false,
+  onCreateOption = null,
+  createOptionLabel = "Créer"
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value || '');
@@ -87,11 +89,13 @@ const AutocompleteInput = ({
     }
   }, [value]);
 
+  const normalizedInput = inputValue.trim().toLowerCase();
   const filteredOptions = options.filter(option => {
     const label = getOptionLabel(option).toLowerCase();
-    const search = inputValue.toLowerCase();
+    const search = normalizedInput;
     return label.includes(search);
   });
+  const canCreate = !!onCreateOption && inputValue.trim() && !filteredOptions.some(option => getOptionLabel(option).trim().toLowerCase() === normalizedInput);
 
   const updateDropdownPosition = () => {
     if (inputRef.current) {
@@ -156,6 +160,13 @@ const AutocompleteInput = ({
     onSelect(id, label);
   };
 
+  const handleCreateOption = () => {
+    if (!canCreate || disabled) return;
+    const query = inputValue.trim();
+    setIsOpen(false);
+    onCreateOption(query);
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -169,6 +180,9 @@ const AutocompleteInput = ({
     } else if (e.key === 'Enter' && isOpen && filteredOptions.length > 0) {
       e.preventDefault();
       handleSelectOption(filteredOptions[highlightedIndex]);
+    } else if (e.key === 'Enter' && isOpen && filteredOptions.length === 0 && canCreate) {
+      e.preventDefault();
+      handleCreateOption();
     } else if (e.key === 'Escape') {
       setIsOpen(false);
     }
@@ -193,7 +207,7 @@ const AutocompleteInput = ({
         style={{ height: '26px', border: 'none', backgroundColor: 'transparent' }}
         autoComplete="off"
       />
-      {isOpen && filteredOptions.length > 0 && (
+      {isOpen && (filteredOptions.length > 0 || canCreate) && (
         <div
           ref={dropdownRef}
           className="bg-white border border-gray-300 shadow-lg"
@@ -213,6 +227,15 @@ const AutocompleteInput = ({
               {getOptionLabel(option)}
             </div>
           ))}
+          {canCreate && (
+            <button
+              type="button"
+              onClick={handleCreateOption}
+              className="flex w-full items-center gap-1 border-t border-gray-200 px-2 py-1.5 text-left text-xs font-medium text-purple-700 hover:bg-purple-50"
+            >
+              <span>+</span><span>{createOptionLabel} "{inputValue.trim()}"</span>
+            </button>
+          )}
         </div>
       )}
     </>
@@ -450,6 +473,15 @@ const getBankLabel = (bank) => {
   return bank.nom || bank.name || 'Banque sans nom';
 };
 
+const JOURNAL_CONTEXT_DRAFT_KEY = 'somane_journal_context_draft';
+
+const getJournalContextCreateRoute = (field) => ({
+  account: '/comptabilite/accounts/new',
+  bank: '/banks',
+  bankAccount: '/PartnerBanks',
+  sequence: '/comptabilite/sequences/create',
+}[field] || '');
+
 const normalizeText = (value) =>
   String(value || '')
     .normalize('NFD')
@@ -575,6 +607,7 @@ const RequiredLabel = ({ children, required }) => (
 // ==========================================
 export default function JournauxShow() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { activeEntity } = useEntity();
 
@@ -662,6 +695,45 @@ export default function JournauxShow() {
     : bankAccounts;
 
   const hasSelectedOption = (id, name) => Boolean(id) || !String(name || '').trim();
+
+  const formatApiErrorMessage = (err, fallback) => {
+    const data = err?.data || err?.response?.data || err;
+    if (!data) return err?.message || fallback;
+
+    if (typeof data === 'string') return data;
+    if (Array.isArray(data)) return data.join('\n');
+
+    const fieldLabels = {
+      non_field_errors: 'Erreur',
+      detail: 'Erreur',
+      code: 'Code',
+      name: 'Nom',
+      type_id: 'Type',
+      default_account_id: 'Compte de tresorerie',
+      suspense_account_id: "Compte d'attente",
+      profit_account_id: 'Compte de profit',
+      loss_account_id: 'Compte de perte',
+      bank_account_id: 'Compte bancaire',
+      bank_acc_number: 'Numero de compte',
+      bank_id: 'Banque',
+      company_id: 'Entite',
+    };
+
+    if (data.detail) return Array.isArray(data.detail) ? data.detail.join('\n') : String(data.detail);
+    if (data.message) return Array.isArray(data.message) ? data.message.join('\n') : String(data.message);
+
+    const lines = Object.entries(data).flatMap(([field, value]) => {
+      const label = fieldLabels[field] || field;
+      const messages = Array.isArray(value)
+        ? value
+        : value && typeof value === 'object'
+          ? Object.values(value).flat()
+          : [value];
+      return messages.filter(Boolean).map(message => `${label} : ${message}`);
+    });
+
+    return lines.length ? lines.join('\n') : (err?.message || fallback);
+  };
 
   const validateSelectedAccountRole = (fieldId, label, predicate, silent) => {
     const selected = getAccountById(formData[fieldId]);
@@ -952,12 +1024,61 @@ export default function JournauxShow() {
     if (activeEntity) {
       const boot = async () => {
         await loadOptions();
+        if (location.state?.restoreJournalDraft) return;
         const journalData = await loadJournal();
         await loadJournalTraceability(journalData);
       };
       boot();
     }
-  }, [activeEntity, id]);
+  }, [activeEntity, id, location.state]);
+
+  useEffect(() => {
+    const state = location.state || {};
+    let contextState = state.restoreJournalDraft ? state : null;
+
+    if (!contextState) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(JOURNAL_CONTEXT_DRAFT_KEY) || 'null');
+        if (saved?.restoreJournalDraft?.journalId && String(saved.restoreJournalDraft.journalId) === String(id)) {
+          contextState = saved;
+        }
+      } catch (storageError) {
+        console.warn('Impossible de restaurer le brouillon du journal', storageError);
+      }
+    }
+
+    const draft = contextState?.restoreJournalDraft;
+    if (!draft?.formData) return;
+
+    const createdRecord = state.createdRecord || state.created_record || state.record || null;
+    const targetFields = contextState.targetFields || {};
+    const createdId = createdRecord?.id || createdRecord?.pk || '';
+    const getCreatedLabel = () => {
+      if (!createdRecord) return contextState.returnQuery || '';
+      if (contextState.returnField === 'account') {
+        return [createdRecord.code, createdRecord.name].filter(Boolean).join(' - ') || createdRecord.display_name || contextState.returnQuery || '';
+      }
+      if (contextState.returnField === 'bank') return getBankLabel(createdRecord) || contextState.returnQuery || '';
+      if (contextState.returnField === 'bankAccount') return getBankAccountLabel(createdRecord) || contextState.returnQuery || '';
+      if (contextState.returnField === 'sequence') return getSequenceLabel(createdRecord) || createdRecord.name || contextState.returnQuery || '';
+      return createdRecord.display_name || createdRecord.name || contextState.returnQuery || '';
+    };
+
+    const restoredForm = { ...draft.formData };
+    if (createdId && targetFields.idField) {
+      restoredForm[targetFields.idField] = createdId;
+      if (targetFields.nameField) restoredForm[targetFields.nameField] = getCreatedLabel();
+    }
+
+    setFormData(restoredForm);
+    setActiveTab(draft.activeTab || 'comptable');
+    setShowTraceabilityPanel(draft.showTraceabilityPanel !== false);
+    setHasUnsavedChanges(true);
+
+    try {
+      sessionStorage.removeItem(JOURNAL_CONTEXT_DRAFT_KEY);
+    } catch {}
+  }, [id, location.state]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -1072,6 +1193,34 @@ export default function JournauxShow() {
     setFormData(prev => ({ ...prev, [field]: value }));
     markAsModified();
   };
+
+  const buildContextReturnState = useCallback((field, query = '', targetFields = null) => ({
+    returnTo: `${location.pathname}${location.search || ''}`,
+    returnField: field,
+    returnQuery: query,
+    suggestedValue: query,
+    targetFields,
+    fromJournal: true,
+    restoreJournalDraft: {
+      formData,
+      activeTab,
+      journalId: id,
+      showTraceabilityPanel,
+    },
+  }), [activeTab, formData, id, location.pathname, location.search, showTraceabilityPanel]);
+
+  const navigateToContextCreate = useCallback((field, query = '', targetFields = null) => {
+    const route = getJournalContextCreateRoute(field);
+    if (!route) return;
+
+    const returnState = buildContextReturnState(field, query, targetFields);
+    try {
+      sessionStorage.setItem(JOURNAL_CONTEXT_DRAFT_KEY, JSON.stringify(returnState));
+    } catch (storageError) {
+      console.warn('Impossible de sauvegarder le brouillon du journal', storageError);
+    }
+    navigate(route, { state: returnState });
+  }, [buildContextReturnState, navigate]);
 
   const handleBankAccountSelect = (id, label) => {
     const selectedBankAccount = bankAccounts.find(item => String(item.id) === String(id));
@@ -1217,6 +1366,18 @@ export default function JournauxShow() {
       if (!validateSelectedAccountRole('default_account_id', 'Compte de tresorerie', isTreasuryAccount, silent)) {
         return false;
       }
+      if (!formData.suspense_account_id) {
+        if (!silent) setError("Le compte d'attente est obligatoire pour un journal de type Caisse");
+        return false;
+      }
+      if (!formData.profit_account_id) {
+        if (!silent) setError('Le compte de profit est obligatoire pour un journal de type Caisse');
+        return false;
+      }
+      if (!formData.loss_account_id) {
+        if (!silent) setError('Le compte de perte est obligatoire pour un journal de type Caisse');
+        return false;
+      }
     }
 
     if (!hasSelectedOption(formData.default_account_id, formData.default_account_name)) {
@@ -1252,7 +1413,7 @@ export default function JournauxShow() {
     if (isBankType()) {
       return ['name', 'code', 'type_id', 'default_account_id', 'bank_account_id', 'bank_acc_number', 'bank_id'];
     } else if (isCashType()) {
-      return ['name', 'code', 'type_id', 'default_account_id'];
+      return ['name', 'code', 'type_id', 'default_account_id', 'suspense_account_id', 'profit_account_id', 'loss_account_id'];
     } else {
       return ['name', 'code', 'type_id'];
     }
@@ -1325,19 +1486,9 @@ const handleSave = async (silent = false) => {
     
   } catch (err) {
     // Le message est dans err.data (pas err.response.data)
-    let errorMessage = "Erreur lors de la mise a jour";
+    const errorMessage = formatApiErrorMessage(err, 'Erreur lors de la mise a jour');
     
     // Essaye différents endroits où le message pourrait être
-    if (err?.data?.code?.[0]) {
-      errorMessage = err.data.code[0];
-    } else if (err?.response?.data?.code?.[0]) {
-      errorMessage = err.response.data.code[0];
-    } else if (err?.data?.message) {
-      errorMessage = err.data.message;
-    } else if (err?.message) {
-      errorMessage = err.message;
-    }
-    
     setError(errorMessage);
     return false;
   } finally {
@@ -1589,6 +1740,18 @@ const handleSave = async (silent = false) => {
               </button>
             </Tooltip>
             <span className="text-sm text-gray-700 font-medium">Activer/Désactiver</span>
+            {(error || success) && (
+              <div className={`ml-2 inline-flex max-w-2xl items-start gap-2 border px-3 py-1.5 text-xs ${
+                error
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : 'border-green-200 bg-green-50 text-green-700'
+              }`}>
+                <span className="mt-0.5 flex-shrink-0">
+                  {error ? <FiAlertCircle size={13} /> : <FiCheck size={13} />}
+                </span>
+                <span className="whitespace-pre-line leading-4">{error || success}</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Tooltip text="Créer une pièce avec ce journal">
@@ -1713,6 +1876,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de tresorerie"
                               required={isFieldRequired('default_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'default_account_id', nameField: 'default_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1728,6 +1893,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={getBankLabel}
                               placeholder="Selectionner une banque (obligatoire)"
                               required={isFieldRequired('bank_id')}
+                              onCreateOption={(query) => navigateToContextCreate('bank', query, { idField: 'bank_id', nameField: 'bank_name' })}
+                              createOptionLabel="Créer la banque"
                             />
                           </div>
                         </div>
@@ -1746,6 +1913,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={getBankAccountLabel}
                               placeholder="Compte bancaire (obligatoire)"
                               required={isFieldRequired('bank_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('bankAccount', query, { idField: 'bank_account_id', nameField: 'bank_account_name' })}
+                              createOptionLabel="Créer le compte bancaire"
                             />
                           </div>
                         </div>
@@ -1779,6 +1948,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={getBankLabel}
                               placeholder="Sélectionner une banque (obligatoire)"
                               required={isFieldRequired('bank_id')}
+                              onCreateOption={(query) => navigateToContextCreate('bank', query, { idField: 'bank_id', nameField: 'bank_name' })}
+                              createOptionLabel="Créer la banque"
                             />
                           </div>
                         </div>
@@ -1861,6 +2032,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de tresorerie"
                               required={isFieldRequired('default_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'default_account_id', nameField: 'default_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1880,6 +2053,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte d'attente"
                               required={isFieldRequired('suspense_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'suspense_account_id', nameField: 'suspense_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1901,6 +2076,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de profit"
                               required={isFieldRequired('profit_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'profit_account_id', nameField: 'profit_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1919,6 +2096,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de perte"
                               required={isFieldRequired('loss_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'loss_account_id', nameField: 'loss_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1967,6 +2146,8 @@ const handleSave = async (silent = false) => {
                               options={accounts}
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte par defaut (optionnel)"
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'default_account_id', nameField: 'default_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -2072,6 +2253,8 @@ const handleSave = async (silent = false) => {
                       options={suspenseAccounts}
                       getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                       placeholder="Compte suspens entrant (optionnel)"
+                      onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'suspense_account_in_id', nameField: 'suspense_account_in_name' })}
+                      createOptionLabel="Créer le compte"
                     />
                   </div>
                 </div>
@@ -2090,6 +2273,8 @@ const handleSave = async (silent = false) => {
                       options={suspenseAccounts}
                       getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                       placeholder="Compte suspens sortant (optionnel)"
+                      onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'suspense_account_out_id', nameField: 'suspense_account_out_name' })}
+                      createOptionLabel="Créer le compte"
                     />
                   </div>
                 </div>
@@ -2121,6 +2306,8 @@ const handleSave = async (silent = false) => {
                       options={sequences}
                       getOptionLabel={getSequenceLabel}
                       placeholder="Séquence (optionnel)"
+                      onCreateOption={(query) => navigateToContextCreate('sequence', query, { idField: 'sequence_id', nameField: 'sequence_name' })}
+                      createOptionLabel="Créer la séquence"
                     />
                   </div>
                 </div>
@@ -2167,6 +2354,8 @@ const handleSave = async (silent = false) => {
                         options={sequences}
                         getOptionLabel={getSequenceLabel}
                         placeholder="Séquence des avoirs"
+                        onCreateOption={(query) => navigateToContextCreate('sequence', query, { idField: 'refund_sequence_id', nameField: 'refund_sequence_name' })}
+                        createOptionLabel="Créer la séquence"
                       />
                     </div>
                   </div>
@@ -2259,16 +2448,6 @@ const handleSave = async (silent = false) => {
           )}
         </div>
 
-        {(error || success) && (
-          <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
-            error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
-          }`}>
-            <div className="flex items-center gap-2">
-              {error ? <FiAlertCircle size={14} /> : <FiCheck size={14} />}
-              <span>{error || success}</span>
-            </div>
-          </div>
-        )}
       </div>
 
       {showConfirmDialog && (

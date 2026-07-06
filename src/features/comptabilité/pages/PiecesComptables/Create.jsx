@@ -57,7 +57,7 @@ const Tooltip = ({ children, text, position = 'top' }) => {
 // =============================================================================
 // AUTOCOMPLETE INPUT
 // =============================================================================
-const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, getOptionLabel, placeholder = "", className = "", disabled = false, required = false, onKeyDown }) => {
+const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, getOptionLabel, placeholder = "", className = "", disabled = false, required = false, onKeyDown, onCreateOption, createOptionLabel = "Créer" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value || '');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -66,12 +66,14 @@ const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, get
   const [dropdownStyle, setDropdownStyle] = useState({});
 
   useEffect(() => { if (value !== undefined) setInputValue(value); }, [value]);
-  const filteredOptions = options.filter(option => getOptionLabel(option).toLowerCase().includes(inputValue.toLowerCase()));
+  const normalizedInput = inputValue.trim().toLowerCase();
+  const filteredOptions = options.filter(option => getOptionLabel(option).toLowerCase().includes(normalizedInput));
+  const canCreate = !!onCreateOption && inputValue.trim() && !filteredOptions.some(option => getOptionLabel(option).trim().toLowerCase() === normalizedInput);
 
   const updateDropdownPosition = useCallback(() => {
     if (inputRef.current) {
       const rect = inputRef.current.getBoundingClientRect();
-      setDropdownStyle({ position: 'fixed', top: `${rect.bottom}px`, left: `${rect.left}px`, width: `${rect.width}px`, zIndex: 9999, maxHeight: '200px', overflowY: 'auto' });
+      setDropdownStyle({ position: 'fixed', top: `${rect.bottom}px`, left: `${rect.left}px`, width: `${rect.width}px`, zIndex: 9999, maxHeight: '220px', overflowY: 'auto' });
     }
   }, []);
 
@@ -96,11 +98,13 @@ const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, get
 
   const handleInputChange = (e) => { if (disabled) return; setInputValue(e.target.value); setIsOpen(true); setHighlightedIndex(0); onChange(e.target.value); if (selectedId) onSelect(null, ''); };
   const handleSelectOption = (option) => { if (disabled) return; const label = getOptionLabel(option); setInputValue(label); setIsOpen(false); onSelect(option.id, label); };
+  const handleCreateOption = () => { if (disabled || !canCreate) return; const query = inputValue.trim(); setIsOpen(false); onCreateOption(query); };
   const handleKeyDown = (e) => {
     if (disabled) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setIsOpen(true); setHighlightedIndex(prev => prev < filteredOptions.length - 1 ? prev + 1 : prev); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0); }
     else if (e.key === 'Enter' && isOpen && filteredOptions.length > 0) { e.preventDefault(); handleSelectOption(filteredOptions[highlightedIndex]); }
+    else if (e.key === 'Enter' && isOpen && filteredOptions.length === 0 && canCreate) { e.preventDefault(); handleCreateOption(); }
     else if (e.key === 'Escape') setIsOpen(false);
     else if (e.key === 'Tab') {
       if (isOpen && filteredOptions.length > 0) {
@@ -121,17 +125,21 @@ const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, get
   return (
     <>
       <input ref={inputRef} type="text" value={inputValue} onChange={handleInputChange} onKeyDown={handleKeyDown} onFocus={() => { if(!disabled) { setIsOpen(true); updateDropdownPosition(); } }} placeholder={placeholder} disabled={disabled} required={required} className={`w-full px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none ${className} ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`} style={{ height: '26px', border: 'none', backgroundColor: 'transparent' }} autoComplete="off" />
-      {isOpen && !disabled && filteredOptions.length > 0 && (
+      {isOpen && !disabled && (filteredOptions.length > 0 || canCreate) && (
         <div ref={dropdownRef} className="bg-white border border-gray-300 shadow-lg" style={dropdownStyle}>
           {filteredOptions.map((option, index) => (
             <div key={option.id} className={`px-2 py-1 text-xs cursor-pointer ${index === highlightedIndex ? 'bg-blue-100 text-blue-700' : 'hover:bg-blue-50'} ${option.id === selectedId ? 'bg-blue-50' : ''}`} onClick={() => handleSelectOption(option)} onMouseEnter={() => setHighlightedIndex(index)}>{getOptionLabel(option)}</div>
           ))}
+          {canCreate && (
+            <button type="button" onClick={handleCreateOption} className="flex w-full items-center gap-1 border-t border-gray-200 px-2 py-1.5 text-left text-xs font-medium text-purple-700 hover:bg-purple-50">
+              <span>+</span><span>{createOptionLabel} "{inputValue.trim()}"</span>
+            </button>
+          )}
         </div>
       )}
     </>
   );
 };
-
 // =============================================================================
 // AMOUNT INPUT
 // =============================================================================
@@ -170,6 +178,31 @@ const roundAmount = (value) => {
   const number = Number(value) || 0;
   return Math.round(number);
 };
+const PIECE_CONTEXT_DRAFT_KEY = 'somane_piece_context_draft';
+
+const getCreatedRecordId = (record) => {
+  if (!record) return '';
+  if (typeof record === 'string' || typeof record === 'number') return record;
+  return record.id || record.pk || record.value || '';
+};
+
+const getCreatedRecordLabel = (field, record, fallback = '') => {
+  if (!record || typeof record !== 'object') return fallback;
+  if (field === 'journal') return [record.code, record.name].filter(Boolean).join(' - ') || record.display_name || fallback;
+  if (field === 'account') return [record.code, record.name].filter(Boolean).join(' - ') || record.display_name || fallback;
+  if (field === 'partner') return record.nom || record.name || record.raison_sociale || record.display_name || fallback;
+  if (field === 'tax') return record.name ? `${record.name}${record.amount ? ` (${record.amount}%)` : ''}` : record.display_name || fallback;
+  if (field === 'withholding') return record.name ? `${record.name}${record.amount ? ` (${record.amount}%)` : ''}` : record.display_name || fallback;
+  return record.display_name || record.name || fallback;
+};
+
+const getContextCreateRoute = (field) => ({
+  journal: '/comptabilite/journaux/create',
+  account: '/comptabilite/accounts/new',
+  partner: '/partners/create',
+  tax: '/comptabilite/taux-fiscaux/create',
+  withholding: '/comptabilite/withholding-taxes/create',
+}[field] || '');
 
 const OPTIONAL_COLUMNS = [
   { key: 'tax', label: 'Taxe' },
@@ -190,6 +223,7 @@ export default function Create() {
   const location = useLocation();
   const { activeEntity } = useEntity();
   const [loading, setLoading] = useState(false);
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
   const [journals, setJournals] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [partners, setPartners] = useState([]);
@@ -224,6 +258,7 @@ export default function Create() {
   const columnsMenuRef = useRef(null);
   const columnsMenuButtonRef = useRef(null);
   const columnsMenuPopupRef = useRef(null);
+  const returnedContextKeyRef = useRef('');
 
   // Refs pour accéder aux données dans les callbacks
   const taxesRef = useRef([]);
@@ -351,6 +386,7 @@ export default function Create() {
 
   const loadOptions = useCallback(async () => {
     if (!activeEntity) return;
+    setOptionsLoaded(false);
     try {
       const [journalsData, accountsData, partnersData, devisesData, taxesData, withholdingData, fiscalData] = await Promise.all([
         piecesService.getJournals(activeEntity.id), piecesService.getAccounts(activeEntity.id),
@@ -377,7 +413,11 @@ export default function Create() {
         const defaultCurrency = normDevises.find(d => d.code === 'XOF') || normDevises[0];
         setFormData(prev => ({ ...prev, currency_id: defaultCurrency.id, currency_label: `${defaultCurrency.code}${defaultCurrency.symbole ? ` (${defaultCurrency.symbole})` : ''}` }));
       }
-    } catch (err) { setError('Erreur chargement données'); }
+      setOptionsLoaded(true);
+    } catch (err) {
+      setOptionsLoaded(true);
+      setError('Erreur chargement donnees');
+    }
   }, [activeEntity]);
 
   useEffect(() => { if (activeEntity) loadOptions(); }, [activeEntity, loadOptions]);
@@ -425,6 +465,32 @@ export default function Create() {
 
   const markAsModified = useCallback(() => setHasUnsavedChanges(true), []);
   const handleChange = useCallback((field, value) => { setFormData(prev => ({ ...prev, [field]: value })); markAsModified(); }, [markAsModified]);
+  const buildContextReturnState = useCallback((field, query = '', lineId = null) => ({
+    returnTo: `${location.pathname}${location.search || ''}`,
+    returnField: field,
+    returnLineId: lineId,
+    returnQuery: query,
+    suggestedValue: query,
+    fromPiece: true,
+    restorePieceDraft: {
+      formData,
+      activeTab,
+      visibleColumns,
+      pieceId,
+    },
+  }), [location.pathname, location.search, formData, activeTab, visibleColumns, pieceId]);
+
+  const navigateToContextCreate = useCallback((field, query = '', lineId = null) => {
+    const route = getContextCreateRoute(field);
+    if (!route) return;
+    const returnState = buildContextReturnState(field, query, lineId);
+    try {
+      sessionStorage.setItem(PIECE_CONTEXT_DRAFT_KEY, JSON.stringify(returnState));
+    } catch (storageError) {
+      console.warn('Impossible de sauvegarder le brouillon de la pièce', storageError);
+    }
+    navigate(route, { state: returnState });
+  }, [buildContextReturnState, navigate]);
 
   const fetchTaxRepartitions = useCallback(async (taxId) => {
     if (taxRepartitionsCache[taxId]) return taxRepartitionsCache[taxId];
@@ -832,7 +898,155 @@ export default function Create() {
       lines: newLines,
     }));
   }, [formData.lines, journals, fetchTaxRepartitions, buildCounterpartLine, buildWithholdingCounterpartLine, markAsModified, getJournalTreasuryAccount, isTreasuryJournal]);
+  const applyReturnedContextRecord = useCallback(async (field, record, lineId, fallbackLabel = '') => {
+    const createdId = getCreatedRecordId(record);
+    const createdLabel = getCreatedRecordLabel(field, record, fallbackLabel);
+    if (!createdId || !createdLabel) return;
 
+    if (field === 'journal') {
+      const exists = journals.some(item => String(item.id) === String(createdId));
+      if (!exists && record && typeof record === 'object') setJournals(prev => [...prev, record]);
+      await handleJournalSelection(createdId, createdLabel);
+      return;
+    }
+
+    if (!lineId) return;
+    if (field === 'account') {
+      const exists = accountsRef.current.some(item => String(item.id) === String(createdId));
+      if (!exists && record && typeof record === 'object') setAccounts(prev => [...prev, record]);
+      await handleAccountSelection(lineId, createdId, createdLabel);
+    } else if (field === 'partner') {
+      const exists = partnersRef.current.some(item => String(item.id) === String(createdId));
+      if (!exists && record && typeof record === 'object') setPartners(prev => [...prev, record]);
+      await handlePartnerSelection(lineId, createdId, createdLabel);
+    } else if (field === 'tax') {
+      const exists = taxesRef.current.some(item => String(item.id) === String(createdId));
+      if (!exists && record && typeof record === 'object') setTaxes(prev => [...prev, record]);
+      await handleTaxSelection(lineId, createdId, createdLabel);
+    } else if (field === 'withholding') {
+      const exists = withholdingTaxesRef.current.some(item => String(item.id) === String(createdId));
+      if (!exists && record && typeof record === 'object') setWithholdingTaxes(prev => [...prev, record]);
+      await handleWithholdingSelection(lineId, createdId, createdLabel);
+    }
+  }, [journals, handleJournalSelection, handleAccountSelection, handlePartnerSelection, handleTaxSelection, handleWithholdingSelection]);
+
+  useEffect(() => {
+    let savedContext = null;
+    try {
+      const rawSavedContext = sessionStorage.getItem(PIECE_CONTEXT_DRAFT_KEY);
+      savedContext = rawSavedContext ? JSON.parse(rawSavedContext) : null;
+    } catch {
+      savedContext = null;
+    }
+
+    const state = {
+      ...(savedContext || {}),
+      ...(location.state || {}),
+    };
+    const createdRecord = state.createdRecord || state.created_record || state.selectedRecord || state.record || state.created || null;
+    const returnField = state.returnField || state.selectedField || '';
+    const returnLineId = state.returnLineId || null;
+    const restoreDraft = state.restorePieceDraft || null;
+
+    if (!createdRecord && !restoreDraft) return;
+
+    const contextKey = [
+      returnField,
+      returnLineId || '',
+      createdRecord?.id || createdRecord?.pk || '',
+      state.returnQuery || state.suggestedValue || '',
+      restoreDraft?.pieceId || '',
+    ].join('|');
+    if (contextKey && returnedContextKeyRef.current === contextKey) return;
+    returnedContextKeyRef.current = contextKey;
+
+    if (createdRecord && returnField === 'journal' && restoreDraft?.formData) {
+      const applyJournalToRestoredDraft = async () => {
+        const createdId = getCreatedRecordId(createdRecord);
+        const createdLabel = getCreatedRecordLabel('journal', createdRecord, state.returnQuery || state.suggestedValue || '');
+        if (!createdId || !createdLabel) return;
+
+        const selectedJournal = createdRecord && typeof createdRecord === 'object'
+          ? createdRecord
+          : journals.find(j => String(j.id) === String(createdId));
+        const restoredLines = Array.isArray(restoreDraft.formData.lines) ? restoreDraft.formData.lines : [];
+        let newLines = restoredLines;
+        if (optionsLoaded) {
+          const treasuryAccount = getJournalTreasuryAccount(selectedJournal);
+          const motherLines = restoredLines
+            .filter(l => !l.is_counterpart && !l.is_tax_line && !l.is_withholding_counterpart)
+            .map(line => {
+              if (
+                selectedJournal &&
+                isTreasuryJournal(selectedJournal) &&
+                treasuryAccount?.id &&
+                String(line.account_id) === String(treasuryAccount.id)
+              ) {
+                return { ...line, account_id: '', account_label: '', account_code: '' };
+              }
+              return line;
+            });
+          const autoLines = restoredLines.filter(l =>
+            (l.is_counterpart || l.is_tax_line || l.is_withholding_counterpart) && !l.is_treasury_counterpart
+          );
+          newLines = await regenerateAllLines(
+            motherLines, autoLines, fetchTaxRepartitions,
+            buildCounterpartLine, buildWithholdingCounterpartLine,
+            taxesRef.current, partnersRef.current, accountsRef.current, withholdingTaxesRef.current,
+            selectedJournal
+          );
+        }
+
+        const exists = journals.some(item => String(item.id) === String(createdId));
+        if (!exists && createdRecord && typeof createdRecord === 'object') setJournals(prev => [...prev, createdRecord]);
+        setFormData({
+          ...restoreDraft.formData,
+          journal_id: createdId,
+          journal_label: createdLabel,
+          lines: newLines,
+        });
+        if (restoreDraft.activeTab) setActiveTab(restoreDraft.activeTab);
+        if (restoreDraft.visibleColumns) setVisibleColumns(prev => ({ ...prev, ...restoreDraft.visibleColumns }));
+        if (restoreDraft.pieceId) setPieceId(restoreDraft.pieceId);
+        markAsModified();
+        setSuccess('Element cree et ajoute a la piece.');
+        try { sessionStorage.removeItem(PIECE_CONTEXT_DRAFT_KEY); } catch {}
+        navigate(`${location.pathname}${location.search || ''}`, { replace: true, state: {} });
+      };
+      applyJournalToRestoredDraft();
+      return;
+    }
+
+    if (restoreDraft?.formData) setFormData(restoreDraft.formData);
+    if (restoreDraft?.activeTab) setActiveTab(restoreDraft.activeTab);
+    if (restoreDraft?.visibleColumns) setVisibleColumns(prev => ({ ...prev, ...restoreDraft.visibleColumns }));
+    if (restoreDraft?.pieceId) setPieceId(restoreDraft.pieceId);
+
+    if (createdRecord && returnField) {
+      applyReturnedContextRecord(returnField, createdRecord, returnLineId, state.returnQuery || state.suggestedValue || '');
+      setSuccess('Element cree et ajoute a la piece.');
+      try { sessionStorage.removeItem(PIECE_CONTEXT_DRAFT_KEY); } catch {}
+    }
+    navigate(`${location.pathname}${location.search || ''}`, { replace: true, state: {} });
+  }, [
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+    applyReturnedContextRecord,
+    optionsLoaded,
+    accounts.length,
+    partners.length,
+    taxes.length,
+    withholdingTaxes.length,
+    journals,
+    fetchTaxRepartitions,
+    buildCounterpartLine,
+    buildWithholdingCounterpartLine,
+    getJournalTreasuryAccount,
+    isTreasuryJournal,
+    markAsModified,
+  ]);
   const handleAmountChange = useCallback(async (lineId, type, value) => {
     const isAutoLine = formData.lines.find(l => l.id === lineId && (l.is_counterpart || l.is_tax_line || l.is_withholding_counterpart));
     if (isAutoLine) {
@@ -1291,7 +1505,7 @@ export default function Create() {
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Journal *</label>
                 <div className="flex-1 ml-2 border border-gray-300">
-                  <AutocompleteInput value={formData.journal_label} selectedId={formData.journal_id} onChange={(text) => handleChange('journal_label', text)} onSelect={handleJournalSelection} options={journals} getOptionLabel={(o) => `${o.code} - ${o.name}`} placeholder="Sélectionner un journal" required={true} disabled={!isDraft} />
+                  <AutocompleteInput value={formData.journal_label} selectedId={formData.journal_id} onChange={(text) => handleChange('journal_label', text)} onSelect={handleJournalSelection} options={journals} getOptionLabel={(o) => `${o.code} - ${o.name}`} placeholder="Sélectionner un journal" required={true} disabled={!isDraft} onCreateOption={(query) => navigateToContextCreate('journal', query)} createOptionLabel="Créer le journal" />
                 </div>
               </div>
             </div>
@@ -1358,6 +1572,8 @@ export default function Create() {
                                 placeholder="Compte" 
                                 required={true} 
                                 disabled={!isDraft} 
+                                onCreateOption={(query) => navigateToContextCreate('account', query, line.id)}
+                                createOptionLabel="Créer le compte"
                               />
                               {line.account_code && accountNature !== 'other' && (
                                 <span className="ml-1 text-sm" title={accountNature === 'charge' ? 'Compte de Charge' : 'Compte de Produit'}>
@@ -1376,6 +1592,8 @@ export default function Create() {
                               getOptionLabel={(o) => o.nom || o.name || o.raison_sociale || ''} 
                               placeholder="Partenaire" 
                               disabled={isAutoLine || !isDraft} 
+                              onCreateOption={(query) => navigateToContextCreate('partner', query, line.id)}
+                              createOptionLabel="Créer le partenaire"
                             />
                           </td>
                           <td className="border border-gray-300 p-1" style={{ minWidth: '150px' }}>
@@ -1418,6 +1636,8 @@ export default function Create() {
                                 placeholder="TVA..." 
                                 onKeyDown={(e) => handleColumnTab(e, line, 'tax')}
                                 disabled={!isDraft} 
+                                onCreateOption={(query) => navigateToContextCreate('tax', query, line.id)}
+                                createOptionLabel="Créer la taxe"
                               />
                             ) : (
                               <div className="px-2 text-xs text-gray-400 italic flex items-center" style={{ height: '26px' }}>
@@ -1437,6 +1657,8 @@ export default function Create() {
                                 placeholder="Retenue..." 
                                 onKeyDown={(e) => handleColumnTab(e, line, 'withholding')}
                                 disabled={!isDraft} 
+                                onCreateOption={(query) => navigateToContextCreate('withholding', query, line.id)}
+                                createOptionLabel="Créer la retenue"
                               />
                             ) : (
                               <div className="px-2 text-xs text-gray-400 italic" style={{ height: '26px' }}>—</div>
@@ -1644,3 +1866,7 @@ export default function Create() {
     </div>
   );
 }
+
+
+
+

@@ -19,7 +19,7 @@ import {
   FiSettings,
   FiUploadCloud,
 } from 'react-icons/fi';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { ENDPOINTS } from '../../../../config/api';
 import axiosInstance from '../../../../config/axiosInstance';
@@ -337,9 +337,57 @@ const resolveAccountLength = (account) => {
   return code ? code.length : '';
 };
 
+const normalizeSavedAccount = (payload, fallback = {}) => {
+  const data = payload?.data ?? payload ?? {};
+  return {
+    ...fallback,
+    ...(data && typeof data === 'object' ? data : {}),
+  };
+};
+
+const getAccountReturnLabel = (account) => {
+  const code = account?.code || '';
+  const name = account?.name || account?.label || account?.display_name || '';
+  return [code, name].filter(Boolean).join(' - ') || name || code || '';
+};
+
+const buildAccountReturnState = (locationState, account) => {
+  const label = getAccountReturnLabel(account);
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    createdRecord: account,
+    created_record: account,
+    selectedRecord: account,
+    updatedRecord: account,
+    returnField: locationState?.returnField || locationState?.selectedField || 'account',
+    selectedField: locationState?.selectedField || locationState?.returnField || 'account',
+    returnLineId: locationState?.returnLineId ?? locationState?.lineId ?? null,
+    lineId: locationState?.lineId ?? locationState?.returnLineId ?? null,
+    returnQuery: locationState?.returnQuery || locationState?.suggestedValue || label,
+    suggestedValue: locationState?.suggestedValue || locationState?.returnQuery || label,
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+    restoreAccountDraft: locationState?.restoreAccountDraft,
+  };
+};
+
+const buildAccountCancelReturnState = (locationState) => {
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+    restoreAccountDraft: locationState?.restoreAccountDraft,
+  };
+};
+
 function AccountDetail() {
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
 
   const { updateAccount, fetchAccountById } = useAccountStore();
@@ -373,6 +421,18 @@ function AccountDetail() {
   const activeValue = Form.useWatch('active', form);
   const isActive = activeValue !== false;
   const readyForValidation = Boolean(watchedFramework && watchedCode && watchedName && watchedType);
+
+  const handleClose = useCallback(() => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildAccountCancelReturnState(location.state),
+      });
+      return;
+    }
+
+    navigate('/comptabilite/accounts');
+  }, [location.state, navigate]);
 
   const loadTypesAndGroups = useCallback(async (fwId) => {
     try {
@@ -524,17 +584,29 @@ function AccountDetail() {
     setSuccess(null);
     try {
       const updatedAccount = await updateAccount(id, values);
+      const savedAccount = normalizeSavedAccount(updatedAccount, {
+        ...(sourceAccount || {}),
+        ...values,
+        id,
+      });
       initialValuesRef.current = values;
       setHasChanges(false);
-      if (updatedAccount?.code || updatedAccount?.name) {
-        setSourceAccount((previous) => ({ ...(previous || {}), ...updatedAccount }));
-        setAccountLabel(`${updatedAccount.code || values.code} - ${updatedAccount.name || values.name}`);
+      if (savedAccount?.code || savedAccount?.name) {
+        setSourceAccount((previous) => ({ ...(previous || {}), ...savedAccount }));
+        setAccountLabel(getAccountReturnLabel(savedAccount));
       } else {
         setSourceAccount((previous) => ({ ...(previous || {}), ...values }));
         setAccountLabel(`${values.code} - ${values.name}`);
       }
       setSuccess('Compte modifié avec succès');
       message.success('Compte modifié avec succès');
+
+      if (location.state?.returnTo) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: buildAccountReturnState(location.state, savedAccount),
+        });
+      }
     } catch (caughtError) {
       const errorData = caughtError.response?.data;
       if (errorData && typeof errorData === 'object') {
@@ -709,7 +781,12 @@ function AccountDetail() {
                         type="button"
                         onClick={() => {
                           setShowActionsMenu(false);
-                          navigate('/comptabilite/accounts/new', { state: { frameworkId: selectedFramework } });
+                          navigate('/comptabilite/accounts/new', {
+                            state: {
+                              ...(location.state || {}),
+                              frameworkId: selectedFramework,
+                            },
+                          });
                         }}
                         className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"
                       >
@@ -783,7 +860,7 @@ function AccountDetail() {
                 <Tooltip text="Fermer">
                   <button
                     type="button"
-                    onClick={() => navigate('/comptabilite/accounts')}
+                    onClick={handleClose}
                     className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 flex items-center justify-center"
                   >
                     <CloseOutlined />

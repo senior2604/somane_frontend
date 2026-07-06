@@ -1,7 +1,7 @@
 // src/features/comptabilité/pages/TauxFiscaux/Show.jsx
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { 
   FiPlus, FiTrash2, FiCheck, FiUploadCloud, FiX, FiAlertCircle,
   FiBriefcase, FiSettings, FiInfo, FiPercent, FiTag, FiCreditCard,
@@ -347,11 +347,59 @@ const RepartitionSummary = ({ lines, title }) => {
   );
 };
 
+const normalizeSavedTax = (payload, fallback = {}) => {
+  const data = payload?.data ?? payload ?? {};
+  return {
+    ...fallback,
+    ...(data && typeof data === 'object' ? data : {}),
+  };
+};
+
+const getTaxReturnLabel = (tax) => {
+  const name = tax?.name || tax?.label || tax?.display_name || '';
+  const amount = tax?.amount !== undefined && tax?.amount !== null && tax?.amount !== ''
+    ? ` (${tax.amount}%)`
+    : '';
+  return `${name}${amount}`.trim();
+};
+
+const buildTaxReturnState = (locationState, tax) => {
+  const label = getTaxReturnLabel(tax);
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    createdRecord: tax,
+    created_record: tax,
+    selectedRecord: tax,
+    updatedRecord: tax,
+    returnField: locationState?.returnField || locationState?.selectedField || 'tax',
+    selectedField: locationState?.selectedField || locationState?.returnField || 'tax',
+    returnLineId: locationState?.returnLineId ?? locationState?.lineId ?? null,
+    lineId: locationState?.lineId ?? locationState?.returnLineId ?? null,
+    returnQuery: locationState?.returnQuery || locationState?.suggestedValue || label,
+    suggestedValue: locationState?.suggestedValue || locationState?.returnQuery || label,
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+  };
+};
+
+const buildTaxCancelReturnState = (locationState) => {
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+  };
+};
+
 // ==========================================
 // COMPOSANT PRINCIPAL
 // ==========================================
 export default function TauxFiscauxShow() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { activeEntity } = useEntity();
 
@@ -778,9 +826,13 @@ export default function TauxFiscauxShow() {
 
       // 1. Mettre à jour la taxe
       const result = await apiClient.put(`/compta/taxes/${id}/`, apiData.tax);
+      const savedTax = normalizeSavedTax(result, {
+        ...apiData.tax,
+        id,
+      });
 
-      if (result?.id) {
-        const taxIdValue = result.id;
+      if (savedTax?.id) {
+        const taxIdValue = savedTax.id;
 
         // 2. Récupérer les lignes existantes
         const existingLines = await apiClient.get(`/compta/tax-repartition-lines/?tax=${taxIdValue}`)
@@ -807,7 +859,7 @@ export default function TauxFiscauxShow() {
       // Recharger avec les listes actuelles pour avoir les IDs à jour
       await loadTaxData(accounts, taxGroups, fiscalPositions, pays);
 
-      return true;
+      return savedTax;
     } catch (err) {
       console.error('❌ Erreur enregistrement:', err);
       const detail = err?.response?.data?.detail || err?.message || JSON.stringify(err);
@@ -831,10 +883,34 @@ export default function TauxFiscauxShow() {
 
   const handleGoToList = () => {
     if (hasChanges && !window.confirm('Modifications non sauvegardées. Quitter ?')) return;
+    handleClose();
+  };
+
+  const navigateAfterSave = (savedTax) => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildTaxReturnState(location.state, savedTax),
+      });
+      return;
+    }
+
     navigate('/comptabilite/taux-fiscaux');
   };
 
-  const handleNewTax    = () => navigate('/comptabilite/taux-fiscaux/create');
+  const handleClose = () => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildTaxCancelReturnState(location.state),
+      });
+      return;
+    }
+
+    navigate('/comptabilite/taux-fiscaux');
+  };
+
+  const handleNewTax    = () => navigate('/comptabilite/taux-fiscaux/create', { state: location.state || undefined });
   const handleDuplicate = () => { setSuccess('Duplication à implémenter'); setShowActionsMenu(false); };
   const handleDelete    = () => { setSuccess('Suppression à implémenter'); setShowActionsMenu(false); };
   const handleExtourner = () => { setSuccess('Extourne à implémenter'); setShowActionsMenu(false); };
@@ -899,7 +975,7 @@ export default function TauxFiscauxShow() {
                 )}
               </div>
               <Tooltip text="Enregistrer">
-                <button onClick={handleSave} disabled={saving || !isFormValid}
+                <button onClick={() => handleSave().then(savedTax => { if (savedTax && location.state?.returnTo) navigateAfterSave(savedTax); })} disabled={saving || !isFormValid}
                   className={`w-8 h-8 rounded-full text-white transition-all duration-200 flex items-center justify-center shadow-sm ${isFormValid && !saving ? 'bg-purple-600 hover:bg-purple-700 hover:scale-110' : 'bg-gray-300 cursor-not-allowed'}`}>
                   <FiUploadCloud size={16} />
                 </button>
@@ -1259,9 +1335,9 @@ export default function TauxFiscauxShow() {
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">Voulez-vous enregistrer les modifications avant de quitter ?</p>
             <div className="flex justify-end gap-3">
-              <button onClick={async () => { setShowConfirmDialog(false); const saved = await handleSave(); if (saved) navigate('/comptabilite/taux-fiscaux'); }}
+              <button onClick={async () => { setShowConfirmDialog(false); const savedTax = await handleSave(); if (savedTax) navigateAfterSave(savedTax); }}
                 className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 transition-all duration-200">Enregistrer</button>
-              <button onClick={() => { handleCancel(); navigate('/comptabilite/taux-fiscaux'); }}
+              <button onClick={() => { handleCancel(); handleClose(); }}
                 className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 transition-all duration-200">Ne pas enregistrer</button>
               <button onClick={() => setShowConfirmDialog(false)}
                 className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 transition-all duration-200">Annuler</button>

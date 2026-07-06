@@ -40,7 +40,7 @@ import SecurityShow from "../pages/Users/Show.jsx";
 
 
 
-// NOUVELLES PAGES D'ENTITÉ
+// NOUVELLES PAGES D'ENTITÃ‰
 import NoEntitePage from "../pages/Entities/NoEntitePage";
 import SelectEntitePage from "../pages/Entities/SelectEntitePage";
 
@@ -83,6 +83,7 @@ import PiecesComptablesCreate from "../features/comptabilité/pages/PiecesCompta
 import PiecesComptablesEdit from "../features/comptabilité/pages/PiecesComptables/Edit.jsx";
 import PiecesComptablesList from "../features/comptabilité/pages/PiecesComptables/List.jsx";
 import PiecesComptablesShow from "../features/comptabilité/pages/PiecesComptables/Show.jsx";
+import EcrituresComptablesList from "../features/comptabilité/pages/EcrituresComptables/List.jsx";
 import PlanList from '../features/comptabilité/pages/plans-comptables/PlanList.jsx';
 import TauxFiscauxIndex from "../features/comptabilité/pages/TauxFiscaux/Index.jsx";
 import TauxFiscauxCreate from "../features/comptabilité/pages/TauxFiscaux/Create.jsx";
@@ -323,6 +324,8 @@ export default function AppRouter() {
             <Route path=":id/edit" element={<PiecesComptablesEdit />} />
           </Route>
 
+          <Route path="ecritures" element={<EcrituresComptablesList />} />
+
           <Route path="frameworks">
             <Route index element={<FrameworkList />} />
             <Route path="new" element={<FrameworkForm />} />
@@ -508,3 +511,4 @@ export default function AppRouter() {
     </BrowserRouter>
   );
 }
+

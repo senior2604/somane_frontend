@@ -271,6 +271,53 @@ const logAxiosError = (label, error) => {
   }, error);
 };
 
+const normalizeSavedAccount = (payload, fallback = {}) => {
+  const data = payload?.data ?? payload ?? {};
+  return {
+    ...fallback,
+    ...(data && typeof data === 'object' ? data : {}),
+  };
+};
+
+const getAccountReturnLabel = (account) => {
+  const code = account?.code || '';
+  const name = account?.name || account?.label || account?.display_name || '';
+  return [code, name].filter(Boolean).join(' - ') || name || code || '';
+};
+
+const buildAccountReturnState = (locationState, account) => {
+  const label = getAccountReturnLabel(account);
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    createdRecord: account,
+    created_record: account,
+    selectedRecord: account,
+    updatedRecord: account,
+    returnField: locationState?.returnField || locationState?.selectedField || 'account',
+    selectedField: locationState?.selectedField || locationState?.returnField || 'account',
+    returnLineId: locationState?.returnLineId ?? locationState?.lineId ?? null,
+    lineId: locationState?.lineId ?? locationState?.returnLineId ?? null,
+    returnQuery: locationState?.returnQuery || locationState?.suggestedValue || label,
+    suggestedValue: locationState?.suggestedValue || locationState?.returnQuery || label,
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+    restoreAccountDraft: locationState?.restoreAccountDraft,
+  };
+};
+
+const buildAccountCancelReturnState = (locationState) => {
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+    restoreAccountDraft: locationState?.restoreAccountDraft,
+  };
+};
+
 function AccountCreate() {
   const [form] = Form.useForm();
   const navigate = useNavigate();
@@ -301,6 +348,18 @@ function AccountCreate() {
   const activeValue = Form.useWatch('active', form);
   const isActive = activeValue !== false;
   const readyForValidation = Boolean(watchedFramework && watchedCode && watchedName && watchedType);
+
+  const handleClose = useCallback(() => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildAccountCancelReturnState(location.state),
+      });
+      return;
+    }
+
+    navigate('/comptabilite/accounts');
+  }, [location.state, navigate]);
 
   const loadTypesAndGroups = useCallback(async (fwId) => {
     if (!fwId) {
@@ -441,9 +500,19 @@ function AccountCreate() {
     setError(null);
     setSuccess(null);
     try {
-      await createAccount(values);
+      const createdPayload = await createAccount(values);
+      const createdAccount = normalizeSavedAccount(createdPayload, values);
       setSuccess('Compte créé avec succès');
       message.success('Compte créé avec succès !');
+
+      if (location.state?.returnTo) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: buildAccountReturnState(location.state, createdAccount),
+        });
+        return;
+      }
+
       navigate('/comptabilite/accounts');
     } catch (caughtError) {
       const errorData = caughtError.response?.data;
@@ -590,7 +659,7 @@ function AccountCreate() {
                 <Tooltip text="Annuler">
                   <button
                     type="button"
-                    onClick={() => navigate('/comptabilite/accounts')}
+                    onClick={handleClose}
                     className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 flex items-center justify-center"
                   >
                     <CloseOutlined />
