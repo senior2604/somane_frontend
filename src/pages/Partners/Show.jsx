@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FiAlertCircle,
   FiBriefcase,
@@ -28,6 +28,53 @@ import {
   validatePartnerForm,
 } from './PartnerShared';
 
+const normalizeSavedPartner = (payload, fallback = {}) => {
+  const data = payload?.data ?? payload ?? {};
+  return {
+    ...fallback,
+    ...(data && typeof data === 'object' ? data : {}),
+  };
+};
+
+const getPartnerReturnLabel = (partner) => (
+  partner?.nom ||
+  partner?.name ||
+  partner?.display_name ||
+  partner?.email ||
+  ''
+);
+
+const buildPartnerReturnState = (locationState, partner) => {
+  const label = getPartnerReturnLabel(partner);
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    createdRecord: partner,
+    created_record: partner,
+    selectedRecord: partner,
+    updatedRecord: partner,
+    returnField: locationState?.returnField || locationState?.selectedField || 'partner',
+    selectedField: locationState?.selectedField || locationState?.returnField || 'partner',
+    returnLineId: locationState?.returnLineId ?? locationState?.lineId ?? null,
+    lineId: locationState?.lineId ?? locationState?.returnLineId ?? null,
+    returnQuery: locationState?.returnQuery || locationState?.suggestedValue || label,
+    suggestedValue: locationState?.suggestedValue || locationState?.returnQuery || label,
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restorePaymentDraft: locationState?.restorePaymentDraft ?? (returnTo.includes('/payement') || returnTo.includes('/paiement')),
+  };
+};
+
+const buildPartnerCancelReturnState = (locationState) => {
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restorePaymentDraft: locationState?.restorePaymentDraft ?? (returnTo.includes('/payement') || returnTo.includes('/paiement')),
+  };
+};
+
 // ==========================================
 // COMPOSANT PRINCIPAL
 // ==========================================
@@ -35,6 +82,7 @@ export default function PartnerShow() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { activeEntity } = useEntity();
 
   const [partner, setPartner] = useState(null);
@@ -137,11 +185,15 @@ export default function PartnerShow() {
     setSuccess(null);
     try {
       const data = await apiClient.put(`/partenaires/${id}/`, buildPartnerPayload(formData));
-      setPartner(data);
-      setFormData(partnerToForm(data));
+      const savedPartner = normalizeSavedPartner(data, {
+        ...buildPartnerPayload(formData),
+        id,
+      });
+      setPartner(savedPartner);
+      setFormData(partnerToForm(savedPartner));
       setHasUnsavedChanges(false);
       if (!silent) setSuccess('Partenaire enregistré.');
-      return true;
+      return savedPartner;
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Modification impossible.');
       return false;
@@ -174,7 +226,7 @@ export default function PartnerShow() {
     setShowActionsMenu(false);
     try {
       await apiClient.delete(`/partenaires/${id}/`);
-      navigate('..');
+      handleClose();
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Suppression impossible.');
     }
@@ -189,7 +241,7 @@ export default function PartnerShow() {
     if (hasUnsavedChanges) {
       setShowConfirmDialog(true);
     } else {
-      navigate('../create');
+      navigate('../create', { state: location.state || undefined });
     }
   };
 
@@ -197,7 +249,7 @@ export default function PartnerShow() {
     if (hasUnsavedChanges) {
       setShowConfirmDialog(true);
     } else {
-      navigate('..');
+      handleClose();
     }
   };
 
@@ -210,6 +262,30 @@ export default function PartnerShow() {
     setFieldErrors({});
     setHasUnsavedChanges(false);
     setShowConfirmDialog(false);
+    handleClose();
+  };
+
+  const navigateAfterSave = (savedPartner) => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildPartnerReturnState(location.state, savedPartner),
+      });
+      return;
+    }
+
+    navigate('..');
+  };
+
+  const handleClose = () => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildPartnerCancelReturnState(location.state),
+      });
+      return;
+    }
+
     navigate('..');
   };
 
@@ -324,7 +400,9 @@ export default function PartnerShow() {
               </div>
               <Tooltip text="Enregistrer les modifications">
                 <button
-                  onClick={() => save(false)}
+                  onClick={() => save(false).then(savedPartner => {
+                    if (savedPartner && location.state?.returnTo) navigateAfterSave(savedPartner);
+                  })}
                   disabled={saving}
                   className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 hover:scale-110 hover:shadow-lg active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm"
                 >
@@ -584,8 +662,8 @@ export default function PartnerShow() {
               <button
                 onClick={async () => {
                   setShowConfirmDialog(false);
-                  const saved = await save(true);
-                  if (saved) navigate('..');
+                  const savedPartner = await save(true);
+                  if (savedPartner) navigateAfterSave(savedPartner);
                 }}
                 className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 active:scale-95 transition-all duration-200"
               >

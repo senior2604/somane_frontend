@@ -1,7 +1,7 @@
 // src/features/comptabilité/pages/WithholdingTaxes/Show.jsx
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { 
   FiPlus, FiTrash2, FiCheck, FiUploadCloud, FiX, FiAlertCircle,
   FiBriefcase, FiSettings, FiPercent, FiTag, FiCreditCard,
@@ -30,6 +30,53 @@ const normalizeData = (data) => {
 };
 
 const generateId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+
+const normalizeSavedWithholding = (payload, fallback = {}) => {
+  const data = payload?.data ?? payload ?? {};
+  return {
+    ...fallback,
+    ...(data && typeof data === 'object' ? data : {}),
+  };
+};
+
+const getWithholdingReturnLabel = (withholding) => {
+  const name = withholding?.name || withholding?.label || withholding?.display_name || '';
+  const amount = withholding?.amount !== undefined && withholding?.amount !== null && withholding?.amount !== ''
+    ? ` (${withholding.amount}%)`
+    : '';
+  return `${name}${amount}`.trim();
+};
+
+const buildWithholdingReturnState = (locationState, withholding) => {
+  const label = getWithholdingReturnLabel(withholding);
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    createdRecord: withholding,
+    created_record: withholding,
+    selectedRecord: withholding,
+    updatedRecord: withholding,
+    returnField: locationState?.returnField || locationState?.selectedField || 'withholding',
+    selectedField: locationState?.selectedField || locationState?.returnField || 'withholding',
+    returnLineId: locationState?.returnLineId ?? locationState?.lineId ?? null,
+    lineId: locationState?.lineId ?? locationState?.returnLineId ?? null,
+    returnQuery: locationState?.returnQuery || locationState?.suggestedValue || label,
+    suggestedValue: locationState?.suggestedValue || locationState?.returnQuery || label,
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+  };
+};
+
+const buildWithholdingCancelReturnState = (locationState) => {
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+  };
+};
 
 // ==========================================
 // COMPOSANT TOOLTIP
@@ -271,6 +318,7 @@ const RepartitionSummary = ({ lines, title }) => {
 // ==========================================
 export default function WithholdingTaxesShow() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { activeEntity } = useEntity();
 
@@ -598,10 +646,18 @@ export default function WithholdingTaxesShow() {
         ]
       };
 
-      await apiClient.put(`/compta/withholding-taxes/${id}/`, payload);
+      const response = await apiClient.put(`/compta/withholding-taxes/${id}/`, payload);
+      const savedWithholding = normalizeSavedWithholding(response, {
+        ...payload,
+        id,
+      });
       setSuccess('Retenue mise à jour avec succès !');
       setHasChanges(false);
       await loadData();
+
+      if (location.state?.returnTo) {
+        navigateAfterSave(savedWithholding);
+      }
     } catch (err) {
       console.error(err);
       setError(err?.response?.data?.detail || err?.message || 'Erreur lors de la mise à jour');
@@ -620,6 +676,30 @@ export default function WithholdingTaxesShow() {
 
   const handleBackToList = () => {
     if (hasChanges && !window.confirm('Modifications non sauvegardées. Quitter ?')) return;
+    handleClose();
+  };
+
+  const navigateAfterSave = (savedWithholding) => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildWithholdingReturnState(location.state, savedWithholding),
+      });
+      return;
+    }
+
+    navigate('/comptabilite/withholding-taxes');
+  };
+
+  const handleClose = () => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildWithholdingCancelReturnState(location.state),
+      });
+      return;
+    }
+
     navigate('/comptabilite/withholding-taxes');
   };
 
@@ -653,7 +733,7 @@ export default function WithholdingTaxesShow() {
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-start gap-3">
               <Tooltip text="Créer une nouvelle retenue">
-                <button onClick={() => navigate('/comptabilite/withholding-taxes/create')} className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 transition-all duration-200 flex items-center justify-center font-medium" style={{ minWidth: '100px' }}>
+                <button onClick={() => navigate('/comptabilite/withholding-taxes/create', { state: location.state || undefined })} className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 transition-all duration-200 flex items-center justify-center font-medium" style={{ minWidth: '100px' }}>
                   <FiPlus size={16} className="mr-1" /><span>Nouveau</span>
                 </button>
               </Tooltip>

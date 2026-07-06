@@ -40,19 +40,16 @@ import SecurityShow from "../pages/Users/Show.jsx";
 
 
 
-// ========== PAGES GENERALES ==========
-import EntitiesPage from "../pages/Entities/EntitiesPage.jsx";
+// NOUVELLES PAGES D'ENTITÃ‰
+import NoEntitePage from "../pages/Entities/NoEntitePage";
+import SelectEntitePage from "../pages/Entities/SelectEntitePage";
 
-// Pages d'entite
-import NoEntitePage from "../pages/Entities/NoEntitePage.jsx";
-import SelectEntitePage from "../pages/Entities/SelectEntitePage.jsx";
+// IMPORTS DU MODULE COMPTABILITÉ
+import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout";
+import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage";
+import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage";
 
-// ========== MODULE COMPTABILITE ==========
-import ComptabiliteLayout from "../features/comptabilité/layouts/ComptabiliteLayout.jsx";
-import DashboardComptabilitePage from "../features/comptabilité/pages/DashboardPage.jsx";
-import PlanComptablePage from "../features/comptabilité/pages/PlanComptablePage.jsx";
-
-// Positions Fiscales
+// IMPORTS DES PAGES POSITIONS FISCALES
 import PositionsFiscalesIndex from "../features/comptabilité/pages/PositionsFiscales/index.jsx";
 import PositionsFiscalesCreate from "../features/comptabilité/pages/PositionsFiscales/create.jsx";
 import PositionsFiscalesShow from "../features/comptabilité/pages/PositionsFiscales/show.jsx";
@@ -86,6 +83,7 @@ import PiecesComptablesCreate from "../features/comptabilité/pages/PiecesCompta
 import PiecesComptablesEdit from "../features/comptabilité/pages/PiecesComptables/Edit.jsx";
 import PiecesComptablesList from "../features/comptabilité/pages/PiecesComptables/List.jsx";
 import PiecesComptablesShow from "../features/comptabilité/pages/PiecesComptables/Show.jsx";
+import EcrituresComptablesList from "../features/comptabilité/pages/EcrituresComptables/List.jsx";
 import PlanList from '../features/comptabilité/pages/plans-comptables/PlanList.jsx';
 import TauxFiscauxIndex from "../features/comptabilité/pages/TauxFiscaux/Index.jsx";
 import TauxFiscauxCreate from "../features/comptabilité/pages/TauxFiscaux/Create.jsx";
@@ -332,6 +330,8 @@ export default function AppRouter() {
             <Route path=":id/edit" element={<PiecesComptablesEdit />} />
           </Route>
 
+          <Route path="ecritures" element={<EcrituresComptablesList />} />
+
           <Route path="frameworks">
             <Route index element={<FrameworkList />} />
             <Route path="new" element={<FrameworkForm />} />
@@ -525,3 +525,4 @@ export default function AppRouter() {
     </BrowserRouter>
   );
 }
+

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   FiPlus,
   FiSettings,
@@ -24,11 +24,59 @@ import {
   validatePartnerForm,
 } from './PartnerShared';
 
+const normalizeSavedPartner = (payload, fallback = {}) => {
+  const data = payload?.data ?? payload ?? {};
+  return {
+    ...fallback,
+    ...(data && typeof data === 'object' ? data : {}),
+  };
+};
+
+const getPartnerReturnLabel = (partner) => (
+  partner?.nom ||
+  partner?.name ||
+  partner?.display_name ||
+  partner?.email ||
+  ''
+);
+
+const buildPartnerReturnState = (locationState, partner) => {
+  const label = getPartnerReturnLabel(partner);
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    createdRecord: partner,
+    created_record: partner,
+    selectedRecord: partner,
+    updatedRecord: partner,
+    returnField: locationState?.returnField || locationState?.selectedField || 'partner',
+    selectedField: locationState?.selectedField || locationState?.returnField || 'partner',
+    returnLineId: locationState?.returnLineId ?? locationState?.lineId ?? null,
+    lineId: locationState?.lineId ?? locationState?.returnLineId ?? null,
+    returnQuery: locationState?.returnQuery || locationState?.suggestedValue || label,
+    suggestedValue: locationState?.suggestedValue || locationState?.returnQuery || label,
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restorePaymentDraft: locationState?.restorePaymentDraft ?? (returnTo.includes('/payement') || returnTo.includes('/paiement')),
+  };
+};
+
+const buildPartnerCancelReturnState = (locationState) => {
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restorePaymentDraft: locationState?.restorePaymentDraft ?? (returnTo.includes('/payement') || returnTo.includes('/paiement')),
+  };
+};
+
 // ==========================================
 // COMPOSANT PRINCIPAL
 // ==========================================
 export default function PartnerCreate() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { activeEntity } = useEntity();
 
   const [formData, setFormData] = useState(INITIAL_FORM);
@@ -94,12 +142,13 @@ export default function PartnerCreate() {
 
     try {
       const response = await apiClient.post('/partenaires/', buildPartnerPayload(formData));
+      const savedPartner = normalizeSavedPartner(response, formData);
       setHasUnsavedChanges(false);
       if (!silent) {
         setSuccess('Partenaire créé avec succès !');
-        navigate(response?.id ? `..partners/${response.id}` : '..');
+        navigateAfterSave(savedPartner);
       }
-      return true;
+      return savedPartner;
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Erreur lors de la création du partenaire.');
       return false;
@@ -129,7 +178,7 @@ export default function PartnerCreate() {
     if (hasUnsavedChanges) {
       setShowConfirmDialog(true);
     } else {
-      navigate('..');
+      handleClose();
     }
   };
 
@@ -140,6 +189,30 @@ export default function PartnerCreate() {
   const confirmDiscardChanges = () => {
     resetForm();
     setShowConfirmDialog(false);
+    handleClose();
+  };
+
+  const navigateAfterSave = (savedPartner) => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildPartnerReturnState(location.state, savedPartner),
+      });
+      return;
+    }
+
+    navigate(savedPartner?.id ? `../${savedPartner.id}` : '..');
+  };
+
+  const handleClose = () => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildPartnerCancelReturnState(location.state),
+      });
+      return;
+    }
+
     navigate('..');
   };
 
@@ -425,8 +498,8 @@ export default function PartnerCreate() {
               <button
                 onClick={async () => {
                   setShowConfirmDialog(false);
-                  const saved = await submit(true);
-                  if (saved) navigate('..');
+                  const savedPartner = await submit(true);
+                  if (savedPartner) navigateAfterSave(savedPartner);
                 }}
                 className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 active:scale-95 transition-all duration-200"
               >

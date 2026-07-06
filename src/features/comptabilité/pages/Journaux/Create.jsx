@@ -21,7 +21,7 @@ import {
   FiSave,
   FiHome
 } from "react-icons/fi";
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
 
@@ -72,7 +72,9 @@ const AutocompleteInput = ({
   placeholder = "",
   className = "",
   disabled = false,
-  required = false
+  required = false,
+  onCreateOption = null,
+  createOptionLabel = "Créer"
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value || '');
@@ -87,11 +89,13 @@ const AutocompleteInput = ({
     }
   }, [value]);
 
+  const normalizedInput = inputValue.trim().toLowerCase();
   const filteredOptions = options.filter(option => {
     const label = getOptionLabel(option).toLowerCase();
-    const search = inputValue.toLowerCase();
+    const search = normalizedInput;
     return label.includes(search);
   });
+  const canCreate = !!onCreateOption && inputValue.trim() && !filteredOptions.some(option => getOptionLabel(option).trim().toLowerCase() === normalizedInput);
 
   const updateDropdownPosition = () => {
     if (inputRef.current) {
@@ -156,6 +160,13 @@ const AutocompleteInput = ({
     onSelect(id, label);
   };
 
+  const handleCreateOption = () => {
+    if (!canCreate || disabled) return;
+    const query = inputValue.trim();
+    setIsOpen(false);
+    onCreateOption(query);
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -169,6 +180,9 @@ const AutocompleteInput = ({
     } else if (e.key === 'Enter' && isOpen && filteredOptions.length > 0) {
       e.preventDefault();
       handleSelectOption(filteredOptions[highlightedIndex]);
+    } else if (e.key === 'Enter' && isOpen && filteredOptions.length === 0 && canCreate) {
+      e.preventDefault();
+      handleCreateOption();
     } else if (e.key === 'Escape') {
       setIsOpen(false);
     }
@@ -193,7 +207,7 @@ const AutocompleteInput = ({
         style={{ height: '26px', border: 'none', backgroundColor: 'transparent' }}
         autoComplete="off"
       />
-      {isOpen && filteredOptions.length > 0 && (
+      {isOpen && (filteredOptions.length > 0 || canCreate) && (
         <div
           ref={dropdownRef}
           className="bg-white border border-gray-300 shadow-lg"
@@ -213,6 +227,15 @@ const AutocompleteInput = ({
               {getOptionLabel(option)}
             </div>
           ))}
+          {canCreate && (
+            <button
+              type="button"
+              onClick={handleCreateOption}
+              className="flex w-full items-center gap-1 border-t border-gray-200 px-2 py-1.5 text-left text-xs font-medium text-purple-700 hover:bg-purple-50"
+            >
+              <span>+</span><span>{createOptionLabel} "{inputValue.trim()}"</span>
+            </button>
+          )}
         </div>
       )}
     </>
@@ -450,6 +473,15 @@ const getBankLabel = (bank) => {
   return bank.nom || bank.name || 'Banque sans nom';
 };
 
+const JOURNAL_CONTEXT_DRAFT_KEY = 'somane_journal_context_draft';
+
+const getJournalContextCreateRoute = (field) => ({
+  account: '/comptabilite/accounts/new',
+  bank: '/banks',
+  bankAccount: '/PartnerBanks',
+  sequence: '/comptabilite/sequences/create',
+}[field] || '');
+
 const normalizeText = (value) =>
   String(value || '')
     .normalize('NFD')
@@ -575,6 +607,8 @@ const RequiredLabel = ({ children, required }) => (
 // ==========================================
 export default function JournauxCreate() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { id } = useParams();
   const { activeEntity } = useEntity();
 
   const [loading, setLoading] = useState(false);
@@ -586,6 +620,11 @@ export default function JournauxCreate() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState('comptable');
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [initialFormData, setInitialFormData] = useState(null);
+  const [traceabilityLogs, setTraceabilityLogs] = useState([]);
+  const [traceabilityLoading, setTraceabilityLoading] = useState(false);
+  const [showTraceabilityPanel, setShowTraceabilityPanel] = useState(true);
+  const [journalRecord, setJournalRecord] = useState(null);
   
   const [accounts, setAccounts] = useState([]);
   const [journalTypes, setJournalTypes] = useState([]);
@@ -657,25 +696,41 @@ export default function JournauxCreate() {
 
   const hasSelectedOption = (id, name) => Boolean(id) || !String(name || '').trim();
 
-  const getJournalApiErrorMessage = (err) => {
-    const data = err?.data || err?.response?.data || {};
-    const nonFieldError = Array.isArray(data.non_field_errors)
-      ? data.non_field_errors[0]
-      : data.non_field_errors;
+  const formatApiErrorMessage = (err, fallback) => {
+    const data = err?.data || err?.response?.data || err;
+    if (!data) return err?.message || fallback;
 
-    if (nonFieldError) {
-      if (String(nonFieldError).toLowerCase().includes('suspense_account')) {
-        return "Le journal ne peut pas etre cree : le compte d'attente est obligatoire pour ce type de journal.";
-      }
-      return `Le journal ne peut pas etre cree : ${nonFieldError}`;
-    }
+    if (typeof data === 'string') return data;
+    if (Array.isArray(data)) return data.join('\n');
 
-    if (data.code?.[0]) return data.code[0];
-    if (data.name?.[0]) return data.name[0];
-    if (data.type_id?.[0]) return data.type_id[0];
-    if (data.suspense_account_id?.[0]) return `Compte d'attente : ${data.suspense_account_id[0]}`;
-    if (data.message) return data.message;
-    return err?.message || 'Erreur lors de la creation du journal.';
+    const fieldLabels = {
+      non_field_errors: 'Erreur',
+      detail: 'Erreur',
+      code: 'Code',
+      name: 'Nom',
+      type_id: 'Type',
+      default_account_id: 'Compte de tresorerie',
+      suspense_account_id: "Compte d'attente",
+      bank_account_id: 'Compte bancaire',
+      bank_acc_number: 'Numero de compte',
+      bank_id: 'Banque',
+      company_id: 'Entite',
+    };
+
+    if (data.detail) return Array.isArray(data.detail) ? data.detail.join('\n') : String(data.detail);
+    if (data.message) return Array.isArray(data.message) ? data.message.join('\n') : String(data.message);
+
+    const lines = Object.entries(data).flatMap(([field, value]) => {
+      const label = fieldLabels[field] || field;
+      const messages = Array.isArray(value)
+        ? value
+        : value && typeof value === 'object'
+          ? Object.values(value).flat()
+          : [value];
+      return messages.filter(Boolean).map(message => `${label} : ${message}`);
+    });
+
+    return lines.length ? lines.join('\n') : (err?.message || fallback);
   };
 
   const validateSelectedAccountRole = (fieldId, label, predicate, silent) => {
@@ -701,6 +756,256 @@ export default function JournauxCreate() {
     throw lastError;
   };
 
+  const getRecordId = (record, ...fields) => {
+    for (const field of fields) {
+      const value = record?.[field];
+      if (value && typeof value === 'object' && value.id) return value.id;
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return '';
+  };
+
+  const getAccountLabelFromRecord = (record, objectField, codeField, nameField) => {
+    const account = record?.[objectField];
+    if (account && typeof account === 'object') {
+      return account.code && account.name ? `${account.code} - ${account.name}` : (account.name || account.code || '');
+    }
+    const code = record?.[codeField] || '';
+    const name = record?.[nameField] || '';
+    return code && name ? `${code} - ${name}` : (name || code || '');
+  };
+
+  const getBankAccountLabelFromRecord = (record) => {
+    const bankAccount = record?.bank_account;
+    if (bankAccount && typeof bankAccount === 'object') {
+      return getBankAccountLabel(bankAccount);
+    }
+    return record?.bank_account_code || record?.bank_acc_number || '';
+  };
+
+  const getUserLabel = (value, fallback = 'Utilisateur') => {
+    if (!value) return fallback;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return `Utilisateur #${value}`;
+    return (
+      value.display_name ||
+      value.name ||
+      value.username ||
+      value.email ||
+      value.label ||
+      fallback
+    );
+  };
+
+  const getTraceDate = (value) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return parsed.toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const normalizeTraceabilityItem = (log, index, source = 'journal') => {
+    const userObj = log.user_detail || log.user || log.author || log.create_uid || log.created_by || {};
+    const userName = log.created_by_name || log.createdByName || log.user_name || log.author_name || getUserLabel(userObj);
+    return {
+      id: log.id || `${source}-${log.created_at || log.date || index}`,
+      source,
+      action: log.action || log.event || log.type || 'Action',
+      description: log.description || log.message || log.body || log.note || '',
+      date: log.created_at || log.createdAt || log.date || log.timestamp || log.create_date || '',
+      user: userName,
+      objectLabel: log.object_label || log.objectLabel || log.move_name || log.name || '',
+      moveId: log.move || log.move_id || log.object_id || null,
+    };
+  };
+
+  const getMoveTraceabilityLogs = (move) => {
+    const rawLogs =
+      move?.traceability ||
+      move?.module_traceability ||
+      move?.moduleTraceability ||
+      move?.audit_logs ||
+      move?.auditLogs ||
+      move?.history ||
+      move?.activity_logs ||
+      move?.activityLogs ||
+      move?.logs ||
+      [];
+    return Array.isArray(rawLogs) ? rawLogs : (rawLogs?.results || []);
+  };
+
+  const buildMoveActivityLogs = (move) => {
+    const moveLabel = move.name || move.display_name || move.ref || `Pièce #${move.id}`;
+    const createdBy =
+      move.create_uid_name ||
+      move.create_uid_label ||
+      move.created_by_name ||
+      getUserLabel(move.create_uid, 'Utilisateur');
+    const syntheticCreation = {
+      id: `move-created-${move.id}`,
+      source: 'piece',
+      action: 'Pièce créée avec ce journal',
+      description: moveLabel,
+      date: move.create_date || move.created_at || move.date || '',
+      user: createdBy,
+      objectLabel: moveLabel,
+      moveId: move.id,
+    };
+    const logs = getMoveTraceabilityLogs(move).map((log, index) => ({
+      ...normalizeTraceabilityItem(log, index, 'piece'),
+      action: log.action || 'Action sur pièce',
+      description: log.description || log.message || moveLabel,
+      objectLabel: log.object_label || log.objectLabel || moveLabel,
+      moveId: log.move || log.move_id || move.id,
+    }));
+    return [syntheticCreation, ...logs];
+  };
+
+  const getTypeInfoFromRecord = (record) => {
+    const type = record?.type;
+    if (type && typeof type === 'object') {
+      return {
+        id: type.id || '',
+        code: type.code || '',
+        name: type.name || type.label || type.libelle || '',
+      };
+    }
+    const selectedType = journalTypes.find(item => String(item.id) === String(record?.type || record?.type_id));
+    return {
+      id: record?.type || record?.type_id || '',
+      code: selectedType?.code || record?.type_code || '',
+      name: selectedType?.name || selectedType?.label || selectedType?.libelle || record?.type_name || '',
+    };
+  };
+
+  const normalizeJournalForForm = (record) => {
+    const typeInfo = getTypeInfoFromRecord(record);
+    const bankAccount = record?.bank_account && typeof record.bank_account === 'object' ? record.bank_account : null;
+    const linkedBank = bankAccount ? getBankFromBankAccount(bankAccount) : null;
+    const bank = record?.bank && typeof record.bank === 'object' ? record.bank : linkedBank;
+
+    return {
+      name: record?.name || '',
+      code: record?.code || '',
+      type_id: typeInfo.id || '',
+      type_code: typeInfo.code || '',
+      type_name: typeInfo.name || '',
+      default_account_id: getRecordId(record, 'default_account', 'default_account_id'),
+      default_account_name: getAccountLabelFromRecord(record, 'default_account', 'default_account_code', 'default_account_name'),
+      profit_account_id: getRecordId(record, 'profit_account', 'profit_account_id'),
+      profit_account_name: getAccountLabelFromRecord(record, 'profit_account', 'profit_account_code', 'profit_account_name'),
+      loss_account_id: getRecordId(record, 'loss_account', 'loss_account_id'),
+      loss_account_name: getAccountLabelFromRecord(record, 'loss_account', 'loss_account_code', 'loss_account_name'),
+      suspense_account_id: getRecordId(record, 'suspense_account', 'suspense_account_id'),
+      suspense_account_name: getAccountLabelFromRecord(record, 'suspense_account', 'suspense_account_code', 'suspense_account_name'),
+      suspense_account_in_id: getRecordId(record, 'suspense_account_in', 'suspense_account_in_id'),
+      suspense_account_in_name: getAccountLabelFromRecord(record, 'suspense_account_in', 'suspense_account_in_code', 'suspense_account_in_name'),
+      suspense_account_out_id: getRecordId(record, 'suspense_account_out', 'suspense_account_out_id'),
+      suspense_account_out_name: getAccountLabelFromRecord(record, 'suspense_account_out', 'suspense_account_out_code', 'suspense_account_out_name'),
+      bank_account_id: getRecordId(record, 'bank_account', 'bank_account_id'),
+      bank_account_name: getBankAccountLabelFromRecord(record),
+      bank_acc_number: record?.bank_acc_number || getBankAccountNumber(bankAccount) || '',
+      bank_id: getRecordId(record, 'bank', 'bank_id') || linkedBank?.id || '',
+      bank_name: bank ? getBankLabel(bank) : (record?.bank_name || ''),
+      bank_statements_source: record?.bank_statements_source || 'manual',
+      email: record?.email || activeEntity?.email || '',
+      payment_method_in: (record?.inbound_payment_methods || record?.inbound_payment_method_ids || []).map(String),
+      payment_method_out: (record?.outbound_payment_methods || record?.outbound_payment_method_ids || []).map(String),
+      note: record?.note || '',
+      active: record?.active !== undefined ? Boolean(record.active) : true,
+      use_refund_sequence: Boolean(record?.use_refund_sequence || record?.refund_sequence),
+      sequence_id: getRecordId(record, 'sequence', 'sequence_id'),
+      sequence_name: record?.sequence_name || getSequenceLabel(record?.sequence) || '',
+      refund_sequence_id: getRecordId(record, 'refund_sequence', 'refund_sequence_id'),
+      refund_sequence_name: record?.refund_sequence_name || getSequenceLabel(record?.refund_sequence) || '',
+      import_bank_statements: Boolean(record?.import_bank_statements),
+      counterpart_per_line: Boolean(record?.counterpart_per_line),
+    };
+  };
+
+  const loadJournal = async () => {
+    if (!id) return;
+    try {
+      const response = await apiClient.get(`/compta/journals/${id}/`);
+      const data = response?.data || response;
+      const normalized = normalizeJournalForForm(data);
+      setJournalRecord(data);
+      setFormData(normalized);
+      setInitialFormData(normalized);
+      setHasUnsavedChanges(false);
+      return data;
+    } catch (err) {
+      console.error('Erreur chargement journal:', err);
+      setError(err?.data?.detail || err?.response?.data?.detail || err?.message || 'Erreur de chargement du journal');
+      return null;
+    }
+  };
+
+  const loadJournalTraceability = async (recordOverride = null) => {
+    if (!id || !activeEntity) return;
+    setTraceabilityLoading(true);
+    try {
+      const sourceRecord = recordOverride || journalRecord;
+      const [journalLogsResponse, movesResponse] = await Promise.allSettled([
+        apiClient.get('/compta/module-traceability/', {
+          params: {
+            company: activeEntity.id,
+            model_name: 'AccountJournal',
+            object_id: id,
+          },
+        }),
+        apiClient.get('/compta/moves/', {
+          params: {
+            company: activeEntity.id,
+            journal: id,
+            ordering: '-create_date',
+          },
+        }),
+      ]);
+
+      const journalLogs = journalLogsResponse.status === 'fulfilled'
+        ? normalizeApiResponse(journalLogsResponse.value).map((log, index) => normalizeTraceabilityItem(log, index, 'journal'))
+        : [];
+      const hasCreationLog = journalLogs.some(log => {
+        const action = normalizeText(log.action);
+        return action.includes('creation') || action.includes('cree');
+      });
+      const syntheticJournalLogs = [];
+      if (sourceRecord && !hasCreationLog && (sourceRecord.created_at || sourceRecord.create_date || sourceRecord.created_by)) {
+        syntheticJournalLogs.push({
+          id: `journal-created-${id}`,
+          source: 'journal',
+          action: 'Création du journal',
+          description: `${sourceRecord.code || formData.code || ''} - ${sourceRecord.name || formData.name || ''}`.trim().replace(/^-|-$/g, '').trim(),
+          date: sourceRecord.created_at || sourceRecord.create_date || '',
+          user: getUserLabel(sourceRecord.created_by_name || sourceRecord.created_by || sourceRecord.create_uid, 'Utilisateur'),
+          objectLabel: sourceRecord.name || formData.name || '',
+        });
+      }
+      const moves = movesResponse.status === 'fulfilled'
+        ? normalizeApiResponse(movesResponse.value)
+        : [];
+      const moveLogs = moves.flatMap(buildMoveActivityLogs);
+      const mergedLogs = [...journalLogs, ...syntheticJournalLogs, ...moveLogs].sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateB - dateA;
+      });
+      setTraceabilityLogs(mergedLogs);
+    } catch (err) {
+      console.error('Erreur chargement traçabilité journal:', err);
+      setTraceabilityLogs([]);
+    } finally {
+      setTraceabilityLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeEntity?.email) {
       setFormData(prev => ({ ...prev, email: activeEntity.email }));
@@ -709,15 +1014,69 @@ export default function JournauxCreate() {
 
   useEffect(() => {
     if (!activeEntity) {
-      setError('Vous devez sélectionner une entité pour créer un journal');
+      setError('Vous devez selectionner une entite pour consulter ce journal');
     }
   }, [activeEntity]);
 
   useEffect(() => {
     if (activeEntity) {
-      loadOptions();
+      const boot = async () => {
+        await loadOptions();
+        if (location.state?.restoreJournalDraft) return;
+        const journalData = await loadJournal();
+        await loadJournalTraceability(journalData);
+      };
+      boot();
     }
-  }, [activeEntity]);
+  }, [activeEntity, id, location.state]);
+
+  useEffect(() => {
+    const state = location.state || {};
+    let contextState = state.restoreJournalDraft ? state : null;
+
+    if (!contextState) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(JOURNAL_CONTEXT_DRAFT_KEY) || 'null');
+        if (saved?.restoreJournalDraft?.journalId && String(saved.restoreJournalDraft.journalId) === String(id)) {
+          contextState = saved;
+        }
+      } catch (storageError) {
+        console.warn('Impossible de restaurer le brouillon du journal', storageError);
+      }
+    }
+
+    const draft = contextState?.restoreJournalDraft;
+    if (!draft?.formData) return;
+
+    const createdRecord = state.createdRecord || state.created_record || state.record || null;
+    const targetFields = contextState.targetFields || {};
+    const createdId = createdRecord?.id || createdRecord?.pk || '';
+    const getCreatedLabel = () => {
+      if (!createdRecord) return contextState.returnQuery || '';
+      if (contextState.returnField === 'account') {
+        return [createdRecord.code, createdRecord.name].filter(Boolean).join(' - ') || createdRecord.display_name || contextState.returnQuery || '';
+      }
+      if (contextState.returnField === 'bank') return getBankLabel(createdRecord) || contextState.returnQuery || '';
+      if (contextState.returnField === 'bankAccount') return getBankAccountLabel(createdRecord) || contextState.returnQuery || '';
+      if (contextState.returnField === 'sequence') return getSequenceLabel(createdRecord) || createdRecord.name || contextState.returnQuery || '';
+      return createdRecord.display_name || createdRecord.name || contextState.returnQuery || '';
+    };
+
+    const restoredForm = { ...draft.formData };
+    if (createdId && targetFields.idField) {
+      restoredForm[targetFields.idField] = createdId;
+      if (targetFields.nameField) restoredForm[targetFields.nameField] = getCreatedLabel();
+    }
+
+    setFormData(restoredForm);
+    setActiveTab(draft.activeTab || 'comptable');
+    setShowTraceabilityPanel(draft.showTraceabilityPanel !== false);
+    setHasUnsavedChanges(true);
+
+    try {
+      sessionStorage.removeItem(JOURNAL_CONTEXT_DRAFT_KEY);
+    } catch {}
+  }, [id, location.state]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -786,14 +1145,14 @@ export default function JournauxCreate() {
             !s.company || s.company === activeEntity?.id
            );
       setSequences(filteredSequences);
-                  console.log('✅ Séquences chargées:', filteredSequences); 
+                  console.log(' Séquences chargées:', filteredSequences); 
 } catch (err) {
   console.log('ℹ️ Séquences non disponibles', err); 
   setSequences([]);
 }
       
     } catch (err) {
-      console.error('❌ Erreur critique:', err);
+      console.error(' Erreur critique:', err);
       setError(`Erreur de chargement: ${err.message}`);
     } finally {
       setLoading(false);
@@ -811,14 +1170,14 @@ export default function JournauxCreate() {
   }, [hasUnsavedChanges]);
 
   const saveAutoDraft = useCallback(async () => {
-    if (!hasUnsavedChanges || isAutoSaving || !activeEntity) return;
+    if (!hasUnsavedChanges || isAutoSaving || !activeEntity || !id) return;
     setIsAutoSaving(true);
     try {
       const apiData = prepareDataForApi();
-      await apiClient.post('/compta/journals/', apiData);
+      await apiClient.patch(`/compta/journals/${id}/`, apiData);
       setHasUnsavedChanges(false);
     } catch (err) {
-      console.error('❌ Erreur sauvegarde automatique:', err);
+      console.error(' Erreur sauvegarde automatique:', err);
     } finally {
       setIsAutoSaving(false);
     }
@@ -832,6 +1191,34 @@ export default function JournauxCreate() {
     setFormData(prev => ({ ...prev, [field]: value }));
     markAsModified();
   };
+
+  const buildContextReturnState = useCallback((field, query = '', targetFields = null) => ({
+    returnTo: `${location.pathname}${location.search || ''}`,
+    returnField: field,
+    returnQuery: query,
+    suggestedValue: query,
+    targetFields,
+    fromJournal: true,
+    restoreJournalDraft: {
+      formData,
+      activeTab,
+      journalId: id,
+      showTraceabilityPanel,
+    },
+  }), [activeTab, formData, id, location.pathname, location.search, showTraceabilityPanel]);
+
+  const navigateToContextCreate = useCallback((field, query = '', targetFields = null) => {
+    const route = getJournalContextCreateRoute(field);
+    if (!route) return;
+
+    const returnState = buildContextReturnState(field, query, targetFields);
+    try {
+      sessionStorage.setItem(JOURNAL_CONTEXT_DRAFT_KEY, JSON.stringify(returnState));
+    } catch (storageError) {
+      console.warn('Impossible de sauvegarder le brouillon du journal', storageError);
+    }
+    navigate(route, { state: returnState });
+  }, [buildContextReturnState, navigate]);
 
   const handleBankAccountSelect = (id, label) => {
     const selectedBankAccount = bankAccounts.find(item => String(item.id) === String(id));
@@ -957,10 +1344,6 @@ export default function JournauxCreate() {
       if (!validateSelectedAccountRole('default_account_id', 'Compte de tresorerie', isTreasuryAccount, silent)) {
         return false;
       }
-      if (!formData.suspense_account_id) {
-        if (!silent) setError("Le compte d'attente est obligatoire pour un journal de type Banque. Le journal ne peut pas etre cree sans ce compte.");
-        return false;
-      }
       if (!formData.bank_account_id) {
         if (!silent) setError('Le compte bancaire lié est obligatoire pour un journal de type Banque');
         return false;
@@ -982,15 +1365,11 @@ export default function JournauxCreate() {
         return false;
       }
       if (!formData.suspense_account_id) {
-        if (!silent) setError("Le compte d'attente est obligatoire pour un journal de type Caisse. Le journal ne peut pas etre cree sans ce compte.");
+        if (!silent) setError("Le compte d'attente est obligatoire pour un journal de type Caisse");
         return false;
       }
-      if (!formData.profit_account_id) {
-        if (!silent) setError('Le compte de profit est obligatoire pour un journal de type Caisse.');
-        return false;
-      }
-      if (!formData.loss_account_id) {
-        if (!silent) setError('Le compte de perte est obligatoire pour un journal de type Caisse.');
+      if (!hasSelectedOption(formData.suspense_account_id, formData.suspense_account_name)) {
+        if (!silent) setError("Selectionnez le compte d'attente dans la liste.");
         return false;
       }
     }
@@ -1026,7 +1405,7 @@ export default function JournauxCreate() {
     if (!formData.type_id) return ['name', 'code', 'type_id'];
     
     if (isBankType()) {
-      return ['name', 'code', 'type_id', 'default_account_id', 'suspense_account_id', 'bank_account_id', 'bank_acc_number', 'bank_id'];
+      return ['name', 'code', 'type_id', 'default_account_id', 'bank_account_id', 'bank_acc_number', 'bank_id'];
     } else if (isCashType()) {
       return ['name', 'code', 'type_id', 'default_account_id', 'suspense_account_id', 'profit_account_id', 'loss_account_id'];
     } else {
@@ -1082,16 +1461,36 @@ const handleSave = async (silent = false) => {
 
   try {
     const apiData = prepareDataForApi();
-    const result = await apiClient.post('/compta/journals/', apiData);
+    const response = id
+      ? await apiClient.patch(`/compta/journals/${id}/`, apiData)
+      : await apiClient.post('/compta/journals/', apiData);
+    const savedJournal = response?.data || response || {};
     
     if (!silent) {
-      setSuccess('Journal créé avec succès !');
+      setSuccess(id ? 'Journal mis a jour avec succes !' : 'Journal cree avec succes !');
     }
     setHasUnsavedChanges(false);
+    const normalized = savedJournal?.id ? normalizeJournalForForm(savedJournal) : formData;
+    setInitialFormData(normalized);
+    setFormData(normalized);
+    if (id) await loadJournalTraceability(savedJournal);
     
     if (!silent) {
       setTimeout(() => {
-        navigate('/comptabilite/journaux');
+        if (location.state?.returnTo) {
+          navigate(location.state.returnTo, {
+            replace: true,
+            state: {
+              ...location.state,
+              createdRecord: savedJournal,
+              created_record: savedJournal,
+              restoreJournalDraft: location.state.restoreJournalDraft,
+              restorePieceDraft: location.state.restorePieceDraft,
+            },
+          });
+        } else {
+          navigate('/comptabilite/journaux');
+        }
       }, 1500);
     }
     
@@ -1099,19 +1498,9 @@ const handleSave = async (silent = false) => {
     
   } catch (err) {
     // Le message est dans err.data (pas err.response.data)
-    let errorMessage = getJournalApiErrorMessage(err);
+    const errorMessage = formatApiErrorMessage(err, id ? 'Erreur lors de la mise a jour' : 'Erreur lors de la creation');
     
     // Essaye différents endroits où le message pourrait être
-    if (err?.data?.code?.[0]) {
-      errorMessage = err.data.code[0];
-    } else if (err?.response?.data?.code?.[0]) {
-      errorMessage = err.response.data.code[0];
-    } else if (err?.data?.message) {
-      errorMessage = err.data.message;
-    } else if (err?.message) {
-      errorMessage = err.message;
-    }
-    
     setError(errorMessage);
     return false;
   } finally {
@@ -1121,6 +1510,14 @@ const handleSave = async (silent = false) => {
   const handleDiscardChanges = () => setShowConfirmDialog(true);
   
   const confirmDiscardChanges = () => {
+    if (initialFormData) {
+      setFormData(initialFormData);
+      setHasUnsavedChanges(false);
+      setShowConfirmDialog(false);
+      setSuccess('Modifications annulees.');
+      return;
+    }
+
     setFormData({
       name: '',
       code: '',
@@ -1155,8 +1552,7 @@ const handleSave = async (silent = false) => {
       sequence_name: '',
       refund_sequence_id: '',
       refund_sequence_name: '',
-      import_bank_statements: false,
-      counterpart_per_line: false
+      import_bank_statements: false
     });
     setHasUnsavedChanges(false);
     setShowConfirmDialog(false);
@@ -1177,14 +1573,46 @@ const handleSave = async (silent = false) => {
     navigate('/comptabilite/journaux');
   };
 
+  const handleNewPiece = async () => {
+    if (!id) {
+      setError('Enregistrez le journal avant de créer une pièce avec ce journal.');
+      return;
+    }
+    if (hasUnsavedChanges) {
+      const saved = await handleSave(true);
+      if (!saved) return;
+    }
+    const journalLabel = `${formData.code || ''} - ${formData.name || ''}`.trim().replace(/^-|-$/g, '').trim();
+    const params = new URLSearchParams({
+      journal_id: String(id),
+      journal: String(id),
+      journal_label: journalLabel,
+    });
+    navigate(`/comptabilite/pieces/create?${params.toString()}`, {
+      state: {
+        journal_id: String(id),
+        journal: String(id),
+        journal_label: journalLabel,
+        journal_code: formData.code || '',
+        journal_name: formData.name || '',
+      },
+    });
+  };
+
   const handleDuplicate = () => {
     setSuccess('Duplication à implémenter');
     setShowActionsMenu(false);
   };
 
-  const handleDelete = () => {
-    setSuccess('Suppression à implémenter');
-    setShowActionsMenu(false);
+  const handleDelete = async () => {
+    try {
+      await apiClient.delete(`/compta/journals/${id}/`);
+      setSuccess('Journal supprime.');
+      setShowActionsMenu(false);
+      navigate('/comptabilite/journaux');
+    } catch (err) {
+      setError(err?.data?.detail || err?.response?.data?.detail || err?.message || 'Erreur lors de la suppression');
+    }
   };
 
   const handleExtourner = () => {
@@ -1197,14 +1625,14 @@ const handleSave = async (silent = false) => {
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-7xl mx-auto bg-white border border-gray-300">
           <div className="border-b border-gray-300 px-4 py-3">
-            <div className="text-lg font-bold text-gray-900">Créer un journal</div>
+            <div className="text-lg font-bold text-gray-900">Journal</div>
           </div>
           <div className="p-8">
             <div className="bg-yellow-50 border border-yellow-200 rounded p-6 text-center">
               <FiAlertCircle className="text-yellow-600 mx-auto mb-3" size={32} />
               <p className="text-yellow-800 font-medium text-lg mb-3">Aucune entité sélectionnée</p>
               <p className="text-sm text-gray-600 mb-4">
-                Vous devez sélectionner une entité pour créer un journal.
+                Vous devez selectionner une entite pour consulter ce journal.
               </p>
             </div>
           </div>
@@ -1265,8 +1693,15 @@ const handleSave = async (silent = false) => {
                     <button onClick={handleDelete} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
                       <FiTrash2 size={12} /> Supprimer
                     </button>
-                    <button onClick={handleExtourner} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2">
+                    <button onClick={handleExtourner} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
                       <FiRotateCcw size={12} /> Extourné
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowTraceabilityPanel(prev => !prev); setShowActionsMenu(false); }}
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2"
+                    >
+                      <FiInfo size={12} /> {showTraceabilityPanel ? 'Masquer la traçabilité' : 'Afficher la traçabilité'}
                     </button>
                   </div>
                 )}
@@ -1317,22 +1752,29 @@ const handleSave = async (silent = false) => {
               </button>
             </Tooltip>
             <span className="text-sm text-gray-700 font-medium">Activer/Désactiver</span>
+            {(error || success) && (
+              <div className={`ml-2 inline-flex max-w-2xl items-start gap-2 border px-3 py-1.5 text-xs ${
+                error
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : 'border-green-200 bg-green-50 text-green-700'
+              }`}>
+                <span className="mt-0.5 flex-shrink-0">
+                  {error ? <FiAlertCircle size={13} /> : <FiCheck size={13} />}
+                </span>
+                <span className="whitespace-pre-line leading-4">{error || success}</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
-              formData.active 
-                ? 'bg-green-100 text-green-700 border-green-300' 
-                : 'bg-gray-100 text-gray-500 border-gray-300'
-            }`}>
-              Actif
-            </div>
-            <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
-              !formData.active 
-                ? 'bg-red-100 text-red-700 border-red-300' 
-                : 'bg-gray-100 text-gray-500 border-gray-300'
-            }`}>
-              Inactif
-            </div>
+            <Tooltip text="Créer une pièce avec ce journal">
+              <button
+                type="button"
+                onClick={handleNewPiece}
+                className="h-8 px-3 text-xs font-medium border border-purple-600 bg-purple-600 text-white hover:bg-purple-700 transition-all duration-200 flex items-center gap-1"
+              >
+                <FiPlus size={12} /> Nouvelle pièce
+              </button>
+            </Tooltip>
           </div>
         </div>
 
@@ -1343,6 +1785,8 @@ const handleSave = async (silent = false) => {
           </div>
         )}
 
+        <div className={`grid gap-0 ${showTraceabilityPanel ? 'lg:grid-cols-[minmax(0,1fr)_320px]' : 'grid-cols-1'}`}>
+          <div className="min-w-0">
         <div className="px-4 py-3 border-b border-gray-300">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center" style={{ height: '26px' }}>
@@ -1444,6 +1888,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de tresorerie"
                               required={isFieldRequired('default_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'default_account_id', nameField: 'default_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1459,11 +1905,12 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={getBankLabel}
                               placeholder="Selectionner une banque (obligatoire)"
                               required={isFieldRequired('bank_id')}
+                              onCreateOption={(query) => navigateToContextCreate('bank', query, { idField: 'bank_id', nameField: 'bank_name' })}
+                              createOptionLabel="Créer la banque"
                             />
                           </div>
                         </div>
                       </div>
-                      
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
@@ -1478,6 +1925,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={getBankAccountLabel}
                               placeholder="Compte bancaire (obligatoire)"
                               required={isFieldRequired('bank_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('bankAccount', query, { idField: 'bank_account_id', nameField: 'bank_account_name' })}
+                              createOptionLabel="Créer le compte bancaire"
                             />
                           </div>
                         </div>
@@ -1494,30 +1943,7 @@ const handleSave = async (silent = false) => {
                           />
                         </div>
                       </div>
-                      
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex items-center" style={{ height: '26px' }}>
-                          <RequiredLabel required={isFieldRequired('suspense_account_id')}>Compte d'attente</RequiredLabel>
-                          <div className="flex-1 ml-2 border border-gray-300 hover:border-purple-400 transition-colors" style={{ height: '26px' }}>
-                            <AutocompleteInput
-                              value={formData.suspense_account_name}
-                              selectedId={formData.suspense_account_id}
-                              onChange={(text) => handleChange('suspense_account_name', text)}
-                              onSelect={(id, label) => {
-                                handleChange('suspense_account_id', id);
-                                handleChange('suspense_account_name', label);
-                              }}
-                              options={suspenseAccounts}
-                              getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
-                              placeholder="Compte d'attente"
-                              required={isFieldRequired('suspense_account_id')}
-                            />
-                          </div>
-                        </div>                        <div className="flex items-center" style={{ height: '26px' }}>
-                        </div>
-                      </div>
-                      
                       <div className="grid grid-cols-2 gap-4">
                         <div className="hidden" style={{ height: '26px' }}>
                           <RequiredLabel required={isFieldRequired('bank_id')}>Banque</RequiredLabel>
@@ -1534,6 +1960,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={getBankLabel}
                               placeholder="Sélectionner une banque (obligatoire)"
                               required={isFieldRequired('bank_id')}
+                              onCreateOption={(query) => navigateToContextCreate('bank', query, { idField: 'bank_id', nameField: 'bank_name' })}
+                              createOptionLabel="Créer la banque"
                             />
                           </div>
                         </div>
@@ -1616,6 +2044,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de tresorerie"
                               required={isFieldRequired('default_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'default_account_id', nameField: 'default_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1635,10 +2065,13 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte d'attente"
                               required={isFieldRequired('suspense_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'suspense_account_id', nameField: 'suspense_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
                       </div>
+                      
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center" style={{ height: '26px' }}>
                           <RequiredLabel required={isFieldRequired('profit_account_id')}>Compte de profit</RequiredLabel>
@@ -1655,6 +2088,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de profit"
                               required={isFieldRequired('profit_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'profit_account_id', nameField: 'profit_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1673,6 +2108,8 @@ const handleSave = async (silent = false) => {
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte de perte"
                               required={isFieldRequired('loss_account_id')}
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'loss_account_id', nameField: 'loss_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1721,6 +2158,8 @@ const handleSave = async (silent = false) => {
                               options={accounts}
                               getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                               placeholder="Compte par defaut (optionnel)"
+                              onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'default_account_id', nameField: 'default_account_name' })}
+                              createOptionLabel="Créer le compte"
                             />
                           </div>
                         </div>
@@ -1826,6 +2265,8 @@ const handleSave = async (silent = false) => {
                       options={suspenseAccounts}
                       getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                       placeholder="Compte suspens entrant (optionnel)"
+                      onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'suspense_account_in_id', nameField: 'suspense_account_in_name' })}
+                      createOptionLabel="Créer le compte"
                     />
                   </div>
                 </div>
@@ -1844,6 +2285,8 @@ const handleSave = async (silent = false) => {
                       options={suspenseAccounts}
                       getOptionLabel={(a) => a.code && a.name ? `${a.code} - ${a.name}` : (a.name || '')}
                       placeholder="Compte suspens sortant (optionnel)"
+                      onCreateOption={(query) => navigateToContextCreate('account', query, { idField: 'suspense_account_out_id', nameField: 'suspense_account_out_name' })}
+                      createOptionLabel="Créer le compte"
                     />
                   </div>
                 </div>
@@ -1875,6 +2318,8 @@ const handleSave = async (silent = false) => {
                       options={sequences}
                       getOptionLabel={getSequenceLabel}
                       placeholder="Séquence (optionnel)"
+                      onCreateOption={(query) => navigateToContextCreate('sequence', query, { idField: 'sequence_id', nameField: 'sequence_name' })}
+                      createOptionLabel="Créer la séquence"
                     />
                   </div>
                 </div>
@@ -1921,6 +2366,8 @@ const handleSave = async (silent = false) => {
                         options={sequences}
                         getOptionLabel={getSequenceLabel}
                         placeholder="Séquence des avoirs"
+                        onCreateOption={(query) => navigateToContextCreate('sequence', query, { idField: 'refund_sequence_id', nameField: 'refund_sequence_name' })}
+                        createOptionLabel="Créer la séquence"
                       />
                     </div>
                   </div>
@@ -1949,18 +2396,70 @@ const handleSave = async (silent = false) => {
               />
             </div>
           )}
+
         </div>
 
-        {(error || success) && (
-          <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
-            error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
-          }`}>
-            <div className="flex items-center gap-2">
-              {error ? <FiAlertCircle size={14} /> : <FiCheck size={14} />}
-              <span>{error || success}</span>
-            </div>
           </div>
-        )}
+          {showTraceabilityPanel && (
+            <aside className="border-l border-gray-300 bg-gray-50 min-h-[420px]">
+              <div className="sticky top-0">
+                <div className="px-4 py-3 border-b border-gray-300 bg-white flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FiInfo className="text-purple-600" size={14} />
+                    <h3 className="text-xs font-semibold text-gray-800 uppercase tracking-wide">Traçabilité</h3>
+                  </div>
+                  <button type="button" onClick={() => setShowTraceabilityPanel(false)} className="text-xs text-gray-500 hover:text-gray-900">Fermer</button>
+                </div>
+                <div className="px-4 py-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-medium text-gray-700">Activité liée au journal</span>
+                    <span className="text-[11px] text-gray-500">{traceabilityLogs.length} événement(s)</span>
+                  </div>
+                  {traceabilityLoading ? (
+                    <div className="bg-white border border-gray-200 px-3 py-4 text-xs text-gray-500 text-center">
+                      Chargement de la traçabilité...
+                    </div>
+                  ) : traceabilityLogs.length > 0 ? (
+                    <div className="space-y-2 max-h-[calc(100vh-240px)] overflow-y-auto pr-1">
+                      {traceabilityLogs.map(log => (
+                        <div key={log.id} className="bg-white border border-gray-200 px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                              log.source === 'journal'
+                                ? 'bg-purple-100 text-purple-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {log.source === 'journal' ? 'Journal' : 'Pièce'}
+                            </span>
+                            <div className="text-xs font-medium text-gray-900 truncate">{log.action}</div>
+                          </div>
+                          {(log.objectLabel || log.description) && (
+                            <div className="text-[11px] text-gray-500 mt-1">
+                              {[log.objectLabel, log.description].filter(Boolean).join(' - ')}
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 mt-2">
+                            <span className="truncate">Par {log.user || 'Utilisateur'}</span>
+                            <span className="whitespace-nowrap">{log.date ? getTraceDate(log.date) : ''}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-gray-200 px-3 py-5 text-center">
+                      <FiClock className="w-7 h-7 text-gray-400 mx-auto mb-2" />
+                      <div className="text-xs text-gray-600">Aucune traçabilité trouvée</div>
+                      <div className="text-[11px] text-gray-500 mt-1">
+                        Les actions sur ce journal apparaîtront ici.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </aside>
+          )}
+        </div>
+
       </div>
 
       {showConfirmDialog && (
@@ -1990,3 +2489,4 @@ const handleSave = async (silent = false) => {
     </div>
   );
 }
+

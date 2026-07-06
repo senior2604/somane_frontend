@@ -311,6 +311,53 @@ const RepartitionSummary = ({ lines, title }) => {
   );
 };
 
+const normalizeSavedTax = (payload, fallback = {}) => {
+  const data = payload?.data ?? payload ?? {};
+  return {
+    ...fallback,
+    ...(data && typeof data === 'object' ? data : {}),
+  };
+};
+
+const getTaxReturnLabel = (tax) => {
+  const name = tax?.name || tax?.label || tax?.display_name || '';
+  const amount = tax?.amount !== undefined && tax?.amount !== null && tax?.amount !== ''
+    ? ` (${tax.amount}%)`
+    : '';
+  return `${name}${amount}`.trim();
+};
+
+const buildTaxReturnState = (locationState, tax) => {
+  const label = getTaxReturnLabel(tax);
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    createdRecord: tax,
+    created_record: tax,
+    selectedRecord: tax,
+    updatedRecord: tax,
+    returnField: locationState?.returnField || locationState?.selectedField || 'tax',
+    selectedField: locationState?.selectedField || locationState?.returnField || 'tax',
+    returnLineId: locationState?.returnLineId ?? locationState?.lineId ?? null,
+    lineId: locationState?.lineId ?? locationState?.returnLineId ?? null,
+    returnQuery: locationState?.returnQuery || locationState?.suggestedValue || label,
+    suggestedValue: locationState?.suggestedValue || locationState?.returnQuery || label,
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+  };
+};
+
+const buildTaxCancelReturnState = (locationState) => {
+  const returnTo = locationState?.returnTo || '';
+
+  return {
+    ...(locationState || {}),
+    restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
+    restoreJournalDraft: locationState?.restoreJournalDraft ?? returnTo.includes('/journals'),
+  };
+};
+
 // ==========================================
 // COMPOSANT PRINCIPAL
 // ==========================================
@@ -825,11 +872,13 @@ export default function TauxFiscauxCreate() {
         result = await apiClient.put(`/compta/taxes/${taxId}/`, apiData.tax);
       } else {
         result = await apiClient.post('/compta/taxes/', apiData.tax);
-        if (result?.id) setTaxId(result.id);
       }
+
+      const savedTax = normalizeSavedTax(result, apiData.tax);
+      if (savedTax?.id) setTaxId(savedTax.id);
       
-      if (result?.id) {
-        const taxIdValue = result.id;
+      if (savedTax?.id) {
+        const taxIdValue = savedTax.id;
         
         const existingLines = await apiClient.get(`/compta/tax-repartition-lines/?tax=${taxIdValue}`)
           .then(res => {
@@ -865,7 +914,7 @@ export default function TauxFiscauxCreate() {
       if (!silent) setSuccess('Taux fiscal enregistré avec succès !');
       setHasUnsavedChanges(false);
       
-      return true;
+      return savedTax;
     } catch (err) {
       console.error('❌ Erreur enregistrement:', err);
       const detail = err?.response?.data?.detail || err?.message || JSON.stringify(err);
@@ -877,6 +926,30 @@ export default function TauxFiscauxCreate() {
   };
 
   const handleDiscardChanges = () => setShowConfirmDialog(true);
+
+  const navigateAfterSave = (savedTax) => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildTaxReturnState(location.state, savedTax),
+      });
+      return;
+    }
+
+    navigate('/comptabilite/taux-fiscaux');
+  };
+
+  const handleClose = () => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: buildTaxCancelReturnState(location.state),
+      });
+      return;
+    }
+
+    navigate('/comptabilite/taux-fiscaux');
+  };
   
   const confirmDiscardChanges = () => {
     setFormData({ name: '', amount: '', amount_type: 'percent', type_tax_use: 'sale', tax_scope: '',
@@ -904,8 +977,9 @@ export default function TauxFiscauxCreate() {
     if (hasUnsavedChanges) {
       setShowConfirmDialog(true);
     } else {
-      navigate('/comptabilite/taux-fiscaux/create');
-      window.location.reload();
+      navigate('/comptabilite/taux-fiscaux/create', {
+        state: location.state || undefined,
+      });
     }
   };
   
@@ -913,7 +987,7 @@ export default function TauxFiscauxCreate() {
     if (hasUnsavedChanges) {
       setShowConfirmDialog(true);
     } else {
-      navigate('/comptabilite/taux-fiscaux');
+      handleClose();
     }
   };
   
@@ -987,7 +1061,7 @@ export default function TauxFiscauxCreate() {
                 )}
               </div>
               <Tooltip text="Enregistrer le taux fiscal">
-                <button onClick={() => handleSave().then(success => { if (success) navigate('/comptabilite/taux-fiscaux'); })} disabled={isSubmitting} className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 hover:scale-110 hover:shadow-lg active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm">
+                <button onClick={() => handleSave().then(savedTax => { if (savedTax) navigateAfterSave(savedTax); })} disabled={isSubmitting} className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 hover:scale-110 hover:shadow-lg active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm">
                   <FiUploadCloud size={16} />
                 </button>
               </Tooltip>
@@ -1261,7 +1335,7 @@ export default function TauxFiscauxCreate() {
               </div>
 
               <div className="pt-4 border-t border-gray-300 flex justify-start gap-2">
-                <button onClick={() => handleSave().then(success => { if (success) navigate('/comptabilite/taux-fiscaux'); })} disabled={isSubmitting} className="h-7 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 transition-all duration-200 flex items-center gap-1 rounded disabled:opacity-50">
+                <button onClick={() => handleSave().then(savedTax => { if (savedTax) navigateAfterSave(savedTax); })} disabled={isSubmitting} className="h-7 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 transition-all duration-200 flex items-center gap-1 rounded disabled:opacity-50">
                   <FiUploadCloud size={12} /><span>Enregistrer</span>
                 </button>
                 <button onClick={handleDiscardChanges} className="h-7 px-3 bg-black text-white text-xs hover:bg-gray-800 transition-all duration-200 flex items-center gap-1 rounded">
@@ -1285,8 +1359,8 @@ export default function TauxFiscauxCreate() {
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">Voulez-vous enregistrer les modifications avant de quitter ?</p>
             <div className="flex justify-end gap-3">
-              <button onClick={async () => { setShowConfirmDialog(false); const saved = await handleSave(true); if (saved) navigate('/comptabilite/taux-fiscaux'); }} className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 transition-all duration-200">Enregistrer</button>
-              <button onClick={() => { confirmDiscardChanges(); navigate('/comptabilite/taux-fiscaux'); }} className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 transition-all duration-200">Ne pas enregistrer</button>
+              <button onClick={async () => { setShowConfirmDialog(false); const savedTax = await handleSave(true); if (savedTax) navigateAfterSave(savedTax); }} className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 transition-all duration-200">Enregistrer</button>
+              <button onClick={() => { confirmDiscardChanges(); handleClose(); }} className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 transition-all duration-200">Ne pas enregistrer</button>
               <button onClick={() => setShowConfirmDialog(false)} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 transition-all duration-200">Annuler</button>
             </div>
           </div>

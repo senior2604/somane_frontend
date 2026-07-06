@@ -30,6 +30,12 @@ const PAYMENT_TYPE_OPTIONS = [
   { id: 'transfer', label: 'Transfert compte à compte' },
 ];
 
+const PAYMENT_PROCESS_STEPS = [
+  { id: 'draft', label: 'Brouillon' },
+  { id: 'processing', label: 'En cours de traitement' },
+  { id: 'paid', label: 'Payé' },
+];
+
 const PARTNER_TYPE_OPTIONS = [
   { id: 'customer', label: 'Client' },
   { id: 'supplier', label: 'Fournisseur' },
@@ -330,7 +336,7 @@ const AmountInput = ({ value, onChange, disabled = false }) => {
       value={displayValue}
       onChange={handleChange}
       onFocus={(event) => {
-        if (value !== '' && value !== null && value !== undefined) event.target.value = String(value);
+        if (value !== '' && value !== null && value !== undefined) event.target.value = Math.round(Number(value)).toString();
       }}
       onBlur={() => setDisplayValue(formatNumber(value))}
       disabled={disabled}
@@ -352,6 +358,34 @@ const Field = ({ label, required = false, children }) => (
     </div>
   </div>
 );
+
+const PaymentProcess = ({ state }) => {
+  const activeIndex = Math.max(0, PAYMENT_PROCESS_STEPS.findIndex((step) => step.id === state));
+
+  return (
+    <div className="flex items-center justify-end overflow-visible text-[11px] font-semibold">
+      {PAYMENT_PROCESS_STEPS.map((step, index) => {
+        const isActive = index === activeIndex;
+        const isDone = index < activeIndex;
+        const colorClass = isActive
+          ? 'bg-purple-600 text-white'
+          : isDone
+            ? 'bg-purple-100 text-purple-700'
+            : 'bg-gray-100 text-gray-500';
+
+        return (
+          <div
+            key={step.id}
+            className={`${index > 0 ? '-ml-2 pl-5' : 'pl-3'} ${colorClass} relative flex h-8 items-center pr-5`}
+            style={{ clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%, 12px 50%)' }}
+          >
+            {step.id === 'paid' ? 'Payé' : step.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 export default function PaymentCreate() {
   const navigate = useNavigate();
@@ -375,7 +409,7 @@ export default function PaymentCreate() {
     payment_date: today(),
     reference: '',
     narration: '',
-    transfer_journal_id: '',
+    destination_journal_id: '',
     state: 'draft',
   });
   const [options, setOptions] = useState({ journals: [], partners: [], currencies: [], methodLines: [] });
@@ -383,7 +417,6 @@ export default function PaymentCreate() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [activeTab, setActiveTab] = useState('parametres');
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -483,7 +516,7 @@ export default function PaymentCreate() {
     if (!formData.currency_id) errors.push('La devise est obligatoire.');
     if (!formData.journal_id) errors.push('Le journal de paiement est obligatoire.');
     if (!formData.payment_date) errors.push('La date du paiement est obligatoire.');
-    if (formData.payment_type === 'transfer' && !formData.transfer_journal_id) errors.push('Le journal de destination est obligatoire pour un transfert.');
+    if (formData.payment_type === 'transfer' && !formData.destination_journal_id) errors.push('Le journal de destination est obligatoire pour un transfert.');
     return errors;
   };
 
@@ -500,7 +533,7 @@ export default function PaymentCreate() {
     partner_id: formData.partner_id || null,
     currency_id: formData.currency_id || null,
     journal_id: formData.journal_id || null,
-    transfer_journal_id: formData.payment_type === 'transfer' ? String(formData.transfer_journal_id || '') : null,
+    destination_journal_id: formData.payment_type === 'transfer' ? String(formData.destination_journal_id || '') : '',
     payment_method_id: formData.payment_method_id || '',
     payment_method_id_label: formData.payment_method_id_label || '',
     payment_method_line_id: formData.payment_method_line_id || '',
@@ -546,7 +579,6 @@ export default function PaymentCreate() {
   const isFormValid = validate().length === 0;
   const isDraft = true;
   const paymentLabel = formData.name || 'N° Sera généré lors de la validation';
-
   if (!activeEntity?.id) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -587,62 +619,68 @@ export default function PaymentCreate() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="relative" ref={actionsMenuRef}>
-                <Tooltip text="Menu des actions">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="relative" ref={actionsMenuRef}>
+                  <Tooltip text="Menu des actions">
+                    <button
+                      onClick={() => setShowActionsMenu((previous) => !previous)}
+                      className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:bg-gray-50 hover:shadow-md active:scale-95"
+                    >
+                      <FiSettings size={12} />
+                      <span>Actions</span>
+                    </button>
+                  </Tooltip>
+                  {showActionsMenu && (
+                    <div className="absolute right-0 z-50 mt-1 w-52 rounded border border-gray-300 bg-white shadow-lg">
+                      <button onClick={() => navigate('/comptabilite/paiements')} className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50">
+                        Retour à la liste
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <Tooltip text="Enregistrer">
                   <button
-                    onClick={() => setShowActionsMenu((previous) => !previous)}
-                    className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:bg-gray-50 hover:shadow-md active:scale-95"
+                    onClick={() => handleSave(false)}
+                    disabled={saving || !isFormValid}
+                    className={`flex h-8 w-8 items-center justify-center rounded-full text-white transition-all ${
+                      isFormValid && !saving ? 'bg-purple-600 hover:scale-110 hover:bg-purple-700' : 'cursor-not-allowed bg-gray-300'
+                    }`}
                   >
-                    <FiSettings size={12} />
-                    <span>Actions</span>
+                    <FiUploadCloud size={16} />
                   </button>
                 </Tooltip>
-                {showActionsMenu && (
-                  <div className="absolute right-0 z-50 mt-1 w-52 rounded border border-gray-300 bg-white shadow-lg">
-                    <button onClick={() => navigate('/comptabilite/conditions-paiement')} className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50">
-                      Conditions de paiement
-                    </button>
-                    <button onClick={() => navigate('/comptabilite/methodes-paiement')} className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50">
-                      Méthodes de paiement
-                    </button>
-                    <button onClick={() => navigate('/comptabilite/paiements')} className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50">
-                      Retour à la liste
-                    </button>
-                  </div>
-                )}
+                <Tooltip text="Annuler">
+                  <button
+                    onClick={handleCancel}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition-all hover:scale-110 hover:bg-gray-800"
+                  >
+                    <FiX size={16} />
+                  </button>
+                </Tooltip>
               </div>
-              <Tooltip text="Enregistrer">
-                <button
-                  onClick={() => handleSave(false)}
-                  disabled={saving || !isFormValid}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-white transition-all ${
-                    isFormValid && !saving ? 'bg-purple-600 hover:scale-110 hover:bg-purple-700' : 'cursor-not-allowed bg-gray-300'
-                  }`}
-                >
-                  <FiUploadCloud size={16} />
-                </button>
-              </Tooltip>
-              <Tooltip text="Annuler">
-                <button
-                  onClick={handleCancel}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition-all hover:scale-110 hover:bg-gray-800"
-                >
-                  <FiX size={16} />
-                </button>
-              </Tooltip>
             </div>
           </div>
         </div>
 
-        {(error || success) && (
-          <div className={`border-b border-gray-300 px-4 py-3 text-sm ${error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-            <div className="flex items-start gap-2">
-              {error ? <FiAlertCircle size={14} className="mt-0.5" /> : <FiCheck size={14} className="mt-0.5" />}
-              <div className="whitespace-pre-wrap">{error || success}</div>
+        <div className="border-b border-gray-300 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-h-8 items-center gap-2 text-xs">
+              {error ? (
+                <div className="flex items-start gap-1 text-red-600">
+                  <FiAlertCircle size={14} className="mt-0.5" />
+                  <span className="whitespace-pre-wrap">{error}</span>
+                </div>
+              ) : success ? (
+                <div className="flex items-center gap-1 text-green-600">
+                  <FiCheck size={14} />
+                  <span>{success}</span>
+                </div>
+              ) : null}
             </div>
+            <PaymentProcess state={saving ? 'processing' : formData.state === 'posted' ? 'paid' : 'draft'} />
           </div>
-        )}
+        </div>
 
         {loading ? (
           <div className="flex items-center justify-center p-8">
@@ -682,7 +720,7 @@ export default function PaymentCreate() {
                   </Field>
                   {formData.payment_type === 'transfer' && (
                     <Field label="Journal destination" required>
-                      <SearchSelect value={formData.transfer_journal_id} onChange={(id) => setField('transfer_journal_id', id)} options={treasuryJournals.length ? treasuryJournals : options.journals} getLabel={(journal) => optionLabel(journal)} placeholder="Journal destination" disabled={!isDraft} />
+                      <SearchSelect value={formData.destination_journal_id} onChange={(id) => setField('destination_journal_id', id)} options={treasuryJournals.length ? treasuryJournals : options.journals} getLabel={(journal) => optionLabel(journal)} placeholder="Journal destination" disabled={!isDraft} />
                     </Field>
                   )}
                   <Field label="Méthode">
@@ -694,39 +732,14 @@ export default function PaymentCreate() {
                 </div>
               </div>
             </div>
-
-            <div className="border-b border-gray-300 px-4">
-              {[
-                ['parametres', 'Paramètres', FiSettings],
-                ['notes', 'Notes', FiFileText],
-              ].map(([key, label, Icon]) => (
-                <button key={key} onClick={() => setActiveTab(key)} className={`border-b-2 px-4 py-2 text-xs font-medium ${activeTab === key ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                  <Icon size={12} className="mr-1 inline" />
-                  {label}
-                </button>
-              ))}
-            </div>
-
             <div className="p-4">
-              {activeTab === 'parametres' && (
-                <div className="border border-gray-300">
-                  <div className="grid grid-cols-2 border-b border-gray-300 bg-gray-100">
-                    {['État', 'Paiement'].map((header, index) => (
-                      <div key={header} className={`${index < 1 ? 'border-r border-gray-300' : ''} px-2 py-1.5 text-xs font-medium text-gray-700`}>{header}</div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2">
-                    <div className="border-r border-gray-300 p-2 text-xs text-gray-700">Brouillon</div>
-                    <div className="p-2 text-xs text-gray-700">{formData.payment_type === 'transfer' ? 'Transfert' : formData.payment_type === 'outbound' ? 'Décaissement' : 'Encaissement'}</div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'notes' && (
-                <div className="border border-gray-300">
-                  <textarea value={formData.narration} onChange={(event) => setField('narration', event.target.value)} disabled={!isDraft} className="h-48 w-full border-0 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" placeholder="Notes / libellé du paiement..." />
-                </div>
-              )}
+              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-700">
+                <FiFileText size={13} />
+                <span>Notes</span>
+              </div>
+              <div className="border border-gray-300">
+                <textarea value={formData.narration} onChange={(event) => setField('narration', event.target.value)} disabled={!isDraft} className="h-48 w-full border-0 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" placeholder="Notes / libelle du paiement..." />
+              </div>
             </div>
           </>
         )}
