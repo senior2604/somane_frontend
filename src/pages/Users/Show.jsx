@@ -1,3 +1,4 @@
+// C:\python\django\somane_fronten\somane_frontend\src\pages\Users\Show.jsx
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -5,9 +6,11 @@ import {
   FiCheck,
   FiCopy,
   FiInfo,
+  FiKey,
   FiPlus,
   FiRefreshCw,
   FiSettings,
+  FiShield,
   FiToggleRight,
   FiTrash2,
   FiUploadCloud,
@@ -30,8 +33,11 @@ import { SecurityForm } from './Create';
 
 export default function SecurityShow() {
   const navigate = useNavigate();
-  const { type = 'users', id } = useParams();
-  const [searchParams] = useSearchParams();
+const params = useParams();
+const [searchParams] = useSearchParams();
+
+const type = searchParams.get('type') || params.type || 'users';
+const id = searchParams.get('id') || params.id;
   const meta = getResourceMeta(type);
   const data = useSecurityData();
 
@@ -50,22 +56,24 @@ export default function SecurityShow() {
   const endpoint = type === 'users' ? 'users' : type === 'groups' ? 'groupes' : 'permissions';
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target)) {
+    const handleClickOutside = (event) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
         setShowActionsMenu(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
-    const handleBeforeUnload = (e) => {
+    const handleBeforeUnload = (event) => {
       if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
+        event.preventDefault();
+        event.returnValue = '';
       }
     };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
@@ -73,6 +81,7 @@ export default function SecurityShow() {
   const loadItem = useCallback(async () => {
     setLoading(true);
     setError(null);
+
     try {
       const response = await apiClient.get(`/${endpoint}/${id}/`);
       setItem(response);
@@ -85,25 +94,43 @@ export default function SecurityShow() {
     }
   }, [endpoint, id, type]);
 
-  useEffect(() => { loadItem(); }, [loadItem]);
+  useEffect(() => {
+    loadItem();
+  }, [loadItem]);
 
   const markAsModified = () => {
     if (!hasUnsavedChanges) setHasUnsavedChanges(true);
   };
 
   const setField = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+
+      if (field === 'target_type') {
+        next.groupe = '';
+        next.user = '';
+
+        if (value === 'group' || value === 'global') {
+          next.mode = 'allow';
+        }
+      }
+
+      if (field === 'module') {
+        next.model_id = '';
+      }
+
+      return next;
+    });
+
     markAsModified();
   };
 
   const isReady = formData ? Object.keys(validateSecurityForm(type, formData)).length === 0 : false;
 
-  // Les utilisateurs n'envoient qu'un payload partiel (statut / groupes) :
-  // un PUT effacerait les champs non envoyes (email, nom, telephone...).
-  // On utilise donc systematiquement PATCH pour toute mise a jour.
   const save = async (silent = false) => {
     const nextErrors = validateSecurityForm(type, formData);
     setFieldErrors(nextErrors);
+
     if (Object.keys(nextErrors).length > 0) {
       setError('Veuillez corriger les champs obligatoires.');
       return false;
@@ -112,13 +139,16 @@ export default function SecurityShow() {
     setSaving(true);
     if (!silent) setError(null);
     setSuccess(null);
+
     try {
       const payload = buildPayload(type, formData, item, data.partenaires);
       const updated = await apiClient.patch(`/${endpoint}/${id}/`, payload);
+
       setItem(updated);
       setFormData(itemToForm(type, updated));
       setHasUnsavedChanges(false);
-      if (!silent) setSuccess('Enregistré.');
+
+      if (!silent) setSuccess('Enregistre.');
       return true;
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Enregistrement impossible.');
@@ -129,23 +159,35 @@ export default function SecurityShow() {
   };
 
   const handleToggleStatus = async () => {
-    if (type === 'groups') return; // pas de notion de statut pour les groupes
+    if (type === 'groups') return;
+
     setSaving(true);
     setError(null);
     setSuccess(null);
+
     try {
-      const nextStatutValue = type === 'users'
-        ? (formData.statut === 'actif' ? 'inactif' : 'actif')
-        : !formData.statut;
-      const payload = buildPayload(type, { ...formData, statut: nextStatutValue }, item, data.partenaires);
+      const nextStatutValue =
+        type === 'users'
+          ? formData.statut === 'actif' ? 'inactif' : 'actif'
+          : !formData.statut;
+
+      const payload = buildPayload(
+        type,
+        { ...formData, statut: nextStatutValue, active: nextStatutValue },
+        item,
+        data.partenaires
+      );
+
       const updated = await apiClient.patch(`/${endpoint}/${id}/`, payload);
+
       setItem(updated);
       setFormData(itemToForm(type, updated));
       setHasUnsavedChanges(false);
+
       const isNowActive = type === 'users' ? nextStatutValue === 'actif' : nextStatutValue;
-      setSuccess(isNowActive ? `${meta.label} activé avec succès !` : `${meta.label} désactivé avec succès !`);
+      setSuccess(isNowActive ? `${meta.label} active avec succes !` : `${meta.label} desactive avec succes !`);
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Échec du changement de statut.');
+      setError(err?.response?.data?.detail || err?.message || 'Echec du changement de statut.');
     } finally {
       setSaving(false);
     }
@@ -153,7 +195,9 @@ export default function SecurityShow() {
 
   const remove = async () => {
     if (!window.confirm(`Supprimer ${meta.label.toLowerCase()} "${getTitle(type, item, data)}" ?`)) return;
+
     setShowActionsMenu(false);
+
     try {
       await apiClient.delete(`/${endpoint}/${id}/`);
       navigate(SECURITY_LIST_ROUTE);
@@ -163,7 +207,7 @@ export default function SecurityShow() {
   };
 
   const handleDuplicate = () => {
-    setSuccess('Duplication à implémenter');
+    setSuccess('Duplication a implementer');
     setShowActionsMenu(false);
   };
 
@@ -183,6 +227,15 @@ export default function SecurityShow() {
     }
   };
 
+const handleOpenGroupAccessRights = () => {
+  if (!id) return;
+  navigate(`${SECURITY_LIST_ROUTE}?tab=permissions&group=${id}`);
+};
+
+const handleOpenUserPermissions = () => {
+  if (!id) return;
+  navigate(`${SECURITY_LIST_ROUTE}?tab=permissions&user=${id}`);
+};
   const handleDiscardChanges = () => {
     if (hasUnsavedChanges) {
       setShowConfirmDialog(true);
@@ -204,7 +257,7 @@ export default function SecurityShow() {
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-7xl mx-auto bg-white border border-gray-300 p-8 flex items-center justify-center">
           <div className="text-center">
-            <div className="w-8 h-8 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <div className="w-8 h-8 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="mt-4 text-gray-600 text-sm">Chargement...</p>
           </div>
         </div>
@@ -217,12 +270,10 @@ export default function SecurityShow() {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-
-        {/* En-tête ligne 1 */}
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-start gap-3">
-              <Tooltip text="Créer une nouvelle fiche">
+              <Tooltip text="Creer une nouvelle fiche">
                 <button
                   onClick={handleNewItem}
                   className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
@@ -232,6 +283,7 @@ export default function SecurityShow() {
                   <span>Nouveau</span>
                 </button>
               </Tooltip>
+
               <div className="flex flex-col h-12 justify-center">
                 <div
                   className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
@@ -239,39 +291,98 @@ export default function SecurityShow() {
                 >
                   {getTitle(type, item, data)}
                 </div>
+
                 <div className="flex items-center gap-2 mt-0.5">
                   {type !== 'groups' && (
                     <span className={`px-2 py-0.5 text-xs font-medium ${isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                       {isActive ? 'Actif' : 'Inactif'}
                     </span>
                   )}
+
+                  {type === 'permissions' && (
+                    <>
+                      <span className={`px-2 py-0.5 text-xs font-medium ${formData.target_type === 'user' ? 'bg-blue-100 text-blue-800' : formData.target_type === 'group' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {formData.target_type === 'user' ? 'Utilisateur' : formData.target_type === 'group' ? 'Groupe' : 'Global'}
+                      </span>
+
+                      <span className={`px-2 py-0.5 text-xs font-medium ${formData.mode === 'deny' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                        {formData.mode === 'deny' ? 'Refuser' : 'Autoriser'}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
+
             <div className="flex items-center gap-2">
+            {type === 'groups' && (
+              <Tooltip text="Afficher les droits d'acces de ce groupe">
+                <button
+                  type="button"
+                  onClick={handleOpenGroupAccessRights}
+                  className="h-8 px-3 border border-purple-300 text-purple-700 bg-purple-50 text-xs hover:bg-purple-100 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                >
+                  <FiShield size={12} />
+                  <span>Droits d'acces</span>
+                </button>
+              </Tooltip>
+            )}
+
+            {type === 'users' && (
+              <Tooltip text="Afficher les permissions specifiques de cet utilisateur">
+                <button
+                  type="button"
+                  onClick={handleOpenUserPermissions}
+                  className="h-8 px-3 border border-blue-300 text-blue-700 bg-blue-50 text-xs hover:bg-blue-100 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                >
+                  <FiKey size={12} />
+                  <span>Permissions</span>
+                </button>
+              </Tooltip>
+            )}
               <div className="relative" ref={actionsMenuRef}>
                 <Tooltip text="Menu des actions">
                   <button
                     onClick={() => setShowActionsMenu(!showActionsMenu)}
                     className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
                   >
-                    <FiSettings size={12} /><span>Actions</span>
+                    <FiSettings size={12} />
+                    <span>Actions</span>
                   </button>
                 </Tooltip>
+
                 {showActionsMenu && (
                   <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
-                    <button onClick={handleDuplicate} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
-                      <FiCopy size={12} /> Dupliquer
+                    <button
+                      onClick={handleDuplicate}
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100"
+                    >
+                      <FiCopy size={12} />
+                      Dupliquer
                     </button>
-                    <button onClick={() => { setShowActionsMenu(false); loadItem(); }} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
-                      <FiRefreshCw size={12} /> Actualiser
+
+                    <button
+                      onClick={() => {
+                        setShowActionsMenu(false);
+                        loadItem();
+                      }}
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100"
+                    >
+                      <FiRefreshCw size={12} />
+                      Actualiser
                     </button>
-                    <button onClick={remove} className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 hover:pl-4 transition-all duration-200 flex items-center gap-2">
-                      <FiTrash2 size={12} /> Supprimer
+
+                    <button
+                      onClick={remove}
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 hover:pl-4 transition-all duration-200 flex items-center gap-2"
+                    >
+                      <FiTrash2 size={12} />
+                      Supprimer
                     </button>
                   </div>
                 )}
               </div>
+
               <Tooltip text="Enregistrer les modifications">
                 <button
                   onClick={() => save(false)}
@@ -281,6 +392,7 @@ export default function SecurityShow() {
                   <FiUploadCloud size={16} />
                 </button>
               </Tooltip>
+
               <Tooltip text="Annuler les modifications">
                 <button
                   onClick={handleDiscardChanges}
@@ -293,13 +405,12 @@ export default function SecurityShow() {
           </div>
         </div>
 
-        {/* En-tête ligne 2 */}
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="flex flex-col">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {type !== 'groups' && (
-                  <Tooltip text={isActive ? 'Désactiver' : 'Activer'}>
+                  <Tooltip text={isActive ? 'Desactiver' : 'Activer'}>
                     <button
                       type="button"
                       onClick={handleToggleStatus}
@@ -311,7 +422,7 @@ export default function SecurityShow() {
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <FiToggleRight size={13} />
-                      {isActive ? 'Désactiver' : 'Activer'}
+                      {isActive ? 'Desactiver' : 'Activer'}
                     </button>
                   </Tooltip>
                 )}
@@ -336,6 +447,7 @@ export default function SecurityShow() {
                   }`}>
                     Actif
                   </div>
+
                   <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
                     !isActive ? 'bg-red-100 text-red-700 border-red-300' : 'bg-gray-100 text-gray-500 border-gray-300'
                   }`}>
@@ -351,19 +463,22 @@ export default function SecurityShow() {
           </div>
         </div>
 
-        {/* Indicateur modifications */}
         {hasUnsavedChanges && (
           <div className="px-4 py-1 bg-blue-50 text-blue-700 text-xs border-b border-blue-200 flex items-center justify-between">
-            <span>Modifications non sauvegardées</span>
+            <span>Modifications non sauvegardees</span>
           </div>
         )}
 
-        {/* Contenu */}
         <div className="p-4">
-          <SecurityForm type={type} formData={formData} setField={setField} errors={fieldErrors} data={data} />
+          <SecurityForm
+            type={type}
+            formData={formData}
+            setField={setField}
+            errors={fieldErrors}
+            data={data}
+          />
         </div>
 
-        {/* Messages */}
         {(error || success) && (
           <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
             error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
@@ -376,14 +491,14 @@ export default function SecurityShow() {
         )}
       </div>
 
-      {/* Dialogue confirmation */}
       {showConfirmDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardees</h3>
             <p className="text-sm text-gray-600 mb-6">
               Voulez-vous enregistrer les modifications avant de quitter ?
             </p>
+
             <div className="flex justify-end gap-3">
               <button
                 onClick={async () => {
@@ -395,12 +510,14 @@ export default function SecurityShow() {
               >
                 Enregistrer
               </button>
+
               <button
                 onClick={confirmDiscardChanges}
                 className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 hover:scale-105 active:scale-95 transition-all duration-200"
               >
                 Ne pas enregistrer
               </button>
+
               <button
                 onClick={() => setShowConfirmDialog(false)}
                 className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 hover:scale-105 active:scale-95 transition-all duration-200"
@@ -419,5 +536,5 @@ function getTitle(type, item, data) {
   if (!item) return '';
   if (type === 'users') return getUserName(item);
   if (type === 'groups') return getGroupName(item);
-  return getPermissionName(item, data.groups, data.modules);
+  return getPermissionName(item, data.groups, data.modules, data.users);
 }

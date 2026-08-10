@@ -174,7 +174,14 @@ import FinancialReportsList from "../features/financial-reports/pages/index.jsx"
 import NewReportPage from "../features/financial-reports/pages/new/page.jsx";
 import SettingPage from "../features/financial-reports/pages/SettingsPage.jsx";
 import FinancialReportConfig from "../features/financial-reports/pages/FinancialReportConfig.jsx";
+// grand livre
+import GrandLivre from "../features/comptabilité/pages/GrandLivre/Index.jsx";
+import GrandLivrePartenaires from "../features/comptabilité/pages/GrandLivrePartenaires/Index.jsx";
+import BalancePartenaires from "../features/comptabilité/pages/BalancePartenaires/Index.jsx";
+import BalanceAgee from "../features/comptabilité/pages/BalanceAgee/Index.jsx";
+import EtatsFinanciersComptabilite from "../features/comptabilité/pages/EtatsFinanciers/Index.jsx";
 
+import ProfilePage from '../pages/Profile/ProfilePage';
 // ========== COMPOSANTS UTILITAIRES ==========
 const LoadingFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -251,6 +258,7 @@ export default function AppRouter() {
         <Route path="/auth/activate/:uid/:token" element={<ActivationPage />} />
         <Route path="/auth/password/reset/:uid/:token" element={<ResetPasswordPage />} />
         <Route path="/auth/reset-confirm/success" element={<ConfirmResetPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
 
         {/* SELECTION D'ENTITE */}
         <Route path="/select-entite" element={<SelectEntitePage />} />
@@ -362,6 +370,12 @@ export default function AppRouter() {
             <Route path=":id/edit" element={<JournauxEdit />} />
           </Route>
 
+        {/* grand livre  */}
+        <Route path="grand-livre" element={<GrandLivre />} />
+        <Route path="grand-livre-partenaires" element={<GrandLivrePartenaires />} />
+        <Route path="balance-partenaires" element={<BalancePartenaires />} />
+        <Route path="balance-agee" element={<BalanceAgee />} />
+        <Route path="Bilan" element={<EtatsFinanciersComptabilite />} />
           <Route path="parametrage">
             <Route path="longueur-compte" element={<AccountCompanyConfigWizard />} />
           </Route>
@@ -420,6 +434,8 @@ export default function AppRouter() {
             <Route path=":id" element={<SequencesShow />} />
           </Route>
         </Route>
+
+
 
         {/* VENTES */}
         <Route path="/vente" element={
@@ -511,4 +527,3 @@ export default function AppRouter() {
     </BrowserRouter>
   );
 }
-

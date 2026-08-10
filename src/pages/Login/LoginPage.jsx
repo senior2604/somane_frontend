@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { authService } from "../../services/authService";
+import { securityService } from "../../services/securityAccess";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -29,18 +31,34 @@ const submit = async (e) => {
       timeout: 10000,
     });
 
-    if (resp.data?.access) {
-      localStorage.setItem("accessToken", resp.data.access);
-      localStorage.setItem("refreshToken", resp.data.refresh);
+if (resp.data?.access) {
+  authService.setToken(resp.data.access);
+  if (resp.data.refresh) {
+    authService.setRefreshToken(resp.data.refresh);
+  }
 
-      if (resp.data.user) {
-        localStorage.setItem("user", JSON.stringify(resp.data.user));
-        localStorage.setItem("entiteActive", resp.data.user.entite_active || '');
+    if (resp.data.user) {
+      authService.setUser(resp.data.user);
+
+      if (resp.data.user.entite_active) {
+        authService.setActiveEntite(resp.data.user.entite_active);
       }
 
-      console.log("✅ Connexion réussie avec JWT");
-      await fetchUserEntites(resp.data.access);
-    } else {
+      localStorage.setItem("entiteActive", resp.data.user.entite_active || "");
+    }
+
+    try {
+      const security = await securityService.fetchMe();
+      authService.setSecurity(security);
+      console.log("✅ Permissions chargées", security);
+    } catch (securityError) {
+      console.warn("⚠️ Connexion OK, mais permissions non chargées:", securityError);
+    }
+
+    console.log("✅ Connexion réussie avec JWT");
+    await fetchUserEntites(resp.data.access);
+  }
+     else {
       setError("Connexion réussie mais aucun token JWT reçu.");
     }
   } catch (err) {

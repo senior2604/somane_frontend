@@ -15,6 +15,7 @@ class ApiClient {
       'auth/',
       'login/',
       'register/',
+      'security/me/',
       'pays/',
       'devises/',
       'subdivisions/',
@@ -168,17 +169,24 @@ class ApiClient {
       console.log('🔑 Token JWT ajouté à la requête');
     }
 
-    // N'injecter l'entité QUE pour les endpoints qui en ont besoin
-    if (this.requiresEntity(endpoint)) {
-      const activeEntity = getActiveEntity();
-      if (activeEntity) {
-        config.headers['X-Entity-ID'] = activeEntity.id;
-        console.log(`🏢 Entité active injectée: ${activeEntity.id} (${activeEntity.raison_sociale})`);
-      } else {
-        console.log(`⚠️ Endpoint ${endpoint} nécessite une entité mais aucune n'est active`);
-      }
+    // Injecter l'entite active des qu'elle existe.
+    // Important : meme les endpoints "permissions/" peuvent avoir besoin
+    // du contexte d'entite pour verifier une permission liee a une entite.
+    const activeEntity = getActiveEntity();
+    const activeEntityId = activeEntity?.id ?? activeEntity;
+
+    if (activeEntityId) {
+    config.headers['X-Entity-ID'] = activeEntityId;
+
+
+      console.log(
+        `Entite active injectee: ${activeEntityId}`,
+        activeEntity?.raison_sociale ? `(${activeEntity.raison_sociale})` : ''
+      );
+    } else if (this.requiresEntity(endpoint)) {
+      console.log(`Endpoint ${endpoint} necessite une entite mais aucune n'est active`);
     } else {
-      console.log(`⏭️ Endpoint ${endpoint} ne nécessite pas d'entité`);
+      console.log(`Endpoint ${endpoint} appele sans entite active`);
     }
 
     try {
@@ -498,11 +506,14 @@ class ApiClient {
     
     // ✅ AJOUTER l'entité active (crucial pour la permission)
     const activeEntity = getActiveEntity();
-    if (activeEntity) {
-      config.headers['X-Entity-ID'] = activeEntity.id;
-      console.log(`🏢 Entité active injectée pour téléchargement: ${activeEntity.id}`);
+    const activeEntityId = activeEntity?.id ?? activeEntity;
+
+    if (activeEntityId) {
+    config.headers['X-Entity-ID'] = activeEntityId;
+
+      console.log(`Entite active injectee pour telechargement: ${activeEntityId}`);
     } else {
-      console.warn(`⚠️ Téléchargement sans entité active - risque de 403`);
+      console.warn('Telechargement sans entite active - risque de 403');
     }
     
     // Nettoyer l'endpoint

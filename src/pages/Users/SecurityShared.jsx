@@ -1,3 +1,4 @@
+// C:\python\django\somane_fronten\somane_frontend\src\pages\Users\SecurityShared.jsx
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../../services/apiClient';
 
@@ -10,13 +11,23 @@ export const ACCESS_TYPES = [
   { value: 'personnalise', label: 'Personnalise', dot: 'bg-gray-500', badge: 'bg-gray-50 text-gray-700 border-gray-200' },
 ];
 
+export const PERMISSION_TARGET_TYPES = [
+  { value: 'group', label: "Droit d'acces groupe" },
+  { value: 'user', label: 'Permission utilisateur' },
+  { value: 'global', label: 'Permission globale' },
+];
+
+export const PERMISSION_MODES = [
+  { value: 'allow', label: 'Autoriser' },
+  { value: 'deny', label: 'Refuser' },
+];
+
 export const RESOURCE_TYPES = [
   { value: 'users', label: 'Utilisateur', plural: 'Utilisateurs' },
   { value: 'groups', label: 'Groupe', plural: 'Groupes' },
   { value: 'permissions', label: 'Permission', plural: 'Permissions' },
 ];
 
-// Route de la liste, vers laquelle pointent tous les boutons "Retour" / "Annuler".
 export const SECURITY_LIST_ROUTE = '/UsersGestions';
 
 export const parseResponse = (response) => {
@@ -31,27 +42,66 @@ export const getResourceMeta = (type) => {
   return RESOURCE_TYPES.find((item) => item.value === type) || RESOURCE_TYPES[0];
 };
 
-export const getUserName = (user) => {
-  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ');
-  return fullName || user?.email || user?.username || 'Utilisateur sans nom';
-};
-
-export const getGroupName = (group) => group?.name || 'Groupe sans nom';
-
-export const getPermissionName = (permission, groups = [], modules = []) => {
-  if (permission?.name) return permission.name;
-  const group = findById(groups, permission?.groupe);
-  const module = findById(modules, permission?.module);
-  return `${group?.name || 'Groupe'} - ${module?.nom_affiche || module?.name || 'Module'}`;
-};
-
-export const findById = (items, value) => {
+export const findById = (items = [], value) => {
   const id = value?.id ?? value;
-  return items.find((item) => String(item.id) === String(id));
+  if (!id && id !== 0) return null;
+  return items.find((item) => String(item.id) === String(id)) || null;
 };
 
-// Un partenaire n'est proposable a la creation d'utilisateur que s'il a au
-// moins une entite rattachee.
+export const normalizeIds = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => item?.id ?? item)
+    .filter(Boolean);
+};
+
+export const getUserName = (user) => {
+  if (!user) return '';
+
+  const fullName = [user?.first_name, user?.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return fullName || user?.email || user?.username || `Utilisateur ${user.id}`;
+};
+
+export const getGroupName = (group) => {
+  if (!group) return '';
+  return group?.name || group?.nom || `Groupe ${group.id}`;
+};
+
+export const getPermissionName = (permission, groups = [], modules = [], users = []) => {
+  if (permission?.name) return permission.name;
+  if (permission?.nom) return permission.nom;
+
+  const group = findById(groups, permission?.groupe);
+  const user = findById(users, permission?.user);
+  const module = findById(modules, permission?.module);
+
+  let target = 'Global';
+
+  if (permission?.user_nom) {
+    target = permission.user_nom;
+  } else if (user) {
+    target = getUserName(user);
+  } else if (permission?.groupe_nom) {
+    target = permission.groupe_nom;
+  } else if (group) {
+    target = getGroupName(group);
+  }
+
+  const moduleName =
+    permission?.module_nom ||
+    module?.nom_affiche ||
+    module?.nom ||
+    module?.name ||
+    'Module';
+
+  return `${target} - ${moduleName}`;
+};
+
 export const getEligiblePartenaires = (partenaires = [], entites = []) => {
   return partenaires.filter((partenaire) =>
     entites.some((entite) => (entite.partenaire?.id ?? entite.partenaire) === partenaire.id)
@@ -66,6 +116,7 @@ export const initialForms = {
     statut: 'actif',
     groups: [],
   },
+
   groups: {
     name: '',
     description: '',
@@ -74,60 +125,111 @@ export const initialForms = {
     permissions: [],
     inherited_groups: [],
   },
+
   permissions: {
     name: '',
+    target_type: 'group',
     groupe: '',
+    user: '',
     module: '',
+    model_id: '',
     entite: '',
-    acces: 'lecture',
+    mode: 'allow',
+    acces: 'personnalise',
     statut: true,
+    active: true,
+    perm_read: false,
+    perm_create: false,
+    perm_write: false,
+    perm_unlink: false,
+    perm_validate: false,
+    perm_cancel: false,
+    perm_export: false,
+    perm_import: false,
+    perm_print: false,
   },
 };
 
 export function itemToForm(type, item) {
-  if (!item) return initialForms[type] || {};
+  if (!item) return { ...(initialForms[type] || {}) };
+
   if (type === 'users') {
     return {
       partenaire: item.partenaire?.id || item.partenaire || '',
       statut: item.statut || (item.is_active ? 'actif' : 'inactif'),
-      groups: item.groups?.map((group) => group.id ?? group) || [],
+      groups: normalizeIds(item.groups || item.groupes || item.groupes_details),
     };
   }
+
   if (type === 'groups') {
     return {
+      id: item.id,
       name: item.name || '',
       description: item.description || '',
       category: item.category || '',
-      members: item.members?.map((user) => user.id ?? user) || [],
-      permissions: item.permissions?.map((permission) => permission.id ?? permission) || [],
-      inherited_groups: item.inherited_groups?.map((group) => group.id ?? group) || [],
+      members: normalizeIds(item.members || item.users || item.users_details),
+      permissions: normalizeIds(item.permissions || item.permissions_fines || item.permissions_details),
+      inherited_groups: normalizeIds(item.inherited_groups || item.implied_ids || item.implied_details),
     };
   }
+
+  const targetType = item.user ? 'user' : item.groupe ? 'group' : 'global';
+
   return {
+    ...initialForms.permissions,
+    id: item.id,
     name: item.name || '',
+    target_type: targetType,
     groupe: item.groupe?.id || item.groupe || '',
+    user: item.user?.id || item.user || '',
     module: item.module?.id || item.module || '',
+    model_id: item.model_id?.id || item.model_id || '',
     entite: item.entite?.id || item.entite || '',
-    acces: item.acces || 'lecture',
+    mode: item.mode || 'allow',
+    acces: item.acces || 'personnalise',
     statut: item.statut !== undefined ? item.statut : true,
+    active: item.active !== undefined ? item.active : true,
+    perm_read: !!item.perm_read,
+    perm_create: !!item.perm_create,
+    perm_write: !!item.perm_write,
+    perm_unlink: !!item.perm_unlink,
+    perm_validate: !!item.perm_validate,
+    perm_cancel: !!item.perm_cancel,
+    perm_export: !!item.perm_export,
+    perm_import: !!item.perm_import,
+    perm_print: !!item.perm_print,
   };
 }
 
 export function validateSecurityForm(type, form) {
   const errors = {};
-  if (type === 'users' && !form.partenaire) errors.partenaire = 'Le partenaire est obligatoire';
-  if (type === 'groups' && !form.name?.trim()) errors.name = 'Le nom du groupe est obligatoire';
+
+  if (type === 'users' && !form.partenaire) {
+    errors.partenaire = 'Le partenaire est obligatoire';
+  }
+
+  if (type === 'groups' && !form.name?.trim()) {
+    errors.name = 'Le nom du groupe est obligatoire';
+  }
+
   if (type === 'permissions') {
-    if (!form.groupe) errors.groupe = 'Le groupe est obligatoire';
+    if (form.target_type === 'group' && !form.groupe) {
+      errors.groupe = 'Le groupe est obligatoire';
+    }
+
+    if (form.target_type === 'user' && !form.user) {
+      errors.user = "L'utilisateur est obligatoire";
+    }
+
     if (!form.module) errors.module = 'Le module est obligatoire';
+    if (!form.model_id) errors.model_id = 'Le modele / table est obligatoire';
+    if (!form.mode) errors.mode = 'Le mode est obligatoire';
     if (!form.acces) errors.acces = "Le type d'acces est obligatoire";
   }
+
   return errors;
 }
 
-// IMPORTANT : ce payload "utilisateur en edition" est volontairement partiel
-// (statut / groupes uniquement). Il doit toujours partir avec un PATCH, jamais
-// un PUT, sinon l'API risque d'ecraser les champs non envoyes (email, nom...).
 export function buildPayload(type, form, item = null, partenaires = []) {
   if (type === 'users') {
     if (item) {
@@ -137,7 +239,9 @@ export function buildPayload(type, form, item = null, partenaires = []) {
         is_active: form.statut === 'actif',
       };
     }
+
     const partenaire = findById(partenaires, form.partenaire);
+
     return {
       partenaire: Number(form.partenaire),
       first_name: partenaire?.prenom || partenaire?.first_name || '',
@@ -155,18 +259,37 @@ export function buildPayload(type, form, item = null, partenaires = []) {
       description: form.description?.trim() || '',
       category: form.category?.trim() || '',
       members: form.members,
+      users: form.members,
       permissions: form.permissions,
+      permissions_fines: form.permissions,
       inherited_groups: form.inherited_groups,
+      implied_ids: form.inherited_groups,
     };
   }
 
+  const isGroup = form.target_type === 'group';
+  const isUser = form.target_type === 'user';
+
   return {
     name: form.name?.trim() || '',
-    groupe: Number(form.groupe),
-    module: Number(form.module),
+    groupe: isGroup && form.groupe ? Number(form.groupe) : null,
+    user: isUser && form.user ? Number(form.user) : null,
+    module: form.module ? Number(form.module) : null,
+    model_id: form.model_id ? Number(form.model_id) : null,
     entite: form.entite ? Number(form.entite) : null,
-    acces: form.acces,
+    mode: form.mode || 'allow',
+    acces: form.acces || 'personnalise',
     statut: !!form.statut,
+    active: form.active !== false,
+    perm_read: !!form.perm_read,
+    perm_create: !!form.perm_create,
+    perm_write: !!form.perm_write,
+    perm_unlink: !!form.perm_unlink,
+    perm_validate: !!form.perm_validate,
+    perm_cancel: !!form.perm_cancel,
+    perm_export: !!form.perm_export,
+    perm_import: !!form.perm_import,
+    perm_print: !!form.perm_print,
   };
 }
 
@@ -176,6 +299,7 @@ export function useSecurityData() {
     groups: [],
     permissions: [],
     modules: [],
+    models: [],
     entites: [],
     partenaires: [],
   });
@@ -185,20 +309,24 @@ export function useSecurityData() {
   const fetchData = async () => {
     setLoading(true);
     setError(null);
+
     try {
-      const [users, groups, permissions, modules, entites, partenaires] = await Promise.all([
+      const [users, groups, permissions, modules, models, entites, partenaires] = await Promise.all([
         apiClient.get('/users/'),
         apiClient.get('/groupes/'),
         apiClient.get('/permissions/'),
         apiClient.get('/modules/'),
+        apiClient.get('/ir-models/'),
         apiClient.get('/entites/'),
         apiClient.get('/partenaires/'),
       ]);
+
       setData({
         users: parseResponse(users),
         groups: parseResponse(groups),
         permissions: parseResponse(permissions),
         modules: parseResponse(modules),
+        models: parseResponse(models),
         entites: parseResponse(entites),
         partenaires: parseResponse(partenaires),
       });
@@ -218,9 +346,6 @@ export function useSecurityData() {
   return { ...data, eligiblePartenaires, loading, error, fetchData };
 }
 
-// ==========================================
-// TOOLTIP (identique a la version PartnerShared)
-// ==========================================
 export const Tooltip = ({ children, text, position = 'top' }) => {
   const [show, setShow] = useState(false);
 
@@ -230,32 +355,19 @@ export const Tooltip = ({ children, text, position = 'top' }) => {
         {children}
       </div>
       {show && (
-        <div
-          className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-            position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-            position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-            position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-            'left-full top-1/2 transform -translate-y-1/2 ml-1'
-          }`}
-        >
+        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
+          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
+          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
+          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
+          'left-full top-1/2 transform -translate-y-1/2 ml-1'
+        }`}>
           {text}
-          <div
-            className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-              position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-              position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-              position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-              'right-full top-1/2 -translate-y-1/2 -mr-1'
-            }`}
-          />
         </div>
       )}
     </div>
   );
 };
 
-// ==========================================
-// Gabarit de champ "libelle a gauche / champ a droite", identique aux pages Partenaires
-// ==========================================
 export function FormField({ label, required, error, children }) {
   return (
     <div>
@@ -275,9 +387,15 @@ export const inputClass = (error) =>
     error ? 'border-red-500' : 'border-gray-300'
   }`;
 
-export function CheckList({ items, value, onChange, getLabel }) {
+export function CheckList({ items = [], value = [], onChange, getLabel }) {
+  const selected = normalizeIds(value);
+
   const toggle = (id) => {
-    onChange(value.includes(id) ? value.filter((item) => item !== id) : [...value, id]);
+    onChange(
+      selected.includes(id)
+        ? selected.filter((item) => item !== id)
+        : [...selected, id]
+    );
   };
 
   return (
@@ -291,7 +409,7 @@ export function CheckList({ items, value, onChange, getLabel }) {
         >
           <input
             type="checkbox"
-            checked={value.includes(item.id)}
+            checked={selected.includes(item.id)}
             onChange={() => toggle(item.id)}
           />
           <span>{getLabel(item)}</span>

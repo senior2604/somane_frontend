@@ -166,137 +166,146 @@ export const paymentService = {
   }
 };
 
-// ============= SERVICE SEQUENCES =============
-const SEQUENCE_ENDPOINTS = ['/sequences/', `${API_PREFIX}sequences/`];
-
-const normalizeApiList = (response) => {
-  if (Array.isArray(response)) return response;
-  if (Array.isArray(response?.results)) return response.results;
-  if (Array.isArray(response?.data)) return response.data;
-  if (Array.isArray(response?.items)) return response.items;
-  if (Array.isArray(response?.records)) return response.records;
-  return [];
-};
-
-const normalizeApiObject = (response) => {
-  if (response?.data && !Array.isArray(response.data)) return response.data;
-  if (response?.result && !Array.isArray(response.result)) return response.result;
-  return response;
-};
-
-const getSequenceParams = (entityId = null, extra = {}) => (
-  entityId ? { ...extra, company: entityId, entity_id: entityId } : extra
-);
-
-const getSequencePayload = (data, entityId = null) => {
-  const payload = { ...(data || {}) };
-  if (entityId) {
-    payload.company = payload.company || entityId;
-  }
-  delete payload.company_id;
-  return payload;
-};
-
-const sequenceRequest = async (requestFactory) => {
-  let lastError = null;
-
-  for (const endpoint of SEQUENCE_ENDPOINTS) {
-    try {
-      return await requestFactory(endpoint);
-    } catch (error) {
-      lastError = error;
-      const status = error?.response?.status || error?.status;
-      if (![404, 405].includes(Number(status))) {
-        throw error;
-      }
-    }
-  }
-
-  throw lastError;
-};
-
+// ============= SERVICE SÉQUENCES =============
 export const sequencesService = {
-  getAll: async (entityId = null, filters = {}) => {
+  /**
+   * Récupérer toutes les séquences
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Array>} Liste des séquences
+   */
+  getAll: async (entityId = null) => {
     try {
-      const params = getSequenceParams(entityId, filters);
-      const response = await sequenceRequest((endpoint) => apiClient.get(endpoint, { params }));
-      return normalizeApiList(response);
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get('/sequences/', { params });
+      
+      let sequencesData = [];
+      if (Array.isArray(response)) {
+        sequencesData = response;
+      } else if (response && typeof response === 'object') {
+        if (response.results && Array.isArray(response.results)) {
+          sequencesData = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          sequencesData = response.data;
+        }
+      }
+      
+      return sequencesData;
     } catch (error) {
-      console.error('Erreur chargement sequences:', error);
+      console.error('Erreur chargement séquences:', error);
       return [];
     }
   },
 
+  /**
+   * Récupérer une séquence par son ID
+   * @param {number} id - ID de la séquence
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Détails de la séquence
+   */
   getById: async (id, entityId = null) => {
     try {
-      const params = getSequenceParams(entityId);
-      const response = await sequenceRequest((endpoint) => apiClient.get(`${endpoint}${id}/`, { params }));
-      return normalizeApiObject(response);
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.get(`/sequences/${id}/`, { params });
+      return response;
     } catch (error) {
-      console.error(`Erreur chargement sequence ${id}:`, error);
+      console.error(`Erreur chargement séquence ${id}:`, error);
       throw error;
     }
   },
 
+  /**
+   * Créer une nouvelle séquence
+   * @param {Object} data - Données de la séquence
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Séquence créée
+   */
   create: async (data, entityId = null) => {
     try {
-      const payload = getSequencePayload(data, entityId);
-      const response = await sequenceRequest((endpoint) => apiClient.post(endpoint, payload));
-      return normalizeApiObject(response);
+      const payload = entityId ? { ...data, company: entityId } : data;
+      const response = await apiClient.post('/sequences/', payload);
+      return response;
     } catch (error) {
-      console.error('Erreur creation sequence:', error);
+      console.error('Erreur création séquence:', error);
       throw error;
     }
   },
 
+  /**
+   * Mettre à jour une séquence
+   * @param {number} id - ID de la séquence
+   * @param {Object} data - Données à mettre à jour
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Séquence mise à jour
+   */
   update: async (id, data, entityId = null) => {
     try {
-      const payload = getSequencePayload(data, entityId);
-      const params = getSequenceParams(entityId);
-      const response = await sequenceRequest((endpoint) => apiClient.put(`${endpoint}${id}/`, payload, { params }));
-      return normalizeApiObject(response);
+      const payload = entityId ? { ...data, company: entityId } : data;
+      const response = await apiClient.put(`/sequences/${id}/`, payload);
+      return response;
     } catch (error) {
-      console.error(`Erreur mise a jour sequence ${id}:`, error);
+      console.error(`Erreur mise à jour séquence ${id}:`, error);
       throw error;
     }
   },
 
+  /**
+   * Supprimer une séquence
+   * @param {number} id - ID de la séquence
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<void>}
+   */
   delete: async (id, entityId = null) => {
     try {
-      const params = getSequenceParams(entityId);
-      await sequenceRequest((endpoint) => apiClient.delete(`${endpoint}${id}/`, { params }));
+      const params = entityId ? { company: entityId } : {};
+      await apiClient.delete(`/sequences/${id}/`, { params });
     } catch (error) {
-      console.error(`Erreur suppression sequence ${id}:`, error);
+      console.error(`Erreur suppression séquence ${id}:`, error);
       throw error;
     }
   },
 
+  /**
+   * Générer le prochain numéro d'une séquence
+   * @param {number} id - ID de la séquence
+   * @param {number|null} entityId - ID de l'entité (optionnel)
+   * @returns {Promise<Object>} Objet avec le prochain numéro
+   */
   getNextNumber: async (id, entityId = null) => {
     try {
-      const params = getSequenceParams(entityId);
-      const response = await sequenceRequest((endpoint) => apiClient.post(`${endpoint}${id}/next/`, {}, { params }));
-      return normalizeApiObject(response);
+      const params = entityId ? { company: entityId } : {};
+      const response = await apiClient.post(`/sequences/${id}/next/`, {}, { params });
+      return response;
     } catch (error) {
-      console.error(`Erreur generation prochain numero sequence ${id}:`, error);
+      console.error(`Erreur génération prochain numéro séquence ${id}:`, error);
       throw error;
     }
   },
 
+  /**
+   * Formater le libellé d'une séquence pour l'affichage
+   * @param {Object} sequence - Objet séquence
+   * @returns {string} Libellé formaté
+   */
   formatSequenceLabel: (sequence) => {
     if (!sequence) return '';
     const prefix = sequence.prefix || '';
     const suffix = sequence.suffix || '';
-    const padding = Number(sequence.padding || 2);
+    const padding = sequence.padding || 5;
     const currentNumber = sequence.current_number || 0;
     const formattedNumber = String(currentNumber).padStart(padding, '0');
     return `${prefix}${formattedNumber}${suffix}`;
   },
 
+  /**
+   * Formater le modèle d'une séquence pour l'affichage
+   * @param {Object} sequence - Objet séquence
+   * @returns {string} Modèle formaté (ex: FACT-00000)
+   */
   formatSequencePattern: (sequence) => {
     if (!sequence) return '';
     const prefix = sequence.prefix || '';
     const suffix = sequence.suffix || '';
-    const padding = Number(sequence.padding || 2);
+    const padding = sequence.padding || 5;
     const zeros = '0'.repeat(padding);
     return `${prefix}${zeros}${suffix}`;
   }
@@ -637,6 +646,17 @@ export const piecesService = {
     return apiClient.post(`${API_PREFIX}moves/${id}/reverse/`, {}, { params });
   },
   
+
+  getGrandLivre: async (entityId = null, filters = {}) => {
+  try {
+    const params = entityId ? { ...filters, company: entityId } : filters;
+    const response = await apiClient.get(`${API_PREFIX}move-lines/grand-livre/`, { params });
+    return response?.data || response;
+  } catch (error) {
+    console.error('Erreur chargement grand livre:', error);
+    throw error;
+  }
+  },
   // === PIÈCES JOINTES ===
   
   /**
@@ -788,8 +808,7 @@ export const piecesService = {
   // === DONNÉES DE RÉFÉRENCE AVEC ENTITÉ ===
   getJournals: async (entityId = null) => {
     try {
-      const params = { active: true };
-      if (entityId) params.company = entityId;
+      const params = entityId ? { company: entityId } : {};
       const response = await apiClient.get(`${API_PREFIX}journals/`, { params });
       
       let journalsData = [];

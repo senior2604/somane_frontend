@@ -8,6 +8,7 @@ class AuthService {
     this.refreshTokenKey = 'refresh_token';
     this.userKey = 'user_data';
     this.entiteKey = 'entite_active';
+    this.securityKey = 'security_data';
     
     // Clés de compatibilité pour migration
     this.compatKeys = {
@@ -553,7 +554,26 @@ class AuthService {
       return null;
     }
   }
+  
+setSecurity(securityData) {
+  try {
+    localStorage.setItem(this.securityKey, JSON.stringify(securityData));
+    return true;
+  } catch (error) {
+    console.error('Erreur stockage security:', error);
+    return false;
+  }
+}
 
+getSecurity() {
+  try {
+    const raw = localStorage.getItem(this.securityKey);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.error('Erreur lecture security:', error);
+    return null;
+  }
+}
   /**
    * Définit l'entité active
    */
@@ -632,7 +652,7 @@ class AuthService {
     try {
       // localStorage
       [
-        this.tokenKey, this.refreshTokenKey, this.userKey, this.entiteKey,
+        this.tokenKey, this.refreshTokenKey, this.userKey, this.entiteKey,this.securityKey,
         'accessToken', 'refreshToken', 'user', 'entiteActive',
         'access', 'refresh'
       ].forEach(key => localStorage.removeItem(key));

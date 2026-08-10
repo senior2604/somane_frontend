@@ -1,6 +1,6 @@
 // src/components/UnifiedHeader.jsx
 import { useNavigate, useLocation } from "react-router-dom";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   FiBell,
   FiChevronDown,
@@ -113,11 +113,11 @@ const MODULES_CONFIG = [
           { label: "Comptes comptables", path: "/comptabilite/accounts" },
           { label: "Import comptes", path: "/comptabilite/accounts/import" },
           { label: "Journaux", path: "/comptabilite/journaux" },
-          { label: "Séquences", path: "/comptabilite/sequences" },
           { label: "Taxes", path: "/comptabilite/taux-fiscaux" },
           { label: "Groupes de taxes", path: "/comptabilite/tax-groups" },
           { label: "Retenues à la source", path: "/comptabilite/withholding-taxes" },
           { label: "Positions fiscales", path: "/comptabilite/positions-fiscales" },
+          { label: "Séquences", path: "/comptabilite/sequences" },
           { label: "Longueur des comptes", path: "/comptabilite/parametrage/longueur-compte" },
           { label: "Réimputations", path: "/comptabilite/reimputations" },
           { label: "Relevés bancaires", path: "/comptabilite/releves-bancaires" }
@@ -383,8 +383,32 @@ export default function UnifiedHeader() {
   const [userEntities, setUserEntities] = useState([]);
   const [loadingEntities, setLoadingEntities] = useState(true);
   const [currentUserName, setCurrentUserName] = useState(getCurrentUserName);
+  const modulesMenuRef = useRef(null);
+  const navMenuRef = useRef(null);
+  const entityMenuRef = useRef(null);
+  const userMenuRef = useRef(null);
 
   const { activeEntity, selectEntity } = useEntity();
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (modulesMenuRef.current && !modulesMenuRef.current.contains(event.target)) {
+        setShowModules(false);
+      }
+      if (navMenuRef.current && !navMenuRef.current.contains(event.target)) {
+        setHoveredCategory(null);
+      }
+      if (entityMenuRef.current && !entityMenuRef.current.contains(event.target)) {
+        setShowEntityMenu(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // === VERIFICATION DE L'EXISTENCE DE L'ENTITE ACTIVE ===
   useEffect(() => {
@@ -506,7 +530,7 @@ export default function UnifiedHeader() {
           {/* GAUCHE - SIMPLIFIEE : Seulement icone menu */}
           <div className="flex items-center">
             {/* Menu des modules */}
-            <div className="relative">
+            <div className="relative" ref={modulesMenuRef}>
               <button
                 onClick={() => !isOnEntitySelectionPage && setShowModules(!showModules)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
@@ -523,10 +547,11 @@ export default function UnifiedHeader() {
               </button>
 
               {showModules && !isOnEntitySelectionPage && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setShowModules(false)} />
-                  <div className="absolute top-full left-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 z-40">
-                    <div className="px-4 py-2 border-b border-gray-100">
+                  <div
+                    onMouseLeave={() => setShowModules(false)}
+                    className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-300 shadow-lg rounded z-50"
+                  >
+                    <div className="px-4 py-2 border-b border-gray-200">
                       <p className="text-xs text-gray-500 font-medium">Modules ERP</p>
                     </div>
                     <div className="py-1">
@@ -546,14 +571,13 @@ export default function UnifiedHeader() {
                       ))}
                     </div>
                   </div>
-                </>
               )}
             </div>
           </div>
 
           {/* CENTRE : Navigation specifique au module - UNIQUEMENT SI ELLE EXISTE */}
           {!isOnEntitySelectionPage && navigation.length > 0 && (
-            <nav className="flex items-center gap-6">
+            <nav className="flex items-center gap-6" ref={navMenuRef}>
               {navigation.map((item) => {
                 const hasItems = item.items?.length > 0;
                 const hasActiveItem = (item.path && location.pathname === item.path) || item.items?.some((sub) => location.pathname === sub.path) || false;
@@ -562,13 +586,16 @@ export default function UnifiedHeader() {
                   <div
                     key={item.name}
                     className="relative"
-                    onMouseEnter={() => hasItems && setHoveredCategory(item.name)}
-                    onMouseLeave={() => setHoveredCategory(null)}
                   >
                     <div className="py-2 px-1 -mx-1">
                       <button
                         onClick={() => {
-                          if (item.path) navigate(item.path);
+                          if (hasItems) {
+                            setHoveredCategory((current) => current === item.name ? null : item.name);
+                          } else if (item.path) {
+                            setHoveredCategory(null);
+                            navigate(item.path);
+                          }
                         }}
                         className={`flex items-center gap-1 text-sm font-medium transition-colors ${
                           hasActiveItem ? textClass : "text-gray-700 hover:text-gray-900"
@@ -585,14 +612,16 @@ export default function UnifiedHeader() {
 
                     {hasItems && hoveredCategory === item.name && (
                       <div
-                        className="absolute top-full left-0 mt-0 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 max-h-[400px] overflow-y-auto"
-                        onMouseEnter={() => setHoveredCategory(item.name)}
+                        className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded py-2 z-50 max-h-[400px] overflow-y-auto"
                         onMouseLeave={() => setHoveredCategory(null)}
                       >
                         {item.items.map((subItem) => (
                           <button
                             key={subItem.path}
-                            onClick={() => navigate(subItem.path)}
+                            onClick={() => {
+                              setHoveredCategory(null);
+                              navigate(subItem.path);
+                            }}
                             className={`w-full px-4 py-2.5 text-sm text-left transition-colors flex items-center ${
                               location.pathname === subItem.path
                                 ? `${bgClass} ${textClass} font-medium`
@@ -614,7 +643,7 @@ export default function UnifiedHeader() {
           {/* DROITE : Actions utilisateur */}
           <div className="flex items-center gap-3">
             {/* Menu des entites */}
-            <div className="relative">
+            <div className="relative" ref={entityMenuRef}>
               <button
                 onClick={() => setShowEntityMenu(!showEntityMenu)}
                 className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -631,10 +660,11 @@ export default function UnifiedHeader() {
               </button>
 
               {showEntityMenu && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setShowEntityMenu(false)} />
-                  <div className="absolute top-full right-0 mt-1 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-40">
-                    <div className="px-4 py-2 border-b border-gray-100">
+                  <div
+                    onMouseLeave={() => setShowEntityMenu(false)}
+                    className="absolute top-full right-0 mt-1 w-60 bg-white border border-gray-300 shadow-lg rounded z-50"
+                  >
+                    <div className="px-4 py-2 border-b border-gray-200">
                       <p className="text-xs text-gray-500 font-medium">
                         {activeEntity ? "Changer d'entite" : "Selectionner une entite"}
                       </p>
@@ -663,13 +693,13 @@ export default function UnifiedHeader() {
                       ) : (
                         <div className="px-4 py-2 text-sm text-gray-500">Aucune entite active</div>
                       )}
-                      <div className="border-t border-gray-100 mt-1 pt-1">
+                      <div className="border-t border-gray-200 mt-1 pt-1">
                         <button
                           onClick={() => {
                             setShowEntityMenu(false);
                             navigate('/entities');
                           }}
-                          className="w-full text-left px-4 py-2 text-sm text-violet-600 hover:bg-violet-50 font-medium flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-gray-50 font-medium flex items-center gap-2"
                         >
                           <FiPlus size={14} />
                           Creer une nouvelle entite
@@ -677,7 +707,6 @@ export default function UnifiedHeader() {
                       </div>
                     </div>
                   </div>
-                </>
               )}
             </div>
 
@@ -686,7 +715,7 @@ export default function UnifiedHeader() {
               <FiBell size={18} />
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
-            <div className="relative">
+            <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
@@ -697,10 +726,11 @@ export default function UnifiedHeader() {
 
 
               {showUserMenu && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setShowUserMenu(false)} />
-                  <div className="absolute top-full right-0 mt-1 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-40">
-                    <div className="px-4 py-2 border-b border-gray-100">
+                  <div
+                    onMouseLeave={() => setShowUserMenu(false)}
+                    className="absolute top-full right-0 mt-1 w-72 bg-white border border-gray-300 shadow-lg rounded z-50"
+                  >
+                    <div className="px-4 py-2 border-b border-gray-200">
                       <p className="truncate text-sm font-semibold text-gray-800">{currentUserName}</p>
                     </div>
                     <div className="py-1">
@@ -718,7 +748,7 @@ export default function UnifiedHeader() {
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
-                          navigate('/preferences');
+                          navigate('/profile');
                         }}
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50"
                         title="Langue, fuseau horaire, etc"
@@ -742,7 +772,6 @@ export default function UnifiedHeader() {
                       </button>
                     </div>
                   </div>
-                </>
               )}
             </div>
           </div>
@@ -751,4 +780,3 @@ export default function UnifiedHeader() {
     </header>
   );
 }
-
