@@ -1,431 +1,463 @@
-// src/features/comptabilité/pages/Sequences/Create.jsx
-import React, { useState, useEffect, useRef } from 'react';
+// src/features/comptabilite/pages/Sequences/Create.jsx
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  FiSave, 
-  FiX, 
+import {
   FiAlertCircle,
   FiCheck,
-  FiHash,
-  FiArrowRight,
-  FiLoader,
   FiInfo,
-  FiBriefcase,
-  FiPlus
+  FiPlus,
+  FiUploadCloud,
+  FiX,
 } from 'react-icons/fi';
-import { sequencesService } from "../../services";
+import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
 
-// ==========================================
-// COMPOSANT TOOLTIP
-// ==========================================
-const Tooltip = ({ children, text, position = 'top' }) => {
+const DOCUMENT_SEQUENCE_TYPES = [
+  {
+    code: 'PIECE',
+    label: 'Pieces comptables',
+    defaultName: 'Sequence pieces comptables',
+    defaultPrefix: '{PREFIXE}/AA/',
+    description: 'Utilise le prefixe du journal : ACH, VTE, BAN, CAI, OD.',
+  },
+  {
+    code: 'FACTURE',
+    label: 'Factures',
+    defaultName: 'Sequence factures',
+    defaultPrefix: 'FAC/AA/',
+    description: 'Utilisee pour les factures clients ou fournisseurs.',
+  },
+  {
+    code: 'PAIEMENT',
+    label: 'Paiements',
+    defaultName: 'Sequence paiements',
+    defaultPrefix: 'PAY/AA/',
+    description: 'Utilisee pour les encaissements, decaissements et transferts.',
+  },
+  {
+    code: 'AVOIR',
+    label: 'Avoirs',
+    defaultName: 'Sequence avoirs',
+    defaultPrefix: 'AV/AA/',
+    description: 'Utilisee pour les avoirs et corrections commerciales.',
+  },
+  {
+    code: 'RELEVE',
+    label: 'Releves bancaires',
+    defaultName: 'Sequence releves bancaires',
+    defaultPrefix: 'REL/AA/',
+    description: 'Utilisee pour les releves et imports bancaires.',
+  },
+  {
+    code: 'RAPPROCHEMENT',
+    label: 'Rapprochements',
+    defaultName: 'Sequence rapprochements',
+    defaultPrefix: 'RAP/AA/',
+    description: 'Utilisee pour les rapprochements et controles.',
+  },
+];
+
+const getCurrentYearShort = () => String(new Date().getFullYear()).slice(-2);
+
+const normalizeApiList = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.records)) return data.records;
+  return [];
+};
+
+const padNumber = (value, padding) => String(Number(value || 0)).padStart(Number(padding || 2), '0');
+
+const stringifyBackendError = (error) => {
+  const data = error?.response?.data || error?.data || error;
+  if (!data) return error?.message || 'Erreur lors de la creation de la sequence.';
+  if (typeof data === 'string') return data;
+  if (data.detail) return Array.isArray(data.detail) ? data.detail.join(' ') : String(data.detail);
+  if (data.non_field_errors) return Array.isArray(data.non_field_errors) ? data.non_field_errors.join(' ') : String(data.non_field_errors);
+  return Object.entries(data)
+    .map(([field, value]) => `${field} : ${Array.isArray(value) ? value.join(' ') : String(value)}`)
+    .join(' | ') || error?.message || 'Erreur lors de la creation de la sequence.';
+};
+
+const sanitizeTemplate = (value) => String(value || '')
+  .toUpperCase()
+  .replace(/[^A-Z0-9_{}\/.-]/g, '')
+  .slice(0, 64);
+
+const renderPreview = (sequence, examplePrefix = 'ACH') => {
+  const year = getCurrentYearShort();
+  const prefix = String(sequence.prefix || '')
+    .replaceAll('{PREFIXE}', examplePrefix)
+    .replaceAll('PREFIXE', examplePrefix)
+    .replaceAll('AAAA', `20${year}`)
+    .replaceAll('AA', year);
+  const next = Number(sequence.current_number || 0) + Number(sequence.number_increment || 1);
+  return `${prefix}${padNumber(next, sequence.padding)}${sequence.suffix || ''}`;
+};
+
+const Tooltip = ({ children, text }) => {
   const [show, setShow] = useState(false);
-  
   return (
-    <div className="relative inline-block">
-      <div
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-      >
-        {children}
-      </div>
+    <div className="relative inline-block" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+      {children}
       {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
+        <div className="absolute bottom-full left-1/2 z-50 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white">
           {text}
-          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-            'right-full top-1/2 -translate-y-1/2 -mr-1'
-          }`} />
         </div>
       )}
     </div>
   );
 };
 
+const RequiredLabel = ({ children, required = false }) => (
+  <label className="w-[150px] flex-shrink-0 text-xs font-medium text-gray-700">
+    {children}{required && <span className="text-red-500">*</span>}
+  </label>
+);
+
+const FieldInput = ({ value, onChange, placeholder, type = 'text', disabled = false, className = '', min, max }) => (
+  <input
+    type={type}
+    value={value}
+    onChange={(event) => onChange(event.target.value)}
+    disabled={disabled}
+    placeholder={placeholder}
+    min={min}
+    max={max}
+    className={`ml-2 h-[26px] flex-1 border border-gray-300 px-2 py-1 text-xs transition-colors hover:border-purple-400 focus:border-purple-600 focus:outline-none disabled:bg-gray-100 disabled:text-gray-400 ${className}`}
+  />
+);
+
 export default function SequencesCreate() {
   const navigate = useNavigate();
   const { activeEntity } = useEntity();
-  
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     code: '',
     prefix: '',
     suffix: '',
-    padding: 5,
+    padding: 2,
     current_number: 0,
     number_increment: 1,
-    active: true
+    active: true,
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState('parametres');
+
+  const selectedType = useMemo(
+    () => DOCUMENT_SEQUENCE_TYPES.find((type) => type.code === formData.code) || null,
+    [formData.code],
+  );
+
+  const preview = useMemo(() => renderPreview(formData), [formData]);
 
   const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((previous) => ({ ...previous, [field]: value }));
     setHasUnsavedChanges(true);
+    setError('');
+    setSuccess('');
   };
 
-  const validateForm = () => {
-    if (!formData.name.trim()) {
-      setError('Le nom est obligatoire');
-      return false;
-    }
-    if (!formData.code.trim()) {
-      setError('Le code est obligatoire');
-      return false;
-    }
-    if (formData.code.length > 32) {
-      setError('Le code ne doit pas dépasser 32 caractères');
-      return false;
-    }
-    if (formData.padding < 1 || formData.padding > 10) {
-      setError('Le nombre de chiffres doit être entre 1 et 10');
-      return false;
-    }
-    if (formData.current_number < 0) {
-      setError('Le numéro courant ne peut pas être négatif');
-      return false;
-    }
-    if (formData.number_increment < 1) {
-      setError("L'incrément doit être au moins 1");
-      return false;
-    }
-    return true;
+  const handleTypeChange = (code) => {
+    const type = DOCUMENT_SEQUENCE_TYPES.find((item) => item.code === code) || null;
+    setFormData((previous) => ({
+      ...previous,
+      code: type?.code || '',
+      name: type?.defaultName || '',
+      prefix: type?.defaultPrefix || '',
+      suffix: previous.suffix || '',
+    }));
+    setHasUnsavedChanges(true);
+    setError('');
+    setSuccess('');
   };
+
+  const validateForm = async () => {
+    if (!activeEntity?.id) return 'Aucune entite selectionnee.';
+    if (!formData.code) return 'Le type de document est obligatoire.';
+    if (!String(formData.name || '').trim()) return 'Le nom est obligatoire.';
+    if (!String(formData.prefix || '').trim()) return 'Le modele de prefixe est obligatoire.';
+    if (Number(formData.padding) < 1 || Number(formData.padding) > 10) return 'La longueur doit etre comprise entre 1 et 10.';
+    if (Number(formData.current_number) < 0) return 'Le compteur courant ne peut pas etre negatif.';
+    if (Number(formData.number_increment) < 1) return "L'increment doit etre superieur ou egal a 1.";
+
+    if (formData.active) {
+      try {
+        const response = await apiClient.get(`/sequences/?company=${activeEntity.id}&page_size=500`);
+        const existing = normalizeApiList(response?.data ?? response).find((sequence) => (
+          String(sequence.code || '').toUpperCase() === String(formData.code || '').toUpperCase()
+          && sequence.active !== false
+        ));
+        if (existing) {
+          return `Une sequence active existe deja pour ${selectedType?.label || formData.code}. Modifiez-la au lieu d'en creer une autre.`;
+        }
+      } catch {
+        return '';
+      }
+    }
+
+    return '';
+  };
+
+  const buildPayload = () => ({
+    name: String(formData.name || '').trim(),
+    code: String(formData.code || '').trim().toUpperCase(),
+    prefix: sanitizeTemplate(formData.prefix),
+    suffix: sanitizeTemplate(formData.suffix),
+    padding: Number(formData.padding || 2),
+    current_number: Number(formData.current_number || 0),
+    number_increment: Number(formData.number_increment || 1),
+    active: Boolean(formData.active),
+    ...(activeEntity?.id ? { company: activeEntity.id } : {}),
+  });
 
   const handleSave = async () => {
-    if (!validateForm()) return;
-    
-    setSaving(true);
-    setError(null);
-    
+    const validation = await validateForm();
+    if (validation) {
+      setError(validation);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+    setSuccess('');
     try {
-      await sequencesService.create(formData, activeEntity.id);
-      setSuccess('Séquence créée avec succès !');
+      await apiClient.post('/sequences/', buildPayload());
+      setSuccess('Sequence creee. Elle sera utilisee uniquement pour les prochains numeros.');
       setHasUnsavedChanges(false);
-      setTimeout(() => {
-        navigate('/comptabilite/sequences');
-      }, 1500);
+      setTimeout(() => navigate('/comptabilite/sequences'), 700);
     } catch (err) {
-      console.error('Erreur:', err);
-      setError(err.response?.data?.detail || err.message || 'Erreur lors de la création');
+      console.error('Erreur creation sequence', err);
+      setError(stringifyBackendError(err));
     } finally {
-      setSaving(false);
+      setIsSubmitting(false);
     }
   };
-
-  const formatPattern = () => {
-    const prefix = formData.prefix || '';
-    const suffix = formData.suffix || '';
-    const padding = formData.padding || 5;
-    const zeros = '0'.repeat(padding);
-    return `${prefix}${zeros}${suffix}`;
-  };
-
-  const formatCurrentNumber = () => {
-    const prefix = formData.prefix || '';
-    const suffix = formData.suffix || '';
-    const padding = formData.padding || 5;
-    const num = String(formData.current_number || 0).padStart(padding, '0');
-    return `${prefix}${num}${suffix}`;
-  };
-
-  const formatNextNumber = () => {
-    const prefix = formData.prefix || '';
-    const suffix = formData.suffix || '';
-    const padding = formData.padding || 5;
-    const next = (formData.current_number || 0) + (formData.number_increment || 1);
-    const num = String(next).padStart(padding, '0');
-    return `${prefix}${num}${suffix}`;
-  };
-
-  if (!activeEntity) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-          <div className="border-b border-gray-300 px-4 py-3">
-            <div className="text-lg font-bold text-gray-900">Créer une séquence</div>
-          </div>
-          <div className="p-8">
-            <div className="bg-yellow-50 border border-yellow-200 rounded p-6 text-center">
-              <FiAlertCircle className="text-yellow-600 mx-auto mb-3" size={32} />
-              <p className="text-yellow-800 font-medium text-lg mb-3">Aucune entité sélectionnée</p>
-              <p className="text-sm text-gray-600 mb-4">
-                Veuillez sélectionner une entité pour créer une séquence.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-
-        {/* En-tête ligne 1 */}
+      <div className="mx-auto max-w-7xl border border-gray-300 bg-white">
         <div className="border-b border-gray-300 px-4 py-3">
-          <div className="flex items-start justify-between mb-2">
+          <div className="mb-2 flex items-start justify-between">
             <div className="flex items-start gap-3">
-              <Tooltip text="Nouvelle séquence">
-                <button 
+              <Tooltip text="Nouvelle sequence">
+                <button
+                  type="button"
                   onClick={() => navigate('/comptabilite/sequences/create')}
-                  className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
+                  className="flex h-8 items-center gap-1 border border-purple-600 bg-purple-600 px-3 text-xs text-white transition-all duration-200 hover:border-purple-700 hover:bg-purple-700 hover:shadow-md active:scale-95"
                 >
-                  <FiPlus size={16} className="mr-1" />
+                  <FiPlus size={12} />
                   <span>Nouveau</span>
                 </button>
               </Tooltip>
-              <div className="flex flex-col h-12 justify-center">
-                <div 
-                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
+              <div className="flex flex-col">
+                <button
+                  type="button"
                   onClick={() => navigate('/comptabilite/sequences')}
+                  className="text-left text-lg font-bold text-gray-900 transition-all duration-200 hover:text-purple-600"
                 >
-                  Séquences
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800">
-                    Création
-                  </span>
+                  Sequences
+                </button>
+                <div className="mt-0.5 text-sm text-gray-600">
+                  Creation - {selectedType?.label || 'Choisir un type de document'}
                 </div>
               </div>
             </div>
+
             <div className="flex items-center gap-2">
+              <Tooltip text="Enregistrer la sequence">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={isSubmitting}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-white shadow-sm transition-all duration-200 hover:bg-purple-700 hover:shadow-lg active:scale-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <FiUploadCloud size={16} />
+                </button>
+              </Tooltip>
               <Tooltip text="Annuler">
-                <button 
+                <button
+                  type="button"
                   onClick={() => navigate('/comptabilite/sequences')}
-                  className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 hover:scale-110 hover:shadow-lg active:scale-90 transition-all duration-200 flex items-center justify-center"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition-all duration-200 hover:bg-gray-800 hover:shadow-lg active:scale-90"
                 >
                   <FiX size={16} />
                 </button>
               </Tooltip>
-              <Tooltip text="Sauvegarder">
-                <button 
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 hover:scale-110 hover:shadow-lg active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm"
-                >
-                  <FiSave size={16} />
-                </button>
-              </Tooltip>
             </div>
           </div>
         </div>
 
-        {/* En-tête ligne 2 - Statut */}
+        <div className="flex items-center justify-between border-b border-gray-300 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Tooltip text={formData.active ? 'Desactiver la sequence' : 'Activer la sequence'}>
+              <button
+                type="button"
+                onClick={() => handleChange('active', !formData.active)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+                  formData.active ? 'bg-purple-600' : 'bg-gray-200'
+                }`}
+                role="switch"
+                aria-checked={formData.active}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    formData.active ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </Tooltip>
+            <span className="text-sm font-medium text-gray-700">Activer/Desactiver</span>
+            {(error || success) && (
+              <div className={`ml-2 inline-flex max-w-2xl items-start gap-2 border px-3 py-1.5 text-xs ${
+                error ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'
+              }`}>
+                <span className="mt-0.5 flex-shrink-0">
+                  {error ? <FiAlertCircle size={13} /> : <FiCheck size={13} />}
+                </span>
+                <span className="whitespace-pre-line leading-4">{error || success}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {hasUnsavedChanges && (
+          <div className="flex items-center justify-between border-b border-blue-200 bg-blue-50 px-4 py-1 text-xs text-blue-700">
+            <span>Modifications non sauvegardees</span>
+            {isSubmitting && <span className="animate-pulse">Sauvegarde en cours...</span>}
+          </div>
+        )}
+
         <div className="border-b border-gray-300 px-4 py-3">
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {hasUnsavedChanges && (
-                  <div className="flex items-center gap-1 text-xs text-amber-600">
-                    <FiInfo size={14} />
-                    <span>Modifications non sauvegardées</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
-                  formData.active 
-                    ? 'bg-green-100 text-green-700 border-green-300' 
-                    : 'bg-gray-100 text-gray-500 border-gray-300'
-                }`}>
-                  Actif
-                </div>
-                <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
-                  !formData.active 
-                    ? 'bg-red-100 text-red-700 border-red-300' 
-                    : 'bg-gray-100 text-gray-500 border-gray-300'
-                }`}>
-                  Inactif
-                </div>
-              </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="flex items-center" style={{ height: '26px' }}>
+              <RequiredLabel required>Type de document</RequiredLabel>
+              <select
+                value={formData.code}
+                onChange={(event) => handleTypeChange(event.target.value)}
+                className="ml-2 h-[26px] flex-1 border border-gray-300 bg-white px-2 py-1 text-xs transition-colors hover:border-purple-400 focus:border-purple-600 focus:outline-none"
+              >
+                <option value="">Selectionner</option>
+                {DOCUMENT_SEQUENCE_TYPES.map((type) => (
+                  <option key={type.code} value={type.code}>{type.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center" style={{ height: '26px' }}>
+              <RequiredLabel required>Nom</RequiredLabel>
+              <FieldInput value={formData.name} onChange={(value) => handleChange('name', value)} placeholder="Sequence paiements" />
             </div>
           </div>
         </div>
 
-        {/* Messages */}
-        {error && (
-          <div className="m-4 p-3 bg-red-50 border border-red-200 rounded flex items-center gap-2 text-red-700">
-            <FiAlertCircle size={16} />
-            <span className="text-sm">{error}</span>
-          </div>
-        )}
-        {success && (
-          <div className="m-4 p-3 bg-green-50 border border-green-200 rounded flex items-center gap-2 text-green-700">
-            <FiCheck size={16} />
-            <span className="text-sm">{success}</span>
-          </div>
-        )}
-
-        {/* Informations séquence */}
-        <div className="px-4 py-3 border-b border-gray-300">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Nom *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
-                  style={{ height: '26px' }}
-                  placeholder="Factures clients"
-                />
-              </div>
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Code *</label>
-                <input
-                  type="text"
-                  value={formData.code}
-                  onChange={(e) => handleChange('code', e.target.value.toUpperCase())}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs font-mono ml-2"
-                  style={{ height: '26px' }}
-                  placeholder="FACT_CLIENT"
-                  maxLength={32}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Entité</label>
-                <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center gap-2" style={{ height: '26px' }}>
-                  <FiBriefcase className="text-purple-600" size={12} />
-                  {activeEntity?.raison_sociale || activeEntity?.nom || '—'}
-                </div>
-              </div>
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Statut</label>
-                <div className="flex-1 ml-2 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleChange('active', !formData.active)}
-                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      formData.active ? 'bg-green-600' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        formData.active ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                  <span className="text-xs text-gray-500">
-                    {formData.active ? 'Actif' : 'Inactif'}
-                  </span>
-                </div>
-              </div>
-            </div>
+        <div className="border-b border-gray-300">
+          <div className="flex px-4">
+            {[
+              { id: 'parametres', label: 'Parametres' },
+              { id: 'apercu', label: 'Apercu' },
+              { id: 'notes', label: 'Notes' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`border-b-2 px-4 py-2 text-xs font-medium transition-all duration-200 ${
+                  activeTab === tab.id
+                    ? 'border-purple-600 text-purple-600'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Section des paramètres */}
         <div className="p-4">
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Préfixe</label>
-                <input
-                  type="text"
-                  value={formData.prefix}
-                  onChange={(e) => handleChange('prefix', e.target.value)}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs font-mono ml-2"
-                  style={{ height: '26px' }}
-                  placeholder="FACT-"
-                />
+          {activeTab === 'parametres' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <RequiredLabel required>Modele prefixe</RequiredLabel>
+                  <FieldInput
+                    value={formData.prefix}
+                    onChange={(value) => handleChange('prefix', sanitizeTemplate(value))}
+                    placeholder="{PREFIXE}/AA/ ou PAY/AA/"
+                    className="font-mono"
+                  />
+                </div>
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <RequiredLabel>Suffixe</RequiredLabel>
+                  <FieldInput value={formData.suffix} onChange={(value) => handleChange('suffix', sanitizeTemplate(value))} placeholder="Optionnel" className="font-mono" />
+                </div>
               </div>
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Suffixe</label>
-                <input
-                  type="text"
-                  value={formData.suffix}
-                  onChange={(e) => handleChange('suffix', e.target.value)}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs font-mono ml-2"
-                  style={{ height: '26px' }}
-                  placeholder="-2025"
-                />
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <RequiredLabel>Compteur courant</RequiredLabel>
+                  <FieldInput type="number" min={0} value={formData.current_number} onChange={(value) => handleChange('current_number', parseInt(value, 10) || 0)} />
+                </div>
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <RequiredLabel>Longueur numero</RequiredLabel>
+                  <FieldInput type="number" min={1} max={10} value={formData.padding} onChange={(value) => handleChange('padding', parseInt(value, 10) || 2)} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <RequiredLabel>Increment</RequiredLabel>
+                  <FieldInput type="number" min={1} value={formData.number_increment} onChange={(value) => handleChange('number_increment', parseInt(value, 10) || 1)} />
+                </div>
+                <div className="flex items-center" style={{ height: '26px' }}>
+                  <RequiredLabel>Code interne</RequiredLabel>
+                  <div className="ml-2 flex h-[26px] flex-1 items-center border border-gray-200 bg-gray-50 px-2 font-mono text-xs text-gray-600">
+                    {formData.code || '-'}
+                  </div>
+                </div>
+              </div>
+
+              {selectedType && (
+                <div className="border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                  {selectedType.description}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'apercu' && (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div className="border border-gray-200 bg-gray-50 p-3">
+                <div className="mb-1 text-xs text-gray-500">Type</div>
+                <div className="text-sm font-semibold text-gray-900">{selectedType?.label || '-'}</div>
+              </div>
+              <div className="border border-gray-200 bg-gray-50 p-3">
+                <div className="mb-1 text-xs text-gray-500">Modele</div>
+                <div className="font-mono text-lg font-semibold text-purple-700">{formData.prefix || '-'}</div>
+              </div>
+              <div className="border border-gray-200 bg-gray-50 p-3">
+                <div className="mb-1 text-xs text-gray-500">Prochain numero</div>
+                <div className="font-mono text-lg font-semibold text-green-700">{preview}</div>
               </div>
             </div>
+          )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Nombre de chiffres</label>
-                <input
-                  type="number"
-                  value={formData.padding}
-                  onChange={(e) => handleChange('padding', parseInt(e.target.value) || 5)}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
-                  style={{ height: '26px' }}
-                  min={1}
-                  max={10}
-                />
-              </div>
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Incrément</label>
-                <input
-                  type="number"
-                  value={formData.number_increment}
-                  onChange={(e) => handleChange('number_increment', parseInt(e.target.value) || 1)}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
-                  style={{ height: '26px' }}
-                  min={1}
-                />
-              </div>
+          {activeTab === 'notes' && (
+            <div className="border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-600">
+              Une seule sequence active est autorisee pour chaque type de document et chaque societe. Modifier une sequence change seulement les prochains numeros.
             </div>
+          )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center" style={{ height: '26px' }}>
-                <label className="text-xs text-gray-700 min-w-[140px] font-medium">Numéro courant</label>
-                <input
-                  type="number"
-                  value={formData.current_number}
-                  onChange={(e) => handleChange('current_number', parseInt(e.target.value) || 0)}
-                  className="flex-1 px-2 py-1 border border-gray-300 text-xs ml-2"
-                  style={{ height: '26px' }}
-                  min={0}
-                />
-              </div>
-              <div className="flex items-center" style={{ height: '26px' }}>
-              </div>
-            </div>
-          </div>
-
-          {/* Aperçu */}
-          <div className="mt-6 bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-              <FiArrowRight size={14} />
-              Aperçu du format
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Modèle</p>
-                <p className="text-lg font-mono text-purple-600 bg-white px-3 py-2 rounded border border-gray-200">
-                  {formatPattern()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Numéro actuel</p>
-                <p className="text-lg font-mono text-gray-900 bg-white px-3 py-2 rounded border border-gray-200">
-                  {formatCurrentNumber()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Prochain numéro</p>
-                <p className="text-lg font-mono text-green-600 bg-white px-3 py-2 rounded border border-gray-200">
-                  {formatNextNumber()}
-                </p>
-              </div>
+          <div className="mt-4 flex items-start gap-2 border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800">
+            <FiInfo className="mt-0.5 flex-shrink-0" size={13} />
+            <div>
+              Pour les pieces comptables, le modele peut contenir <span className="font-mono">{'{PREFIXE}'}</span> : il sera remplace par le prefixe du journal.
             </div>
           </div>
         </div>

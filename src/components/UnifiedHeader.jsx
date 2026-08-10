@@ -212,6 +212,38 @@ const MODULES_CONFIG = [
   }
 ];
 
+const NAVIGATION_PAGE_KEY = 'somane:unified-index:last-page';
+const NAVIGATION_CURRENT_PAGE_KEY = 'somane:navigation:current-page';
+const NAVIGATION_PREVIOUS_PAGE_KEY = 'somane:navigation:previous-page';
+const NAVIGATION_HISTORY_KEY = 'somane:navigation:history';
+const NAVIGATION_CHANGED_EVENT = 'somane:navigation-history-changed';
+
+const getRouteLabel = (pathname) => {
+  const candidates = [];
+  MODULES_CONFIG.forEach((module) => {
+    if (module.path) candidates.push({ path: module.path, label: module.name });
+    module.navigation?.forEach((group) => {
+      if (group.path) candidates.push({ path: group.path, label: group.name });
+      group.items?.forEach((item) => {
+        if (item.path) candidates.push({ path: item.path, label: item.label || item.name });
+        item.items?.forEach((subItem) => {
+          if (subItem.path) candidates.push({ path: subItem.path, label: subItem.label || subItem.name });
+        });
+      });
+    });
+  });
+
+  const match = candidates
+    .filter((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
+    .sort((left, right) => right.path.length - left.path.length)[0];
+
+  if (match?.label) return match.label;
+  const segment = pathname.split('/').filter(Boolean).pop() || 'Accueil';
+  return segment
+    .replace(/[-_]+/g, ' ')
+    .replace(/^./, (letter) => letter.toUpperCase());
+};
+
 // ===== UTILITAIRES DE COULEUR =====
 const getColorClasses = (color, type) => {
   const classes = {
@@ -420,6 +452,32 @@ export default function UnifiedHeader() {
     ));
     return matched || MODULES_CONFIG[0];
   }, [location.pathname]);
+
+  useEffect(() => {
+    const path = `${location.pathname}${location.search}`;
+    const page = { path, label: getRouteLabel(location.pathname) };
+    try {
+      const currentPage = JSON.parse(
+        sessionStorage.getItem(NAVIGATION_CURRENT_PAGE_KEY)
+        || sessionStorage.getItem(NAVIGATION_PAGE_KEY)
+        || 'null',
+      );
+      if (currentPage?.path && currentPage.path !== path) {
+        sessionStorage.setItem(NAVIGATION_PREVIOUS_PAGE_KEY, JSON.stringify(currentPage));
+      }
+      const storedHistory = JSON.parse(sessionStorage.getItem(NAVIGATION_HISTORY_KEY) || '[]');
+      const history = Array.isArray(storedHistory) ? storedHistory : [];
+      if (history[history.length - 1]?.path === path) {
+        history[history.length - 1] = page;
+      } else {
+        history.push(page);
+      }
+      sessionStorage.setItem(NAVIGATION_HISTORY_KEY, JSON.stringify(history.slice(-20)));
+      sessionStorage.setItem(NAVIGATION_CURRENT_PAGE_KEY, JSON.stringify(page));
+      sessionStorage.setItem(NAVIGATION_PAGE_KEY, JSON.stringify(page));
+      window.dispatchEvent(new CustomEvent(NAVIGATION_CHANGED_EVENT));
+    } catch {}
+  }, [location.pathname, location.search]);
 
   const { color, navigation } = currentModule;
 
