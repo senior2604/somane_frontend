@@ -1,21 +1,20 @@
+// src/features/comptabilite/pages/payement/PaymentMethodForm.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import {
-  FiAlertCircle,
-  FiCheck,
+  FiCopy,
   FiPlus,
+  FiPower,
   FiSettings,
   FiTrash2,
-  FiUploadCloud,
-  FiX,
 } from 'react-icons/fi';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+
+import UnifiedFormPage from '../../../../components/UnifiedFormPage';
 import axiosInstance from '../../../../config/axiosInstance';
 import {
   Field,
-  HeaderIconButton,
   SearchSelect,
   StatusSwitch,
-  Tooltip,
   getActionErrorMessage,
   getActiveEntityId,
   normalizeApiList,
@@ -28,406 +27,693 @@ const API = {
   accounts: 'compta/accounts/',
   journals: 'compta/journals/',
 };
-
-const METHOD_DIRECTION_OPTIONS = [
-  { id: 'both', label: 'Les deux' },
-  { id: 'inbound', label: 'Encaissement seulement' },
-  { id: 'outbound', label: 'Décaissement seulement' },
+const FORM_MEMORY_KEY = 'comptabilite:payment-method:create:v3';
+const DIRECTIONS = [
+  { id: 'both', label: 'Encaissement et décaissement' },
+  { id: 'inbound', label: 'Encaissement uniquement' },
+  { id: 'outbound', label: 'Décaissement uniquement' },
 ];
-
-const LINE_PAYMENT_TYPE_OPTIONS = [
-  { id: 'inbound', label: 'Entrant' },
-  { id: 'outbound', label: 'Sortant' },
+const LINE_TYPES = [
+  { id: 'inbound', label: 'Encaissement' },
+  { id: 'outbound', label: 'Décaissement' },
 ];
+const LINE_FIELDS = ['payment_type', 'journal', 'payment_account', 'sequence'];
 
-const LINE_TAB_FIELDS = ['name', 'journal', 'payment_type', 'payment_account', 'sequence'];
-
+const relationId = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'object') return value.id ?? value.value ?? '';
+  return value;
+};
 const emptyMethod = () => ({
-  id: null,
   name: '',
   code: '',
   payment_type: 'both',
-  active: true,
   outstanding_receipts_account_id: '',
   outstanding_payments_account_id: '',
+  active: true,
 });
-
 const emptyLine = () => ({
-  id: `tmp-${Date.now()}-${Math.random()}`,
-  name: '',
-  code: '',
+  id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  payment_type: 'inbound',
   journal: '',
   payment_account: '',
-  payment_type: 'inbound',
   sequence: 10,
-  payment_provider_id: '',
-  payment_provider_state: '',
+  name: '',
+  code: '',
 });
+const normalizeMethod = (method = {}) => ({
+  name: method.name || '',
+  code: method.code || '',
+  payment_type: method.payment_type || 'both',
+  outstanding_receipts_account_id: relationId(
+    method.outstanding_receipts_account_id ?? method.outstanding_receipts_account,
+  ),
+  outstanding_payments_account_id: relationId(
+    method.outstanding_payments_account_id ?? method.outstanding_payments_account,
+  ),
+  active: method.active !== false,
+});
+const normalizeLine = (line) => ({
+  ...line,
+  journal: relationId(line.journal_id ?? line.journal),
+  payment_account: relationId(line.payment_account_id ?? line.payment_account),
+  payment_type: line.payment_type || 'inbound',
+  sequence: Number(line.sequence || 10),
+});
+
+function ActionsMenu({
+  active,
+  canManage,
+  onDelete,
+  onDuplicate,
+  onList,
+  onPayments,
+  onToggleActive,
+  disabled,
+}) {
+  const rootRef = useRef(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const close = (event) => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700"
+      >
+        <FiSettings size={13} />
+        Actions
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-[120] mt-1 w-48 border border-gray-300 bg-white py-1 shadow-lg">
+          <button type="button" onClick={() => { setOpen(false); onList(); }} className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-purple-50 hover:text-purple-700">
+            Liste des méthodes
+          </button>
+          <button type="button" onClick={() => { setOpen(false); onPayments(); }} className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-purple-50 hover:text-purple-700">
+            Paiements
+          </button>
+          {canManage && (
+            <>
+              <div className="my-1 border-t border-gray-200" />
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => { setOpen(false); onDuplicate(); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-purple-50 hover:text-purple-700 disabled:opacity-50"
+              >
+                <FiCopy size={13} />
+                Dupliquer
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => { setOpen(false); onToggleActive(); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-purple-50 hover:text-purple-700 disabled:opacity-50"
+              >
+                <FiPower size={13} />
+                {active ? 'Désactiver' : 'Activer'}
+              </button>
+              <div className="my-1 border-t border-gray-200" />
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => { setOpen(false); onDelete(); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                <FiTrash2 size={13} />
+                Supprimer
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PaymentMethodForm({ mode = 'create' }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
-  const actionsMenuRef = useRef(null);
-  const isDetail = mode === 'detail';
-  const [formData, setFormData] = useState(emptyMethod());
-  const [lineDrafts, setLineDrafts] = useState([emptyLine()]);
+  const isShowMode = mode === 'show' || mode === 'detail';
+  const entityId = getActiveEntityId();
+  const cachedMethod = location.state?.methodRecord
+    || location.state?.selectedRecord
+    || null;
+
+  const [formData, setFormData] = useState(() => (
+    cachedMethod ? normalizeMethod(cachedMethod) : emptyMethod()
+  ));
+  const [methodRecord, setMethodRecord] = useState(cachedMethod);
+  const [lineDrafts, setLineDrafts] = useState(() => {
+    const duplicatedLines = location.state?.lineDrafts;
+    if (!isShowMode && Array.isArray(duplicatedLines) && duplicatedLines.length) {
+      return duplicatedLines.map((line) => ({
+        ...normalizeLine(line),
+        id: emptyLine().id,
+      }));
+    }
+    return [emptyLine()];
+  });
+  const [originalLineIds, setOriginalLineIds] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [journals, setJournals] = useState([]);
-  const [methodLines, setMethodLines] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('journals');
+  const [loading, setLoading] = useState(isShowMode && !cachedMethod);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
-  const [showActionsMenu, setShowActionsMenu] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-
-  const treasuryJournals = useMemo(() => journals.filter((journal) => {
-    const typeText = [journal.type_code, journal.journal_type, journal.type, journal.type_name, journal.code, journal.name].filter(Boolean).join(' ').toLowerCase();
-    return journal.is_bank_or_cash_flag || typeText.includes('ban') || typeText.includes('bank') || typeText.includes('cai') || typeText.includes('cash') || typeText.includes('caisse');
-  }), [journals]);
+  const [feedback, setFeedback] = useState(null);
+  const [traceabilityOpen, setTraceabilityOpen] = useState(isShowMode);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    setError('');
+    if (isShowMode && !cachedMethod) setLoading(true);
     try {
-      const entityId = getActiveEntityId();
       const [accountsResponse, journalsResponse, linesResponse, methodResponse] = await Promise.all([
-        axiosInstance.get(API.accounts, { params: { company: entityId || undefined, exclude_roots: true, page_size: 1000 } }).catch(() => ({ data: [] })),
-        axiosInstance.get(API.journals, { params: { company: entityId || undefined, page_size: 500 } }).catch(() => ({ data: [] })),
-        axiosInstance.get(API.methodLines, { params: { company: entityId || undefined, page_size: 1000 } }).catch(() => ({ data: [] })),
-        isDetail ? axiosInstance.get(`${API.methods}${id}/`) : Promise.resolve({ data: null }),
+        axiosInstance.get(API.accounts, {
+          params: {
+            company: entityId || undefined,
+            company_id: entityId || undefined,
+            exclude_roots: true,
+            page_size: 2000,
+          },
+        }).catch(() => ({ data: [] })),
+        axiosInstance.get(API.journals, {
+          params: { company: entityId || undefined, page_size: 500 },
+        }).catch(() => ({ data: [] })),
+        isShowMode
+          ? axiosInstance.get(API.methodLines, {
+            params: { payment_method: id, company: entityId || undefined, page_size: 1000 },
+          }).catch(() => ({ data: [] }))
+          : Promise.resolve({ data: [] }),
+        isShowMode
+          ? axiosInstance.get(`${API.methods}${id}/`)
+          : Promise.resolve({ data: null }),
       ]);
 
-      const nextLines = normalizeApiList(linesResponse.data);
-      setAccounts(normalizeApiList(accountsResponse.data));
+      setAccounts(normalizeApiList(accountsResponse.data).filter(
+        (account) => account.is_root !== true,
+      ));
       setJournals(normalizeApiList(journalsResponse.data));
-      setMethodLines(nextLines);
 
       if (methodResponse.data) {
-        const method = methodResponse.data;
-        setFormData({
-          id: method.id,
-          name: method.name || '',
-          code: method.code || '',
-          payment_type: method.payment_type || 'both',
-          active: method.active !== false,
-          outstanding_receipts_account_id: method.outstanding_receipts_account_id || method.outstanding_receipts_account?.id || '',
-          outstanding_payments_account_id: method.outstanding_payments_account_id || method.outstanding_payments_account?.id || '',
-        });
-        const existingLines = nextLines.filter((line) => String(line.payment_method) === String(method.id) || String(line.payment_method_id) === String(method.id));
-        setLineDrafts(existingLines.length ? existingLines.map((line) => ({
-          ...line,
-          journal: line.journal || line.journal_id || '',
-          payment_account: line.payment_account || line.payment_account_id || '',
-        })) : [emptyLine()]);
+        setMethodRecord(methodResponse.data);
+        setFormData(normalizeMethod(methodResponse.data));
+      }
+
+      if (isShowMode) {
+        const lines = normalizeApiList(linesResponse.data)
+          .filter((line) => {
+            const methodId = relationId(line.payment_method_id ?? line.payment_method);
+            return !methodId || String(methodId) === String(id);
+          })
+          .map(normalizeLine);
+        setLineDrafts(lines.length ? lines : [emptyLine()]);
+        setOriginalLineIds(
+          lines.map((line) => line.id).filter((lineId) => Number.isFinite(Number(lineId))),
+        );
       }
       setHasChanges(false);
-    } catch (err) {
-      setError(isDetail ? 'Impossible de charger la méthode.' : 'Impossible de préparer la création.');
-      console.error('Erreur chargement méthode paiement', err);
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        message: getActionErrorMessage(error, 'Impossible de charger la méthode de paiement.'),
+      });
     } finally {
       setLoading(false);
     }
-  }, [id, isDetail]);
+  }, [cachedMethod, entityId, id, isShowMode]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
-        setShowActionsMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+  const markChanged = useCallback(() => {
+    setHasChanges(true);
+    setFeedback(null);
   }, []);
 
-  const markAsChanged = () => {
-    setHasChanges(true);
-    setSuccess('');
-    setError('');
-  };
-
-  const setField = (field, value) => {
+  const setField = useCallback((field, value) => {
     setFormData((previous) => ({ ...previous, [field]: value }));
-    markAsChanged();
-  };
+    markChanged();
+  }, [markChanged]);
 
-  const updateLine = (index, field, value) => {
-    setLineDrafts((previous) => previous.map((line, lineIndex) => lineIndex === index ? { ...line, [field]: value } : line));
-    markAsChanged();
-  };
+  const updateLine = useCallback((index, field, value) => {
+    setLineDrafts((previous) => previous.map((line, lineIndex) => (
+      lineIndex === index ? { ...line, [field]: value } : line
+    )));
+    markChanged();
+  }, [markChanged]);
 
-  const focusLineCell = useCallback((lineId, field) => {
-    setTimeout(() => {
-      const selector = `tr[data-method-line-id="${lineId}"] td[data-method-field="${field}"] input:not([disabled])`;
-      document.querySelector(selector)?.focus();
-    }, 40);
+  const addLine = useCallback(() => {
+    setLineDrafts((previous) => [...previous, emptyLine()]);
+    markChanged();
+  }, [markChanged]);
+
+  const removeLine = useCallback((index) => {
+    setLineDrafts((previous) => {
+      const next = previous.filter((_, lineIndex) => lineIndex !== index);
+      return next.length ? next : [emptyLine()];
+    });
+    markChanged();
+  }, [markChanged]);
+
+  const focusCell = useCallback((lineId, field) => {
+    window.setTimeout(() => {
+      document.querySelector(
+        `[data-method-line="${lineId}"] [data-method-field="${field}"] input`,
+      )?.focus();
+    }, 30);
   }, []);
 
   const handleLineTab = useCallback((event, lineIndex, field) => {
     if (event.key !== 'Tab' || event.shiftKey) return;
-    const fieldIndex = LINE_TAB_FIELDS.indexOf(field);
-    if (fieldIndex === -1) return;
-
+    const fieldIndex = LINE_FIELDS.indexOf(field);
+    if (fieldIndex < 0) return;
     event.preventDefault();
-    const nextField = LINE_TAB_FIELDS[fieldIndex + 1];
-    const currentLine = lineDrafts[lineIndex];
 
-    if (nextField && currentLine) {
-      focusLineCell(currentLine.id, nextField);
+    const nextField = LINE_FIELDS[fieldIndex + 1];
+    if (nextField) {
+      focusCell(lineDrafts[lineIndex].id, nextField);
       return;
     }
-
-    const nextLine = lineDrafts[lineIndex + 1];
-    if (nextLine) {
-      focusLineCell(nextLine.id, LINE_TAB_FIELDS[0]);
+    if (lineDrafts[lineIndex + 1]) {
+      focusCell(lineDrafts[lineIndex + 1].id, LINE_FIELDS[0]);
       return;
     }
+    const line = emptyLine();
+    setLineDrafts((previous) => [...previous, line]);
+    markChanged();
+    focusCell(line.id, LINE_FIELDS[0]);
+  }, [focusCell, lineDrafts, markChanged]);
 
-    const newLine = emptyLine();
-    setLineDrafts((previous) => [...previous, newLine]);
-    markAsChanged();
-    focusLineCell(newLine.id, LINE_TAB_FIELDS[0]);
-  }, [focusLineCell, lineDrafts]);
+  const saveLines = useCallback(async (methodId) => {
+    const validLines = lineDrafts.filter((line) => (
+      line.journal || line.payment_account || line.name || line.code
+    ));
+    const keptIds = [];
 
-  const saveLines = async (methodId) => {
-    const entityId = getActiveEntityId();
-    const existingIds = methodLines
-      .filter((line) => String(line.payment_method) === String(methodId) || String(line.payment_method_id) === String(methodId))
-      .map((line) => line.id);
-
-    await Promise.all(lineDrafts.map((line) => {
+    for (const line of validLines) {
       const payload = {
         company: entityId || null,
         payment_method: methodId,
-        name: line.name || '',
-        code: line.code || '',
+        payment_type: line.payment_type || 'inbound',
         journal: line.journal || null,
         payment_account: line.payment_account || null,
-        payment_type: line.payment_type || 'inbound',
         sequence: Number(line.sequence || 10),
-        payment_provider_id: line.payment_provider_id || '',
-        payment_provider_state: line.payment_provider_state || '',
+        name: line.name || formData.name,
+        code: line.code || formData.code,
       };
-      if (typeof line.id === 'number') return axiosInstance.patch(`${API.methodLines}${line.id}/`, payload);
-      return axiosInstance.post(API.methodLines, payload);
-    }));
+      if (Number.isFinite(Number(line.id))) {
+        await axiosInstance.patch(`${API.methodLines}${line.id}/`, payload);
+        keptIds.push(Number(line.id));
+      } else {
+        const response = await axiosInstance.post(API.methodLines, payload);
+        if (response.data?.id) keptIds.push(Number(response.data.id));
+      }
+    }
 
-    const keptIds = lineDrafts.filter((line) => typeof line.id === 'number').map((line) => line.id);
-    await Promise.all(existingIds.filter((lineId) => !keptIds.includes(lineId)).map((lineId) => axiosInstance.delete(`${API.methodLines}${lineId}/`).catch(() => null)));
-  };
+    await Promise.all(
+      originalLineIds
+        .filter((lineId) => !keptIds.includes(Number(lineId)))
+        .map((lineId) => axiosInstance.delete(`${API.methodLines}${lineId}/`)),
+    );
+  }, [entityId, formData.code, formData.name, lineDrafts, originalLineIds]);
 
-  const handleSave = async () => {
+  const save = useCallback(async () => {
     if (!formData.name.trim()) {
-      setError('Le nom de la méthode est obligatoire.');
+      setFeedback({ type: 'error', message: 'Le nom de la méthode est obligatoire.' });
       return false;
     }
     setSaving(true);
-    setError('');
+    setFeedback(null);
     try {
-      const entityId = getActiveEntityId();
       const payload = {
-        name: formData.name,
-        code: formData.code || '',
+        name: formData.name.trim(),
+        code: formData.code.trim(),
         payment_type: formData.payment_type || 'both',
-        active: !!formData.active,
+        active: formData.active !== false,
         company_id: entityId || null,
         outstanding_receipts_account_id: formData.outstanding_receipts_account_id || null,
         outstanding_payments_account_id: formData.outstanding_payments_account_id || null,
       };
-      const response = isDetail
+      const response = isShowMode
         ? await axiosInstance.patch(`${API.methods}${id}/`, payload)
         : await axiosInstance.post(API.methods, payload);
+
       await saveLines(response.data.id);
-      setSuccess('Méthode de paiement enregistrée.');
+      setMethodRecord(response.data);
+      setFormData(normalizeMethod(response.data));
       setHasChanges(false);
-      if (!isDetail) navigate('/comptabilite/methodes-paiement');
-      else await loadData();
-      return true;
-    } catch (err) {
-      setError(`Échec enregistrement : ${getActionErrorMessage(err, 'Échec enregistrement de la méthode.')}`);
-      console.error('Erreur sauvegarde méthode paiement', err);
+      setFeedback({
+        type: 'success',
+        message: isShowMode
+          ? 'Méthode de paiement modifiée avec succès.'
+          : 'Méthode de paiement créée avec succès.',
+      });
+      return response.data;
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        message: getActionErrorMessage(error, "Impossible d'enregistrer la méthode de paiement."),
+      });
       return false;
     } finally {
       setSaving(false);
     }
-  };
+  }, [entityId, formData, id, isShowMode, saveLines]);
 
-  const handleDelete = async () => {
-    if (!isDetail || !id) return;
+  const deleteMethod = useCallback(async () => {
+    if (!id || !window.confirm('Supprimer cette méthode de paiement ?')) return;
     setSaving(true);
-    setError('');
     try {
       await axiosInstance.delete(`${API.methods}${id}/`);
-      navigate('/comptabilite/methodes-paiement');
-    } catch (err) {
-      setError(`Échec suppression : ${getActionErrorMessage(err, 'Impossible de supprimer cette méthode.')}`);
+      navigate('/comptabilite/methodes-paiement', {
+        replace: true,
+        state: { refreshMethods: true },
+      });
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        message: getActionErrorMessage(error, 'Impossible de supprimer cette méthode.'),
+      });
     } finally {
       setSaving(false);
     }
-  };
+  }, [id, navigate]);
 
-  const handleClose = () => {
-    if (hasChanges) setShowConfirmDialog(true);
-    else navigate('/comptabilite/methodes-paiement');
-  };
+  const duplicateMethod = useCallback(() => {
+    navigate('/comptabilite/methodes-paiement/create', {
+      state: {
+        methodRecord: {
+          ...methodRecord,
+          id: undefined,
+          name: formData.name ? `Copie de ${formData.name}` : '',
+          code: '',
+        },
+        lineDrafts: lineDrafts.map((line) => ({
+          ...line,
+          id: undefined,
+          payment_method: undefined,
+          payment_method_id: undefined,
+        })),
+      },
+    });
+  }, [formData.name, lineDrafts, methodRecord, navigate]);
 
-  const discardChanges = () => {
-    setShowConfirmDialog(false);
-    navigate('/comptabilite/methodes-paiement');
-  };
+  const toggleActive = useCallback(async () => {
+    if (!id) return;
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const active = formData.active === false;
+      const response = await axiosInstance.patch(`${API.methods}${id}/`, { active });
+      setMethodRecord((previous) => ({ ...previous, ...response.data }));
+      setFormData((previous) => ({ ...previous, active }));
+      setFeedback({
+        type: 'success',
+        message: active
+          ? 'Méthode de paiement activée avec succès.'
+          : 'Méthode de paiement désactivée avec succès.',
+      });
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        message: getActionErrorMessage(error, "Impossible de modifier l'état de la méthode."),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [formData.active, id]);
 
-  const title = isDetail ? 'Méthodes de paiement' : 'Nouvelle méthode';
-  const subtitle = formData.name || (isDetail ? `Méthode #${id}` : 'Méthode de paiement');
+  const traceabilityContent = (
+    <div className="space-y-3 p-4 text-xs">
+      <div className="border border-gray-200 p-3">
+        <div className="font-semibold text-gray-900">Création</div>
+        <div className="mt-1 text-gray-600">
+          {methodRecord?.create_date
+            ? new Date(methodRecord.create_date).toLocaleString('fr-FR')
+            : '-'}
+        </div>
+        <div className="text-gray-500">
+          {methodRecord?.create_uid_name || methodRecord?.created_by_name || 'Utilisateur'}
+        </div>
+      </div>
+      <div className="border border-gray-200 p-3">
+        <div className="font-semibold text-gray-900">Dernière modification</div>
+        <div className="mt-1 text-gray-600">
+          {methodRecord?.write_date
+            ? new Date(methodRecord.write_date).toLocaleString('fr-FR')
+            : '-'}
+        </div>
+        <div className="text-gray-500">
+          {methodRecord?.write_uid_name || methodRecord?.updated_by_name || 'Utilisateur'}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="mx-auto max-w-7xl border border-gray-300 bg-white">
-        <div className="border-b border-gray-300 px-4 py-2">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-shrink-0 items-center gap-3">
-              <Tooltip text="Nouvelle méthode">
-                <button onClick={() => navigate('/comptabilite/methodes-paiement/create')} className="flex h-8 items-center gap-1 rounded bg-purple-600 px-3 text-xs font-medium text-white transition-all duration-200 hover:scale-105 hover:bg-purple-700">
-                  <FiPlus size={12} />Nouveau
-                </button>
-              </Tooltip>
-              <div className="leading-tight">
-                <h1 onClick={() => navigate('/comptabilite/methodes-paiement')} className="cursor-pointer text-lg font-bold text-gray-900 hover:text-purple-600">{title}</h1>
-                <span className="text-xs text-gray-600">{subtitle}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="relative" ref={actionsMenuRef}>
-                <Tooltip text="Menu des actions">
-                  <button onClick={() => setShowActionsMenu((previous) => !previous)} className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 text-gray-700 transition-all duration-200 hover:scale-110 hover:bg-gray-50 hover:shadow-md active:scale-90">
-                    <FiSettings size={14} />
-                  </button>
-                </Tooltip>
-                {showActionsMenu && (
-                  <div className="absolute right-0 z-50 mt-1 w-56 rounded-sm border border-gray-300 bg-white shadow-lg">
-                    <button onClick={() => navigate('/comptabilite/methodes-paiement')} className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50">Liste des méthodes</button>
-                    <button onClick={() => navigate('/comptabilite/conditions-paiement')} className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50">Conditions de paiement</button>
-                    <button onClick={() => navigate('/comptabilite/paiements')} className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50">Paiements</button>
-                  </div>
-                )}
-              </div>
-              {isDetail && (
-                <HeaderIconButton tooltip="Supprimer" onClick={handleDelete} disabled={saving} className="border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">
-                  <FiTrash2 size={15} />
-                </HeaderIconButton>
-              )}
-              <HeaderIconButton tooltip="Enregistrer" onClick={handleSave} disabled={saving || !hasChanges} className="bg-purple-600 text-white hover:bg-purple-700">
-                <FiUploadCloud size={16} />
-              </HeaderIconButton>
-              <HeaderIconButton tooltip="Fermer" onClick={handleClose} className="bg-black text-white hover:bg-gray-800">
-                <FiX size={16} />
-              </HeaderIconButton>
-            </div>
-          </div>
+    <UnifiedFormPage
+      title="Méthodes de paiement"
+      recordLabel={formData.name || 'Nouvelle méthode'}
+      pageLabel={isShowMode ? 'Détail de la méthode de paiement' : 'Création d’une méthode de paiement'}
+      mode={isShowMode ? 'show' : 'create'}
+      fallbackPath="/comptabilite/methodes-paiement"
+      primaryAction={{
+        label: 'Nouveau',
+        icon: <FiPlus size={13} />,
+        path: '/comptabilite/methodes-paiement/create',
+      }}
+      actionsMenu={(
+        <ActionsMenu
+          active={formData.active !== false}
+          canManage={isShowMode}
+          onDelete={deleteMethod}
+          onDuplicate={duplicateMethod}
+          onList={() => navigate('/comptabilite/methodes-paiement')}
+          onPayments={() => navigate('/comptabilite/paiements')}
+          onToggleActive={toggleActive}
+          disabled={saving}
+        />
+      )}
+      onSave={save}
+      saveLabel={isShowMode ? 'Enregistrer les modifications' : 'Enregistrer'}
+      saving={saving}
+      autoReturnAfterSave={!isShowMode}
+      hasUnsavedChanges={hasChanges}
+      rememberForm={!isShowMode}
+      memoryKey={FORM_MEMORY_KEY}
+      memoryState={!isShowMode ? { formData, lineDrafts } : undefined}
+      onRestoreMemoryState={!isShowMode ? (memory) => {
+        if (memory?.formData) setFormData((previous) => ({ ...previous, ...memory.formData }));
+        if (Array.isArray(memory?.lineDrafts) && memory.lineDrafts.length) {
+          setLineDrafts(memory.lineDrafts);
+        }
+      } : undefined}
+      feedback={feedback}
+      onDismissFeedback={() => setFeedback(null)}
+      messageDuration={15000}
+      traceability={isShowMode ? {
+        open: traceabilityOpen,
+        onOpen: () => setTraceabilityOpen(true),
+        onClose: () => setTraceabilityOpen(false),
+        title: 'Traçabilité',
+        content: traceabilityContent,
+      } : undefined}
+      noContext={loading ? (
+        <div className="p-10 text-center text-sm text-gray-500">
+          Chargement de la méthode...
         </div>
+      ) : undefined}
+    >
+      {!loading && (
+        <div>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-2 border-b border-gray-300 px-4 py-4 lg:grid-cols-2">
+            <Field label="Nom" required>
+              <input
+                value={formData.name}
+                onChange={(event) => setField('name', event.target.value)}
+                className="h-[26px] w-full border border-gray-300 px-2 text-xs outline-none hover:border-purple-400 focus:border-purple-600"
+                placeholder="Ex. Virement bancaire"
+              />
+            </Field>
 
-        {(error || success) && (
-          <div className={`border-b border-gray-300 px-4 py-2 text-xs ${error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-            <div className="flex items-start gap-2">{error ? <FiAlertCircle size={14} /> : <FiCheck size={14} />}{error || success}</div>
+            <Field label="Code">
+              <input
+                value={formData.code}
+                onChange={(event) => setField('code', event.target.value)}
+                className="h-[26px] w-full border border-gray-300 px-2 text-xs uppercase outline-none hover:border-purple-400 focus:border-purple-600"
+                placeholder="Ex. BANK"
+              />
+            </Field>
+
+            <Field label="Type de paiement" required>
+              <SearchSelect
+                value={formData.payment_type}
+                onChange={(value) => setField('payment_type', value)}
+                options={DIRECTIONS}
+                getLabel={(option) => option.label}
+              />
+            </Field>
           </div>
-        )}
 
-        {loading ? (
-          <div className="p-8 text-center text-sm text-gray-500">Chargement...</div>
-        ) : (
-          <>
-            <div className="space-y-4 p-4">
-              <section className="border border-gray-300">
-                <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700">Informations</div>
-                <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-2">
-                  <Field label="Nom" required>
-                    <input value={formData.name} onChange={(event) => setField('name', event.target.value)} className="h-[26px] w-full border border-gray-300 bg-white px-2 text-xs outline-none focus:ring-1 focus:ring-blue-500" />
-                  </Field>
-                  <Field label="Code">
-                    <input value={formData.code} onChange={(event) => setField('code', event.target.value)} className="h-[26px] w-full border border-gray-300 bg-white px-2 text-xs outline-none focus:ring-1 focus:ring-blue-500" />
-                  </Field>
-                  <Field label="Direction">
-                    <SearchSelect value={formData.payment_type} onChange={(value) => setField('payment_type', value)} options={METHOD_DIRECTION_OPTIONS} getLabel={(option) => option.label} placeholder="Direction" />
-                  </Field>
-                  <Field label="Actif">
-                    <StatusSwitch checked={formData.active} onChange={(value) => setField('active', value)} />
-                  </Field>
+          <div className="flex border-b border-gray-300 px-4">
+            {[
+              ['journals', 'Utilisation dans les journaux'],
+              ['accounts', 'Comptes'],
+              ['advanced', 'Paramètres avancés'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                className={`border-b-2 px-4 py-2 text-xs font-medium ${
+                  activeTab === key
+                    ? 'border-purple-600 text-purple-700'
+                    : 'border-transparent text-gray-500 hover:text-purple-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'accounts' && (
+            <div className="grid grid-cols-1 gap-x-6 gap-y-2 px-4 py-4 lg:grid-cols-2">
+              <Field label="Compte des encaissements">
+                <SearchSelect
+                  value={formData.outstanding_receipts_account_id}
+                  onChange={(value) => setField('outstanding_receipts_account_id', value)}
+                  options={accounts}
+                  getLabel={(account) => optionLabel(account)}
+                  placeholder="Sélectionner un compte"
+                />
+              </Field>
+              <Field label="Compte des décaissements">
+                <SearchSelect
+                  value={formData.outstanding_payments_account_id}
+                  onChange={(value) => setField('outstanding_payments_account_id', value)}
+                  options={accounts}
+                  getLabel={(account) => optionLabel(account)}
+                  placeholder="Sélectionner un compte"
+                />
+              </Field>
+            </div>
+          )}
+
+          {activeTab === 'journals' && (
+            <div className="px-4 py-4">
+              <div className="overflow-x-auto border border-gray-300">
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-gray-100 text-left text-gray-700">
+                      <th className="border-r border-gray-300 px-2 py-2">Type de paiement</th>
+                      <th className="border-r border-gray-300 px-2 py-2">Journal</th>
+                      <th className="border-r border-gray-300 px-2 py-2">Compte en suspens</th>
+                      <th
+                        className="w-32 border-r border-gray-300 px-2 py-2"
+                        title="Détermine la position de cette méthode dans la liste du journal"
+                      >
+                        Ordre d'affichage
+                      </th>
+                      <th className="w-10 px-2 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lineDrafts.map((line, index) => (
+                      <tr key={line.id} data-method-line={line.id} className="border-t border-gray-200">
+                        <td data-method-field="payment_type" className="border-r border-gray-200 p-0">
+                          <SearchSelect
+                            value={line.payment_type}
+                            onChange={(value) => updateLine(index, 'payment_type', value)}
+                            options={LINE_TYPES}
+                            getLabel={(option) => option.label}
+                            bordered={false}
+                          />
+                        </td>
+                        <td data-method-field="journal" className="border-r border-gray-200 p-0">
+                          <SearchSelect
+                            value={line.journal}
+                            onChange={(value) => updateLine(index, 'journal', value)}
+                            options={journals}
+                            getLabel={(journal) => optionLabel(journal)}
+                            placeholder="Journal"
+                            bordered={false}
+                          />
+                        </td>
+                        <td data-method-field="payment_account" className="border-r border-gray-200 p-0">
+                          <SearchSelect
+                            value={line.payment_account}
+                            onChange={(value) => updateLine(index, 'payment_account', value)}
+                            options={accounts}
+                            getLabel={(account) => optionLabel(account)}
+                            placeholder="Compte"
+                            bordered={false}
+                          />
+                        </td>
+                        <td data-method-field="sequence" className="border-r border-gray-200 p-0">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={line.sequence}
+                            onChange={(event) => updateLine(index, 'sequence', event.target.value)}
+                            onKeyDown={(event) => handleLineTab(event, index, 'sequence')}
+                            className="h-[26px] w-full border-0 px-2 text-right text-xs outline-none focus:bg-purple-50"
+                            title="Les plus petits nombres apparaissent en premier"
+                          />
+                        </td>
+                        <td className="p-0 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeLine(index)}
+                            className="p-2 text-gray-400 hover:text-red-600"
+                            title="Supprimer la ligne"
+                          >
+                            <FiTrash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button
+                type="button"
+                onClick={addLine}
+                className="mt-3 flex h-8 items-center gap-1 bg-purple-600 px-3 text-xs font-medium text-white hover:bg-purple-700"
+              >
+                <FiPlus size={13} />
+                Ajouter une ligne
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'advanced' && (
+            <div className="px-4 py-4">
+              <Field label="Méthode active">
+                <div className="flex h-[26px] items-center gap-2">
+                  <StatusSwitch
+                    checked={formData.active}
+                    onChange={(value) => setField('active', value)}
+                  />
+                  <span className="text-xs text-gray-600">
+                    {formData.active ? 'Activée' : 'Désactivée'}
+                  </span>
                 </div>
-              </section>
-
-              <section className="border border-gray-300">
-                  <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700">Comptes d'attente</div>
-                  <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
-                    <Field label="Compte attente encaissements">
-                      <SearchSelect value={formData.outstanding_receipts_account_id} onChange={(value) => setField('outstanding_receipts_account_id', value)} options={accounts} getLabel={(account) => optionLabel(account)} placeholder="Compte" />
-                    </Field>
-                    <Field label="Compte attente décaissements">
-                      <SearchSelect value={formData.outstanding_payments_account_id} onChange={(value) => setField('outstanding_payments_account_id', value)} options={accounts} getLabel={(account) => optionLabel(account)} placeholder="Compte" />
-                    </Field>
-                  </div>
-              </section>
-
-              <section className="border border-gray-300">
-                  <div className="flex items-center justify-between border-b border-gray-300 bg-gray-100 px-3 py-2">
-                    <div className="text-xs font-semibold text-gray-700">Lignes par journal</div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-gray-100">
-                          <th className="border border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700" style={{ minWidth: '150px' }}>Nom</th>
-                          <th className="border border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700" style={{ minWidth: '170px' }}>Journal</th>
-                          <th className="border border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700" style={{ minWidth: '130px' }}>Type</th>
-                          <th className="border border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700" style={{ minWidth: '190px' }}>Compte</th>
-                          <th className="border border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700" style={{ minWidth: '80px' }}>Seq.</th>
-                          <th className="border border-gray-300 px-2 py-1.5 text-center text-xs font-medium text-gray-700" style={{ width: '40px' }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {lineDrafts.map((line, index) => (
-                          <tr key={line.id} data-method-line-id={line.id}>
-                            <td data-method-field="name" onKeyDown={(event) => handleLineTab(event, index, 'name')} className="border border-gray-300 p-1" style={{ minWidth: '150px' }}><input value={line.name || ''} onChange={(event) => updateLine(index, 'name', event.target.value)} className="h-[26px] w-full border-0 px-2 text-xs outline-none focus:ring-1 focus:ring-blue-500" /></td>
-                            <td data-method-field="journal" onKeyDown={(event) => handleLineTab(event, index, 'journal')} className="border border-gray-300 p-1" style={{ minWidth: '170px' }}><SearchSelect bordered={false} value={line.journal} onChange={(value) => updateLine(index, 'journal', value)} options={treasuryJournals.length ? treasuryJournals : journals} getLabel={(journal) => optionLabel(journal)} placeholder="Journal" /></td>
-                            <td data-method-field="payment_type" onKeyDown={(event) => handleLineTab(event, index, 'payment_type')} className="border border-gray-300 p-1" style={{ minWidth: '130px' }}><SearchSelect bordered={false} value={line.payment_type || 'inbound'} onChange={(value) => updateLine(index, 'payment_type', value)} options={LINE_PAYMENT_TYPE_OPTIONS} getLabel={(option) => option.label} placeholder="Type" /></td>
-                            <td data-method-field="payment_account" onKeyDown={(event) => handleLineTab(event, index, 'payment_account')} className="border border-gray-300 p-1" style={{ minWidth: '190px' }}><SearchSelect bordered={false} value={line.payment_account} onChange={(value) => updateLine(index, 'payment_account', value)} options={accounts} getLabel={(account) => optionLabel(account)} placeholder="Compte" /></td>
-                            <td data-method-field="sequence" onKeyDown={(event) => handleLineTab(event, index, 'sequence')} className="border border-gray-300 p-1" style={{ minWidth: '80px' }}><input type="number" value={line.sequence || 10} onChange={(event) => updateLine(index, 'sequence', event.target.value)} className="h-[26px] w-full border-0 px-2 text-right text-xs outline-none focus:ring-1 focus:ring-blue-500" /></td>
-                            <td className="border border-gray-300 p-1 text-center" style={{ width: '40px' }}><button onClick={() => { setLineDrafts((previous) => previous.filter((_, lineIndex) => lineIndex !== index)); markAsChanged(); }} className="flex h-[26px] w-full items-center justify-center text-gray-400 transition-colors hover:text-red-600"><FiTrash2 size={14} /></button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex items-center gap-4 px-3 py-3">
-                    <Tooltip text="Ajouter une ligne de journal">
-                      <button onClick={() => { setLineDrafts((previous) => [...previous, emptyLine()]); markAsChanged(); }} className="flex h-8 items-center gap-1 bg-purple-600 px-3 text-xs text-white transition-all hover:bg-purple-700">
-                        <FiPlus size={12} /><span>Ajouter une ligne</span>
-                      </button>
-                    </Tooltip>
-                  </div>
-              </section>
+              </Field>
             </div>
-          </>
-        )}
-      </div>
-
-      {showConfirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="mx-4 w-full max-w-md rounded-sm bg-white p-6 shadow-lg">
-            <h3 className="mb-3 text-lg font-bold text-gray-900">Modifications non sauvegardées</h3>
-            <p className="mb-6 text-sm text-gray-600">Voulez-vous enregistrer les modifications avant de quitter ?</p>
-            <div className="flex justify-end gap-3">
-              <button onClick={async () => { setShowConfirmDialog(false); const ok = await handleSave(); if (ok) navigate('/comptabilite/methodes-paiement'); }} className="bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700">Enregistrer</button>
-              <button onClick={discardChanges} className="bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700">Ne pas enregistrer</button>
-              <button onClick={() => setShowConfirmDialog(false)} className="border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Annuler</button>
-            </div>
-          </div>
+          )}
         </div>
       )}
-    </div>
+    </UnifiedFormPage>
   );
 }

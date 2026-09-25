@@ -1,52 +1,50 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FiAlertCircle,
   FiActivity,
   FiArrowDown,
   FiArrowUp,
   FiBarChart2,
   FiCalendar,
-  FiChevronLeft,
-  FiChevronRight,
+  FiCircle,
   FiCreditCard,
   FiFileText,
-  FiFilter,
   FiGrid,
   FiMoreVertical,
   FiPieChart,
   FiPlus,
   FiRefreshCcw,
-  FiSettings,
   FiStar,
   FiTrendingUp,
   FiUsers,
   FiX
 } from 'react-icons/fi';
 import { useEntity } from '../../../context/EntityContext';
+import UnifiedIndexPage from '../../../components/UnifiedIndexPage';
 import { dashboardService, journauxService } from '../services';
 
 const COLORS = ['#7c3aed', '#14b8a6', '#2563eb', '#f59e0b', '#ef4444', '#0f766e', '#334155', '#db2777', '#10b981', '#8b5cf6'];
+const DASHBOARD_CACHE_PREFIX = 'somane:compta-dashboard';
 
-const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-        {children}
-      </div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-        </div>
-      )}
-    </div>
-  );
+const readDashboardCache = (entityId) => {
+  if (!entityId || typeof window === 'undefined') return null;
+  try {
+    const cached = JSON.parse(window.sessionStorage.getItem(`${DASHBOARD_CACHE_PREFIX}:${entityId}`) || 'null');
+    return cached?.dashboard ? cached : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeDashboardCache = (entityId, dashboard, journalCards) => {
+  if (!entityId || !dashboard || typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(`${DASHBOARD_CACHE_PREFIX}:${entityId}`, JSON.stringify({
+      dashboard,
+      journalCards,
+      savedAt: Date.now(),
+    }));
+  } catch {}
 };
 
 const formatAmount = (value) => {
@@ -673,8 +671,12 @@ const MainChart = ({ data, chartType, colors = COLORS }) => {
     return <div className="h-40 flex items-center justify-center text-sm text-gray-500">Aucune donnee a afficher.</div>;
   }
 
-  if (chartType === 'pie') {
-    const total = normalized.reduce((sum, item) => sum + Math.abs(item.value), 0);
+  if (chartType === 'pie' || chartType === 'donut') {
+    const pieData = normalized
+      .map((item, index) => ({ ...item, colorIndex: index, amount: Math.abs(item.value) }))
+      .filter((item) => item.amount > 0);
+    const total = pieData.reduce((sum, item) => sum + item.amount, 0);
+    const isDonut = chartType === 'donut';
     let startAngle = -90;
     const polarToCartesian = (cx, cy, radius, angle) => {
       const radians = (angle * Math.PI) / 180;
@@ -686,28 +688,52 @@ const MainChart = ({ data, chartType, colors = COLORS }) => {
       const largeArcFlag = end - start <= 180 ? '0' : '1';
       return `M ${cx} ${cy} L ${startPoint.x} ${startPoint.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${endPoint.x} ${endPoint.y} Z`;
     };
+    const percentageLabel = (amount) => {
+      const percentage = total > 0 ? (amount / total) * 100 : 0;
+      if (percentage > 0 && percentage < 0.01) return '< 0,01 %';
+      return `${percentage.toLocaleString('fr-FR', { minimumFractionDigits: percentage < 1 ? 2 : 1, maximumFractionDigits: percentage < 1 ? 2 : 1 })} %`;
+    };
 
     return (
-      <div className="h-40 grid grid-cols-1 md:grid-cols-[160px_1fr] items-center gap-4">
-        <svg viewBox="0 0 220 220" className="w-full h-36">
-          {normalized.map((item, index) => {
-            const angle = total > 0 ? (Math.abs(item.value) / total) * 360 : 0;
+      <div className="grid min-h-44 grid-cols-1 items-center gap-4 md:grid-cols-[210px_1fr]">
+        <svg viewBox="0 0 240 240" className="h-44 w-full" role="img" aria-label={`${isDonut ? 'Diagramme en anneau' : 'Diagramme en camembert'} des journaux`}>
+          {pieData.length === 1 ? (
+            <circle cx="120" cy="120" r="100" fill={getColor(pieData[0].colorIndex)} stroke="white" strokeWidth="2">
+              <title>{`${pieData[0].name} : ${formatAmount(pieData[0].amount)} (${percentageLabel(pieData[0].amount)})`}</title>
+            </circle>
+          ) : pieData.map((item) => {
+            const angle = total > 0 ? (item.amount / total) * 360 : 0;
             const endAngle = startAngle + angle;
-            const path = arc(110, 110, 94, startAngle, endAngle);
+            const path = arc(120, 120, 100, startAngle, endAngle);
+            const middleAngle = startAngle + angle / 2;
+            const labelPoint = polarToCartesian(120, 120, isDonut ? 78 : 66, middleAngle);
+            const percentage = total > 0 ? (item.amount / total) * 100 : 0;
             startAngle = endAngle;
-            return <path key={`${item.name}-${index}`} d={path} fill={getColor(index)} />;
+            return (
+              <g key={`${item.name}-${item.colorIndex}`}>
+                <path d={path} fill={getColor(item.colorIndex)} stroke="white" strokeWidth="2">
+                  <title>{`${item.name} : ${formatAmount(item.amount)} (${percentageLabel(item.amount)})`}</title>
+                </path>
+                {percentage >= 4 && (
+                  <text x={labelPoint.x} y={labelPoint.y} textAnchor="middle" dominantBaseline="middle" className="fill-white text-[11px] font-semibold">
+                    {percentageLabel(item.amount)}
+                  </text>
+                )}
+              </g>
+            );
           })}
-          <circle cx="110" cy="110" r="54" fill="white" />
-          <text x="110" y="106" textAnchor="middle" className="fill-gray-500 text-xs">Total</text>
-          <text x="110" y="126" textAnchor="middle" className="fill-gray-900 text-sm font-semibold">{formatAmount(total)}</text>
+          {isDonut && <circle cx="120" cy="120" r="56" fill="white" />}
+          {isDonut && <text x="120" y="115" textAnchor="middle" className="fill-gray-500 text-xs">Total</text>}
+          {isDonut && <text x="120" y="135" textAnchor="middle" className="fill-gray-900 text-sm font-semibold">{formatAmount(total)}</text>}
         </svg>
-        <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+        <div className="max-h-44 space-y-1 overflow-y-auto pr-1">
           {normalized.map((item, index) => (
-            <div key={`${item.name}-legend-${index}`} className="flex items-center justify-between gap-3 text-sm">
+            <div key={`${item.name}-legend-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-gray-100 py-1 text-sm last:border-b-0">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: getColor(index) }} />
                 <span className="text-gray-600 truncate">{item.name}</span>
               </div>
+              <span className="whitespace-nowrap text-xs font-medium text-purple-700">{percentageLabel(Math.abs(item.value))}</span>
               <span className="font-semibold text-gray-900 whitespace-nowrap">{formatAmount(item.value)}</span>
             </div>
           ))}
@@ -938,112 +964,127 @@ const ActivityPanel = ({ items, onOpen }) => {
   }), [items, typeFilter, stateFilter]);
 
   return (
-    <div className="bg-white border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+    <div className="overflow-hidden border border-gray-200 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-gray-900">Activite & actions recentes</h2>
-          <p className="text-xs text-gray-500">Pieces et paiements regroupes au meme endroit</p>
+          <h2 className="text-sm font-semibold text-gray-900">Activité & actions récentes</h2>
+          <p className="text-xs text-gray-500">Chronologie des pièces et des paiements</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value)}
-            className="h-8 px-2 border border-gray-300 bg-white text-xs focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+            className="h-8 border border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
           >
             <option value="all">Tous</option>
-            <option value="move">Pieces</option>
+            <option value="move">Pièces</option>
             <option value="payment">Paiements</option>
           </select>
           <select
             value={stateFilter}
             onChange={(event) => setStateFilter(event.target.value)}
-            className="h-8 px-2 border border-gray-300 bg-white text-xs focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+            className="h-8 border border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
           >
-            <option value="all">Tous les etats</option>
+            <option value="all">Tous les états</option>
             <option value="draft">Brouillon</option>
-            <option value="posted">Comptabilise / valide</option>
-            <option value="cancel">Annule</option>
+            <option value="posted">Comptabilisé / validé</option>
+            <option value="cancel">Annulé</option>
           </select>
-          <FiActivity size={18} className="text-purple-600 shrink-0" />
+          <FiActivity size={18} className="shrink-0 text-purple-600" />
         </div>
       </div>
-      <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+      <div className="unified-index-scroll max-h-80 divide-y divide-gray-100 overflow-y-auto">
         {filteredItems.length === 0 ? (
-          <div className="px-4 py-8 text-sm text-gray-500 text-center">Aucune activite pour ce filtre.</div>
-        ) : filteredItems.map((item) => (
+          <div className="px-4 py-8 text-center text-sm text-gray-500">Aucune activité pour ce filtre.</div>
+        ) : filteredItems.map((item, index) => {
+          const ItemIcon = item.type === 'payment' ? FiCreditCard : FiFileText;
+          const isPosted = item.state === 'posted';
+          return (
           <button
             key={`${item.type}-${item.id}`}
             type="button"
             onClick={() => onOpen(item)}
-            className="relative group w-full px-4 py-3 text-left hover:bg-purple-50 transition-colors"
+            className="group grid w-full grid-cols-[76px_22px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-purple-50"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-900 truncate">{item.name || item.label || '-'}</p>
-                <p className="text-xs text-gray-500 truncate">{formatDate(item.date || item.payment_date)} - {item.journal || '-'}</p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-sm font-bold text-gray-900">{formatAmount(item.amount || item.amount_total)} CFA</p>
-                <p className="text-[11px] text-purple-700">{item.label || getStateLabel(item.state)}</p>
-              </div>
+            <span className="text-[11px] tabular-nums text-gray-500">
+              {formatDate(item.date || item.payment_date)}
+            </span>
+            <span className="relative flex h-full items-center justify-center">
+              <span className={`absolute left-1/2 w-px -translate-x-1/2 bg-gray-200 ${index === 0 ? 'top-1/2' : 'top-[-11px]'} bottom-[-11px]`} />
+              <span className={`relative z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border ${item.type === 'payment' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-purple-200 bg-purple-50 text-purple-700'}`}>
+                <ItemIcon size={12} />
+              </span>
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-gray-900 group-hover:text-purple-800">{item.name || item.label || '-'}</p>
+              <p className="truncate text-[11px] text-gray-500">
+                {item.journal || '-'}{item.partner ? ` · ${item.partner}` : ''}
+              </p>
             </div>
-            <div className="pointer-events-none absolute right-3 top-full mt-1 hidden group-hover:block z-50 w-80 max-w-[calc(100vw-2rem)] bg-gray-900 text-white text-xs rounded shadow-lg p-3">
-              <div className="font-semibold">{item.type === 'payment' ? 'Paiement' : 'Piece comptable'} : {item.name || '-'}</div>
-              <div className="mt-1">Partenaire : {item.partner || '-'}</div>
-              <div className="mt-1">Journal : {item.journal || '-'}</div>
-              <div className="mt-1">Montant : {formatAmount(item.amount || item.amount_total)} CFA</div>
-              <div className="mt-1">Etat : {getStateLabel(item.state)}</div>
+            <div className="shrink-0 text-right">
+              <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-gray-900">{formatAmount(item.amount || item.amount_total)} CFA</p>
+              <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${isPosted ? 'bg-emerald-50 text-emerald-700' : item.state === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                {item.label || getStateLabel(item.state)}
+              </span>
             </div>
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 };
 
-const PartnerHighlightsPanel = ({ partners, onOpen }) => (
-  <div className="bg-white border border-gray-200 overflow-hidden">
-    <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-3">
+const PartnerHighlightsPanel = ({ partners, onOpen }) => {
+  const maximumAmount = Math.max(0, ...partners.map((partner) => Number(partner.amount || 0)));
+
+  return (
+  <div className="overflow-hidden border border-gray-200 bg-white">
+    <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
       <div className="min-w-0">
-        <h2 className="text-sm font-semibold text-gray-900">Partenaires a suivre</h2>
-        <p className="text-xs text-gray-500">Volume, paiements et reste detectes</p>
+        <h2 className="text-sm font-semibold text-gray-900">Partenaires à suivre</h2>
+        <p className="text-xs text-gray-500">Classement par volume comptabilisé</p>
       </div>
-      <FiUsers size={18} className="text-purple-600 shrink-0" />
+      <FiUsers size={18} className="shrink-0 text-purple-600" />
     </div>
-    <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+    <div className="unified-index-scroll max-h-80 divide-y divide-gray-100 overflow-y-auto">
       {partners.length === 0 ? (
-        <div className="px-4 py-8 text-sm text-gray-500 text-center">Aucun partenaire a afficher.</div>
-      ) : partners.map((partner) => (
+        <div className="px-4 py-8 text-center text-sm text-gray-500">Aucun partenaire à afficher.</div>
+      ) : partners.map((partner, index) => {
+        const progress = maximumAmount > 0 ? Math.min(100, (Number(partner.amount || 0) / maximumAmount) * 100) : 0;
+        const residual = Number(partner.residual || 0);
+        return (
         <button
           key={partner.id || partner.name}
           type="button"
           onClick={() => onOpen(partner)}
-          className="relative group w-full px-4 py-3 text-left hover:bg-purple-50 transition-colors"
+          className="group grid w-full grid-cols-[26px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-purple-50"
         >
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">{partner.name || '-'}</p>
-              <p className="text-xs text-gray-500 truncate">{partner.moves_count || 0} piece(s) - {partner.payments_count || 0} paiement(s)</p>
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-purple-50 text-[11px] font-bold text-purple-700">
+            {index + 1}
+          </span>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <p className="truncate text-sm font-semibold text-gray-900 group-hover:text-purple-800">{partner.name || '-'}</p>
+              <p className="shrink-0 text-[11px] text-gray-500">{partner.moves_count || 0} pièce(s) · {partner.payments_count || 0} paiement(s)</p>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-sm font-bold text-gray-900">{formatAmount(partner.amount)} CFA</p>
-              <p className={`text-[11px] ${Number(partner.residual || 0) > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                Reste {formatAmount(partner.residual)} CFA
-              </p>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
+              <div className="h-full rounded-full bg-purple-500 transition-all" style={{ width: `${progress}%` }} />
             </div>
           </div>
-          <div className="pointer-events-none absolute right-3 top-full mt-1 hidden group-hover:block z-50 w-80 max-w-[calc(100vw-2rem)] bg-gray-900 text-white text-xs rounded shadow-lg p-3">
-            <div className="font-semibold">{partner.name || '-'}</div>
-            <div className="mt-1">Volume pieces : {formatAmount(partner.amount)} CFA</div>
-            <div className="mt-1">Paiements : {formatAmount(partner.payments_amount)} CFA</div>
-            <div className="mt-1">Reste a suivre : {formatAmount(partner.residual)} CFA</div>
-            <div className="mt-1">Derniere date : {formatDate(partner.last_date)}</div>
+          <div className="shrink-0 text-right">
+            <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-gray-900">{formatAmount(partner.amount)} CFA</p>
+            <p className={`text-[11px] ${residual > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+              Reste {formatAmount(residual)} CFA
+            </p>
           </div>
         </button>
-      ))}
+        );
+      })}
     </div>
   </div>
-);
+  );
+};
 
 const KpiStrip = ({ summary, amounts, onNavigate }) => {
   const kpis = [
@@ -1113,84 +1154,114 @@ const InsightPanel = ({ activeTab, setActiveTab, health, financialFlows, selecte
   </div>
 );
 
-const JournalMenu = ({ journal, onView, onNew, onAnalyze, onColor, onFavorite, onConfigure, onOpenLine }) => {
+const JournalMenu = ({ journal, onView, onNew, onAnalyze, onColor, onFavorite, onConfigure, onOpenLine, onClose }) => {
   const actionLinks = getJournalDashboardActionLinks(journal);
 
   return (
-    <div className="mx-4 mb-4 bg-white border border-gray-200 shadow-lg max-h-[420px] overflow-y-auto">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-8 px-5 py-5">
-        <div>
-          <div className="font-semibold text-gray-800 mb-3">Suivi</div>
-          {actionLinks.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => onOpenLine(journal, item)}
-              className="block w-full text-left text-sm text-gray-600 py-1 hover:text-purple-700"
-            >
-              {item.label}
-            </button>
-          ))}
-          {(journal.menu?.view || getJournalSpecificTerms(journal).viewLabels).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onView(journal, item)}
-              className="block w-full text-left text-sm text-gray-500 py-1 hover:text-purple-700"
-            >
-              {item}
-            </button>
-          ))}
+    <div
+      className="absolute inset-y-3 right-3 z-30 flex w-[min(310px,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white/95 shadow-2xl backdrop-blur-sm"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-gray-100 bg-gray-50/90 px-3">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold text-gray-900">Actions du journal</p>
+          <p className="truncate text-[10px] text-gray-500">{journal.name || journal.code}</p>
         </div>
-        <div>
-          <div className="font-semibold text-gray-800 mb-3">Nouveau</div>
-          {(journal.menu?.new || getJournalSpecificTerms(journal).newLabels).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onNew(journal, item)}
-              className="block w-full text-left text-sm text-gray-600 py-1 hover:text-purple-700"
-            >
-              {item}
-            </button>
-          ))}
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-purple-100 hover:text-purple-700"
+          title="Fermer"
+          aria-label="Fermer le menu"
+        >
+          <FiX size={13} />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 [scrollbar-width:thin]">
+        <div className="grid grid-cols-2 gap-3">
+          <section>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Suivi</p>
+            {actionLinks.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onOpenLine(journal, item)}
+                className="block w-full truncate rounded px-2 py-1 text-left text-xs text-gray-700 transition-colors hover:bg-purple-50 hover:text-purple-700"
+                title={item.label}
+              >
+                {item.label}
+              </button>
+            ))}
+            {(journal.menu?.view || getJournalSpecificTerms(journal).viewLabels).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onView(journal, item)}
+                className="block w-full truncate rounded px-2 py-1 text-left text-xs text-gray-600 transition-colors hover:bg-purple-50 hover:text-purple-700"
+                title={item}
+              >
+                {item}
+              </button>
+            ))}
+          </section>
+
+          <section>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Nouveau</p>
+            {(journal.menu?.new || getJournalSpecificTerms(journal).newLabels).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onNew(journal, item)}
+                className="block w-full truncate rounded px-2 py-1 text-left text-xs text-gray-700 transition-colors hover:bg-purple-50 hover:text-purple-700"
+                title={item}
+              >
+                {item}
+              </button>
+            ))}
+
+            <p className="mb-1 mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Analyse</p>
+            {(journal.menu?.analysis || [getJournalSpecificTerms(journal).analysisLabel]).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onAnalyze(journal, item)}
+                className="block w-full truncate rounded px-2 py-1 text-left text-xs text-gray-700 transition-colors hover:bg-purple-50 hover:text-purple-700"
+                title={item}
+              >
+                {item}
+              </button>
+            ))}
+          </section>
         </div>
-        <div>
-          <div className="font-semibold text-gray-800 mb-3">Analyse</div>
-          {(journal.menu?.analysis || [getJournalSpecificTerms(journal).analysisLabel]).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onAnalyze(journal, item)}
-              className="block w-full text-left text-sm text-gray-600 py-1 hover:text-purple-700"
-            >
-              {item}
+
+        <div className="mt-2 border-t border-gray-100 pt-2">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Couleur</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => onColor(journal, 0)} className="relative h-5 w-5 rounded-full border border-gray-300 bg-white" title="Aucune couleur">
+              <span className="absolute left-0 top-1/2 h-px w-full -rotate-45 bg-rose-500" />
             </button>
-          ))}
+            {COLORS.map((color, index) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => onColor(journal, index)}
+                className="h-5 w-5 rounded-full border-2 border-white shadow-sm ring-1 ring-gray-200 transition-transform hover:scale-110"
+                style={{ backgroundColor: color }}
+                aria-label={`Couleur ${index + 1}`}
+              />
+            ))}
+          </div>
         </div>
       </div>
-      <div className="border-t border-gray-200 px-5 py-3 flex flex-wrap gap-2">
-        <button type="button" onClick={() => onColor(journal, 0)} className="w-6 h-6 border border-gray-300 bg-white relative">
-          <span className="absolute left-0 top-1/2 w-full h-px bg-rose-500 -rotate-45" />
+
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/80 px-3 py-2">
+        <button type="button" onClick={() => onFavorite(journal)} className="flex min-w-0 items-center gap-1.5 truncate text-xs text-gray-600 transition-colors hover:text-purple-700">
+          <FiStar className="shrink-0 text-yellow-400" size={13} />
+          <span className="truncate">{journal.show_on_dashboard === false ? 'Ajouter aux favoris' : 'Retirer des favoris'}</span>
         </button>
-        {COLORS.map((color, index) => (
-          <button
-            key={color}
-            type="button"
-            onClick={() => onColor(journal, index)}
-            className="w-6 h-6 border border-gray-300"
-            style={{ backgroundColor: color }}
-            aria-label={`Couleur ${index + 1}`}
-          />
-        ))}
-      </div>
-      <div className="border-t border-gray-200 px-5 py-3 flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={() => onFavorite(journal)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-purple-700">
-          <FiStar className="text-yellow-400" size={16} />
-          {journal.show_on_dashboard === false ? 'Ajouter aux favoris' : 'Supprimer des favoris'}
-        </button>
-        <button type="button" onClick={() => onConfigure(journal)} className="text-sm text-gray-600 hover:text-purple-700">
-          Configuration
+        <button type="button" onClick={() => onConfigure(journal)} className="shrink-0 rounded px-2 py-1 text-xs font-medium text-purple-700 transition-colors hover:bg-purple-100">
+          Configurer
         </button>
       </div>
     </div>
@@ -1218,7 +1289,9 @@ const JournalCard = ({ journal, openMenuId, setOpenMenuId, onAction, onView, onN
         <button
           type="button"
           onClick={() => setOpenMenuId(isOpen ? null : journal.id)}
-          className="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-50"
+          className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full transition-all ${isOpen ? 'bg-purple-100 text-purple-700' : 'text-gray-500 hover:bg-purple-50 hover:text-purple-700'}`}
+          aria-expanded={isOpen}
+          aria-label="Ouvrir les actions du journal"
         >
           <FiMoreVertical size={16} />
         </button>
@@ -1271,16 +1344,25 @@ const JournalCard = ({ journal, openMenuId, setOpenMenuId, onAction, onView, onN
       </div>
 
       {isOpen && (
-        <JournalMenu
-          journal={journal}
-          onView={onView}
-          onNew={onNew}
-          onAnalyze={onAnalyze}
-          onColor={onColor}
-          onFavorite={onFavorite}
-          onConfigure={onConfigure}
-          onOpenLine={onOpenLine}
-        />
+        <>
+          <button
+            type="button"
+            className="absolute inset-0 z-20 bg-slate-900/10 backdrop-blur-[1px]"
+            onClick={() => setOpenMenuId(null)}
+            aria-label="Fermer le menu du journal"
+          />
+          <JournalMenu
+            journal={journal}
+            onView={onView}
+            onNew={onNew}
+            onAnalyze={onAnalyze}
+            onColor={onColor}
+            onFavorite={onFavorite}
+            onConfigure={onConfigure}
+            onOpenLine={onOpenLine}
+            onClose={() => setOpenMenuId(null)}
+          />
+        </>
       )}
     </div>
   );
@@ -1289,6 +1371,8 @@ const JournalCard = ({ journal, openMenuId, setOpenMenuId, onAction, onView, onN
 export default function ComptaDashboard() {
   const navigate = useNavigate();
   const { activeEntity } = useEntity();
+  const initialCacheRef = useRef(readDashboardCache(activeEntity?.id));
+  const lastAutoLoadedEntityRef = useRef(null);
 
   const today = useMemo(() => new Date(), []);
   const defaultDateFrom = useMemo(() => `${today.getFullYear()}-01-01`, [today]);
@@ -1296,37 +1380,46 @@ export default function ComptaDashboard() {
 
   const [dateFrom, setDateFrom] = useState(defaultDateFrom);
   const [dateTo, setDateTo] = useState(defaultDateTo);
-  const [dashboard, setDashboard] = useState(null);
-  const [fallbackJournalCards, setFallbackJournalCards] = useState([]);
+  const [dashboard, setDashboard] = useState(() => initialCacheRef.current?.dashboard || null);
+  const [fallbackJournalCards, setFallbackJournalCards] = useState(() => initialCacheRef.current?.journalCards || []);
   const latestDashboardRequest = useRef(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !initialCacheRef.current?.dashboard);
   const [error, setError] = useState('');
   const [openMenuId, setOpenMenuId] = useState(null);
   const [searchText, setSearchText] = useState('');
   const [activeFilters, setActiveFilters] = useState([]);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const [showActionsMenu, setShowActionsMenu] = useState(false);
-  const [showGroupMenu, setShowGroupMenu] = useState(false);
-  const [showFavoritesMenu, setShowFavoritesMenu] = useState(false);
   const [groupBy, setGroupBy] = useState('none');
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [journalsPerPage, setJournalsPerPage] = useState(6);
   const [journalPage, setJournalPage] = useState(1);
-  const [chartType, setChartType] = useState('bar');
+  const [chartType, setChartType] = useState('pie');
   const [analysis, setAnalysis] = useState('journals');
   const [chartColors, setChartColors] = useState(COLORS);
   const [insightTab, setInsightTab] = useState('health');
   const [selectedHealthKey, setSelectedHealthKey] = useState(null);
   const [selectedFlowKey, setSelectedFlowKey] = useState(null);
 
-  const summary = dashboard?.summary || {};
-  const amounts = dashboard?.amounts || {};
-  const baseJournalCards = (dashboard?.journal_cards?.length ? dashboard.journal_cards : fallbackJournalCards);
-  const accountingHealth = dashboard?.accounting_health || { score: 100, items: [] };
-  const recentMoves = dashboard?.recent_moves || [];
-  const recentPayments = dashboard?.recent_payments || [];
-  const financialFlows = dashboard?.financial_flows || {};
-  const partnerHighlights = dashboard?.partner_highlights || [];
+  const normalizedDashboard = useMemo(() => ({
+    summary: dashboard?.summary || {},
+    amounts: dashboard?.amounts || {},
+    accountingHealth: dashboard?.accounting_health || { score: 100, items: [] },
+    recentMoves: dashboard?.recent_moves || [],
+    recentPayments: dashboard?.recent_payments || [],
+    financialFlows: dashboard?.financial_flows || {},
+    partnerHighlights: dashboard?.partner_highlights || [],
+  }), [dashboard]);
+  const {
+    summary,
+    amounts,
+    accountingHealth,
+    recentMoves,
+    recentPayments,
+    financialFlows,
+    partnerHighlights,
+  } = normalizedDashboard;
+  const baseJournalCards = useMemo(() => (
+    dashboard?.journal_cards?.length ? dashboard.journal_cards : fallbackJournalCards
+  ), [dashboard, fallbackJournalCards]);
   const journalCards = useMemo(() => baseJournalCards.map((journal) => ({
     ...journal,
     dashboard_metrics: Object.keys(journal?.dashboard_metrics || {}).length
@@ -1357,13 +1450,10 @@ export default function ComptaDashboard() {
         journauxService.getAll(activeEntity.id)
       ]);
       const fallbackCards = buildJournalCardsFromList(unwrapList(journalsResponse));
-      console.log('Dashboard entity:', activeEntity);
-      console.log('Dashboard filters:', filters);
-      console.log('Dashboard response:', data);
-      console.log('Dashboard journals fallback:', fallbackCards);
       if (requestId !== latestDashboardRequest.current) return;
       setDashboard(data);
       setFallbackJournalCards(fallbackCards);
+      writeDashboardCache(activeEntity.id, data, fallbackCards);
     } catch (err) {
       if (requestId !== latestDashboardRequest.current) return;
       console.error('Erreur chargement dashboard compta:', err);
@@ -1376,22 +1466,27 @@ export default function ComptaDashboard() {
   }, [activeEntity, dateFrom, dateTo]);
 
   useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+    const entityId = activeEntity?.id;
+    if (!entityId || lastAutoLoadedEntityRef.current === entityId) return;
 
-  const addSearchAsFilter = () => {
-    const value = searchText.trim();
-    if (!value) return;
-    setActiveFilters((filters) => [...filters, { field: 'recherche', value }]);
-    setSearchText('');
-  };
+    lastAutoLoadedEntityRef.current = entityId;
+    const cached = readDashboardCache(entityId);
+    if (cached) {
+      setDashboard(cached.dashboard);
+      setFallbackJournalCards(cached.journalCards || []);
+      setLoading(false);
+    } else {
+      setDashboard(null);
+      setFallbackJournalCards([]);
+    }
+    loadDashboard();
+  }, [activeEntity?.id, loadDashboard]);
 
   const addFilter = (field, value) => {
     setActiveFilters((filters) => {
       const exists = filters.some((filter) => filter.field === field && filter.value === value);
       return exists ? filters : [...filters, { field, value }];
     });
-    setShowFilterMenu(false);
   };
 
   const removeFilter = (index) => {
@@ -1419,6 +1514,15 @@ export default function ComptaDashboard() {
 
   const filteredJournals = useMemo(() => {
     let journals = [...journalCards];
+
+    const normalizedSearch = searchText.trim().toLowerCase();
+    if (normalizedSearch) {
+      journals = journals.filter((journal) => (
+        `${journal.code || ''} ${journal.name || ''} ${journal.type || ''}`
+          .toLowerCase()
+          .includes(normalizedSearch)
+      ));
+    }
 
     if (favoriteOnly) {
       journals = journals.filter((journal) => journal.show_on_dashboard !== false);
@@ -1460,7 +1564,7 @@ export default function ComptaDashboard() {
     }
 
     return journals;
-  }, [journalCards, activeFilters, favoriteOnly, groupBy]);
+  }, [journalCards, activeFilters, favoriteOnly, groupBy, searchText]);
 
   const totalJournalPages = Math.max(Math.ceil(filteredJournals.length / journalsPerPage), 1);
   const currentJournalPage = Math.min(journalPage, totalJournalPages);
@@ -1477,12 +1581,6 @@ export default function ComptaDashboard() {
       setJournalPage(totalJournalPages);
     }
   }, [journalPage, totalJournalPages]);
-
-  const handleJournalsPerPageChange = (event) => {
-    const rawValue = Number(event.target.value || 1);
-    const nextValue = Number.isFinite(rawValue) ? Math.max(1, rawValue) : 1;
-    setJournalsPerPage(nextValue);
-  };
 
   const analysisData = useMemo(() => {
     if (analysis === 'states') {
@@ -1614,7 +1712,7 @@ export default function ComptaDashboard() {
   const handleJournalAnalyze = (journal) => {
     closeJournalMenu();
     setAnalysis('journals');
-    setChartType('bar');
+    setChartType('pie');
     setActiveFilters((filters) => {
       const withoutJournalSearch = filters.filter((filter) => !(filter.field === 'recherche' && filter.value === journal.code));
       return [...withoutJournalSearch, { field: 'recherche', value: journal.code || journal.name }];
@@ -1658,281 +1756,306 @@ export default function ComptaDashboard() {
     });
   };
 
+  const dashboardFilterChips = [
+    ...((dateFrom !== defaultDateFrom || dateTo !== defaultDateTo) ? [{
+      id: 'period',
+      label: `${formatDate(dateFrom)} - ${formatDate(dateTo)}`,
+      kind: 'period',
+    }] : []),
+    ...activeFilters.map((filter, index) => ({
+      id: `filter-${filter.field}-${filter.value}-${index}`,
+      label: getFilterDisplay(filter).text,
+      kind: 'filter',
+      index,
+    })),
+    ...(groupBy !== 'none' ? [{
+      id: 'group-by',
+      label: `Regroupement : ${{ type: 'Type', name: 'Nom', balance: 'Solde' }[groupBy] || groupBy}`,
+      kind: 'group',
+    }] : []),
+    ...(favoriteOnly ? [{ id: 'favorites', label: 'Favoris', kind: 'favorite' }] : []),
+  ];
+
+  const dashboardMemoryState = {
+    searchText,
+    activeFilters,
+    groupBy,
+    favoriteOnly,
+    journalsPerPage,
+    journalPage: currentJournalPage,
+    dateFrom,
+    dateTo,
+    chartType,
+    analysis,
+    insightTab,
+  };
+
+  const restoreDashboardMemory = (saved = {}) => {
+    if (typeof saved.searchText === 'string') setSearchText(saved.searchText);
+    if (Array.isArray(saved.activeFilters)) setActiveFilters(saved.activeFilters);
+    if (typeof saved.groupBy === 'string') setGroupBy(saved.groupBy);
+    if (typeof saved.favoriteOnly === 'boolean') setFavoriteOnly(saved.favoriteOnly);
+    if (Number(saved.journalsPerPage) > 0) setJournalsPerPage(Number(saved.journalsPerPage));
+    if (Number(saved.journalPage) > 0) setJournalPage(Number(saved.journalPage));
+    if (typeof saved.dateFrom === 'string') setDateFrom(saved.dateFrom);
+    if (typeof saved.dateTo === 'string') setDateTo(saved.dateTo);
+    if (typeof saved.chartType === 'string') setChartType(saved.chartType);
+    if (typeof saved.analysis === 'string') setAnalysis(saved.analysis);
+    if (typeof saved.insightTab === 'string') setInsightTab(saved.insightTab);
+  };
+
+  const renderDashboardFilters = ({ close }) => (
+    <div className="grid grid-cols-1 text-xs text-gray-700 md:grid-cols-2">
+      <section className="border-b border-gray-200 p-3 md:col-span-2">
+        <div className="mb-2 flex items-center gap-2 font-semibold text-gray-800">
+          <FiCalendar size={14} className="text-purple-600" />
+          <span>Période</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 min-w-0 items-center overflow-hidden rounded border border-gray-300 bg-white transition-colors focus-within:border-purple-500 focus-within:ring-1 focus-within:ring-purple-100">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
+              aria-label="Date de début"
+              title="Date de début"
+              className="h-full w-[132px] border-0 bg-transparent px-2 text-xs text-gray-700 outline-none"
+            />
+            <span className="h-4 w-px shrink-0 bg-gray-300" />
+            <span className="shrink-0 px-1 text-[11px] text-gray-400">au</span>
+            <span className="h-4 w-px shrink-0 bg-gray-300" />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
+              aria-label="Date de fin"
+              title="Date de fin"
+              className="h-full w-[132px] border-0 bg-transparent px-2 text-xs text-gray-700 outline-none"
+            />
+          </div>
+          {(dateFrom !== defaultDateFrom || dateTo !== defaultDateTo) && (
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom(defaultDateFrom);
+                setDateTo(defaultDateTo);
+              }}
+              className="h-8 rounded px-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-purple-700"
+            >
+              Réinitialiser
+            </button>
+          )}
+        </div>
+      </section>
+
+      <div className="border-b border-gray-200 p-3 md:border-b-0 md:border-r">
+        <section>
+          <p className="mb-2 font-semibold text-gray-800">Type de journal</p>
+          <div className="space-y-1">
+          {[
+            ['sale', 'Ventes'],
+            ['purchase', 'Achats'],
+            ['treasury', 'Trésorerie'],
+            ['misc', 'Opérations diverses'],
+          ].map(([value, label]) => {
+            const selected = activeFilters.some((filter) => filter.field === 'type' && filter.value === value);
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => addFilter('type', value)}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-gray-100"
+              >
+                <span className="w-4 font-semibold text-purple-600">{selected ? '✓' : ''}</span>
+                <span>{label}</span>
+              </button>
+            );
+          })}
+          </div>
+        </section>
+
+        <section className="mt-3 border-t border-gray-200 pt-3">
+          <p className="mb-2 font-semibold text-gray-800">Statut</p>
+          <div className="space-y-1">
+            {[
+              ['todo', 'À traiter'],
+              ['configured', 'Journaux configurés'],
+              ['alert', 'À vérifier'],
+            ].map(([value, label]) => {
+              const selected = activeFilters.some((filter) => filter.field === 'status' && filter.value === value);
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => addFilter('status', value)}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-gray-100"
+                >
+                  <span className="w-4 font-semibold text-purple-600">{selected ? '✓' : ''}</span>
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      <div className="p-3">
+        <section>
+          <p className="mb-2 font-semibold text-gray-800">Regrouper par</p>
+          <div className="space-y-1">
+          {[
+            ['none', 'Aucun'],
+            ['type', 'Type'],
+            ['name', 'Nom'],
+            ['balance', 'Solde'],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setGroupBy(value)}
+              className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors ${groupBy === value ? 'bg-purple-50 font-medium text-purple-700' : 'hover:bg-gray-100'}`}
+            >
+              <span className="w-4 font-semibold text-purple-600">{groupBy === value ? '✓' : ''}</span>
+              <span>{label}</span>
+            </button>
+          ))}
+          </div>
+        </section>
+
+        <section className="mt-3 border-t border-gray-200 pt-3">
+          <p className="mb-2 font-semibold text-gray-800">Favoris</p>
+          <button
+            type="button"
+            onClick={() => setFavoriteOnly((value) => !value)}
+            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors ${favoriteOnly ? 'bg-purple-50 font-medium text-purple-700' : 'hover:bg-gray-100'}`}
+          >
+            <span className="w-4 font-semibold text-purple-600">{favoriteOnly ? '✓' : ''}</span>
+            <FiStar size={13} />
+            <span>Favoris uniquement</span>
+          </button>
+        </section>
+      </div>
+
+      {(activeFilters.length > 0 || favoriteOnly || groupBy !== 'none' || dateFrom !== defaultDateFrom || dateTo !== defaultDateTo) && (
+        <section className="border-t border-gray-200 p-3 md:col-span-2">
+          <button
+            type="button"
+            onClick={() => {
+              clearAllFilters();
+              setGroupBy('none');
+              setDateFrom(defaultDateFrom);
+              setDateTo(defaultDateTo);
+              close();
+            }}
+            className="w-full rounded py-1.5 text-center text-red-600 hover:bg-red-50"
+          >
+            Effacer les filtres
+          </button>
+        </section>
+      )}
+    </div>
+  );
+
   if (!activeEntity) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="bg-white border border-gray-200 p-6 text-sm text-gray-600">
-          Vous devez selectionner une entite.
-        </div>
-      </div>
+      <UnifiedIndexPage
+        title="Tableau de bord"
+        rows={[]}
+        columns={[]}
+        selectable={false}
+        allowColumnResize={false}
+        allowColumnVisibility={false}
+        allowColumnSort={false}
+        renderContent={() => (
+          <div className="p-6 text-sm text-gray-600">Vous devez sélectionner une entité.</div>
+        )}
+      />
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 text-gray-800 overflow-x-hidden">
-      <div className="max-w-full mx-auto bg-white border border-gray-300">
-        <div className="border-b border-gray-300 px-4 py-2">
-          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-            <div className="flex items-center gap-3 flex-shrink-0 min-w-0">
-              <Tooltip text="Creer une nouvelle piece">
-                <button
-                  type="button"
-                  onClick={() => navigate('/comptabilite/pieces/create')}
-                  className="h-8 px-3 bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 hover:scale-105 transition-all duration-200 rounded flex items-center gap-1 whitespace-nowrap"
-                >
-                  <FiPlus size={12} />
-                  Nouveau
-                </button>
-              </Tooltip>
-              <Tooltip text="Actualiser le tableau de bord">
-                <h1
-                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200 truncate"
-                  onClick={loadDashboard}
-                >
-                  Tableau de bord
-                </h1>
-              </Tooltip>
-              <span className="hidden sm:inline text-xs text-gray-500 truncate max-w-[180px]">
-                {activeEntity?.raison_sociale || activeEntity?.nom || activeEntity?.name || 'Entite'}
-              </span>
-
-              <div className="relative">
-                <Tooltip text="Menu des actions">
-                  <button
-                    type="button"
-                    onClick={() => setShowActionsMenu((value) => !value)}
-                    className="w-8 h-8 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50 hover:scale-110 hover:shadow-md active:scale-90 transition-all duration-200 flex items-center justify-center"
-                  >
-                    <FiSettings size={14} />
-                  </button>
-                </Tooltip>
-                {showActionsMenu && (
-                  <div className="absolute left-0 mt-1 w-56 bg-white border border-gray-300 shadow-lg rounded z-50">
-                    <button
-                      type="button"
-                      onClick={() => { setShowActionsMenu(false); navigate('/comptabilite/pieces/create'); }}
-                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
-                    >
-                      <FiPlus size={12} /> Nouvelle piece
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowActionsMenu(false); navigate('/comptabilite/journaux'); }}
-                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
-                    >
-                      <FiGrid size={12} /> Voir les journaux
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowActionsMenu(false); loadDashboard(); }}
-                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
-                    >
-                      <FiRefreshCcw size={12} /> Actualiser
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 flex justify-center min-w-0">
-              <div className="relative w-full max-w-2xl">
-                <div className="flex items-center flex-wrap border border-gray-300 rounded bg-white min-h-[38px] p-1">
-                  {activeFilters.map((filter, index) => {
-                    const display = getFilterDisplay(filter);
-                    return (
-                      <span key={`${filter.field}-${filter.value}-${index}`} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${display.color} m-0.5`}>
-                        {display.text}
-                        <button type="button" onClick={() => removeFilter(index)} className="hover:text-red-600">
-                          <FiX size={10} />
-                        </button>
-                      </span>
-                    );
-                  })}
-                  <input
-                    type="text"
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') addSearchAsFilter();
-                    }}
-                    placeholder="Rechercher..."
-                    className="flex-1 min-w-0 px-2 py-1 text-sm focus:outline-none"
-                  />
-                  <div className="relative">
-                    <Tooltip text="Ajouter un filtre">
-                      <button
-                        type="button"
-                        onClick={() => setShowFilterMenu((value) => !value)}
-                        className={`p-1.5 rounded hover:bg-gray-100 ${showFilterMenu ? 'bg-gray-100' : ''}`}
-                      >
-                        <FiFilter size={14} className={activeFilters.length > 0 ? 'text-purple-600' : 'text-gray-400'} />
-                      </button>
-                    </Tooltip>
-
-                    {showFilterMenu && (
-                      <div className="absolute right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white border border-gray-300 shadow-lg rounded z-50">
-                        <div className="p-2 border-b border-gray-200">
-                          <p className="text-xs font-medium text-gray-700 mb-2">Type de journal</p>
-                          <div className="grid grid-cols-2 gap-1">
-                            <button type="button" onClick={() => addFilter('type', 'sale')} className="text-left text-xs px-2 py-1 hover:bg-gray-100 rounded">Ventes</button>
-                            <button type="button" onClick={() => addFilter('type', 'purchase')} className="text-left text-xs px-2 py-1 hover:bg-gray-100 rounded">Achats</button>
-                            <button type="button" onClick={() => addFilter('type', 'treasury')} className="text-left text-xs px-2 py-1 hover:bg-gray-100 rounded">Tresorerie</button>
-                            <button type="button" onClick={() => addFilter('type', 'misc')} className="text-left text-xs px-2 py-1 hover:bg-gray-100 rounded">Divers</button>
-                          </div>
-                        </div>
-                        <div className="p-2 border-b border-gray-200">
-                          <p className="text-xs font-medium text-gray-700 mb-2">Statut</p>
-                          <button type="button" onClick={() => addFilter('status', 'todo')} className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded">A traiter</button>
-                          <button type="button" onClick={() => addFilter('status', 'configured')} className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded">Journaux configures</button>
-                          <button type="button" onClick={() => addFilter('status', 'alert')} className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded">A verifier</button>
-                        </div>
-                        {(activeFilters.length > 0 || favoriteOnly) && (
-                          <div className="p-2">
-                            <button type="button" onClick={clearAllFilters} className="w-full text-xs text-red-600 hover:text-red-700 text-center py-1">
-                              Effacer tous les filtres
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+    <UnifiedIndexPage
+      title="Tableau de bord"
+      rows={displayedJournals}
+      columns={[]}
+      rowKey="id"
+      loading={loading}
+      error={error}
+      messageDuration={15000}
+      onDismissError={() => setError('')}
+      memoryKey={`comptabilite:dashboard:v2:${activeEntity.id}`}
+      memoryState={dashboardMemoryState}
+      onRestoreMemoryState={restoreDashboardMemory}
+      searchValue={searchText}
+      onSearchChange={setSearchText}
+      searchPlaceholder="Rechercher un journal..."
+      searchActions={[
+        {
+          id: 'refresh-dashboard',
+          label: 'Actualiser',
+          title: 'Actualiser le tableau de bord',
+          showLabel: true,
+          onClick: loadDashboard,
+          disabled: loading,
+          active: loading,
+          icon: <FiRefreshCcw size={16} className={loading ? 'animate-spin' : ''} />,
+        },
+      ]}
+      filterChips={dashboardFilterChips}
+      onRemoveFilterChip={(chip) => {
+        if (chip.kind === 'period') {
+          setDateFrom(defaultDateFrom);
+          setDateTo(defaultDateTo);
+        }
+        if (chip.kind === 'filter') removeFilter(chip.index);
+        if (chip.kind === 'group') setGroupBy('none');
+        if (chip.kind === 'favorite') setFavoriteOnly(false);
+      }}
+      renderFilters={renderDashboardFilters}
+      filterPanelWidth={720}
+      primaryAction={{
+        label: 'Nouveau',
+        icon: <FiPlus size={13} />,
+        onClick: () => navigate('/comptabilite/pieces/create'),
+      }}
+      trailingActions={[
+        {
+          id: 'journals',
+          label: 'Journaux',
+          icon: <FiGrid size={13} />,
+          onClick: () => navigate('/comptabilite/journaux'),
+        },
+      ]}
+      selectable={false}
+      page={currentJournalPage}
+      onPageChange={setJournalPage}
+      pageSize={journalsPerPage}
+      onPageSizeChange={(size) => {
+        setJournalsPerPage(Number(size));
+        setJournalPage(1);
+      }}
+      pageSizeOptions={[3, 6, 9, 12]}
+      total={filteredJournals.length}
+      serverSide
+      footerText={`${filteredJournals.length ? journalStartIndex + 1 : 0}-${journalEndIndex} / ${filteredJournals.length} journal(aux)`}
+      allowColumnResize={false}
+      allowColumnVisibility={false}
+      allowColumnSort={false}
+      renderContent={() => (
+        <div className="space-y-4 px-4 pb-4 pt-4 text-gray-800">
+        {loading && !dashboard && fallbackJournalCards.length === 0 ? (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3" aria-label="Chargement du tableau de bord">
+            {[0, 1, 2, 3, 4, 5].map((item) => (
+              <div key={item} className="h-[210px] animate-pulse border border-gray-200 bg-white p-4">
+                <div className="h-4 w-2/5 bg-gray-200" />
+                <div className="mt-2 h-3 w-1/3 bg-gray-100" />
+                <div className="mt-6 space-y-3">
+                  <div className="h-3 w-full bg-gray-100" />
+                  <div className="h-3 w-5/6 bg-gray-100" />
+                  <div className="h-3 w-4/6 bg-gray-100" />
                 </div>
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-start xl:justify-end gap-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowGroupMenu((value) => !value)}
-                  className="h-8 px-3 border border-gray-300 bg-white text-xs hover:bg-gray-50 rounded flex items-center gap-2 whitespace-nowrap"
-                >
-                  <FiGrid size={14} />
-                  Regrouper par
-                </button>
-                {showGroupMenu && (
-                  <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-300 shadow-lg rounded z-50">
-                    <button type="button" onClick={() => { setGroupBy('none'); setShowGroupMenu(false); }} className="w-full text-left text-xs px-3 py-2 hover:bg-gray-50">Aucun</button>
-                    <button type="button" onClick={() => { setGroupBy('type'); setShowGroupMenu(false); }} className="w-full text-left text-xs px-3 py-2 hover:bg-gray-50">Type</button>
-                    <button type="button" onClick={() => { setGroupBy('name'); setShowGroupMenu(false); }} className="w-full text-left text-xs px-3 py-2 hover:bg-gray-50">Nom</button>
-                    <button type="button" onClick={() => { setGroupBy('balance'); setShowGroupMenu(false); }} className="w-full text-left text-xs px-3 py-2 hover:bg-gray-50">Solde</button>
-                  </div>
-                )}
-              </div>
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowFavoritesMenu((value) => !value)}
-                  className={`h-8 px-3 border border-gray-300 bg-white text-xs hover:bg-gray-50 rounded flex items-center gap-2 whitespace-nowrap ${favoriteOnly ? 'text-purple-700' : ''}`}
-                >
-                  <FiStar size={14} />
-                  Favoris
-                </button>
-                {showFavoritesMenu && (
-                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded z-50">
-                    <button
-                      type="button"
-                      onClick={() => { setFavoriteOnly((value) => !value); setShowFavoritesMenu(false); }}
-                      className="w-full text-left text-xs px-3 py-2 hover:bg-gray-50"
-                    >
-                      {favoriteOnly ? 'Afficher tout' : 'Favoris uniquement'}
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="h-8 px-2 border border-gray-300 bg-white rounded flex items-center gap-2">
-                <span className="text-xs text-gray-500 whitespace-nowrap">Afficher</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={journalsPerPage}
-                  onChange={handleJournalsPerPageChange}
-                  className="w-14 text-xs text-gray-800 text-center focus:outline-none"
-                />
-                <span className="text-xs text-gray-500 whitespace-nowrap">journaux</span>
-              </div>
-              <span className="text-xs text-gray-500 whitespace-nowrap">
-                {filteredJournals.length ? `${journalStartIndex + 1}-${journalEndIndex}` : '0'} / {filteredJournals.length}
-                <span className="hidden sm:inline"> - page {currentJournalPage}/{totalJournalPages}</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setJournalPage((page) => Math.max(page - 1, 1))}
-                disabled={currentJournalPage <= 1}
-                className="w-8 h-8 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                <FiChevronLeft size={15} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setJournalPage((page) => Math.min(page + 1, totalJournalPages))}
-                disabled={currentJournalPage >= totalJournalPages}
-                className="w-8 h-8 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                <FiChevronRight size={15} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-      <div className="px-4 py-4 space-y-4 min-w-0">
-        <div className="bg-white border border-gray-200 px-4 py-3">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Date debut</label>
-                <div className="relative">
-                  <FiCalendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(event) => setDateFrom(event.target.value)}
-                    className="pl-9 pr-3 py-2 border border-gray-300 text-sm focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Date fin</label>
-                <div className="relative">
-                  <FiCalendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(event) => setDateTo(event.target.value)}
-                    className="pl-9 pr-3 py-2 border border-gray-300 text-sm focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                </div>
-              </div>
-              {dashboard?.period && (
-                <div className="pb-2 text-xs text-gray-500">
-                  Periode : {formatDate(dashboard.period.date_from)} - {formatDate(dashboard.period.date_to)}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={loadDashboard}
-              className="px-3 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-sm flex items-center gap-2"
-              disabled={loading}
-            >
-              <FiRefreshCcw size={15} />
-              Actualiser
-            </button>
-          </div>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm flex items-center gap-2">
-            <FiAlertCircle size={16} />
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="bg-white border border-gray-200 p-8 text-center text-sm text-gray-500">
-            Chargement...
+            ))}
           </div>
         ) : (
           <>
@@ -1977,7 +2100,8 @@ export default function ComptaDashboard() {
                       <option value="payments">Paiements</option>
                       <option value="balance">Debit / Credit</option>
                     </select>
-                    <ChartTypeButton active={chartType === 'pie'} icon={FiPieChart} label="Circulaire" onClick={() => setChartType('pie')} />
+                    <ChartTypeButton active={chartType === 'pie'} icon={FiPieChart} label="Camembert" onClick={() => setChartType('pie')} />
+                    <ChartTypeButton active={chartType === 'donut'} icon={FiCircle} label="Anneau" onClick={() => setChartType('donut')} />
                     <ChartTypeButton active={chartType === 'bar'} icon={FiBarChart2} label="Batons" onClick={() => setChartType('bar')} />
                     <ChartTypeButton active={chartType === 'horizontal'} icon={FiGrid} label="Bandes" onClick={() => setChartType('horizontal')} />
                     <ChartTypeButton active={chartType === 'line'} icon={FiTrendingUp} label="Courbe" onClick={() => setChartType('line')} />
@@ -2038,8 +2162,8 @@ export default function ComptaDashboard() {
             <KpiStrip summary={summary} amounts={amounts} onNavigate={navigate} />
           </>
         )}
-      </div>
-    </div>
-    </div>
+        </div>
+      )}
+    />
   );
 }

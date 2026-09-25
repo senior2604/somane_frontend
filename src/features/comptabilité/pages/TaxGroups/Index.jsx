@@ -374,15 +374,7 @@ export default function TaxGroupsIndex() {
       onSelectionChange={setSelectedIds}
       selectionActions={selectionActions}
       renderSelectionSummary={() => <span>{selectedIds.length} groupe(s) sélectionné(s)</span>}
-      onRowClick={(group, { event }) => {
-        if (event.detail > 1) return;
-        setSelectedIds((current) => current.includes(group.id)
-          ? current.filter((id) => id !== group.id)
-          : [...current, group.id]);
-      }}
-      onRowDoubleClick={(group, { event, saveNow }) => {
-        event.preventDefault();
-        event.stopPropagation();
+      onRowOpen={(group, { saveNow }) => {
         saveNow();
         navigate(`/comptabilite/tax-groups/${group.id}`, { state: { taxGroupRecord: group } });
       }}

@@ -22,6 +22,11 @@ const PREVIOUS_PAGE_KEY = 'somane:navigation:previous-page';
 const HISTORY_CHANGED_EVENT = 'somane:navigation-history-changed';
 const FORM_MEMORY_PREFIX = 'somane:unified-form';
 const DEFAULT_MESSAGE_DURATION = 30000;
+const debugUnifiedForm = (message, details) => {
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') return;
+  if (details === undefined) console.log(`[UnifiedFormPage] ${message}`);
+  else console.log(`[UnifiedFormPage] ${message}`, details);
+};
 
 const PAGE_LABELS = [
   ['/comptabilite/dashboard', 'Tableau de bord comptable'],
@@ -326,16 +331,38 @@ export default function UnifiedFormPage({
   }, [getReturnTarget, hasUnsavedChanges, performNavigation]);
 
   const save = useCallback(async ({ returnAfterSave = autoReturnAfterSave } = {}) => {
-    if (typeof onSave !== 'function' || saving || saveDisabled) return false;
+    debugUnifiedForm('Demande d’enregistrement', {
+      currentPath,
+      hasOnSave: typeof onSave === 'function',
+      saving,
+      saveDisabled,
+      returnAfterSave,
+    });
+    if (typeof onSave !== 'function' || saving || saveDisabled) {
+      debugUnifiedForm('Enregistrement bloqué avant appel métier', {
+        reason: typeof onSave !== 'function' ? 'onSave absent' : saving ? 'déjà en cours' : 'désactivé',
+      });
+      return false;
+    }
     const savedRecord = await onSave();
-    if (!savedRecord) return false;
+    debugUnifiedForm('Réponse de onSave reçue', savedRecord);
+    if (!savedRecord) {
+      debugUnifiedForm('Aucune redirection : onSave a retourné false ou null');
+      return false;
+    }
 
     try {
       window.sessionStorage.removeItem(resolvedMemoryKey);
     } catch {}
 
     onAfterSave?.(savedRecord);
-    if (returnAfterSave) performNavigation(getReturnTarget(savedRecord));
+    if (returnAfterSave) {
+      const target = getReturnTarget(savedRecord);
+      debugUnifiedForm('Redirection automatique après enregistrement', target);
+      performNavigation(target);
+    } else {
+      debugUnifiedForm('Pas de redirection automatique : la page métier gère la destination');
+    }
     return savedRecord;
   }, [
     autoReturnAfterSave,
@@ -513,7 +540,10 @@ export default function UnifiedFormPage({
                   {onSave && (
                     <button
                       type="button"
-                      onClick={() => save()}
+                      onClick={() => {
+                        debugUnifiedForm('Clic sur le bouton Enregistrer', { currentPath, saveLabel });
+                        void save();
+                      }}
                       disabled={saving || saveDisabled}
                       title={saveLabel}
                       aria-label={saveLabel}
@@ -601,9 +631,12 @@ export default function UnifiedFormPage({
                 <button
                   type="button"
                   onClick={traceability.onClose}
-                  className="text-xs text-gray-500 transition-colors hover:text-gray-900"
+                  className="flex h-7 items-center gap-1 border border-gray-300 px-2 text-xs text-gray-600 transition-all hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700"
+                  title="Fermer la traçabilité"
+                  aria-label="Fermer la traçabilité"
                 >
-                  Fermer
+                  <FiX size={12} />
+                  <span>Fermer</span>
                 </button>
               </div>
               {traceability.content}

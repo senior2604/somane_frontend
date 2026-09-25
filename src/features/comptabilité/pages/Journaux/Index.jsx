@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FiCheck,
@@ -216,13 +216,24 @@ const BankDisplay = ({ journal }) => {
   return <span className="block truncate" title={label}>{label}</span>;
 };
 
+const JOURNALS_INDEX_CACHE_DURATION = 5 * 60 * 1000;
+const journalsIndexCache = new Map();
+
+const getCachedJournalsIndex = entityId => {
+  const cached = journalsIndexCache.get(String(entityId || ''));
+  if (!cached || Date.now() - cached.loadedAt >= JOURNALS_INDEX_CACHE_DURATION) return null;
+  return cached;
+};
+
 export default function JournauxPage() {
   const navigate = useNavigate();
   const { activeEntity, entities = [] } = useEntity();
 
-  const [journals, setJournals] = useState([]);
-  const [journalTypes, setJournalTypes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const initialCache = getCachedJournalsIndex(activeEntity?.id);
+
+  const [journals, setJournals] = useState(initialCache?.journals || []);
+  const [journalTypes, setJournalTypes] = useState(initialCache?.types || []);
+  const [loading, setLoading] = useState(!initialCache);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
@@ -244,7 +255,14 @@ export default function JournauxPage() {
       return;
     }
 
-    setLoading(true);
+    const cachedData = getCachedJournalsIndex(targetEntityId);
+    if (cachedData) {
+      setJournals(cachedData.journals);
+      setJournalTypes(cachedData.types);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
 
     try {
       setError('');
@@ -272,10 +290,19 @@ export default function JournauxPage() {
 
       setJournalTypes(types);
       setJournals(enrichedJournals);
+      journalsIndexCache.set(String(targetEntityId), {
+        journals: enrichedJournals,
+        types,
+        loadedAt: Date.now(),
+      });
       setSelectedIds([]);
     } catch (requestError) {
-      setJournals([]);
-      setError(getErrorMessage(requestError, 'Impossible de charger les journaux.'));
+      if (!cachedData) {
+        setJournals([]);
+        setError(getErrorMessage(requestError, 'Impossible de charger les journaux.'));
+      } else {
+        console.warn('Actualisation silencieuse des journaux impossible:', requestError);
+      }
     } finally {
       setLoading(false);
     }
@@ -372,7 +399,9 @@ export default function JournauxPage() {
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            navigate(`/comptabilite/journaux/${journal.id}`);
+            navigate(`/comptabilite/journaux/${journal.id}`, {
+              state: { journalRecord: journal },
+            });
           }}
           onDoubleClick={(event) => event.stopPropagation()}
           className="block w-full truncate text-left font-mono font-semibold text-teal-700 hover:text-purple-700 hover:underline"
@@ -532,7 +561,7 @@ export default function JournauxPage() {
         </div>
       )}
     </div>
-  ), [activeFilters, addFilter, entities, entityId, journalTypes]);
+  ), [activeFilters, addFilter, entities, entityId, journalTypes, search]);
 
   const memoryState = useMemo(() => ({
     activeFilters,
@@ -575,16 +604,6 @@ export default function JournauxPage() {
     return (
       <tr
         key={journal.id}
-        onClick={(event) => {
-          if (event.detail > 1) return;
-          context.toggleRow(journal.id);
-        }}
-        onDoubleClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          context.saveNow();
-          navigate(`/comptabilite/journaux/${journal.id}`);
-        }}
         className={`cursor-pointer border-b border-gray-200 transition-colors duration-150 ${
           selected
             ? 'bg-purple-50'
@@ -629,7 +648,7 @@ export default function JournauxPage() {
         <td className="w-6 border-r border-gray-100 px-0.5 py-1.5" />
       </tr>
     );
-  }, [navigate]);
+  }, []);
 
   return (
     <UnifiedIndexPage
@@ -668,6 +687,9 @@ export default function JournauxPage() {
       renderSelectionSummary={() => (
         <span>{selectedIds.length} journal(aux) sélectionné(s)</span>
       )}
+      onRowOpen={(journal) => navigate(`/comptabilite/journaux/${journal.id}`, {
+        state: { journalRecord: journal },
+      })}
       renderRow={renderJournalRow}
       page={currentPage}
       onPageChange={setCurrentPage}

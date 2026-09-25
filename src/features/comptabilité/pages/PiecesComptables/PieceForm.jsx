@@ -507,7 +507,7 @@ export default function PieceForm({ mode = 'create' }) {
   }), []);
 
   const initialFormData = useMemo(() => ({
-    name: '', state: 'draft', move_type: 'entry', date: today, registration_date: today, ref: '',
+    name: '', state: 'draft', move_type: 'entry', auto_post: 'manual', date: today, registration_date: today, ref: '',
     currency_id: '', currency_label: '', journal_id: '', journal_label: '', partner_id: '', partner_label: '',
     invoice_date: today, invoice_date_due: '', invoice_user_id: '', invoice_user_label: '', invoice_origin: '',
     fiscal_position_id: '', fiscal_position_label: '', payment_reference: '', lines: [emptyLine()], notes: '',
@@ -812,6 +812,7 @@ export default function PieceForm({ mode = 'create' }) {
         name: data.name || '',
         state: normalizeMoveState(data.state),
         move_type: data.move_type || 'entry',
+        auto_post: data.auto_post || 'manual',
         date: data.date || today,
         registration_date: getRegistrationDate(data) || data.registration_date || today,
         ref: data.ref || '',
@@ -1962,7 +1963,8 @@ export default function PieceForm({ mode = 'create' }) {
     const mainPartner = formData.partner_id ||
       formData.lines.find(l => l.partner_id && !l.is_counterpart && !l.is_tax_line && !l.is_withholding_counterpart)?.partner_id || null;
     return {
-      name: formData.name || '', move_type: formData.move_type || 'entry', state: formData.state,
+      name: formData.name || '', move_type: formData.move_type || 'entry',
+      auto_post: formData.auto_post || 'manual', state: formData.state,
       journal_id: toInt(formData.journal_id), date: formData.date, ref: formData.ref || '',
       partner_id: mainPartner, company_id: activeEntity?.id || null, currency_id: toInt(formData.currency_id),
       invoice_date: formData.invoice_date || formData.date, invoice_date_due: formData.invoice_date_due || null,
@@ -2995,17 +2997,32 @@ export default function PieceForm({ mode = 'create' }) {
           {/* ONGLET NOTES */}
           {activeTab === 'notes' && (
             <div className="border border-gray-300">
-              <div className="grid grid-cols-3 bg-gray-100 border-b border-gray-300">
-                {['Devise', 'Position fiscale', 'Entité'].map((h, i) => (
-                  <div key={i} className={`${i < 2 ? 'border-r border-gray-300' : ''} px-2 py-1.5 text-xs font-medium text-gray-700`}>{h}</div>
+              <div className="grid grid-cols-4 bg-gray-100 border-b border-gray-300">
+                {['Devise', 'Position fiscale', 'Mode de comptabilisation', 'Entité'].map((h, i) => (
+                  <div key={i} className={`${i < 3 ? 'border-r border-gray-300' : ''} px-2 py-1.5 text-xs font-medium text-gray-700`}>{h}</div>
                 ))}
               </div>
-              <div className="grid grid-cols-3 border-b border-gray-300">
+              <div className="grid grid-cols-4 border-b border-gray-300">
                 <div className="border-r border-gray-300 p-1">
                   <AutocompleteInput value={formData.currency_label} selectedId={formData.currency_id} onChange={(text) => handleChange('currency_label', text)} onSelect={(id, label) => { setFormData(prev => ({ ...prev, currency_id: id, currency_label: label })); markAsModified(); }} options={devises} getOptionLabel={(o) => `${o.code}${o.symbole ? ` (${o.symbole})` : ''}`} placeholder="Devise" disabled={!isDraft} />
                 </div>
                 <div className="border-r border-gray-300 p-1">
                   <AutocompleteInput value={formData.fiscal_position_label} selectedId={formData.fiscal_position_id} onChange={(text) => handleChange('fiscal_position_label', text)} onSelect={(id, label) => { setFormData(prev => ({ ...prev, fiscal_position_id: id, fiscal_position_label: label })); markAsModified(); }} options={fiscalPositions} getOptionLabel={(f) => f.name} placeholder="Position fiscale" disabled={!isDraft} />
+                </div>
+                <div className="border-r border-gray-300 p-1">
+                  <select
+                    value={formData.auto_post || 'manual'}
+                    onChange={(event) => handleChange('auto_post', event.target.value)}
+                    disabled={!isDraft}
+                    className="w-full px-2 py-1 border-0 bg-white text-xs text-gray-700 focus:ring-1 focus:ring-purple-500 disabled:bg-gray-50"
+                    style={{ height: '26px' }}
+                  >
+                    <option value="manual">Manuel</option>
+                    <option value="at_date">À la date</option>
+                    <option value="monthly">Mensuel</option>
+                    <option value="quarterly">Trimestriel</option>
+                    <option value="yearly">Annuel</option>
+                  </select>
                 </div>
                 <div className="p-1">
                   <div className="w-full px-2 py-1 text-xs text-gray-700 flex items-center" style={{ height: '26px' }}>

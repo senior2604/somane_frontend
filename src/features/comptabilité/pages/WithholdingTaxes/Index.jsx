@@ -501,15 +501,7 @@ export default function WithholdingTaxesIndex() {
       onSelectionChange={setSelectedIds}
       selectionActions={selectionActions}
       renderSelectionSummary={() => <span>{selectedIds.length} retenue(s) sélectionnée(s)</span>}
-      onRowClick={(tax, { event }) => {
-        if (event.detail > 1) return;
-        setSelectedIds((current) => current.includes(tax.id)
-          ? current.filter((id) => id !== tax.id)
-          : [...current, tax.id]);
-      }}
-      onRowDoubleClick={(tax, { event, saveNow }) => {
-        event.preventDefault();
-        event.stopPropagation();
+      onRowOpen={(tax, { saveNow }) => {
         saveNow();
         navigate(`/comptabilite/withholding-taxes/${tax.id}`, {
           state: { withholdingTaxRecord: tax },

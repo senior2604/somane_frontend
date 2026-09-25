@@ -213,6 +213,8 @@ export default function UnifiedIndexPage({
   defaultSearchValue = '',
   onSearchChange,
   searchPlaceholder = 'Rechercher...',
+  searchActions = [],
+  renderToolbarExtension,
   filterChips = [],
   onRemoveFilterChip,
   renderFilters,
@@ -229,11 +231,13 @@ export default function UnifiedIndexPage({
   selectedRowKeys,
   defaultSelectedRowKeys = [],
   onSelectionChange,
+  onRowOpen,
   onRowClick,
   onRowDoubleClick,
   getRowClassName,
   renderRow,
   renderBody,
+  renderContent,
   stripedRows = true,
   rowStripeClassNames = DEFAULT_ROW_STRIPES,
 
@@ -310,6 +314,7 @@ export default function UnifiedIndexPage({
   const columnsButtonRef = useRef(null);
   const columnsPanelRef = useRef(null);
   const saveTimerRef = useRef(null);
+  const rowClickTimerRef = useRef(null);
   const restoreScrollRef = useRef(null);
   const stateSnapshotRef = useRef(null);
   const dismissErrorRef = useRef(onDismissError);
@@ -701,6 +706,63 @@ export default function UnifiedIndexPage({
     setSelected(next);
   }, [currentSelectedKeys, selectedKeySet, setSelected]);
 
+  useEffect(() => () => window.clearTimeout(rowClickTimerRef.current), []);
+
+  const isRowInteractionControl = useCallback((event) => {
+    const target = event?.target;
+    return typeof Element !== 'undefined' && target instanceof Element && Boolean(target.closest(
+      'a, button, input, select, textarea, label, [role="button"], [data-row-interaction-ignore="true"]',
+    ));
+  }, []);
+
+  const getRowInteractionProps = useCallback((row) => {
+    if (!onRowOpen) {
+      return {
+        onClick: (event) => onRowClick?.(row, { saveNow, event }),
+        onDoubleClick: (event) => onRowDoubleClick?.(row, { saveNow, event }),
+      };
+    }
+
+    const key = resolveRowKey(row, rowKey);
+    return {
+      onClick: (event) => {
+        if (event.defaultPrevented || isRowInteractionControl(event)) return;
+        window.clearTimeout(rowClickTimerRef.current);
+        if (event.detail > 1) return;
+
+        rowClickTimerRef.current = window.setTimeout(() => {
+          if (selectable && currentSelectedKeys.length > 0) {
+            toggleRow(key);
+            return;
+          }
+          saveNow();
+          onRowOpen(row, { saveNow, event });
+        }, 220);
+      },
+      onDoubleClick: (event) => {
+        if (event.defaultPrevented || isRowInteractionControl(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        window.clearTimeout(rowClickTimerRef.current);
+        if (selectable) {
+          toggleRow(key);
+          return;
+        }
+        onRowDoubleClick?.(row, { saveNow, event });
+      },
+    };
+  }, [
+    currentSelectedKeys.length,
+    isRowInteractionControl,
+    onRowClick,
+    onRowDoubleClick,
+    onRowOpen,
+    rowKey,
+    saveNow,
+    selectable,
+    toggleRow,
+  ]);
+
   const toggleDisplayedRows = () => {
     if (allDisplayedSelected) {
       const displayedSet = new Set(displayedKeys);
@@ -745,6 +807,8 @@ export default function UnifiedIndexPage({
     : undefined;
 
   useLayoutEffect(() => {
+    if (renderContent) return undefined;
+
     const measure = () => {
       const cells = Array.from(sizingHeaderRef.current?.querySelectorAll('th') || []);
       if (!cells.length || !bodyTableRef.current || !tableScrollRef.current) return;
@@ -763,14 +827,17 @@ export default function UnifiedIndexPage({
     };
     const frame = window.requestAnimationFrame(measure);
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-    observer?.observe(bodyTableRef.current);
+    const observedElement = bodyTableRef.current;
+    if (observer && typeof Element !== 'undefined' && observedElement instanceof Element) {
+      observer.observe(observedElement);
+    }
     window.addEventListener('resize', measure);
     return () => {
       window.cancelAnimationFrame(frame);
       observer?.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [columnWidths, displayedRows.length, visibleColumnKey]);
+  }, [columnWidths, displayedRows.length, renderContent, visibleColumnKey]);
 
   const renderHeaderRow = (interactive) => (
     <tr className="h-11 border-y border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
@@ -853,15 +920,15 @@ export default function UnifiedIndexPage({
   const renderDefaultRow = useCallback((row, rowIndex) => {
     const key = resolveRowKey(row, rowKey);
     const selected = selectedKeySet.has(key);
+    const interactionProps = getRowInteractionProps(row);
     return (
       <tr
         key={key ?? rowIndex}
-        onClick={(event) => onRowClick?.(row, { saveNow, event })}
-        onDoubleClick={(event) => onRowDoubleClick?.(row, { saveNow, event })}
+        {...interactionProps}
         className={classNames(
           'border-b border-gray-200 text-xs text-gray-700',
           selected ? 'bg-purple-50' : `${getStripeClassName(rowIndex)} hover:bg-purple-50/40`,
-          (onRowClick || onRowDoubleClick) && 'cursor-pointer',
+          (onRowOpen || onRowClick || onRowDoubleClick) && 'cursor-pointer',
           getRowClassName?.(row, rowIndex),
         )}
       >
@@ -904,10 +971,11 @@ export default function UnifiedIndexPage({
     columnWidthStyle,
     getRowClassName,
     getStripeClassName,
+    getRowInteractionProps,
     onRowClick,
     onRowDoubleClick,
+    onRowOpen,
     rowKey,
-    saveNow,
     selectable,
     selectedKeySet,
     toggleRow,
@@ -935,10 +1003,39 @@ export default function UnifiedIndexPage({
       saveNow,
       columnCount: activeColumns.length + (selectable ? 1 : 0) + (allowColumnVisibility ? 1 : 0),
     };
-    if (renderBody) return renderBody(context);
-    if (renderRow) return displayedRows.map((row, index) => renderRow(row, index, context));
+    if (renderBody) return renderBody({ ...context, getRowInteractionProps });
+    if (renderRow) {
+      return displayedRows.map((row, index) => {
+        const renderedRow = renderRow(row, index, { ...context, getRowInteractionProps });
+        if (!onRowOpen || !React.isValidElement(renderedRow)) return renderedRow;
+        return React.cloneElement(renderedRow, {
+          ...getRowInteractionProps(row),
+          className: classNames(renderedRow.props.className, 'cursor-pointer'),
+        });
+      });
+    }
     return displayedRows.map(renderDefaultRow);
   };
+
+  const renderCustomContent = () => renderContent?.({
+    rows: displayedRows,
+    allRows: rows,
+    columns: activeColumns,
+    selectedRowKeys: currentSelectedKeys,
+    selectedRows,
+    toggleRow,
+    toggleDisplayedRows,
+    allDisplayedSelected,
+    getRowInteractionProps,
+    getStripeClassName,
+    saveNow,
+    loading,
+    empty: displayedRows.length === 0,
+    page: safePage,
+    pageSize: currentPageSize,
+    total: totalItems,
+    totalPages,
+  });
 
   const handlePreviousPage = (page) => {
     saveNow();
@@ -1062,6 +1159,24 @@ export default function UnifiedIndexPage({
                 placeholder={searchPlaceholder}
                 className="h-9 min-w-[90px] flex-1 bg-transparent px-3 text-sm outline-none"
               />
+              {searchActions.map((action) => (
+                <button
+                  key={action.id || action.label || action.title}
+                  type="button"
+                  onClick={() => executeAction(action)}
+                  disabled={action.disabled}
+                  title={action.title || action.label}
+                  aria-label={action.title || action.label}
+                  className={classNames(
+                    'mr-1 inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                    action.active ? 'bg-purple-50 text-purple-700' : 'text-gray-500 hover:bg-purple-50 hover:text-purple-700',
+                    action.className,
+                  )}
+                >
+                  {action.icon}
+                  {action.showLabel && action.label}
+                </button>
+              ))}
               {renderFilters && (
                 <button
                   ref={filterButtonRef}
@@ -1104,6 +1219,12 @@ export default function UnifiedIndexPage({
               <span className="text-xs text-gray-500">lignes</span>
             </div>
           </div>
+
+          {renderToolbarExtension && (
+            <div className="border-t border-gray-200 bg-white px-3 py-1">
+              {renderToolbarExtension()}
+            </div>
+          )}
 
           {visibleError && (
             <div className="unified-index-message flex items-center gap-2 border-t border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
@@ -1154,6 +1275,18 @@ export default function UnifiedIndexPage({
           )}
         </div>
 
+        {renderContent ? (
+          <div
+            ref={tableScrollRef}
+            onScroll={() => {
+              window.clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = window.setTimeout(saveNow, 120);
+            }}
+            className="unified-index-scroll relative min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          >
+            {renderCustomContent()}
+          </div>
+        ) : <>
         <div ref={fixedHeaderScrollRef} className="shrink-0 overflow-hidden">
           <table
             className="w-full table-auto border-collapse text-sm"
@@ -1188,6 +1321,7 @@ export default function UnifiedIndexPage({
             <tbody>{renderRows()}</tbody>
           </table>
         </div>
+        </>}
 
         <footer className="shrink-0 border-t border-gray-300 bg-gray-50 px-4 py-2">
           <div className="flex items-center justify-between">

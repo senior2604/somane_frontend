@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export const normalizeApiList = (data) => (Array.isArray(data) ? data : (data?.results || []));
 
@@ -59,11 +59,20 @@ export const SearchSelect = ({ value, onChange, options, getLabel, placeholder =
   const dropdownRef = useRef(null);
   const [dropdownStyle, setDropdownStyle] = useState({});
 
-  const selected = options.find((option) => String(option.id) === String(value));
+  const selected = useMemo(
+    () => options.find((option) => String(option.id) === String(value)),
+    [options, value],
+  );
   const selectedLabel = selected ? getLabel(selected) : '';
-  const filteredOptions = options
-    .filter((option) => getLabel(option).toLowerCase().includes(inputValue.toLowerCase()))
-    .slice(0, 60);
+  const filteredOptions = useMemo(() => {
+    const query = inputValue.toLowerCase();
+    const matches = [];
+    for (const option of options) {
+      if (getLabel(option).toLowerCase().includes(query)) matches.push(option);
+      if (matches.length === 60) break;
+    }
+    return matches;
+  }, [getLabel, inputValue, options]);
 
   useEffect(() => {
     setInputValue(selectedLabel || '');

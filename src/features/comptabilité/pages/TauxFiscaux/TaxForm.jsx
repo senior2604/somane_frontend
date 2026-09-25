@@ -93,6 +93,18 @@ const resolveId = (value) => {
 
 const joinLabel = (code, name) => [code, name].filter(Boolean).join(' - ');
 
+const isSelectableAccount = (account) => {
+  if (!account || account.id === null || account.id === undefined) return false;
+  if (account.is_root === true || account.is_root_account === true) return false;
+  if (account.can_be_used_in_entry === false || account.movement_allowed === false) return false;
+
+  const company = account.company_id ?? account.company;
+  const companyId = typeof company === 'object' ? (company?.id ?? company?.pk) : company;
+  return companyId !== null && companyId !== undefined && companyId !== '';
+};
+
+const selectableAccounts = (values) => asArray(values).filter(isSelectableAccount);
+
 const accountLabelFrom = (record, prefix) => (
   joinLabel(record?.[`${prefix}_code`], record?.[`${prefix}_name`])
 );
@@ -383,6 +395,8 @@ const Toggle = ({ checked, onChange, label, disabled = false }) => (
 );
 
 const RepartitionTable = ({
+  title,
+  totalLabel,
   lines,
   accounts,
   taxGroups,
@@ -398,24 +412,14 @@ const RepartitionTable = ({
     if (line.repartition_type === 'delatax') result.delta += value;
     return result;
   }, { base: 0, tax: 0, delta: 0 }), [lines]);
-  const valid = Math.abs(totals.base - 100) <= 0.01
-    && Math.abs(totals.tax - 100) <= 0.01
-    && (totals.delta === 0 || Math.abs(totals.tax - totals.delta) <= 0.01);
-
   return (
     <div className="border border-gray-300">
-      <div className="flex items-center justify-between border-b border-gray-300 bg-gray-50 px-3 py-2">
-        <div>
-          <div className="text-sm font-semibold text-gray-800">Répartition commune</div>
-          <div className="text-[11px] text-gray-500">Les mêmes comptes sont appliqués aux factures et aux avoirs.</div>
-        </div>
-        <div className={`text-xs font-medium ${valid ? 'text-green-700' : 'text-amber-700'}`}>
-          {valid ? 'Répartition équilibrée' : 'Répartition à compléter'}
-        </div>
+      <div className="border-b border-gray-300 bg-gray-50 px-3 py-2">
+        <div className="text-sm font-semibold text-gray-800">{title}</div>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] table-fixed border-collapse text-xs">
+        <table className="w-full min-w-[600px] table-fixed border-collapse text-xs">
           <thead>
             <tr className="bg-gray-100 text-gray-700">
               <th className="w-[145px] border-r border-gray-300 px-2 py-1.5 text-left font-medium">Type</th>
@@ -511,15 +515,9 @@ const RepartitionTable = ({
         </table>
       </div>
 
-      <div className="flex items-center justify-between border-t border-gray-300 px-3 py-2">
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex h-7 items-center gap-1 bg-purple-600 px-3 text-xs font-medium text-white transition-colors hover:bg-purple-700"
-        >
-          <FiPlus size={12} /> Ajouter une ligne
-        </button>
-        <div className="flex gap-4 text-xs text-gray-600">
+      <div className="flex items-center justify-between gap-3 border-t border-gray-300 px-3 py-2">
+        <span className="shrink-0 text-xs font-semibold text-purple-700">{totalLabel}</span>
+        <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-xs text-gray-600">
           <span>Base <b>{totals.base.toFixed(2)} %</b></span>
           <span>Taxe <b>{totals.tax.toFixed(2)} %</b></span>
           <span>De la taxe <b>{totals.delta.toFixed(2)} %</b></span>
@@ -568,8 +566,10 @@ export default function TaxForm({ mode = 'create', taxId: explicitTaxId = null }
 
   const mergeAccounts = useCallback((values) => {
     setAccounts((current) => {
-      const byId = new Map(current.map((account) => [String(account.id), account]));
-      values.forEach((account) => {
+      const byId = new Map(
+        current.filter(isSelectableAccount).map((account) => [String(account.id), account]),
+      );
+      selectableAccounts(values).forEach((account) => {
         if (account?.id !== undefined && account?.id !== null) byId.set(String(account.id), account);
       });
       return Array.from(byId.values());
@@ -589,7 +589,7 @@ export default function TaxForm({ mode = 'create', taxId: explicitTaxId = null }
           ...(search.trim() ? { search: search.trim() } : {}),
         },
       });
-      const rows = asArray(response);
+      const rows = selectableAccounts(response);
       if (requestId === accountRequestRef.current) mergeAccounts(rows);
       return rows;
     } catch {
@@ -618,7 +618,9 @@ export default function TaxForm({ mode = 'create', taxId: explicitTaxId = null }
       countries: countryResult.status === 'fulfilled' ? asArray(countryResult.value) : cached.countries || [],
       taxGroups: groupResult.status === 'fulfilled' ? asArray(groupResult.value) : cached.taxGroups || [],
       fiscalPositions: fiscalResult.status === 'fulfilled' ? asArray(fiscalResult.value) : cached.fiscalPositions || [],
-      accounts: accountResult.status === 'fulfilled' ? asArray(accountResult.value) : cached.accounts || [],
+      accounts: accountResult.status === 'fulfilled'
+        ? selectableAccounts(accountResult.value)
+        : selectableAccounts(cached.accounts || []),
     };
     setCountries(next.countries);
     setTaxGroups(next.taxGroups);
@@ -1093,54 +1095,40 @@ export default function TaxForm({ mode = 'create', taxId: explicitTaxId = null }
         <div className="p-4">
           {activeTab === 'accounting' && (
             <div className="space-y-4">
-              <div className="border border-gray-300 bg-gray-50 p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-gray-800">Comptes de taxe par défaut</h3>
-                  <span className="text-[11px] text-gray-500">Optionnels, les lignes de répartition restent prioritaires.</span>
-                </div>
-                <div className="grid grid-cols-1 gap-x-6 gap-y-1 lg:grid-cols-2">
-                  <Field label="Compte de taxe">
-                    <div className="border border-gray-300 bg-white hover:border-purple-400">
-                      <SearchSelect
-                        value={form.account_label}
-                        selectedId={form.account}
-                        options={accounts}
-                        getOptionLabel={(account) => joinLabel(account.code, account.name)}
-                        onChange={(value) => updateForm('account_label', value)}
-                        onSelect={(id, label) => { updateForm('account', id); updateForm('account_label', label); }}
-                        onOpen={() => loadAccounts('')}
-                        onQuery={loadAccounts}
-                        placeholder="Compte collecté"
-                      />
-                    </div>
-                  </Field>
-                  <Field label="Compte de remboursement">
-                    <div className="border border-gray-300 bg-white hover:border-purple-400">
-                      <SearchSelect
-                        value={form.refund_account_label}
-                        selectedId={form.refund_account}
-                        options={accounts}
-                        getOptionLabel={(account) => joinLabel(account.code, account.name)}
-                        onChange={(value) => updateForm('refund_account_label', value)}
-                        onSelect={(id, label) => { updateForm('refund_account', id); updateForm('refund_account_label', label); }}
-                        onOpen={() => loadAccounts('')}
-                        onQuery={loadAccounts}
-                        placeholder="Compte déductible"
-                      />
-                    </div>
-                  </Field>
+              <div className="overflow-x-auto">
+                <div className="grid min-w-[1220px] grid-cols-2 gap-3">
+                  <RepartitionTable
+                    title="Répartition sur une facture"
+                    totalLabel="Total Facture"
+                    lines={lines}
+                    accounts={accounts}
+                    taxGroups={taxGroups}
+                    onChange={updateLine}
+                    onRemove={removeLine}
+                    onAdd={addLine}
+                    loadAccounts={loadAccounts}
+                  />
+                  <RepartitionTable
+                    title="Répartition sur un avoir"
+                    totalLabel="Total Avoir"
+                    lines={lines}
+                    accounts={accounts}
+                    taxGroups={taxGroups}
+                    onChange={updateLine}
+                    onRemove={removeLine}
+                    onAdd={addLine}
+                    loadAccounts={loadAccounts}
+                  />
                 </div>
               </div>
 
-              <RepartitionTable
-                lines={lines}
-                accounts={accounts}
-                taxGroups={taxGroups}
-                onChange={updateLine}
-                onRemove={removeLine}
-                onAdd={addLine}
-                loadAccounts={loadAccounts}
-              />
+              <button
+                type="button"
+                onClick={addLine}
+                className="mt-3 flex h-7 items-center gap-1 bg-purple-600 px-3 text-xs font-medium text-white transition-colors hover:bg-purple-700"
+              >
+                <FiPlus size={12} /> Ajouter une ligne de répartition
+              </button>
             </div>
           )}
 
