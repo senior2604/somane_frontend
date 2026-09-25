@@ -1,3 +1,4 @@
+// C:\python\django\somane_frontend\src\pages\Partners\PartnersPage.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
 import { useEntity } from '../../context/EntityContext';
@@ -1185,246 +1186,11 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
 // ============================================================================
 // MODAL CRÉATION UTILISATEUR
 // ============================================================================
-function UserFromPartenaireModal({ open, onClose, partenaire, onSuccess }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-  const [groupesList, setGroupesList] = useState([]);
-  const [formData, setFormData] = useState({
-    first_name: '', last_name: '', telephone: '',
-    groups: [], send_activation_email: true, statut: 'actif'
-  });
-
-  useEffect(() => {
-    let mounted = true;
-    if (open && partenaire) {
-      const parts = partenaire?.nom?.split(' ') || [];
-      setFormData({
-        first_name: parts[0] || '',
-        last_name: parts.slice(1).join(' ') || '',
-        telephone: partenaire?.telephone || '',
-        groups: [], send_activation_email: true, statut: 'actif'
-      });
-      setError(null);
-      setSuccess(false);
-      apiClient.get('/groupes/')
-        .then(res => { if (mounted) setGroupesList(parseResponse(res)); })
-        .catch(console.error);
-    }
-    return () => { mounted = false; };
-  }, [open, partenaire]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      if (!partenaire?.email) throw new Error('Email manquant sur ce partenaire');
-      if (partenaire?.user) throw new Error('Ce partenaire a déjà un compte utilisateur');
-      if (!partenaire?.id) throw new Error('Partenaire invalide');
-      const response = await apiClient.post('/users/create-from-partenaire/', {
-        partenaire: partenaire.id,
-        first_name: formData.first_name?.trim() || '',
-        last_name: formData.last_name?.trim() || '',
-        telephone: formData.telephone?.trim() || '',
-        groups: formData.groups,
-        send_activation_email: formData.send_activation_email,
-        statut: formData.statut
-      });
-      if (response?.success === false) throw new Error(response.error);
-      setSuccess(true);
-      setTimeout(() => { onSuccess?.(); onClose?.(); }, 3000);
-    } catch (err) {
-      const errorData = err?.response?.data;
-      let msg = 'Erreur création';
-      if (errorData?.email?.[0]) msg = errorData.email[0];
-      else if (errorData?.detail) msg = errorData.detail;
-      else if (typeof errorData === 'string') msg = errorData;
-      else if (err?.message) msg = err.message;
-      setError(msg);
-    } finally { setLoading(false); }
-  };
-
-  const toggleGroup = (id) => {
-    setFormData(prev => ({
-      ...prev,
-      groups: prev.groups.includes(id)
-        ? prev.groups.filter(g => g !== id)
-        : [...prev.groups, id]
-    }));
-  };
-
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
-        <div className="bg-violet-600 text-white rounded-t-lg p-4 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white bg-opacity-20 rounded-lg">
-                <FiUserPlus className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="font-bold text-lg">Créer compte</h2>
-                <p className="text-violet-100 text-sm">{partenaire?.nom} ({partenaire?.email})</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white hover:bg-opacity-20 rounded"
-              disabled={loading && !success}
-            >
-              <FiX size={20} />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
-          {error && (
-            <div className="mb-4 bg-red-50 border-l-4 border-red-500 rounded-r p-3">
-              <div className="flex items-start gap-2">
-                <FiAlertCircle className="text-red-500 mt-0.5" />
-                <p className="text-red-700 text-sm">{error}</p>
-              </div>
-            </div>
-          )}
-
-          {success ? (
-            <div className="text-center py-6">
-              <FiCheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h3 className="font-bold text-xl text-gray-900 mb-2">Compte créé</h3>
-              <p className="font-bold text-lg text-violet-600 mb-4">{partenaire?.email}</p>
-              {formData.send_activation_email ? (
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <p className="font-medium text-blue-900 mb-2">Email envoyé</p>
-                  <p className="text-sm text-blue-700">Lien d'activation envoyé.</p>
-                </div>
-              ) : (
-                <p className="text-amber-600">Activation manuelle requise</p>
-              )}
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <h4 className="font-medium text-gray-900 mb-2">Email</h4>
-                <div className="bg-white rounded p-3">
-                  <p className="font-bold text-lg text-blue-700">{partenaire?.email}</p>
-                  <label className="flex items-center gap-2 mt-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.send_activation_email}
-                      onChange={(e) => setFormData(prev => ({ ...prev, send_activation_email: e.target.checked }))}
-                      className="text-violet-600"
-                    />
-                    <span className="text-sm">Envoyer email d'activation</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <h4 className="font-medium text-gray-900 mb-2">Informations</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">
-                      Prénom <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.first_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">
-                      Nom <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.last_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm text-gray-700 mb-1">Téléphone</label>
-                    <input
-                      type="tel"
-                      value={formData.telephone}
-                      onChange={(e) => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
-                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-violet-50 rounded-lg p-4 border border-violet-200">
-                <h4 className="font-medium text-gray-900 mb-2">Groupes</h4>
-                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
-                  {groupesList.length === 0 ? (
-                    <p className="text-gray-500 text-sm italic">Aucun groupe disponible</p>
-                  ) : groupesList.map(g => (
-                    <label key={g.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.groups.includes(g.id)}
-                        onChange={() => toggleGroup(g.id)}
-                        className="text-violet-600"
-                      />
-                      <span className="text-sm text-gray-700">{g.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t sticky bottom-0 bg-white">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
-                  disabled={loading}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 flex items-center gap-2"
-                >
-                  {loading
-                    ? <><FiRefreshCw className="animate-spin" />Création...</>
-                    : <><FiUserPlus />Créer</>
-                  }
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// MODAL DÉTAILS
-// ============================================================================
-function PartnerDetailModal({ partner, onClose, onCreateUser }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
+// La création d'un utilisateur depuis un partenaire a été supprimée.
+// L'association est désormais créée uniquement depuis la fiche utilisateur.
+function PartnerDetailModal({ partner, onClose }) {
   if (!partner) return null;
-
-  // Vérifie si le partenaire est complet pour créer un compte
-  const missingFields = [];
-  if (!partner.email) missingFields.push('email');
-  if (!partner.telephone) missingFields.push('téléphone');
-  if (!partner.pays_details) missingFields.push('pays');
-  if (!partner.region_details) missingFields.push('région');
-  if (!partner.ville_details) missingFields.push('ville');
-  if (!partner.adresse) missingFields.push('adresse');
+  const linkedUser = partner.utilisateur_details || null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
@@ -1432,158 +1198,53 @@ function PartnerDetailModal({ partner, onClose, onCreateUser }) {
         <div className="bg-violet-600 text-white rounded-t-lg p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white bg-opacity-20 rounded-lg">
-                <FiBriefcase className="w-5 h-5" />
-              </div>
+              <div className="p-2 bg-white bg-opacity-20 rounded-lg"><FiBriefcase className="w-5 h-5" /></div>
               <div>
                 <h2 className="font-bold text-lg">{partner.nom}</h2>
-                <p className="text-violet-100 text-sm capitalize">
-                  {partner.type_partenaire} • {partner.statut ? 'Actif' : 'Inactif'}
-                </p>
+                <p className="text-violet-100 text-sm capitalize">{partner.type_partenaire} • {partner.statut ? 'Actif' : 'Inactif'}</p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white hover:bg-opacity-20 rounded">
-              <FiX size={20} />
-            </button>
+            <button onClick={onClose} className="p-2 hover:bg-white hover:bg-opacity-20 rounded"><FiX size={20} /></button>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-
-          {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 rounded-r p-3">
-              <div className="flex items-start gap-2">
-                <FiAlertCircle className="text-red-500 mt-0.5" />
-                <p className="text-red-700 text-sm">{error}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Alerte champs manquants pour création de compte */}
-          {!partner.user && missingFields.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <FiAlertCircle className="text-amber-500 mt-0.5 flex-shrink-0" size={15} />
-                <div>
-                  <p className="text-amber-800 font-medium text-sm">
-                    Profil incomplet pour la création de compte
-                  </p>
-                  <p className="text-amber-700 text-xs mt-1">
-                    Champs manquants : <strong>{missingFields.join(', ')}</strong>
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
             <h3 className="font-medium text-gray-900 mb-3">Informations principales</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-gray-600">Type</p>
-                <p className="font-medium capitalize">{partner.type_partenaire || 'Non spécifié'}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Statut</p>
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  partner.statut ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                  {partner.statut ? 'Actif' : 'Inactif'}
-                </span>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-600">Email</p>
-                <p className={`font-medium ${!partner.email ? 'text-red-400 italic' : ''}`}>
-                  {partner.email || '⚠ Non renseigné (requis)'}
-                </p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-600">Téléphone</p>
-                <p className={`font-medium ${!partner.telephone ? 'text-red-400 italic' : ''}`}>
-                  {partner.telephone || '⚠ Non renseigné (requis)'}
-                </p>
-              </div>
-              {partner.pays_details && (
-                <div>
-                  <p className="text-gray-600">Pays</p>
-                  <p className="font-medium">{partner.pays_details.emoji} {partner.pays_details.nom}</p>
-                </div>
-              )}
-              {partner.ville_details && (
-                <div>
-                  <p className="text-gray-600">Ville</p>
-                  <p className="font-medium">{partner.ville_details.nom}</p>
-                </div>
-              )}
-              {partner.region_details && (
-                <div>
-                  <p className="text-gray-600">Région</p>
-                  <p className="font-medium">{partner.region_details.nom}</p>
-                </div>
-              )}
+              <div><p className="text-gray-600">Type</p><p className="font-medium capitalize">{partner.type_partenaire || 'Non spécifié'}</p></div>
+              <div><p className="text-gray-600">Statut</p><span className={`px-2 py-1 rounded text-xs font-medium ${partner.statut ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{partner.statut ? 'Actif' : 'Inactif'}</span></div>
+              <div><p className="text-gray-600">Email</p><p className="font-medium">{partner.email || 'Non renseigné'}</p></div>
+              <div><p className="text-gray-600">Téléphone</p><p className="font-medium">{partner.telephone || 'Non renseigné'}</p></div>
+              {partner.pays_details && <div><p className="text-gray-600">Pays</p><p className="font-medium">{partner.pays_details.emoji} {partner.pays_details.nom}</p></div>}
+              {partner.region_details && <div><p className="text-gray-600">Région</p><p className="font-medium">{partner.region_details.nom}</p></div>}
+              {partner.ville_details && <div><p className="text-gray-600">Ville</p><p className="font-medium">{partner.ville_details.nom}</p></div>}
+              {partner.adresse && <div className="col-span-2"><p className="text-gray-600">Adresse</p><p className="font-medium">{partner.adresse}</p></div>}
             </div>
           </div>
 
           <div className="bg-violet-50 rounded-lg p-4 border border-violet-200">
-            <h3 className="font-medium text-gray-900 mb-3">Compte utilisateur</h3>
-            {partner.user ? (
-              <div className="bg-white rounded p-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-gray-900">{partner.user.email || 'Non renseigné'}</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Créé le {partner.user.date_joined
-                        ? new Date(partner.user.date_joined).toLocaleDateString('fr-FR')
-                        : 'Non spécifié'}
-                    </p>
-                  </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    partner.user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {partner.user.is_active ? 'Actif' : 'Inactif'}
-                  </span>
+            <h3 className="font-medium text-gray-900 mb-3">Compte utilisateur associé</h3>
+            {linkedUser ? (
+              <div className="bg-white rounded p-3 flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-gray-900">{[linkedUser.first_name, linkedUser.last_name].filter(Boolean).join(' ') || linkedUser.email}</p>
+                  <p className="text-sm text-gray-600 mt-1">{linkedUser.email}</p>
+                  <p className="text-xs text-gray-500 mt-1">Créé le {linkedUser.date_joined ? new Date(linkedUser.date_joined).toLocaleDateString('fr-FR') : 'Non spécifié'}</p>
                 </div>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${linkedUser.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{linkedUser.is_active ? 'Actif' : 'Inactif'}</span>
               </div>
             ) : (
-              <div className="text-center py-4">
-                {missingFields.length === 0 ? (
-                  <button
-                    onClick={async () => {
-                      setLoading(true);
-                      setError(null);
-                      try { await onCreateUser?.(partner); }
-                      catch (err) { setError(err?.message || 'Erreur'); }
-                      finally { setLoading(false); }
-                    }}
-                    disabled={loading}
-                    className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 font-medium flex items-center justify-center gap-2 mx-auto"
-                  >
-                    {loading ? <FiRefreshCw className="animate-spin" /> : <FiUserPlus />}
-                    Créer un compte
-                  </button>
-                ) : (
-                  <div className="bg-amber-50 p-3 rounded border border-amber-200">
-                    <p className="font-medium text-amber-800 text-sm">
-                      Complétez le profil avant de créer un compte
-                    </p>
-                    <p className="text-amber-700 text-xs mt-1">
-                      Manquant : {missingFields.join(', ')}
-                    </p>
-                  </div>
-                )}
+              <div className="bg-white rounded p-3">
+                <p className="text-sm text-gray-600">Aucun utilisateur n'est associé à ce partenaire.</p>
+                <p className="text-xs text-gray-500 mt-2">L'association est créée uniquement depuis la fiche utilisateur.</p>
               </div>
             )}
           </div>
-
         </div>
 
         <div className="p-4 border-t flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700"
-          >
-            Fermer
-          </button>
+          <button onClick={onClose} className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700">Fermer</button>
         </div>
       </div>
     </div>
@@ -1604,7 +1265,6 @@ export default function PartnersPage() {
   const itemsPerPage = 10;
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showUserModal, setShowUserModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const { activeEntity } = useEntity();
@@ -1655,13 +1315,6 @@ export default function PartnersPage() {
     currentPage * itemsPerPage
   );
 
-  const handleCreateUser = (partner) => {
-    if (!partner?.email) { setError('Le partenaire doit avoir un email pour créer un compte'); return; }
-    if (partner?.user) { setError('Ce partenaire a déjà un compte utilisateur'); return; }
-    setSelectedPartner(partner);
-    setShowUserModal(true);
-  };
-
   const handleDelete = async (partner) => {
     if (!window.confirm(`Supprimer "${partner?.nom}" ?`)) return;
     try {
@@ -1683,7 +1336,7 @@ export default function PartnersPage() {
     actifs: partners.filter(p => p?.statut).length,
     inactifs: partners.filter(p => !p?.statut).length,
     avecEmail: partners.filter(p => p?.email).length,
-    avecCompte: partners.filter(p => p?.user).length,
+    avecCompte: partners.filter(p => p?.utilisateur_details).length,
   };
 
   // Partenaires avec profil incomplet (pour la colonne compte)
@@ -1869,7 +1522,7 @@ const isProfileComplete = (p) =>
                       <p className="font-medium text-gray-900">{partner.nom || 'Non spécifié'}</p>
                       <p className="text-xs text-gray-500">ID: {partner.id}</p>
                       {/* Alerte profil incomplet dans la liste */}
-                      {!complete && !partner.user && (
+                      {!complete && (
                         <span className="inline-flex items-center gap-1 mt-0.5 text-xs text-amber-600">
                           <FiAlertCircle size={10} />Profil incomplet
                         </span>
@@ -1914,21 +1567,17 @@ const isProfileComplete = (p) =>
 
                     {/* Compte */}
                     <td className="py-3 px-4">
-                      {partner.user ? (
+                      {partner.utilisateur_details ? (
                         <div className="flex items-center gap-2">
                           <FiCheckCircle className="w-4 h-4 text-green-500" />
-                          <span className="text-sm text-green-700">Compte actif</span>
+                          <div>
+                            <span className="text-sm text-green-700">Compte associé</span>
+                            <p className="text-xs text-gray-500">{partner.utilisateur_details.email}</p>
+                          </div>
                         </div>
-                      ) : complete ? (
-                        <button
-                          onClick={() => handleCreateUser(partner)}
-                          className="px-3 py-1 bg-violet-100 text-violet-700 rounded text-sm hover:bg-violet-200 flex items-center gap-1"
-                        >
-                          <FiUserPlus className="w-3 h-3" />Créer compte
-                        </button>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
-                          <FiAlertCircle size={10} />Profil incomplet
+                        <span className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                          Aucun compte associé
                         </span>
                       )}
                     </td>
@@ -2027,15 +1676,8 @@ const isProfileComplete = (p) =>
         <PartnerDetailModal
           partner={selectedPartner}
           onClose={() => setShowDetailModal(false)}
-          onCreateUser={handleCreateUser}
         />
       )}
-      <UserFromPartenaireModal
-        open={showUserModal}
-        onClose={() => setShowUserModal(false)}
-        partenaire={selectedPartner}
-        onSuccess={() => fetchPartners()}
-      />
 
     </div>
   );

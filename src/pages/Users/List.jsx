@@ -10,6 +10,7 @@ import {
   FiSearch,
   FiShield,
   FiTrash2,
+  FiUserPlus,
   FiUsers,
   FiX,
 } from 'react-icons/fi';
@@ -682,6 +683,16 @@ function SecurityList() {
                 <button type="button" onClick={() => goToEdit(user)} className="text-purple-600 hover:text-purple-800">
                   <FiEdit2 size={14} />
                 </button>
+                {!user.partner_id && !user.partner_details && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/partners/create', { state: { userId: user.id } })}
+                    className="text-green-600 hover:text-green-800"
+                    title="Créer le partenaire depuis cet utilisateur"
+                  >
+                    <FiUserPlus size={14} />
+                  </button>
+                )}
                 <button type="button" onClick={() => deleteItem(user)} disabled={deleteId === user.id} className="text-red-600 hover:text-red-800 disabled:opacity-50">
                   <FiTrash2 size={14} />
                 </button>

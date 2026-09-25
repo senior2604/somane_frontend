@@ -111,11 +111,14 @@ export const getEligiblePartenaires = (partenaires = [], entites = []) => {
 export const getAccessType = (value) => ACCESS_TYPES.find((type) => type.value === value);
 
 export const initialForms = {
-  users: {
-    partenaire: '',
-    statut: 'actif',
-    groups: [],
-  },
+users: {
+  email: '',
+  first_name: '',
+  last_name: '',
+  telephone: '',
+  statut: 'actif',
+  groups: [],
+},
 
   groups: {
     name: '',
@@ -155,9 +158,18 @@ export function itemToForm(type, item) {
 
   if (type === 'users') {
     return {
-      partenaire: item.partenaire?.id || item.partenaire || '',
-      statut: item.statut || (item.is_active ? 'actif' : 'inactif'),
-      groups: normalizeIds(item.groups || item.groupes || item.groupes_details),
+      email: item.email || '',
+      first_name: item.first_name || '',
+      last_name: item.last_name || '',
+      telephone: item.telephone || '',
+      statut: item.statut || (
+        item.is_active ? 'actif' : 'inactif'
+      ),
+      groups: normalizeIds(
+        item.groups ||
+        item.groupes ||
+        item.groupes_details
+      ),
     };
   }
 
@@ -204,9 +216,25 @@ export function itemToForm(type, item) {
 export function validateSecurityForm(type, form) {
   const errors = {};
 
-  if (type === 'users' && !form.partenaire) {
-    errors.partenaire = 'Le partenaire est obligatoire';
+if (type === 'users') {
+  if (!form.email?.trim()) {
+    errors.email = "L'adresse email est obligatoire";
+  } else {
+    const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailValide.test(form.email.trim())) {
+      errors.email = "L'adresse email n'est pas valide";
+    }
   }
+
+  if (!form.first_name?.trim()) {
+    errors.first_name = 'Le prénom est obligatoire';
+  }
+
+  if (!form.last_name?.trim()) {
+    errors.last_name = 'Le nom est obligatoire';
+  }
+}
 
   if (type === 'groups' && !form.name?.trim()) {
     errors.name = 'Le nom du groupe est obligatoire';
@@ -229,29 +257,26 @@ export function validateSecurityForm(type, form) {
 
   return errors;
 }
-
 export function buildPayload(type, form, item = null, partenaires = []) {
-  if (type === 'users') {
-    if (item) {
-      return {
-        statut: form.statut,
-        groups: form.groups,
-        is_active: form.statut === 'actif',
-      };
-    }
+if (type === 'users') {
+  const payload = {
+    email: form.email?.trim() || '',
+    first_name: form.first_name?.trim() || '',
+    last_name: form.last_name?.trim() || '',
+    telephone: form.telephone?.trim() || '',
+    statut: form.statut || 'actif',
+    is_active: form.statut === 'actif',
+    groups: normalizeIds(form.groups),
+  };
 
-    const partenaire = findById(partenaires, form.partenaire);
-
-    return {
-      partenaire: Number(form.partenaire),
-      first_name: partenaire?.prenom || partenaire?.first_name || '',
-      last_name: partenaire?.nom || partenaire?.last_name || '',
-      telephone: partenaire?.telephone || '',
-      groups: form.groups,
-      send_activation_email: true,
-      statut: form.statut,
-    };
+  // L'email ne doit normalement pas être changé
+  // depuis la fiche d'un utilisateur existant.
+  if (item) {
+    delete payload.email;
   }
+
+  return payload;
+}
 
   if (type === 'groups') {
     return {

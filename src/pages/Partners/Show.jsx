@@ -1,3 +1,4 @@
+// C:\python\django\somane_frontend\src\pages\Partners\Show.jsx
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {

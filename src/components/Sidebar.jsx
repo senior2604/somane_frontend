@@ -30,6 +30,7 @@ import {
   FiZap
 } from "react-icons/fi";
 import { useState, useEffect, useRef } from "react";
+import { useUi } from "../context/UiContext";
 
 // Composant pour texte avec tooltip automatique
 const TruncatedTextWithTooltip = ({ text, className = "", maxWidth = "none" }) => {
@@ -79,6 +80,7 @@ const TruncatedTextWithTooltip = ({ text, className = "", maxWidth = "none" }) =
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { configuration } = useUi();
   
   const [openCategories, setOpenCategories] = useState({
     organisation: true,
@@ -120,7 +122,7 @@ export default function Sidebar() {
     }
   };
 
-  const menuCategories = [
+  const staticMenuCategories = [
     {
       id: "dashboard",
       name: "Tableau de Bord",
@@ -183,6 +185,23 @@ export default function Sidebar() {
       ]
     }
   ];
+
+  const dynamicMenuCategories = (configuration?.menus || []).map((menu) => ({
+    id: `dynamic-${menu.id}`,
+    name: menu.name,
+    icon: <FiGrid />,
+    path: menu.action_id ? `/ui/action/${menu.action_id}` : undefined,
+    isSimpleLink: Boolean(menu.action_id) && !(menu.children || []).length,
+    items: (menu.children || [])
+      .filter((child) => child.action_id)
+      .map((child) => ({
+        name: child.name,
+        path: `/ui/action/${child.action_id}`,
+        icon: <FiList />,
+      })),
+  })).filter((menu) => menu.isSimpleLink || menu.items.length);
+
+  const menuCategories = [...staticMenuCategories, ...dynamicMenuCategories];
 
   const handleLogout = () => {
     localStorage.removeItem("authToken");

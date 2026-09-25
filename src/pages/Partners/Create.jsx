@@ -1,3 +1,4 @@
+// C:\python\django\somane_frontend\src\pages\Partners\Create.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -11,7 +12,6 @@ import {
   FiAlertCircle,
   FiBriefcase,
   FiInfo,
-  FiUserPlus,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
 import { useEntity } from '../../context/EntityContext';
@@ -21,6 +21,7 @@ import {
   PartnerForm,
   Tooltip,
   buildPartnerPayload,
+  parseResponse,
   validatePartnerForm,
 } from './PartnerShared';
 
@@ -88,8 +89,24 @@ export default function PartnerCreate() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState(location.state?.userId ? String(location.state.userId) : '');
+
+  const selectedUser = users.find((user) => String(user.id) === String(selectedUserId)) || null;
 
   const actionsMenuRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+    apiClient.get('/users/').then((response) => {
+      if (!mounted) return;
+      const eligibleUsers = parseResponse(response).filter((user) => !user.partner_id && !user.partner_details);
+      setUsers(eligibleUsers);
+    }).catch((err) => {
+      if (mounted) setError(err?.data?.detail || err?.message || 'Impossible de charger les utilisateurs.');
+    });
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -124,10 +141,10 @@ export default function PartnerCreate() {
   const isReady = Object.keys(validatePartnerForm(formData)).length === 0;
 
   const submit = async (silent = false) => {
-    const errors = validatePartnerForm(formData);
+    const errors = selectedUser ? (!formData.type_partenaire ? { type_partenaire: 'Le type est obligatoire.' } : {}) : validatePartnerForm(formData);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
-      setError('Champs obligatoires manquants : nom, type, email, téléphone, pays, région, ville et adresse sont requis.');
+      setError(selectedUser ? 'Le type de partenaire est obligatoire.' : 'Champs obligatoires manquants : nom, type, email, téléphone, pays, région, ville et adresse sont requis.');
       return false;
     }
 
@@ -141,8 +158,12 @@ export default function PartnerCreate() {
     setSuccess(null);
 
     try {
-      const response = await apiClient.post('/partenaires/', buildPartnerPayload(formData));
-      const savedPartner = normalizeSavedPartner(response, formData);
+      const response = selectedUser
+        ? await apiClient.post(`/users/${selectedUser.id}/create-partenaire/`, { type_partenaire: formData.type_partenaire })
+        : await apiClient.post('/partenaires/', buildPartnerPayload(formData));
+      const savedPartner = selectedUser
+        ? normalizeSavedPartner(response?.partenaire || response, formData)
+        : normalizeSavedPartner(response, formData);
       setHasUnsavedChanges(false);
       if (!silent) {
         setSuccess('Partenaire créé avec succès !');
@@ -159,6 +180,7 @@ export default function PartnerCreate() {
 
   const resetForm = () => {
     setFormData(INITIAL_FORM);
+    setSelectedUserId('');
     setFieldErrors({});
     setActiveTab('fiche');
     setError(null);
@@ -403,14 +425,36 @@ export default function PartnerCreate() {
           </div>
         </div>
 
+        {/* Utilisateur source facultatif */}
+        <div className="px-4 py-3 border-b border-gray-300 bg-blue-50">
+          <div className="flex items-center">
+            <label className="text-xs text-gray-700 min-w-[140px] font-medium">Utilisateur source</label>
+            <select
+              value={selectedUserId}
+              onChange={(event) => {
+                setSelectedUserId(event.target.value);
+                setActiveTab('fiche');
+                setHasUnsavedChanges(true);
+              }}
+              className="flex-1 ml-2 h-8 border border-gray-300 bg-white px-2 text-xs"
+            >
+              <option value="">Aucun — partenaire indépendant</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {[user.first_name, user.last_name].filter(Boolean).join(' ') || user.email} — {user.email}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="ml-[148px] mt-1 text-[11px] text-blue-700">
+            Seuls les utilisateurs sans partenaire sont proposés. Si un utilisateur est choisi, ses informations sont reprises automatiquement.
+          </p>
+        </div>
+
         {/* Onglets */}
         <div className="border-b border-gray-300">
           <div className="px-4 flex">
-            {[
-              ['fiche', 'Fiche partenaire'],
-              ['utilisateur', 'Utilisateur'],
-              ['notes', 'Notes'],
-            ].map(([key, label]) => (
+            {[['fiche', 'Fiche partenaire'], ['notes', 'Notes']].map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
@@ -428,39 +472,33 @@ export default function PartnerCreate() {
 
         {/* Contenu onglets */}
         <div className="p-4">
-          {activeTab === 'fiche' && (
-            <PartnerForm
-              mode="main"
-              formData={formData}
-              setFormData={updateForm}
-              fieldErrors={fieldErrors}
-              setFieldErrors={setFieldErrors}
-            />
-          )}
-
-          {activeTab === 'utilisateur' && (
-            <div className="border border-gray-300">
-              <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">Compte utilisateur</div>
-              <div className="p-4 text-sm text-gray-600">
-                <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
-                  <FiInfo size={14} className="mt-0.5" />
-                  <div>
-                    Enregistrez d'abord le partenaire. Sa fiche permettra ensuite de générer le compte utilisateur avec cet email :
-                    <span className="font-bold"> {formData.email || 'email non renseigné'}</span>
-                  </div>
+          {activeTab === 'fiche' && (selectedUser ? (
+            <div className="space-y-4">
+              <div className="border border-gray-300 p-3">
+                <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Utilisateur sélectionné</div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div><span className="text-gray-500">Nom :</span> {[selectedUser.first_name, selectedUser.last_name].filter(Boolean).join(' ') || '-'}</div>
+                  <div><span className="text-gray-500">Email :</span> {selectedUser.email}</div>
+                  <div><span className="text-gray-500">Téléphone :</span> {selectedUser.telephone || '-'}</div>
+                  <div><span className="text-gray-500">Localisation :</span> {selectedUser.ville_details?.nom || selectedUser.ville?.nom || 'Reprise par le backend'}</div>
                 </div>
-                <Tooltip text="Enregistrer puis ouvrir la fiche pour créer le compte">
-                  <button
-                    onClick={() => submit(false)}
-                    disabled={loading}
-                    className="mt-4 h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 flex items-center gap-1"
-                  >
-                    <FiUserPlus size={13} /> Créer le partenaire puis ouvrir sa fiche
-                  </button>
-                </Tooltip>
+              </div>
+              <div className="border border-gray-300 p-3">
+                <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Paramètre du partenaire</div>
+                <div className="flex items-center">
+                  <label className="text-xs text-gray-700 min-w-[140px] font-medium">Type de partenaire *</label>
+                  <select value={formData.type_partenaire} onChange={(event) => updateForm((previous) => ({ ...previous, type_partenaire: event.target.value }))} className="flex-1 ml-2 h-8 border border-gray-300 px-2 text-xs">
+                    {PARTNER_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
+                Le nom, l'email, le téléphone, le pays, la région et la ville ne sont pas ressaisis : ils sont copiés depuis l'utilisateur par l'API.
               </div>
             </div>
-          )}
+          ) : (
+            <PartnerForm mode="main" formData={formData} setFormData={updateForm} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} />
+          ))}
 
           {activeTab === 'notes' && (
             <PartnerForm
