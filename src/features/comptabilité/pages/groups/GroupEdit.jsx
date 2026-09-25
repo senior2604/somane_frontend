@@ -1,603 +1,339 @@
 // src/features/comptabilite/pages/groups/GroupEdit.jsx
-import { CloseOutlined } from '@ant-design/icons';
-import {
-  Form,
-  Input,
-  message,
-  Select,
-  Spin,
-} from 'antd';
-import { useEffect, useMemo, useState } from 'react';
-import {
-  FiAlertCircle,
-  FiCheck,
-  FiEye,
-  FiInfo,
-  FiPlus,
-  FiSettings,
-  FiUploadCloud,
-} from 'react-icons/fi';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Form, Spin } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FiEye, FiInfo, FiPlus, FiSettings } from 'react-icons/fi';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+
+import UnifiedFormPage from '../../../../components/UnifiedFormPage';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 import useGroupStore from '../../../../stores/comptabilite/groupStore';
+import GroupFormFields from './components/GroupFormFields';
 
-const { TextArea } = Input;
 const FRAMEWORK_SESSION_KEY = 'group_list_selected_framework';
 
-const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-        {children}
-      </div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-            'right-full top-1/2 -translate-y-1/2 -mr-1'
-          }`} />
-        </div>
-      )}
-    </div>
-  );
+const relationId = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'object') return value.id ?? value.value ?? null;
+  return value;
 };
 
-const Section = ({ title, hint, children }) => (
-  <section className="border-b border-gray-200 px-4 py-4 last:border-b-0">
-    <div className="mb-3">
-      <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
-      {hint && <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500">{hint}</p>}
-    </div>
-    <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
-      {children}
-    </div>
-  </section>
+const normalizeIds = (value) => (
+  Array.isArray(value)
+    ? value.map(relationId).filter((item) => item !== null && item !== undefined && item !== '')
+    : []
 );
 
-const FieldRow = ({ label, optional = false, span = false, children }) => (
-  <div className={span ? 'md:col-span-2' : ''}>
-    <label className="mb-1 block text-xs font-medium text-gray-700">
-      {label}
-      {optional && <span className="ml-1 text-[11px] font-normal text-gray-400">(optional)</span>}
-    </label>
-    {children}
-  </div>
-);
+const getErrorMessage = (error, fallback) => {
+  const payload = error?.response?.data;
+  if (!payload || typeof payload !== 'object') return error?.message || fallback;
 
-const normalizeIdList = (value) => {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => (typeof item === 'object' ? item.id ?? item.value : item))
-    .filter((item) => item !== null && item !== undefined && item !== '');
+  return Object.entries(payload)
+    .map(([field, errors]) => `${field} : ${Array.isArray(errors) ? errors.join(', ') : String(errors)}`)
+    .join('\n');
 };
 
-const optionLabel = (record, fallback) => {
-  if (!record) return fallback;
-  const code = record.code || record.numero || record.number;
-  const name = record.name || record.nom || record.raison_sociale || record.label || record.libelle;
-  if (code && name) return `${code} - ${name}`;
-  return name || code || fallback;
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('fr-FR');
 };
 
-function GroupEdit() {
+export default function GroupEdit() {
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
 
-  const { updateGroup, fetchGroupById, fetchGroups, groups } = useGroupStore();
-  const { frameworks, fetchFrameworks } = useFrameworkStore();
+  const { updateGroup, fetchGroupById, fetchGroups, groups = [] } = useGroupStore();
+  const { frameworks = [], fetchFrameworks } = useFrameworkStore();
 
-  const [pageLoading, setPageLoading] = useState(true);
+  const cachedGroup = useMemo(() => {
+    const candidate = location.state?.groupRecord;
+    return candidate && String(candidate.id) === String(id) ? candidate : null;
+  }, [id, location.state]);
+
+  const [groupData, setGroupData] = useState(cachedGroup);
+  const [selectedFramework, setSelectedFramework] = useState(() => relationId(cachedGroup?.framework));
+  const [initializing, setInitializing] = useState(!cachedGroup);
   const [saving, setSaving] = useState(false);
-  const [selectedFramework, setSelectedFramework] = useState(null);
-  const [groupData, setGroupData] = useState(null);
-  const [showActionsMenu, setShowActionsMenu] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState({
-    to: '/comptabilite/groups',
-    options: undefined,
-  });
+  const [hasChanges, setHasChanges] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [traceabilityOpen, setTraceabilityOpen] = useState(true);
 
   const watchedCode = Form.useWatch('code', form);
   const watchedName = Form.useWatch('name', form);
-  const readyForValidation = Boolean(watchedCode && watchedName);
-
-  useEffect(() => {
-    const init = async () => {
-      setPageLoading(true);
-      setError(null);
-      setSuccess(null);
-      try {
-        const [, group] = await Promise.all([
-          fetchFrameworks(),
-          fetchGroupById(id),
-        ]);
-
-        const fwId = group.framework;
-        setSelectedFramework(fwId);
-        setGroupData(group);
-        sessionStorage.setItem(FRAMEWORK_SESSION_KEY, String(fwId));
-
-        try {
-          await fetchGroups({ framework: fwId });
-        } catch {
-          // On garde l'ecran utilisable meme si la liste des classes parentes expire.
-        }
-
-        form.setFieldsValue({
-          framework: fwId,
-          code: group.code,
-          name: group.name,
-          code_prefix_start: group.code_prefix_start || '',
-          code_prefix_end: group.code_prefix_end || '',
-          sequence: group.sequence ?? 0,
-          parent: group.parent || null,
-          company: normalizeIdList(group.company),
-          excluded_account_ids: normalizeIdList(group.excluded_account_ids),
-          note: group.note || '',
-        });
-      } catch (caughtError) {
-        message.error('Impossible de charger la classe à modifier');
-        console.error(caughtError);
-        navigate('/comptabilite/groups');
-      } finally {
-        setPageLoading(false);
-      }
-    };
-
-    init();
-  }, [id]);
-
-  const selectedFw = useMemo(
-    () => frameworks.find((framework) => String(framework.id) === String(selectedFramework)),
-    [frameworks, selectedFramework]
+  const recordLabel = useMemo(
+    () => [watchedCode || groupData?.code, watchedName || groupData?.name].filter(Boolean).join(' - ') || 'Classe comptable',
+    [groupData, watchedCode, watchedName],
   );
 
-  const frameworkOptions = useMemo(() => (
-    frameworks.map((framework) => ({
-      value: framework.id,
-      label: `${framework.code || ''} - ${framework.name || ''}`.trim(),
-    }))
-  ), [frameworks]);
+  const hydrateForm = useCallback((group) => {
+    if (!group) return null;
+    const frameworkId = relationId(group.framework) ?? group.framework_id;
+    setGroupData(group);
+    setSelectedFramework(frameworkId);
+    if (frameworkId) sessionStorage.setItem(FRAMEWORK_SESSION_KEY, String(frameworkId));
 
-  const parentOptions = useMemo(() => (
-    groups
-      .filter((group) => String(group.id) !== String(id))
-      .map((group) => ({
-        value: group.id,
-        label: `${group.code || ''} - ${group.name || ''}`.trim(),
-      }))
-  ), [groups, id]);
-
-  const companyOptions = useMemo(() => {
-    const ids = normalizeIdList(groupData?.company);
-    const names = Array.isArray(groupData?.company_names) ? groupData.company_names : [];
-    const details =
-      groupData?.company_detail ||
-      groupData?.companies_detail ||
-      groupData?.company_details ||
-      [];
-
-    if (Array.isArray(details) && details.length > 0) {
-      return details.map((company, index) => ({
-        value: company.id ?? ids[index],
-        label: optionLabel(company, `Societe ${company.id ?? ids[index] ?? ''}`.trim()),
-      }));
-    }
-
-    return ids.map((companyId, index) => ({
-      value: companyId,
-      label: names[index] || `Societe ${companyId}`,
-    }));
-  }, [groupData]);
-
-  const excludedAccountOptions = useMemo(() => {
-    const ids = normalizeIdList(groupData?.excluded_account_ids);
-    const details = Array.isArray(groupData?.excluded_accounts_detail)
-      ? groupData.excluded_accounts_detail
-      : [];
-
-    if (details.length > 0) {
-      return details.map((account, index) => ({
-        value: account.id ?? ids[index],
-        label: optionLabel(account, `Compte ${account.id ?? ids[index] ?? ''}`.trim()),
-      }));
-    }
-
-    return ids.map((accountId) => ({
-      value: accountId,
-      label: `Compte ${accountId}`,
-    }));
-  }, [groupData]);
+    form.setFieldsValue({
+      framework: frameworkId,
+      code: group.code || '',
+      name: group.name || '',
+      code_prefix_start: group.code_prefix_start || '',
+      code_prefix_end: group.code_prefix_end || '',
+      sequence: group.sequence ?? 0,
+      parent: relationId(group.parent),
+      company: normalizeIds(group.company_detail?.length ? group.company_detail : group.company),
+      excluded_account_ids: normalizeIds(
+        group.excluded_account_ids?.length
+          ? group.excluded_account_ids
+          : group.excluded_accounts_detail,
+      ),
+      note: group.note || '',
+    });
+    setHasChanges(false);
+    return frameworkId;
+  }, [form]);
 
   useEffect(() => {
-    const handleBeforeUnload = (event) => {
-      if (hasUnsavedChanges) {
-        event.preventDefault();
-        event.returnValue = '';
+    let active = true;
+
+    const initialize = async () => {
+      if (cachedGroup) hydrateForm(cachedGroup);
+      else setInitializing(true);
+
+      try {
+        const frameworkPromise = frameworks.length ? Promise.resolve() : fetchFrameworks();
+        const groupPromise = fetchGroupById(id);
+        const [, freshGroup] = await Promise.all([frameworkPromise, groupPromise]);
+        if (!active || !freshGroup) return;
+
+        const frameworkId = hydrateForm(freshGroup);
+        if (frameworkId) fetchGroups({ framework: frameworkId }).catch(() => {});
+      } catch (error) {
+        if (!active) return;
+        setFeedback({
+          type: cachedGroup ? 'warning' : 'error',
+          message: cachedGroup
+            ? 'Les données de la liste sont affichées, mais leur synchronisation a échoué.'
+            : getErrorMessage(error, 'Impossible de charger la classe à modifier.'),
+        });
+      } finally {
+        if (active) setInitializing(false);
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
+    initialize();
+    return () => { active = false; };
+    // Les données du store changent pendant le chargement; l'initialisation ne doit pas repartir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
-  const navigateWithGuard = (to, options) => {
-    if (hasUnsavedChanges) {
-      setPendingNavigation({ to, options });
-      setShowConfirmDialog(true);
-      return;
-    }
+  const handleFrameworkChange = useCallback(async (frameworkId) => {
+    const normalizedId = relationId(frameworkId);
+    setSelectedFramework(normalizedId);
+    form.setFieldValue('parent', null);
+    setFeedback(null);
+    if (!normalizedId) return;
 
-    navigate(to, options);
-  };
-
-  const saveValues = async (values, redirect = { to: '/comptabilite/groups', options: undefined }) => {
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
+    sessionStorage.setItem(FRAMEWORK_SESSION_KEY, String(normalizedId));
     try {
-      await updateGroup(id, {
+      await fetchGroups({ framework: normalizedId });
+    } catch (error) {
+      setFeedback({ type: 'error', message: getErrorMessage(error, 'Impossible de charger les classes parentes.') });
+    }
+  }, [fetchGroups, form]);
+
+  const save = useCallback(async () => {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const values = await form.validateFields();
+      const payload = {
         ...values,
-        company: values.company || [],
-        excluded_account_ids: values.excluded_account_ids || [],
-      });
-      setSuccess('Classe modifiée avec succès');
-      message.success('Classe modifiée avec succès');
-      setHasUnsavedChanges(false);
-      navigate(redirect.to, redirect.options);
-    } catch (caughtError) {
-      const errorData = caughtError.response?.data;
-      if (errorData && typeof errorData === 'object') {
-        Object.entries(errorData).forEach(([field, errors]) => {
-          const msg = Array.isArray(errors) ? errors.join(', ') : String(errors);
-          message.error(`${field} : ${msg}`);
-          setError(`${field} : ${msg}`);
-        });
+        framework: relationId(values.framework),
+        parent: relationId(values.parent),
+        company: normalizeIds(values.company),
+        excluded_account_ids: normalizeIds(values.excluded_account_ids),
+      };
+      const updated = await updateGroup(id, payload);
+      const result = { ...groupData, ...payload, ...(updated || {}), id };
+      setGroupData(result);
+      setHasChanges(false);
+      setFeedback({ type: 'success', message: 'Classe modifiée avec succès.' });
+      return result;
+    } catch (error) {
+      if (error?.errorFields) {
+        setFeedback({ type: 'error', message: 'Complétez les champs obligatoires avant l’enregistrement.' });
       } else {
-        const msg = caughtError.message || 'Erreur lors de la modification';
-        message.error(msg);
-        setError(msg);
+        setFeedback({ type: 'error', message: getErrorMessage(error, 'Erreur lors de la modification de la classe.') });
       }
+      return false;
     } finally {
       setSaving(false);
     }
-  };
+  }, [form, groupData, id, updateGroup]);
 
-  const onFinish = async (values) => {
-    await saveValues(values, { to: '/comptabilite/groups', options: undefined });
-  };
+  const listPath = selectedFramework
+    ? `/comptabilite/groups?framework=${selectedFramework}`
+    : '/comptabilite/groups';
 
-  const saveBeforeLeaving = async () => {
-    try {
-      const values = await form.validateFields();
-      setShowConfirmDialog(false);
-      await saveValues(values, pendingNavigation);
-    } catch {
-      setShowConfirmDialog(false);
-    }
-  };
+  const traceabilityLogs = useMemo(() => [
+    {
+      id: 'creation',
+      title: 'Création de la classe',
+      date: groupData?.created_at || groupData?.create_date,
+      user: groupData?.created_by_name || groupData?.create_uid_label || groupData?.created_by,
+    },
+    {
+      id: 'update',
+      title: 'Dernière modification',
+      date: groupData?.updated_at || groupData?.write_date,
+      user: groupData?.updated_by_name || groupData?.write_uid_label || groupData?.updated_by,
+    },
+  ].filter((item) => item.date || item.user), [groupData]);
 
-  const discardChanges = () => {
-    setHasUnsavedChanges(false);
-    setShowConfirmDialog(false);
-    navigate(pendingNavigation.to, pendingNavigation.options);
-  };
-
-  if (pageLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="mx-auto flex min-h-[300px] max-w-7xl items-center justify-center border border-gray-300 bg-white">
-          <Spin size="large" tip="Chargement de la classe..." />
+  const traceabilityContent = (
+    <div className="p-3">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs font-medium text-gray-700">Activité liée à cette classe</span>
+        <span className="text-[11px] text-gray-500">{traceabilityLogs.length} événement(s)</span>
+      </div>
+      {traceabilityLogs.length ? traceabilityLogs.map((log) => (
+        <div key={log.id} className="mb-2 border border-gray-200 bg-white px-3 py-2 last:mb-0">
+          <div className="text-xs font-semibold text-gray-900">{log.title}</div>
+          <div className="mt-1 text-[11px] text-gray-600">{recordLabel}</div>
+          <div className="mt-1 text-[11px] text-gray-500">Par {log.user || 'Utilisateur'}</div>
+          <div className="text-[11px] text-gray-400">{formatDateTime(log.date)}</div>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <style>{`
-        .group-edit-form .ant-form-item {
-          margin-bottom: 0;
-        }
-        .group-edit-form .ant-input,
-        .group-edit-form .ant-select-selector {
-          min-height: 30px !important;
-          border-radius: 0 !important;
-          border-color: #d1d5db !important;
-          font-size: 12px !important;
-          box-shadow: none !important;
-        }
-        .group-edit-form .ant-input {
-          padding: 3px 8px !important;
-        }
-        .group-edit-form textarea.ant-input {
-          min-height: 110px !important;
-          line-height: 1.5 !important;
-          resize: vertical;
-        }
-        .group-edit-form .ant-select-selection-item,
-        .group-edit-form .ant-select-selection-placeholder {
-          font-size: 12px !important;
-        }
-        .group-edit-form .ant-form-item-explain-error,
-        .group-edit-form .ant-form-item-extra {
-          font-size: 11px;
-          margin-top: 2px;
-        }
-      `}</style>
-
-      <div className="mx-auto max-w-7xl border border-gray-300 bg-white">
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={onFinish}
-          onValuesChange={() => setHasUnsavedChanges(true)}
-          requiredMark="optional"
-          size="middle"
-          className="group-edit-form"
-        >
-          <div className="border-b border-gray-300 px-4 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-start gap-3">
-                <Tooltip text="Créer une nouvelle classe">
-                  <button
-                    type="button"
-                    onClick={() => navigateWithGuard('/comptabilite/groups/new', { state: { frameworkId: selectedFramework } })}
-                    className="flex h-12 items-center gap-1 bg-purple-600 px-4 text-sm font-medium text-white transition-all hover:bg-purple-700"
-                  >
-                    <FiPlus size={16} /><span>Nouveau</span>
-                  </button>
-                </Tooltip>
-                <div className="flex min-h-[48px] min-w-0 flex-col justify-center">
-                  <div
-                    className="cursor-pointer text-lg font-bold text-gray-900 transition-colors hover:text-purple-600"
-                    onClick={() => navigateWithGuard('/comptabilite/groups')}
-                  >
-                    Modifier la classe de comptes
-                  </div>
-                  <div className="mt-1 text-xs font-medium text-gray-600">
-                    {groupData
-                      ? `${groupData.code} - ${groupData.name}`
-                      : 'Modifiez les informations de la classe'}
-                  </div>
-                  {selectedFw && (
-                    <div className="mt-1 text-xs text-gray-500">
-                      Référentiel actif : {selectedFw.code} - {selectedFw.name}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Tooltip text="Menu des actions">
-                    <button
-                      type="button"
-                      onClick={() => setShowActionsMenu(!showActionsMenu)}
-                      className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 hover:bg-gray-50"
-                    >
-                      <FiSettings size={12} /><span>Actions</span>
-                    </button>
-                  </Tooltip>
-                  {showActionsMenu && (
-                    <div className="absolute right-0 z-50 mt-1 w-52 rounded-sm border border-gray-300 bg-white shadow-lg">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowActionsMenu(false);
-                          navigateWithGuard(`/comptabilite/groups/${id}`);
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-gray-50"
-                      >
-                        <FiEye size={12} /> Voir le détail
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowActionsMenu(false);
-                          navigateWithGuard('/comptabilite/groups');
-                        }}
-                        className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"
-                      >
-                        <FiInfo size={12} /> Retour à la liste
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <Tooltip text="Enregistrer">
-                  <button
-                    type="button"
-                    onClick={() => form.submit()}
-                    disabled={saving}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <FiUploadCloud size={16} />
-                  </button>
-                </Tooltip>
-                <Tooltip text="Annuler">
-                  <button
-                    type="button"
-                    onClick={() => navigateWithGuard('/comptabilite/groups')}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white hover:bg-gray-800"
-                  >
-                    <CloseOutlined />
-                  </button>
-                </Tooltip>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-b border-gray-300 px-4 py-2">
-            {error ? (
-              <div className="flex items-center gap-1 text-xs text-red-600">
-                <FiAlertCircle size={14} /><span>{error}</span>
-              </div>
-            ) : success ? (
-              <div className="flex items-center gap-1 text-xs text-green-600">
-                <FiCheck size={14} /><span>{success}</span>
-              </div>
-            ) : !readyForValidation ? (
-              <div className="flex items-center gap-1 text-xs text-amber-600">
-                <FiInfo size={14} /><span>Complétez le code et le nom de la classe</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 text-xs text-green-600">
-                <FiCheck size={14} /><span>Classe prête à être enregistrée</span>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white">
-            <Section title="Référentiel & Identification">
-              <FieldRow label="Référentiel comptable">
-                <Form.Item name="framework" rules={[{ required: true, message: 'Référentiel obligatoire' }]}>
-                  <Select
-                    disabled
-                    showSearch
-                    optionFilterProp="label"
-                    placeholder="Sélectionner un référentiel"
-                    options={frameworkOptions}
-                  />
-                </Form.Item>
-              </FieldRow>
-
-              <FieldRow label="Code">
-                <Form.Item name="code" rules={[{ required: true, message: 'Code obligatoire' }]}>
-                  <Input />
-                </Form.Item>
-              </FieldRow>
-
-              <FieldRow label="Ordre d'affichage" optional>
-                <Form.Item name="sequence">
-                  <Input type="number" />
-                </Form.Item>
-              </FieldRow>
-
-              <FieldRow label="Nom de la classe">
-                <Form.Item name="name" rules={[{ required: true, message: 'Nom obligatoire' }]}>
-                  <Input />
-                </Form.Item>
-              </FieldRow>
-            </Section>
-
-            <Section title="Hiérarchie">
-              <FieldRow label="Classe parente" optional>
-                <Form.Item name="parent">
-                  <Select
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    placeholder="Aucune (classe racine)"
-                    options={parentOptions}
-                  />
-                </Form.Item>
-              </FieldRow>
-            </Section>
-
-            <Section
-              title="Plage de comptes"
-              hint="La plage détermine quels comptes sont rattachés automatiquement à cette classe via leur préfixe de code."
-            >
-              <FieldRow label="Début de plage" optional>
-                <Form.Item name="code_prefix_start">
-                  <Input />
-                </Form.Item>
-              </FieldRow>
-
-              <FieldRow label="Fin de plage" optional>
-                <Form.Item name="code_prefix_end">
-                  <Input />
-                </Form.Item>
-              </FieldRow>
-
-              <FieldRow label="Comptes exclus de la plage" optional>
-                <Form.Item name="excluded_account_ids">
-                  <Select
-                    allowClear
-                    mode="multiple"
-                    optionFilterProp="label"
-                    placeholder="Aucun compte exclu"
-                    options={excludedAccountOptions}
-                  />
-                </Form.Item>
-              </FieldRow>
-            </Section>
-
-            <Section title="Périmètre">
-              <FieldRow label="Sociétés concernées" optional>
-                <Form.Item name="company">
-                  <Select
-                    allowClear
-                    mode="multiple"
-                    optionFilterProp="label"
-                    placeholder="Toutes les sociétés (par défaut)"
-                    options={companyOptions}
-                  />
-                </Form.Item>
-              </FieldRow>
-            </Section>
-
-            <Section title="Notes">
-              <FieldRow label="Description / Remarques" optional span>
-                <Form.Item name="note">
-                  <TextArea maxLength={1000} showCount rows={5} />
-                </Form.Item>
-              </FieldRow>
-            </Section>
-          </div>
-        </Form>
-      </div>
-
-      {showConfirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="mx-4 w-full max-w-md rounded-sm bg-white p-6 shadow-lg">
-            <h3 className="mb-3 text-lg font-bold text-gray-900">Modifications non sauvegardées</h3>
-            <p className="mb-6 text-sm text-gray-600">
-              Voulez-vous enregistrer les modifications avant de quitter ?
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={saveBeforeLeaving}
-                className="bg-purple-600 px-4 py-2 text-sm text-white transition-all hover:bg-purple-700"
-              >
-                Enregistrer
-              </button>
-              <button
-                type="button"
-                onClick={discardChanges}
-                className="bg-red-600 px-4 py-2 text-sm text-white transition-all hover:bg-red-700"
-              >
-                Ne pas enregistrer
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowConfirmDialog(false)}
-                className="border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-all hover:bg-gray-50"
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
+      )) : (
+        <div className="border border-gray-200 bg-white p-5 text-center text-xs text-gray-500">
+          Aucune traçabilité disponible pour cette classe.
         </div>
       )}
     </div>
+  );
+
+  const actionsMenu = (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setActionsOpen((open) => !open)}
+        className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700"
+      >
+        <FiSettings size={12} /> Actions
+      </button>
+      {actionsOpen && (
+        <div className="absolute right-0 top-full z-50 mt-1 w-52 border border-gray-300 bg-white shadow-lg">
+          <button
+            type="button"
+            onClick={() => navigate(`/comptabilite/groups/${id}`, { state: { groupRecord: groupData, frameworkId: selectedFramework, returnTo: location.pathname } })}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-purple-50"
+          >
+            <FiEye size={12} /> Voir le détail
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/comptabilite/groups/new', { state: { frameworkId: selectedFramework, parentId: id, returnTo: location.pathname } })}
+            className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-xs hover:bg-purple-50"
+          >
+            <FiPlus size={12} /> Ajouter une sous-classe
+          </button>
+          <button
+            type="button"
+            onClick={() => { setTraceabilityOpen((open) => !open); setActionsOpen(false); }}
+            className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-xs hover:bg-purple-50"
+          >
+            <FiInfo size={12} /> {traceabilityOpen ? 'Masquer' : 'Afficher'} la traçabilité
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  if (initializing && !groupData) {
+    return <div className="flex h-full items-center justify-center bg-white"><Spin size="large" tip="Chargement de la classe..." /></div>;
+  }
+
+  return (
+    <UnifiedFormPage
+      title="Classes / Groupes"
+      recordLabel={recordLabel}
+      pageLabel="Modification d’une classe comptable"
+      mode="edit"
+      fallbackPath={listPath}
+      primaryAction={{
+        label: 'Nouveau',
+        icon: <FiPlus size={12} />,
+        path: '/comptabilite/groups/new',
+        state: { frameworkId: selectedFramework },
+      }}
+      actionsMenu={actionsMenu}
+      onSave={save}
+      saveLabel="Enregistrer les modifications"
+      saving={saving}
+      hasUnsavedChanges={hasChanges}
+      rememberForm={false}
+      feedback={feedback}
+      onDismissFeedback={() => setFeedback(null)}
+      messageDuration={15000}
+      buildReturnState={(updated) => ({
+        restoredFromSmartBack: true,
+        refreshGroups: true,
+        updatedGroup: updated,
+        frameworkId: relationId(updated?.framework) || selectedFramework,
+      })}
+      traceability={groupData ? {
+        open: traceabilityOpen,
+        onOpen: () => setTraceabilityOpen(true),
+        onClose: () => setTraceabilityOpen(false),
+        title: 'Traçabilité',
+        content: traceabilityContent,
+      } : undefined}
+      noContext={!groupData ? <div className="text-center text-sm text-gray-500">Cette classe est introuvable.</div> : undefined}
+    >
+      {groupData && (
+        <div className="p-4">
+          <Form
+            form={form}
+            layout="vertical"
+            requiredMark={false}
+            className="group-form"
+            onValuesChange={() => {
+              setHasChanges(true);
+              setFeedback(null);
+            }}
+          >
+            <style>{`
+              .group-form .ant-form-item { margin-bottom: 10px; }
+              .group-form .ant-form-item-label { padding-bottom: 3px; }
+              .group-form .ant-form-item-label > label { height: auto; font-size: 12px; font-weight: 600; color: #374151; }
+              .group-form .ant-input,
+              .group-form .ant-input-number,
+              .group-form .ant-select-selector { min-height: 30px !important; border-radius: 0 !important; font-size: 12px !important; box-shadow: none !important; }
+              .group-form .ant-input { height: 30px; padding: 3px 8px; }
+              .group-form textarea.ant-input { height: auto; min-height: 76px !important; }
+              .group-form .ant-select-selector { padding: 0 8px !important; }
+              .group-form .ant-select-selection-item,
+              .group-form .ant-select-selection-placeholder { line-height: 28px !important; font-size: 12px !important; }
+              .group-form .ant-input:hover,
+              .group-form .ant-select:hover .ant-select-selector { border-color: #c084fc !important; }
+              .group-form .ant-input:focus,
+              .group-form .ant-select-focused .ant-select-selector { border-color: #9333ea !important; box-shadow: 0 0 0 1px #9333ea !important; }
+              .group-form .ant-card { border-radius: 0 !important; box-shadow: none !important; }
+            `}</style>
+            <GroupFormFields
+              frameworks={frameworks}
+              groups={groups.filter((item) => String(item.id) !== String(id))}
+              selectedFramework={selectedFramework}
+              onFrameworkChange={handleFrameworkChange}
+              disableFramework
+            />
+          </Form>
+        </div>
+      )}
+    </UnifiedFormPage>
   );
 }
 
 export { GroupEdit };
-export default GroupEdit;

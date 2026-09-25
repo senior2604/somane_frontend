@@ -1,6 +1,6 @@
 // src/features/comptabilité/pages/EcrituresComptables/List.jsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   FiCheck,
@@ -18,6 +18,18 @@ const DEFAULT_COLUMNS = [
   'date', 'piece', 'journal', 'account', 'partner',
   'label', 'debit', 'credit', 'reconcile', 'state',
 ];
+const ORDERING_FIELDS = {
+  date: 'date',
+  piece: 'move__name',
+  journal: 'journal__code',
+  account: 'account__code',
+  partner: 'partner__nom',
+  label: 'name',
+  debit: 'debit',
+  credit: 'credit',
+  reconcile: 'reconciled',
+  state: 'move__state',
+};
 
 const normalizeApiList = (data) => {
   if (Array.isArray(data)) return data;
@@ -188,6 +200,8 @@ export default function EcrituresComptablesList() {
   const [pageSize, setPageSize] = useState(15);
   const [total, setTotal] = useState(0);
   const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_COLUMNS);
+  const [sortColumn, setSortColumn] = useState('date');
+  const [sortDirection, setSortDirection] = useState('desc');
   const requestIdRef = useRef(0);
 
   const loadLines = useCallback(async () => {
@@ -206,8 +220,8 @@ export default function EcrituresComptablesList() {
           page,
           page_size: pageSize,
           search: search.trim() || undefined,
-          state: stateFilter || undefined,
-          ordering: '-date,-id',
+          move__state: stateFilter || undefined,
+          ordering: `${sortDirection === 'desc' ? '-' : ''}${ORDERING_FIELDS[sortColumn] || 'date'}`,
         },
       });
       if (requestId !== requestIdRef.current) return;
@@ -224,7 +238,7 @@ export default function EcrituresComptablesList() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeEntity?.id, activeFilters, moveIdFilter, page, pageSize, search]);
+  }, [activeEntity?.id, activeFilters, moveIdFilter, page, pageSize, search, sortColumn, sortDirection]);
 
   useEffect(() => {
     const delay = search.trim() ? 250 : 0;
@@ -237,8 +251,23 @@ export default function EcrituresComptablesList() {
   const clearMoveFilter = useCallback(() => {
     const params = new URLSearchParams(location.search);
     params.delete('move_id');
-    navigate(`/comptabilite/ecritures${params.toString() ? `?${params.toString()}` : ''}`, { replace: true });
-  }, [location.search, navigate]);
+    params.delete('piece_id');
+
+    const nextState = { ...(location.state || {}) };
+    delete nextState.move_id;
+    delete nextState.moveId;
+    delete nextState.piece_id;
+    delete nextState.pieceId;
+    delete nextState.pieceName;
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: params.toString() ? `?${params.toString()}` : '',
+      },
+      { replace: true, state: nextState },
+    );
+  }, [location.pathname, location.search, location.state, navigate]);
 
   const addFilter = useCallback((field, value, label) => {
     setActiveFilters((current) => current.some((item) => item.field === field && item.value === value)
@@ -246,12 +275,13 @@ export default function EcrituresComptablesList() {
       : [...current, { id: `${field}:${value}`, field, value, label }]);
   }, []);
 
-  const removeFilter = useCallback((id) => {
-    if (id === 'move') {
+  const removeFilter = useCallback((filterOrId) => {
+    const filterId = typeof filterOrId === 'object' ? filterOrId?.id : filterOrId;
+    if (filterId === 'move') {
       clearMoveFilter();
       return;
     }
-    setActiveFilters((current) => current.filter((item) => item.id !== id));
+    setActiveFilters((current) => current.filter((item) => item.id !== filterId));
   }, [clearMoveFilter]);
 
   const filteredLines = useMemo(() => lines.filter((line) => {
@@ -338,7 +368,7 @@ export default function EcrituresComptablesList() {
     selectedRowKeys={selectedIds}
     onSelectionChange={setSelectedIds}
     renderSelectionSummary={(selectedRows) => <span><FiCheck className="mr-1 inline" size={13} />{selectedRows.length} sélectionnée(s)</span>}
-    onRowDoubleClick={(line) => { const moveId = getMoveId(line); if (moveId) navigate(`/comptabilite/pieces/${moveId}`); }}
+    onRowOpen={(line) => { const moveId = getMoveId(line); if (moveId) navigate(`/comptabilite/pieces/${moveId}`); }}
     page={page}
     onPageChange={setPage}
     pageSize={pageSize}
@@ -351,6 +381,13 @@ export default function EcrituresComptablesList() {
     defaultVisibleColumnIds={DEFAULT_COLUMNS}
     defaultSortColumn="date"
     defaultSortDirection="desc"
+    sortColumn={sortColumn}
+    sortDirection={sortDirection}
+    onSortChange={(columnId, direction) => {
+      setPage(1);
+      setSortColumn(columnId);
+      setSortDirection(direction);
+    }}
     footerText={`${total} écriture(s)`}
   />;
 }

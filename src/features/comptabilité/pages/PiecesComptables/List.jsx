@@ -16,10 +16,26 @@ import { piecesService } from '../../services';
 
 const PIECES_MEMORY_KEY = 'comptabilite:pieces:index:v1';
 const PIECES_DATA_CACHE_PREFIX = 'comptabilite:pieces:data:v2';
-const PIECES_PAGE_SIZE = 200;
-const PIECES_PAGE_CONCURRENCY = 4;
+// La première réponse doit rester légère : la page affiche 15 lignes par défaut.
+// Les pages suivantes sont récupérées discrètement après le premier rendu.
+const PIECES_PAGE_SIZE = 25;
+const PIECES_PAGE_CONCURRENCY = 2;
 const piecesDataMemoryCache = new Map();
 const piecesPageRequestCache = new Map();
+
+const waitForBrowserIdle = () => new Promise((resolve) => {
+  if (typeof window === 'undefined') {
+    resolve();
+    return;
+  }
+
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(resolve, { timeout: 250 });
+    return;
+  }
+
+  window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
+});
 
 const getPiecesDataCacheKey = (entityId) => `${PIECES_DATA_CACHE_PREFIX}:${entityId}`;
 
@@ -529,6 +545,7 @@ export default function PiecesComptablesList() {
   const loadData = useCallback(async (force = false) => {
     const requestId = loadRequestRef.current + 1;
     loadRequestRef.current = requestId;
+    let firstPageDisplayed = false;
 
     if (!entityId) {
       setPieces([]);
@@ -550,9 +567,6 @@ export default function PiecesComptablesList() {
     try {
       setError('');
 
-      const referentialsRequest = getReferentialData(entityId)
-        .then((data) => ({ data, error: null }))
-        .catch((referentialError) => ({ data: null, error: referentialError }));
       const piecesResponse = await requestPiecesPage(entityId, 1, force);
       if (loadRequestRef.current !== requestId) return;
 
@@ -562,6 +576,16 @@ export default function PiecesComptablesList() {
       setPieces(firstPieces);
       writePiecesDataCache(entityId, firstPieces);
       setLoading(false);
+      firstPageDisplayed = true;
+
+      // Le navigateur peint d'abord les premières lignes. Les requêtes moins
+      // urgentes ne ralentissent donc plus l'arrivée de la liste à l'écran.
+      await waitForBrowserIdle();
+      if (loadRequestRef.current !== requestId) return;
+
+      const referentialsRequest = getReferentialData(entityId)
+        .then((data) => ({ data, error: null }))
+        .catch((referentialError) => ({ data: null, error: referentialError }));
 
       const effectivePageSize = firstPage.results.length || PIECES_PAGE_SIZE;
       const pageCount = firstPage.hasPagination
@@ -594,10 +618,10 @@ export default function PiecesComptablesList() {
     } catch (loadError) {
       if (loadRequestRef.current !== requestId) return;
       console.error('Erreur chargement pièces:', loadError);
-      setError(cachedData
+      setError((cachedData || firstPageDisplayed)
         ? 'Impossible d\'actualiser les pièces comptables. La dernière liste disponible reste affichée.'
         : 'Impossible de charger les pièces comptables.');
-      if (!cachedData) setPieces([]);
+      if (!cachedData && !firstPageDisplayed) setPieces([]);
     } finally {
       if (loadRequestRef.current === requestId) setLoading(false);
     }
@@ -862,7 +886,7 @@ export default function PiecesComptablesList() {
       value: (piece) => piece.payment_state || '',
       render: (_, piece) => <PaymentBadge state={piece.payment_state} />,
     },
-  ], [dateDisplayMode]);
+  ], [dateDisplayMode, navigate]);
 
   const renderFilters = useCallback(({ close }) => (
     <div className="grid grid-cols-1 text-xs text-gray-700 md:grid-cols-[minmax(220px,0.8fr)_minmax(360px,1.4fr)]">
@@ -1070,7 +1094,7 @@ export default function PiecesComptablesList() {
       onSelectionChange={setSelectedPieceIds}
       selectionActions={selectionActions}
       renderSelectionSummary={() => <span>{selectedPieceIds.length} pièce(s) sélectionnée(s)</span>}
-      onRowClick={handleRowClick}
+      onRowOpen={handleRowClick}
       page={currentPage}
       onPageChange={setCurrentPage}
       pageSize={itemsPerPage}

@@ -14,6 +14,7 @@ import EntitiesCreate  from "../pages/Entities/Create.jsx";
 import EntitiesShow  from "../pages/Entities/Show.jsx";
 import EntitiesList   from "../pages/Entities/List.jsx";
 
+import ResetPasswordConfirm from "../pages/Auth/ResetPasswordConfirm";
 import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
 import GroupesPage from "../pages/Groupes/GroupesPage";
 import JournalPage from "../pages/Journal/JournalPage";
@@ -38,7 +39,7 @@ import SecurityList from "../pages/Users/List.jsx";
 import SecurityCreate from "../pages/Users/Create.jsx";
 import SecurityShow from "../pages/Users/Show.jsx";
 
-
+import DynamicActionPage from '../pages/DynamicUI/DynamicActionPage';
 
 // NOUVELLES PAGES D'ENTITÃ‰
 import NoEntitePage from "../pages/Entities/NoEntitePage";
@@ -69,7 +70,7 @@ import TypeEdit from "../features/comptabilité/pages/types/TypeEdit.jsx";
 import TypeDetail from "../features/comptabilité/pages/types/TypeDetail.jsx";
 import AccountList from "../features/comptabilité/pages/accounts/AccountList.jsx";
 import AccountCreate from "../features/comptabilité/pages/accounts/AccountCreate.jsx";
-import AccountEdit from "../features/comptabilité/pages/accounts/AccountEdit.jsx";
+import AccountEdit from "../features/comptabilité/pages/accounts/AccountForm.jsx";
 import AccountDetail from "../features/comptabilité/pages/accounts/AccountDetail.jsx";
 import AccountImport from "../features/comptabilité/pages/accounts/AccountImport.jsx";
 
@@ -117,6 +118,19 @@ import PaymentTermDetail from "../features/comptabilité/pages/payement/PaymentT
 import PaymentMethods from "../features/comptabilité/pages/payement/PaymentMethods.jsx";
 import PaymentMethodCreate from "../features/comptabilité/pages/payement/PaymentMethodCreate.jsx";
 import PaymentMethodDetail from "../features/comptabilité/pages/payement/PaymentMethodDetail.jsx";
+
+// Emprunts
+import LoanList from "../features/comptabilité/pages/emprunts/LoanList.jsx";
+import LoanCreate from "../features/comptabilité/pages/emprunts/LoanCreate.jsx";
+import LoanDetail from "../features/comptabilité/pages/emprunts/LoanDetail.jsx";
+
+// Immobilisations
+import AssetList from "../features/comptabilité/pages/immobilisations/AssetList.jsx";
+import AssetCreate from "../features/comptabilité/pages/immobilisations/AssetCreate.jsx";
+import AssetDetail from "../features/comptabilité/pages/immobilisations/AssetDetail.jsx";
+import AssetCategoryList from "../features/comptabilité/pages/immobilisations/AssetCategoryList.jsx";
+import AssetCategoryCreate from "../features/comptabilité/pages/immobilisations/AssetCategoryCreate.jsx";
+import AssetCategoryDetail from "../features/comptabilité/pages/immobilisations/AssetCategoryDetail.jsx";
 
 // ========== MODULE VENTES ==========
 import VenteLayout from "../features/vente/layouts/VenteLayout.jsx";
@@ -248,6 +262,9 @@ const RoutePage = ({ component, name }) => {
   return Component ? <Component /> : <InvalidRouteComponent name={name} />;
 };
 
+
+
+
 // ========== ROUTER PRINCIPAL ==========
 export default function AppRouter() {
   return (
@@ -259,7 +276,10 @@ export default function AppRouter() {
         <Route path="/auth/password/reset/:uid/:token" element={<ResetPasswordPage />} />
         <Route path="/auth/reset-confirm/success" element={<ConfirmResetPage />} />
         <Route path="/profile" element={<ProfilePage />} />
-
+        <Route
+          path="/auth/reset-password/:uid/:token"
+          element={<ResetPasswordConfirm />}
+        />
         {/* SELECTION D'ENTITE */}
         <Route path="/select-entite" element={<SelectEntitePage />} />
         <Route path="/no-entite" element={<NoEntitePage />} />
@@ -283,6 +303,10 @@ export default function AppRouter() {
           <Route path="/security/create" element={<SecurityCreate />} />
           <Route path="/security/:type/:id" element={<SecurityShow />} />
 
+          <Route
+          path="/ui/action/:actionId"
+          element={<DynamicActionPage />}
+            />
           <Route path="/userentities" element={<UserEntitiesPage />} />
           <Route path="/groupes" element={<GroupesPage />} />
           <Route path="/permissions" element={<PermissionsPage />} />
@@ -370,12 +394,12 @@ export default function AppRouter() {
             <Route path=":id/edit" element={<JournauxEdit />} />
           </Route>
 
-        {/* grand livre  */}
-        <Route path="grand-livre" element={<GrandLivre />} />
-        <Route path="grand-livre-partenaires" element={<GrandLivrePartenaires />} />
-        <Route path="balance-partenaires" element={<BalancePartenaires />} />
-        <Route path="balance-agee" element={<BalanceAgee />} />
-        <Route path="Bilan" element={<EtatsFinanciersComptabilite />} />
+          {/* grand livre */}
+          <Route path="grand-livre" element={<GrandLivre />} />
+          <Route path="grand-livre-partenaires" element={<GrandLivrePartenaires />} />
+          <Route path="balance-partenaires" element={<BalancePartenaires />} />
+          <Route path="balance-agee" element={<BalanceAgee />} />
+          <Route path="Bilan" element={<EtatsFinanciersComptabilite />} />
           <Route path="parametrage">
             <Route path="longueur-compte" element={<AccountCompanyConfigWizard />} />
           </Route>
@@ -420,6 +444,27 @@ export default function AppRouter() {
             <Route path=":id" element={<PaymentMethodDetail />} />
           </Route>
 
+          <Route path="emprunts">
+            <Route index element={<LoanList />} />
+            <Route path="create" element={<LoanCreate />} />
+            <Route path="new" element={<LoanCreate />} />
+            <Route path=":id" element={<LoanDetail />} />
+          </Route>
+
+          <Route path="immobilisations">
+            <Route index element={<AssetList />} />
+            <Route path="create" element={<AssetCreate />} />
+            <Route path="new" element={<AssetCreate />} />
+            <Route path=":id" element={<AssetDetail />} />
+          </Route>
+
+          <Route path="categories-immobilisations">
+            <Route index element={<AssetCategoryList />} />
+            <Route path="create" element={<AssetCategoryCreate />} />
+            <Route path="new" element={<AssetCategoryCreate />} />
+            <Route path=":id" element={<AssetCategoryDetail />} />
+          </Route>
+
           <Route path="lettrage">
             <Route index element={<LettrageIndex />} />
             <Route path="create" element={<LettrageCreate />} />
@@ -433,9 +478,8 @@ export default function AppRouter() {
             <Route path="create" element={<SequencesCreate />} />
             <Route path=":id" element={<SequencesShow />} />
           </Route>
+
         </Route>
-
-
 
         {/* VENTES */}
         <Route path="/vente" element={
@@ -527,3 +571,4 @@ export default function AppRouter() {
     </BrowserRouter>
   );
 }
+

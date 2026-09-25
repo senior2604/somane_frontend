@@ -1,910 +1,507 @@
 // src/features/comptabilite/pages/frameworks/FrameworkForm.jsx
-import { CloseOutlined } from '@ant-design/icons';
-import {
-  Form,
-  Input,
-  message,
-  Spin,
-  Switch,
-} from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  FiAlertCircle,
-  FiCheck,
-  FiEye,
-  FiInfo,
-  FiPlus,
-  FiSettings,
-  FiUploadCloud,
-} from 'react-icons/fi';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Form, Input, Select, Spin, Switch } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FiBriefcase, FiFolder, FiInfo, FiPlus, FiSettings, FiTag } from 'react-icons/fi';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
+import UnifiedFormPage from '../../../../components/UnifiedFormPage';
 import { ENDPOINTS } from '../../../../config/api';
 import axiosInstance from '../../../../config/axiosInstance';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 
 const { TextArea } = Input;
+const requestCache = new Map();
 
-const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-        {children}
-      </div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-            'right-full top-1/2 -translate-y-1/2 -mr-1'
-          }`} />
-        </div>
-      )}
-    </div>
-  );
+const normalizeList = (payload) => {
+  const list = payload?.results || payload || [];
+  return Array.isArray(list) ? list : [];
 };
 
 const relationId = (value) => {
-  if (!value) return null;
+  if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'object') return value.id ?? value.value ?? null;
   return value;
 };
 
-const normalizeApiList = (data) => {
-  const list = data?.results || data || [];
-  return Array.isArray(list) ? list : [];
-};
+const relationIds = (values) => normalizeList(values).map(relationId).filter((value) => value !== null);
 
 const getCountryLabel = (country) => (
-  country?.nom ||
-  country?.name ||
-  country?.libelle ||
-  country?.code ||
-  `Pays ${country?.id || ''}`.trim()
+  country?.nom || country?.name || country?.libelle || country?.code || `Pays ${country?.id || ''}`.trim()
 );
 
 const getEntityLabel = (entity) => (
-  entity?.raison_sociale ||
-  entity?.name ||
-  entity?.nom ||
-  `Entité ${entity?.id || ''}`.trim()
+  entity?.raison_sociale || entity?.name || entity?.nom || `Entité ${entity?.id || ''}`.trim()
 );
 
-const getSelectedOption = (options, value) => (
-  options.find((option) => String(option.value) === String(value))
-);
+const getCompanyNames = (framework) => normalizeList(framework?.company)
+  .map((company) => (typeof company === 'object' ? getEntityLabel(company) : String(company)))
+  .filter(Boolean);
 
-const PieceDropdown = ({
-  value,
-  onChange,
-  afterChange,
-  options = [],
-  placeholder = '',
-  disabled = false,
-  allowClear = false,
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [inputValue, setInputValue] = useState('');
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [dropdownStyle, setDropdownStyle] = useState({});
-  const inputRef = useRef(null);
-  const dropdownRef = useRef(null);
-
-  const selectedOption = useCallback(() => getSelectedOption(options, value), [options, value]);
-
-  useEffect(() => {
-    const selected = selectedOption();
-    setInputValue(selected?.label || '');
-  }, [selectedOption]);
-
-  const filteredOptions = options.filter((option) =>
-    String(option.label || '').toLowerCase().includes(inputValue.toLowerCase())
-  );
-
-  const updateDropdownPosition = useCallback(() => {
-    if (!inputRef.current) return;
-    const rect = inputRef.current.getBoundingClientRect();
-    setDropdownStyle({
-      position: 'fixed',
-      top: `${rect.bottom}px`,
-      left: `${rect.left}px`,
-      width: `${rect.width}px`,
-      zIndex: 9999,
-      maxHeight: '220px',
-      overflowY: 'auto',
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    updateDropdownPosition();
-    const handleScroll = () => updateDropdownPosition();
-    const handleResize = () => updateDropdownPosition();
-    window.addEventListener('scroll', handleScroll, true);
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [isOpen, updateDropdownPosition]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target)
-      ) {
-        setIsOpen(false);
-        const selected = selectedOption();
-        setInputValue(selected?.label || '');
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [selectedOption]);
-
-  const selectOption = (option) => {
-    if (disabled) return;
-    setInputValue(option.label || '');
-    setIsOpen(false);
-    onChange?.(option.value);
-    afterChange?.(option.value, option);
-  };
-
-  const clearSelection = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (disabled) return;
-    setInputValue('');
-    setIsOpen(false);
-    onChange?.(null);
-    afterChange?.(null, null);
-  };
-
-  const handleInputChange = (event) => {
-    if (disabled) return;
-    setInputValue(event.target.value);
-    setIsOpen(true);
-    setHighlightedIndex(0);
-    if (value) {
-      onChange?.(null);
-      afterChange?.(null, null);
-    }
-  };
-
-  const handleKeyDown = (event) => {
-    if (disabled) return;
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setIsOpen(true);
-      setHighlightedIndex((prev) => (prev < filteredOptions.length - 1 ? prev + 1 : prev));
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0));
-    } else if (event.key === 'Enter' && isOpen && filteredOptions.length > 0) {
-      event.preventDefault();
-      selectOption(filteredOptions[highlightedIndex]);
-    } else if (event.key === 'Escape') {
-      setIsOpen(false);
-      const selected = selectedOption();
-      setInputValue(selected?.label || '');
-    }
-  };
-
-  return (
-    <>
-      <div className="relative flex items-center">
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          onFocus={() => {
-            if (!disabled) {
-              setIsOpen(true);
-              updateDropdownPosition();
-            }
-          }}
-          placeholder={placeholder}
-          disabled={disabled}
-          className={`w-full px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none ${
-            disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''
-          }`}
-          style={{ height: '24px', border: 'none', backgroundColor: disabled ? '#f3f4f6' : 'transparent' }}
-          autoComplete="off"
-        />
-        {allowClear && value && !disabled && (
-          <button
-            type="button"
-            onClick={clearSelection}
-            className="absolute right-1 top-1/2 -translate-y-1/2 px-1 text-xs text-gray-400 hover:text-gray-700"
-            tabIndex={-1}
-          >
-            x
-          </button>
-        )}
-      </div>
-      {isOpen && !disabled && filteredOptions.length > 0 && (
-        <div ref={dropdownRef} className="bg-white border border-gray-300 shadow-lg" style={dropdownStyle}>
-          {filteredOptions.map((option, index) => (
-            <div
-              key={option.value}
-              className={`px-2 py-1 text-xs cursor-pointer ${
-                index === highlightedIndex ? 'bg-blue-100 text-blue-700' : 'hover:bg-blue-50'
-              } ${String(option.value) === String(value) ? 'bg-blue-50' : ''}`}
-              onClick={() => selectOption(option)}
-              onMouseEnter={() => setHighlightedIndex(index)}
-            >
-              {option.label}
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  );
+const countFromResponse = (payload) => {
+  if (Number.isFinite(Number(payload?.count))) return Number(payload.count);
+  return normalizeList(payload).length;
 };
 
-const MultiPieceDropdown = ({
-  value = [],
-  onChange,
-  options = [],
-  placeholder = '',
-  disabled = false,
-}) => {
-  const selectedValues = Array.isArray(value) ? value : [];
-  const [isOpen, setIsOpen] = useState(false);
-  const [inputValue, setInputValue] = useState('');
-  const [dropdownStyle, setDropdownStyle] = useState({});
-  const inputRef = useRef(null);
-  const dropdownRef = useRef(null);
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('fr-FR');
+};
 
-  const selectedOptions = options.filter((option) =>
-    selectedValues.some((selectedValue) => String(selectedValue) === String(option.value))
-  );
+const apiErrorMessage = (error, fallback) => {
+  const data = error?.response?.data;
+  if (typeof data?.detail === 'string') return data.detail;
+  if (data && typeof data === 'object') {
+    return Object.entries(data)
+      .map(([field, value]) => `${field} : ${Array.isArray(value) ? value.join(', ') : value}`)
+      .join('\n');
+  }
+  return error?.message || fallback;
+};
 
-  const filteredOptions = options.filter((option) =>
-    String(option.label || '').toLowerCase().includes(inputValue.toLowerCase())
-  );
-
-  const updateDropdownPosition = useCallback(() => {
-    if (!inputRef.current) return;
-    const rect = inputRef.current.getBoundingClientRect();
-    setDropdownStyle({
-      position: 'fixed',
-      top: `${rect.bottom}px`,
-      left: `${rect.left}px`,
-      width: `${rect.width}px`,
-      zIndex: 9999,
-      maxHeight: '240px',
-      overflowY: 'auto',
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    updateDropdownPosition();
-    const handleScroll = () => updateDropdownPosition();
-    const handleResize = () => updateDropdownPosition();
-    window.addEventListener('scroll', handleScroll, true);
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [isOpen, updateDropdownPosition]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target)
-      ) {
-        setIsOpen(false);
-        setInputValue('');
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const toggleOption = (option) => {
-    if (disabled) return;
-    const exists = selectedValues.some((selectedValue) => String(selectedValue) === String(option.value));
-    const nextValues = exists
-      ? selectedValues.filter((selectedValue) => String(selectedValue) !== String(option.value))
-      : [...selectedValues, option.value];
-    onChange?.(nextValues);
-  };
-
-  const removeOption = (event, optionValue) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (disabled) return;
-    onChange?.(selectedValues.filter((selectedValue) => String(selectedValue) !== String(optionValue)));
-  };
-
-  return (
-    <>
-      <div
-        ref={inputRef}
-        className={`min-h-[24px] flex items-center gap-1 px-1 py-0.5 ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'cursor-text'}`}
-        onClick={() => {
-          if (!disabled) {
-            setIsOpen(true);
-            updateDropdownPosition();
-          }
-        }}
-      >
-        {selectedOptions.slice(0, 3).map((option) => (
-          <span key={option.value} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded">
-            {option.label}
-            <button type="button" onClick={(event) => removeOption(event, option.value)} className="hover:text-red-600">
-              x
-            </button>
-          </span>
-        ))}
-        {selectedOptions.length > 3 && (
-          <span className="text-[10px] text-gray-500">+{selectedOptions.length - 3}</span>
-        )}
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(event) => {
-            setInputValue(event.target.value);
-            setIsOpen(true);
-          }}
-          disabled={disabled}
-          placeholder={selectedOptions.length ? '' : placeholder}
-          className="flex-1 min-w-[80px] text-xs focus:outline-none bg-transparent"
-        />
-      </div>
-      {isOpen && !disabled && (
-        <div ref={dropdownRef} className="bg-white border border-gray-300 shadow-lg" style={dropdownStyle}>
-          {filteredOptions.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-gray-400">Aucune option disponible</div>
-          ) : filteredOptions.map((option) => {
-            const checked = selectedValues.some((selectedValue) => String(selectedValue) === String(option.value));
-            return (
-              <div
-                key={option.value}
-                className={`px-2 py-1 text-xs cursor-pointer flex items-center gap-2 ${
-                  checked ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'
-                }`}
-                onClick={() => toggleOption(option)}
-              >
-                <input type="checkbox" checked={checked} readOnly className="w-3.5 h-3.5" />
-                <span>{option.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </>
-  );
+const cachedRequest = (key, loader) => {
+  if (!requestCache.has(key)) {
+    requestCache.set(key, Promise.resolve().then(loader).catch((error) => {
+      requestCache.delete(key);
+      throw error;
+    }));
+  }
+  return requestCache.get(key);
 };
 
 const FieldLine = ({ label, required = false, children }) => (
-  <div className="flex items-center" style={{ height: '26px' }}>
-    <label className="text-xs text-gray-700 min-w-[150px] font-medium">
-      {label}{required ? ' *' : ''}
+  <div className="flex min-w-0 items-center" style={{ height: 28 }}>
+    <label className="w-40 shrink-0 text-xs font-medium text-gray-700">
+      {label}{required && <span className="ml-0.5 text-red-500">*</span>}
     </label>
-    <div className="flex-1 ml-2 border border-gray-300 framework-form-control">
-      {children}
-    </div>
+    <div className="ml-2 min-w-0 flex-1">{children}</div>
   </div>
 );
 
-const TableCell = ({ children, className = '' }) => (
-  <div className={`border-r border-gray-300 p-1 last:border-r-0 ${className}`}>
+const CompactSelect = ({ options, ...props }) => (
+  <Select
+    {...props}
+    options={options}
+    showSearch
+    allowClear
+    optionFilterProp="label"
+    popupClassName="framework-select-dropdown"
+    className="w-full"
+    notFoundContent={<span className="text-xs text-gray-400">Aucun résultat</span>}
+  />
+);
+
+const TableHeader = ({ children }) => (
+  <th className="border border-gray-300 bg-gray-100 px-2 py-1.5 text-left text-xs font-medium text-gray-700">
     {children}
-  </div>
+  </th>
 );
 
-function FrameworkForm() {
+const TableCell = ({ children }) => (
+  <td className="h-8 min-w-0 border border-gray-300 p-0 align-middle">{children}</td>
+);
+
+const hydrateForm = (form, framework) => {
+  if (!framework) return;
+  const companies = relationIds(framework.company);
+  form.setFieldsValue({
+    code: framework.code || '',
+    name: framework.name || '',
+    version: framework.version || '',
+    country: relationId(framework.country),
+    country_group: framework.country_group || '',
+    account_code_length: framework.account_code_length ?? 10,
+    shared: companies.length === 0,
+    company: companies,
+    description: framework.description || '',
+    active: framework.active !== false,
+  });
+};
+
+export default function FrameworkForm({ mode = 'create' }) {
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
-  const isEdit = Boolean(id);
+  const resolvedMode = mode === 'show' ? 'show' : (id ? 'edit' : 'create');
+  const isShowMode = resolvedMode === 'show';
+  const isExisting = Boolean(id);
+  const initialRecord = location.state?.frameworkRecord || location.state?.record || null;
+  const initialValuesRef = useRef({});
 
   const { createFramework, updateFramework, fetchFrameworkById } = useFrameworkStore();
 
-  const [loading, setLoading] = useState(false);
+  const [framework, setFramework] = useState(initialRecord);
+  const [pageLoading, setPageLoading] = useState(isExisting && !initialRecord);
+  const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   const [countries, setCountries] = useState([]);
   const [entities, setEntities] = useState([]);
-  const [isShared, setIsShared] = useState(true);
-  const [activeTab, setActiveTab] = useState('general');
-  const [showActionsMenu, setShowActionsMenu] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [activeTab, setActiveTab] = useState('parameters');
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [traceabilityOpen, setTraceabilityOpen] = useState(true);
+  const [feedback, setFeedback] = useState(null);
+  const [stats, setStats] = useState({ groups: null, types: null, accounts: null });
 
   const watchedCode = Form.useWatch('code', form);
   const watchedName = Form.useWatch('name', form);
-  const activeValue = Form.useWatch('active', form);
-  const sharedValue = Form.useWatch('shared', form);
-  const isActive = activeValue !== false;
-  const readyForValidation = Boolean(watchedCode && watchedName);
+  const watchedActive = Form.useWatch('active', form);
+  const watchedShared = Form.useWatch('shared', form);
 
-  const countryOptions = countries.map((country) => ({
-    label: getCountryLabel(country),
+  const countryOptions = useMemo(() => countries.map((country) => ({
     value: country.id,
-  }));
+    label: getCountryLabel(country),
+  })), [countries]);
 
-  const entityOptions = entities.map((entity) => ({
-    label: getEntityLabel(entity),
+  const entityOptions = useMemo(() => entities.map((entity) => ({
     value: entity.id,
-  }));
+    label: getEntityLabel(entity),
+  })), [entities]);
 
-  const loadFormData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const [countriesRes, entitiesRes] = await Promise.allSettled([
-        axiosInstance.get(ENDPOINTS.PAYS),
-        axiosInstance.get(ENDPOINTS.ENTITES),
-      ]);
+  const rememberInitialValues = useCallback(() => {
+    initialValuesRef.current = form.getFieldsValue(true);
+    setHasChanges(false);
+  }, [form]);
 
-      if (countriesRes.status === 'fulfilled') {
-        setCountries(normalizeApiList(countriesRes.value.data));
-      } else {
-        console.error('Erreur chargement pays:', countriesRes.reason);
-        setCountries([]);
-        message.warning('Impossible de charger la liste des pays');
-      }
+  const loadReferences = useCallback(async () => {
+    const [countriesResult, entitiesResult] = await Promise.allSettled([
+      cachedRequest('framework-countries', () => axiosInstance.get(ENDPOINTS.PAYS).then((response) => response.data)),
+      cachedRequest('framework-entities', () => axiosInstance.get(ENDPOINTS.ENTITES).then((response) => response.data)),
+    ]);
+    if (countriesResult.status === 'fulfilled') setCountries(normalizeList(countriesResult.value));
+    if (entitiesResult.status === 'fulfilled') setEntities(normalizeList(entitiesResult.value));
+  }, []);
 
-      if (entitiesRes.status === 'fulfilled') {
-        setEntities(normalizeApiList(entitiesRes.value.data));
-      } else {
-        console.error('Erreur chargement entités:', entitiesRes.reason);
-        setEntities([]);
-        message.warning('Impossible de charger la liste des entités');
-      }
-
-      if (id) {
-        const framework = await fetchFrameworkById(id);
-        const shared = !framework.company || framework.company.length === 0;
-        const companyValues = Array.isArray(framework.company)
-          ? framework.company.map((company) => relationId(company)).filter(Boolean)
-          : [];
-
-        setIsShared(shared);
-        form.setFieldsValue({
-          code: framework.code,
-          name: framework.name,
-          version: framework.version,
-          country: relationId(framework.country),
-          country_group: framework.country_group,
-          account_code_length: framework.account_code_length ?? 10,
-          shared,
-          company: companyValues,
-          description: framework.description,
-          active: framework.active !== false,
-        });
-      } else {
-        form.setFieldsValue({
-          shared: true,
-          active: true,
-          account_code_length: 10,
-        });
-      }
-    } catch (caughtError) {
-      message.error('Impossible de charger les données du formulaire');
-      setError('Impossible de charger les données du formulaire');
-      console.error(caughtError);
-    } finally {
-      setLoading(false);
-    }
-  }, [id, fetchFrameworkById, form]);
+  const loadStats = useCallback(async () => {
+    if (!id) return;
+    const [groupsResult, typesResult, accountsResult] = await Promise.allSettled([
+      axiosInstance.get(ENDPOINTS.COMPTA.GROUPS, { params: { framework: id, page_size: 1 } }),
+      axiosInstance.get(ENDPOINTS.COMPTA.TYPES, { params: { framework: id, page_size: 1 } }),
+      axiosInstance.get(ENDPOINTS.COMPTA.ACCOUNTS, { params: { framework: id, page_size: 1 } }),
+    ]);
+    setStats({
+      groups: groupsResult.status === 'fulfilled' ? countFromResponse(groupsResult.value.data) : null,
+      types: typesResult.status === 'fulfilled' ? countFromResponse(typesResult.value.data) : null,
+      accounts: accountsResult.status === 'fulfilled' ? countFromResponse(accountsResult.value.data) : null,
+    });
+  }, [id]);
 
   useEffect(() => {
-    loadFormData();
-  }, [loadFormData]);
+    let mounted = true;
+    loadReferences();
 
-  const onFinish = async (values) => {
-    const payload = {
-      ...values,
-      company: values.shared ? [] : (values.company || []),
-    };
-
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      if (id) {
-        await updateFramework(id, payload);
-        setSuccess('Plan comptable modifié avec succès');
-        message.success('Plan comptable modifié avec succès');
-      } else {
-        await createFramework(payload);
-        setSuccess('Plan comptable créé avec succès');
-        message.success('Plan comptable créé avec succès');
-      }
-      navigate('/comptabilite/frameworks');
-    } catch (caughtError) {
-      const errorMessage =
-        caughtError.response?.data?.detail ||
-        caughtError.response?.data?.non_field_errors?.[0] ||
-        caughtError.message ||
-        'Erreur lors de la sauvegarde';
-      message.error(errorMessage);
-      setError(errorMessage);
-      console.error(caughtError);
-    } finally {
-      setLoading(false);
+    if (!isExisting) {
+      form.setFieldsValue({ active: true, shared: true, account_code_length: 10 });
+      rememberInitialValues();
+      setPageLoading(false);
+      return () => { mounted = false; };
     }
-  };
+
+    if (initialRecord) {
+      hydrateForm(form, initialRecord);
+      rememberInitialValues();
+      setPageLoading(false);
+    }
+
+    fetchFrameworkById(id)
+      .then((record) => {
+        if (!mounted || !record) return;
+        setFramework(record);
+        hydrateForm(form, record);
+        rememberInitialValues();
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        setFeedback({ type: 'error', message: apiErrorMessage(error, 'Impossible de charger le plan comptable.') });
+      })
+      .finally(() => {
+        if (mounted) setPageLoading(false);
+      });
+
+    loadStats();
+    return () => { mounted = false; };
+  }, [fetchFrameworkById, form, id, initialRecord, isExisting, loadReferences, loadStats, rememberInitialValues]);
+
+  const restoreMemory = useCallback((values) => {
+    if (isExisting || !values || typeof values !== 'object') return;
+    form.setFieldsValue(values);
+    setHasChanges(true);
+  }, [form, isExisting]);
+
+  const save = useCallback(async () => {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const values = await form.validateFields();
+      const { shared, ...fields } = values;
+      const payload = {
+        ...fields,
+        country: relationId(values.country),
+        company: shared ? [] : relationIds(values.company),
+        account_code_length: Number(values.account_code_length || 10),
+        active: values.active !== false,
+      };
+
+      const saved = isExisting
+        ? await updateFramework(id, payload)
+        : await createFramework(payload);
+      const savedRecord = saved || { ...framework, ...payload, id: framework?.id || id };
+      setFramework(savedRecord);
+      hydrateForm(form, savedRecord);
+      rememberInitialValues();
+      setFeedback({
+        type: 'success',
+        message: isExisting ? 'Plan comptable modifié avec succès.' : 'Plan comptable créé avec succès.',
+      });
+      return savedRecord;
+    } catch (error) {
+      if (error?.errorFields) {
+        setFeedback({ type: 'error', message: 'Complétez les champs obligatoires du plan comptable.' });
+      } else {
+        setFeedback({ type: 'error', message: apiErrorMessage(error, 'Impossible d’enregistrer le plan comptable.') });
+      }
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [createFramework, form, framework, id, isExisting, rememberInitialValues, updateFramework]);
+
+  const buildReturnState = useCallback((savedRecord) => ({
+    restoredFromSmartBack: true,
+    frameworkRecord: savedRecord,
+    createdRecord: savedRecord,
+    updatedRecord: savedRecord,
+  }), []);
+
+  const recordLabel = watchedCode || watchedName || (isExisting ? 'Plan comptable' : 'Nouveau plan');
+  const companyNames = getCompanyNames(framework);
+  const traceabilityLogs = useMemo(() => [
+    {
+      id: 'creation',
+      title: 'Création du plan comptable',
+      date: framework?.created_at || framework?.create_date,
+      user: framework?.created_by_name || framework?.create_uid_label || framework?.created_by,
+    },
+    {
+      id: 'update',
+      title: 'Dernière modification',
+      date: framework?.updated_at || framework?.write_date,
+      user: framework?.updated_by_name || framework?.write_uid_label || framework?.updated_by,
+    },
+  ].filter((log) => log.date || log.user), [framework]);
+
+  const traceabilityContent = (
+    <div className="p-3">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs font-medium text-gray-700">Activité liée à ce plan</span>
+        <span className="text-[11px] text-gray-500">{traceabilityLogs.length} événement(s)</span>
+      </div>
+      {traceabilityLogs.length ? traceabilityLogs.map((log) => (
+        <div key={log.id} className="mb-2 border border-gray-200 bg-white px-3 py-2 last:mb-0">
+          <div className="text-xs font-semibold text-gray-900">{log.title}</div>
+          <div className="mt-1 text-[11px] text-gray-600">{[framework?.code, framework?.name].filter(Boolean).join(' - ')}</div>
+          <div className="mt-1 text-[11px] text-gray-500">Par {log.user || 'Utilisateur'}</div>
+          <div className="text-[11px] text-gray-400">{formatDateTime(log.date)}</div>
+        </div>
+      )) : (
+        <div className="border border-gray-200 bg-white p-4 text-center text-xs text-gray-500">
+          Aucune traçabilité disponible.
+        </div>
+      )}
+    </div>
+  );
+
+  const actionsMenu = (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setActionsOpen((open) => !open)}
+        className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700"
+      >
+        <FiSettings size={12} /> Actions
+      </button>
+      {actionsOpen && (
+        <div className="absolute right-0 top-full z-50 mt-1 w-52 border border-gray-300 bg-white shadow-lg">
+          <button type="button" onClick={() => navigate(`/comptabilite/groups?framework=${id || ''}`)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-purple-50"><FiFolder size={12} /> Voir les classes</button>
+          <button type="button" onClick={() => navigate(`/comptabilite/types?framework=${id || ''}`)} className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-xs hover:bg-purple-50"><FiTag size={12} /> Voir les natures</button>
+          <button type="button" onClick={() => navigate(`/comptabilite/accounts?framework=${id || ''}`)} className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-xs hover:bg-purple-50"><FiBriefcase size={12} /> Voir les comptes</button>
+          {isShowMode && <button type="button" onClick={() => { setTraceabilityOpen((open) => !open); setActionsOpen(false); }} className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-xs hover:bg-purple-50"><FiInfo size={12} /> {traceabilityOpen ? 'Masquer la traçabilité' : 'Afficher la traçabilité'}</button>}
+        </div>
+      )}
+    </div>
+  );
+
+  if (pageLoading) {
+    return <div className="flex h-full items-center justify-center bg-white"><Spin size="large" tip="Chargement du plan comptable..." /></div>;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <style>{`
-        .framework-form .ant-form-item {
-          margin-bottom: 0;
-        }
-        .framework-form .ant-input {
-          height: 24px;
-          min-height: 24px;
-          border: 0 !important;
-          border-radius: 0 !important;
-          padding: 2px 8px !important;
-          font-size: 12px !important;
-          box-shadow: none !important;
-        }
-        .framework-form textarea.ant-input {
-          height: 140px !important;
-          min-height: 140px !important;
-          line-height: 1.5 !important;
-          resize: vertical;
-        }
-        .framework-form .ant-form-item-explain-error {
-          font-size: 11px;
-          margin-top: 2px;
-        }
-        .framework-form-control .ant-form-item-control-input {
-          min-height: 24px;
-        }
-        .framework-form-control .ant-switch {
-          min-width: 46px;
-          transform: scale(0.85);
-          transform-origin: left center;
-        }
-      `}</style>
+    <UnifiedFormPage
+      title="Plan comptable"
+      recordLabel={recordLabel}
+      pageLabel={isShowMode ? 'Détail du plan comptable' : (isExisting ? 'Modification du plan comptable' : 'Création d’un plan comptable')}
+      mode={resolvedMode}
+      fallbackPath="/comptabilite/frameworks"
+      primaryAction={{ label: 'Nouveau', icon: <FiPlus size={12} />, path: '/comptabilite/frameworks/new' }}
+      actionsMenu={actionsMenu}
+      onSave={save}
+      saveLabel={isExisting ? 'Enregistrer les modifications' : 'Enregistrer'}
+      saving={saving}
+      autoReturnAfterSave={!isExisting}
+      buildReturnState={buildReturnState}
+      hasUnsavedChanges={hasChanges}
+      rememberForm={!isExisting}
+      memoryKey="comptabilite:framework:form:v2"
+      memoryState={!isExisting ? form.getFieldsValue(true) : undefined}
+      onRestoreMemoryState={!isExisting ? restoreMemory : undefined}
+      feedback={feedback}
+      onDismissFeedback={() => setFeedback(null)}
+      messageDuration={15000}
+      traceability={{
+        open: traceabilityOpen,
+        onOpen: () => setTraceabilityOpen(true),
+        onClose: () => setTraceabilityOpen(false),
+        title: 'Traçabilité',
+        content: traceabilityContent,
+      }}
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        onValuesChange={() => {
+          setHasChanges(true);
+          setFeedback(null);
+        }}
+        className="framework-form"
+      >
+        <style>{`
+          .framework-form .ant-form-item { margin-bottom: 0; }
+          .framework-form .ant-input,
+          .framework-form .ant-select-selector {
+            min-height: 26px !important;
+            border-radius: 0 !important;
+            font-size: 12px !important;
+            box-shadow: none !important;
+          }
+          .framework-form .ant-input { height: 26px; padding: 2px 8px; }
+          .framework-form .ant-select-selector { padding: 0 8px !important; }
+          .framework-form .ant-select-selection-item,
+          .framework-form .ant-select-selection-placeholder { line-height: 24px !important; font-size: 12px !important; }
+          .framework-form .ant-input:hover,
+          .framework-form .ant-select:hover .ant-select-selector { border-color: #c084fc !important; }
+          .framework-form .ant-input:focus,
+          .framework-form .ant-select-focused .ant-select-selector {
+            border-color: #9333ea !important;
+            box-shadow: 0 0 0 1px #9333ea !important;
+          }
+          .framework-form-table .ant-input,
+          .framework-form-table .ant-select-selector,
+          .framework-form-table .ant-input:hover,
+          .framework-form-table .ant-input:focus,
+          .framework-form-table .ant-select:hover .ant-select-selector,
+          .framework-form-table .ant-select-focused .ant-select-selector {
+            height: 30px !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+          }
+          .framework-form-table .ant-select { display: block; width: 100%; }
+          .framework-form-table .ant-select-selection-item,
+          .framework-form-table .ant-select-selection-placeholder { line-height: 28px !important; }
+          .framework-select-dropdown { border-radius: 0 !important; padding: 0 !important; }
+          .framework-select-dropdown .ant-select-item { min-height: 27px; border-radius: 0; padding: 4px 8px; font-size: 12px; }
+          .framework-select-dropdown .ant-select-item-option-active { background: #faf5ff !important; }
+          .framework-select-dropdown .ant-select-item-option-selected { background: #f3e8ff !important; color: #7e22ce; }
+          .framework-form textarea.ant-input { min-height: 150px !important; height: 150px !important; resize: vertical; }
+        `}</style>
 
-      <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-        <Spin spinning={loading}>
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={onFinish}
-            requiredMark={false}
-            size="middle"
-            className="framework-form"
-          >
-            <div className="border-b border-gray-300 px-4 py-3">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-start gap-3">
-                  <Tooltip text="Créer un nouveau plan comptable">
-                    <button
-                      type="button"
-                      onClick={() => navigate('/comptabilite/frameworks/new')}
-                      className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 transition-all flex items-center gap-1 font-medium"
-                    >
-                      <FiPlus size={16} /><span>Nouveau</span>
-                    </button>
-                  </Tooltip>
-                  <div className="flex flex-col h-12 justify-center">
-                    <div
-                      className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 transition-colors"
-                      onClick={() => navigate('/comptabilite/frameworks')}
-                    >
-                      Plans comptables
-                    </div>
-                    <span className="text-xs text-gray-600 font-medium">
-                      N° {watchedCode || (isEdit ? 'Plan en modification' : 'Nouveau plan')}
-                    </span>
-                  </div>
-                </div>
+        <div className="border-b border-gray-300 px-4 py-3">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+            <FieldLine label="Code" required>
+              <Form.Item name="code" rules={[{ required: true, message: 'Code obligatoire' }, { max: 64, message: 'Maximum 64 caractères' }]}>
+                <Input placeholder="SYSCOHADA" className="font-mono" />
+              </Form.Item>
+            </FieldLine>
+            <FieldLine label="Nom complet" required>
+              <Form.Item name="name" rules={[{ required: true, message: 'Nom obligatoire' }, { max: 255, message: 'Maximum 255 caractères' }]}>
+                <Input placeholder="SYSCOHADA révisé" />
+              </Form.Item>
+            </FieldLine>
+            <FieldLine label="Version">
+              <Form.Item name="version"><Input placeholder="2018" /></Form.Item>
+            </FieldLine>
+            <FieldLine label="Pays principal">
+              <Form.Item name="country"><CompactSelect options={countryOptions} placeholder="Sélectionner un pays" /></Form.Item>
+            </FieldLine>
+          </div>
+        </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <Tooltip text="Menu des actions">
-                      <button
-                        type="button"
-                        onClick={() => setShowActionsMenu(!showActionsMenu)}
-                        className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 flex items-center gap-1"
-                      >
-                        <FiSettings size={12} /><span>Actions</span>
-                      </button>
-                    </Tooltip>
-                    {showActionsMenu && (
-                      <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
-                        {isEdit && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowActionsMenu(false);
-                              navigate(`/comptabilite/frameworks/${id}`);
-                            }}
-                            className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
-                          >
-                            <FiEye size={12} /> Voir le détail
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowActionsMenu(false);
-                            navigate('/comptabilite/frameworks');
-                          }}
-                          className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100"
-                        >
-                          <FiInfo size={12} /> Retour à la liste
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <Tooltip text="Enregistrer">
-                    <button
-                      type="button"
-                      onClick={() => form.submit()}
-                      disabled={loading}
-                      className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                    >
-                      <FiUploadCloud size={16} />
-                    </button>
-                  </Tooltip>
-                  <Tooltip text="Annuler">
-                    <button
-                      type="button"
-                      onClick={() => navigate('/comptabilite/frameworks')}
-                      className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 flex items-center justify-center"
-                    >
-                      <CloseOutlined />
-                    </button>
-                  </Tooltip>
-                </div>
-              </div>
+        <div className="border-b border-gray-300 px-4">
+          <div className="flex">
+            {[
+              ['parameters', 'Paramètres'],
+              ['scope', 'Portée'],
+              ['notes', 'Notes'],
+              ...(isExisting ? [['statistics', 'Statistiques']] : []),
+            ].map(([key, label]) => (
+              <button key={key} type="button" onClick={() => setActiveTab(key)} className={`border-b-2 px-4 py-2 text-xs font-medium transition-all ${activeTab === key ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-purple-600'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-4">
+          {activeTab === 'parameters' && (
+            <div className="overflow-x-auto">
+              <table className="framework-form-table w-full table-fixed border-collapse">
+                <thead><tr><TableHeader>Groupe de pays</TableHeader><TableHeader>Longueur des comptes</TableHeader><TableHeader>Plan actif</TableHeader><TableHeader>Type de portée</TableHeader></tr></thead>
+                <tbody><tr>
+                  <TableCell><Form.Item name="country_group"><Input placeholder="UEMOA" /></Form.Item></TableCell>
+                  <TableCell><Form.Item name="account_code_length"><Input type="number" min={1} max={20} placeholder="10" /></Form.Item></TableCell>
+                  <TableCell><div className="flex h-8 items-center gap-2 px-2 text-xs"><Form.Item name="active" valuePropName="checked"><Switch size="small" /></Form.Item><span>{watchedActive !== false ? 'Oui' : 'Non'}</span></div></TableCell>
+                  <TableCell><div className="flex h-8 items-center gap-2 px-2 text-xs"><Form.Item name="shared" valuePropName="checked"><Switch size="small" onChange={(checked) => { if (checked) form.setFieldValue('company', []); }} /></Form.Item><span>{watchedShared !== false ? 'Partagé' : 'Spécifique'}</span></div></TableCell>
+                </tr></tbody>
+              </table>
             </div>
+          )}
 
-            <div className="border-b border-gray-300 px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {error ? (
-                    <div className="flex items-center gap-1 text-xs text-red-600">
-                      <FiAlertCircle size={14} /><span>{error}</span>
-                    </div>
-                  ) : success ? (
-                    <div className="flex items-center gap-1 text-xs text-green-600">
-                      <FiCheck size={14} /><span>{success}</span>
-                    </div>
-                  ) : !readyForValidation ? (
-                    <div className="flex items-center gap-1 text-xs text-amber-600">
-                      <FiInfo size={14} /><span>Complétez le code et le nom du plan</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 text-xs text-green-600">
-                      <FiCheck size={14} /><span>Plan prêt à être enregistré</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className={`h-8 px-3 text-xs font-medium border flex items-center ${
-                    isActive ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-100 text-gray-500 border-gray-300'
-                  }`}>
-                    Actif
-                  </div>
-                  <div className={`h-8 px-3 text-xs font-medium border flex items-center ${
-                    sharedValue !== false ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-gray-100 text-gray-700 border-gray-300'
-                  }`}>
-                    {sharedValue !== false ? 'Partagé' : 'Spécifique'}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-2 ml-1">
-                <span className="text-xs text-gray-600 font-medium">
-                  {isEdit ? 'Modification du référentiel comptable' : 'Création du référentiel comptable'}
-                </span>
-              </div>
+          {activeTab === 'scope' && (
+            <div className="overflow-x-auto">
+              <table className="framework-form-table w-full table-fixed border-collapse">
+                <thead><tr><TableHeader>Plan partagé</TableHeader><TableHeader>Sociétés concernées</TableHeader></tr></thead>
+                <tbody><tr>
+                  <TableCell><div className="flex h-8 items-center gap-2 px-2 text-xs"><Form.Item name="shared" valuePropName="checked"><Switch size="small" onChange={(checked) => { if (checked) form.setFieldValue('company', []); }} /></Form.Item><span>{watchedShared !== false ? 'Toutes les sociétés' : 'Sociétés spécifiques'}</span></div></TableCell>
+                  <TableCell><Form.Item name="company" rules={[{ validator: (_, value) => watchedShared !== false || (value?.length ? Promise.resolve() : Promise.reject(new Error('Sélectionnez au moins une société'))) }]}><CompactSelect mode="multiple" disabled={watchedShared !== false} options={entityOptions} placeholder={watchedShared !== false ? 'Toutes les sociétés' : 'Sélectionner les sociétés'} /></Form.Item></TableCell>
+                </tr></tbody>
+              </table>
+              {isShowMode && companyNames.length > 0 && <div className="mt-2 text-xs text-gray-500">{companyNames.join(', ')}</div>}
             </div>
+          )}
 
-            <div className="px-4 py-3 border-b border-gray-300">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <FieldLine label="Code" required>
-                    <Form.Item
-                      name="code"
-                      rules={[
-                        { required: true, message: 'Code obligatoire' },
-                        { max: 64, message: 'Maximum 64 caractères' },
-                      ]}
-                    >
-                      <Input placeholder="ex : SYSCOHADA" style={{ fontFamily: 'monospace' }} />
-                    </Form.Item>
-                  </FieldLine>
-
-                  <FieldLine label="Version">
-                    <Form.Item name="version">
-                      <Input placeholder="ex : 2018, v1.2" />
-                    </Form.Item>
-                  </FieldLine>
-                </div>
-
-                <div className="space-y-2">
-                  <FieldLine label="Nom complet" required>
-                    <Form.Item
-                      name="name"
-                      rules={[
-                        { required: true, message: 'Nom obligatoire' },
-                        { max: 255, message: 'Maximum 255 caractères' },
-                      ]}
-                    >
-                      <Input placeholder="ex : SYSCOHADA Révisé 2018" />
-                    </Form.Item>
-                  </FieldLine>
-
-                  <FieldLine label="Pays principal">
-                    <Form.Item name="country">
-                      <PieceDropdown
-                        placeholder="Sélectionner un pays"
-                        allowClear
-                        options={countryOptions}
-                      />
-                    </Form.Item>
-                  </FieldLine>
-                </div>
-              </div>
+          {activeTab === 'notes' && (
+            <div className="border border-gray-300">
+              <div className="border-b border-gray-300 bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-700">Description</div>
+              <Form.Item name="description"><TextArea placeholder="Description du plan comptable..." /></Form.Item>
             </div>
+          )}
 
-            <div className="border-b border-gray-300">
-              <div className="px-4 flex">
-                {['general', 'portee', 'notes'].map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 text-xs font-medium border-b-2 transition-all ${
-                      activeTab === tab
-                        ? 'border-purple-600 text-purple-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    {tab === 'general' ? 'Paramètres' : tab === 'portee' ? 'Portée' : 'Notes'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="p-4">
-              {activeTab === 'general' && (
-                <div className="border border-gray-300">
-                  <div className="grid grid-cols-4 bg-gray-100 border-b border-gray-300">
-                    {['Groupement de pays', 'Longueur par défaut', 'Statut', 'Type de portée'].map((heading) => (
-                      <div key={heading} className="border-r border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 last:border-r-0">
-                        {heading}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-4">
-                    <TableCell>
-                      <Form.Item name="country_group">
-                        <Input placeholder="ex : UEMOA" />
-                      </Form.Item>
-                    </TableCell>
-                    <TableCell>
-                      <Form.Item name="account_code_length">
-                        <Input type="number" min={1} max={20} placeholder="ex : 10" />
-                      </Form.Item>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3 px-1 text-xs text-gray-700" style={{ height: '24px' }}>
-                        <Form.Item name="active" valuePropName="checked">
-                          <Switch checkedChildren="Oui" unCheckedChildren="Non" />
-                        </Form.Item>
-                        <span>Actif</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3 px-1 text-xs text-gray-700" style={{ height: '24px' }}>
-                        <Form.Item name="shared" valuePropName="checked">
-                          <Switch
-                            checkedChildren="Partagé"
-                            unCheckedChildren="Spécifique"
-                            onChange={(checked) => {
-                              setIsShared(checked);
-                              if (checked) form.setFieldValue('company', []);
-                            }}
-                          />
-                        </Form.Item>
-                      </div>
-                    </TableCell>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'portee' && (
-                <div className="border border-gray-300">
-                  <div className="grid grid-cols-2 bg-gray-100 border-b border-gray-300">
-                    {['Plan partagé', 'Entités concernées'].map((heading) => (
-                      <div key={heading} className="border-r border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 last:border-r-0">
-                        {heading}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2">
-                    <TableCell>
-                      <div className="flex items-center gap-3 px-1 text-xs text-gray-700" style={{ minHeight: '24px' }}>
-                        <Form.Item name="shared" valuePropName="checked">
-                          <Switch
-                            checkedChildren="Oui"
-                            unCheckedChildren="Non"
-                            onChange={(checked) => {
-                              setIsShared(checked);
-                              if (checked) form.setFieldValue('company', []);
-                            }}
-                          />
-                        </Form.Item>
-                        <span>{isShared ? 'Toutes les entités' : 'Entités spécifiques'}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Form.Item
-                        name="company"
-                        rules={[
-                          {
-                            required: !isShared,
-                            message: 'Sélectionnez au moins une entité',
-                          },
-                        ]}
-                      >
-                        <MultiPieceDropdown
-                          placeholder={isShared ? 'Toutes les entités' : 'Sélectionnez les entités'}
-                          disabled={isShared}
-                          options={entityOptions}
-                        />
-                      </Form.Item>
-                    </TableCell>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'notes' && (
-                <div className="border border-gray-300">
-                  <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700">
-                    Description / Notes
-                  </div>
-                  <div className="p-1">
-                    <Form.Item name="description">
-                      <TextArea
-                        rows={5}
-                        placeholder="Description détaillée du plan, version, spécificités, remarques..."
-                      />
-                    </Form.Item>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Form>
-        </Spin>
-      </div>
-    </div>
+          {activeTab === 'statistics' && (
+            <table className="w-full table-fixed border-collapse">
+              <thead><tr><TableHeader>Classes de comptes</TableHeader><TableHeader>Natures de comptes</TableHeader><TableHeader>Comptes comptables</TableHeader></tr></thead>
+              <tbody><tr>
+                <TableCell><button type="button" onClick={() => navigate(`/comptabilite/groups?framework=${id}`)} className="flex h-10 w-full items-center gap-2 px-3 text-left text-xs hover:bg-purple-50"><FiFolder className="text-purple-600" /> <strong>{stats.groups ?? '-'}</strong></button></TableCell>
+                <TableCell><button type="button" onClick={() => navigate(`/comptabilite/types?framework=${id}`)} className="flex h-10 w-full items-center gap-2 px-3 text-left text-xs hover:bg-purple-50"><FiTag className="text-purple-600" /> <strong>{stats.types ?? '-'}</strong></button></TableCell>
+                <TableCell><button type="button" onClick={() => navigate(`/comptabilite/accounts?framework=${id}`)} className="flex h-10 w-full items-center gap-2 px-3 text-left text-xs hover:bg-purple-50"><FiBriefcase className="text-purple-600" /> <strong>{stats.accounts ?? '-'}</strong></button></TableCell>
+              </tr></tbody>
+            </table>
+          )}
+        </div>
+      </Form>
+    </UnifiedFormPage>
   );
 }
 
 export { FrameworkForm };
-export default FrameworkForm;

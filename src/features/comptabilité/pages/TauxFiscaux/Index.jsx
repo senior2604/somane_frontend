@@ -616,17 +616,7 @@ export default function TauxFiscauxIndex() {
       renderSelectionSummary={() => (
         <span>{selectedIds.length} taux fiscal(aux) selectionne(s)</span>
       )}
-      onRowClick={(tax, { event }) => {
-        if (event.detail > 1) return;
-        setSelectedIds((current) => (
-          current.includes(tax.id)
-            ? current.filter((id) => id !== tax.id)
-            : [...current, tax.id]
-        ));
-      }}
-      onRowDoubleClick={(tax, { saveNow, event }) => {
-        event.preventDefault();
-        event.stopPropagation();
+      onRowOpen={(tax, { saveNow }) => {
         saveNow();
         navigate(`/comptabilite/taux-fiscaux/${tax.id}`, { state: { taxRecord: tax } });
       }}

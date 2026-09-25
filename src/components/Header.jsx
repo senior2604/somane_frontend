@@ -106,7 +106,6 @@ const MODULES_CONFIG = [
         items: [
           { label: "Partenaires", path: "/partners" },
           { label: "Plans comptables", path: "/comptabilite/plans" },
-          { label: "Plan comptable", path: "/comptabilite/plan-comptable" },
           { label: "Référentiels comptables", path: "/comptabilite/frameworks" },
           { label: "Classes / Groupes", path: "/comptabilite/groups" },
           { label: "Types / Natures de comptes", path: "/comptabilite/types" },
@@ -118,6 +117,7 @@ const MODULES_CONFIG = [
           { label: "Retenues à la source", path: "/comptabilite/withholding-taxes" },
           { label: "Positions fiscales", path: "/comptabilite/positions-fiscales" },
           { label: "Séquences", path: "/comptabilite/sequences" },
+          { label: "Catégories d'immobilisations", path: "/comptabilite/categories-immobilisations" },
           { label: "Longueur des comptes", path: "/comptabilite/parametrage/longueur-compte" },
           { label: "Réimputations", path: "/comptabilite/reimputations" },
           { label: "Relevés bancaires", path: "/comptabilite/releves-bancaires" }
@@ -130,9 +130,9 @@ const MODULES_CONFIG = [
           { label: "Écritures comptables", path: "/comptabilite/ecritures" },
           { label: "Paiements", path: "/comptabilite/paiements" },
           { label: "Conditions de paiement", path: "/comptabilite/conditions-paiement" },
-          { label: "Méthodes de paiement", path: "/comptabilite/methodes-paiement" },
+          { label: "Modes de paiement", path: "/comptabilite/methodes-paiement" },
           { label: "Lettrage des comptes", path: "/comptabilite/lettrage" },
-          { label: "Immobilisation", path: "/comptabilite/immobilisations" },
+          { label: "Immobilisations", path: "/comptabilite/immobilisations" },
           { label: "Emprunts", path: "/comptabilite/emprunts" },
           { label: "Rapprochement", path: "/comptabilite/rapprochement" }
         ]

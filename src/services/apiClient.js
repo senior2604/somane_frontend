@@ -138,10 +138,37 @@ class ApiClient {
       console.warn(`⚠️ Slash de début supprimé. Nouvel endpoint: ${endpoint}`);
     }
     
-    const url = `${this.baseURL}${endpoint}`;
+    // `fetch` ne traite pas l'option `params` comme Axios. Les pages de liste
+    // utilisent pourtant toutes `apiClient.get(endpoint, { params })` : il faut
+    // donc construire explicitement la query string avant l'appel réseau.
+    const { params, ...fetchOptions } = options;
+    const queryParams = new URLSearchParams();
+
+    const appendQueryParam = (key, value) => {
+      if (value === undefined || value === null || value === '') return;
+
+      if (Array.isArray(value)) {
+        value.forEach((item) => appendQueryParam(key, item));
+        return;
+      }
+
+      queryParams.append(key, String(value));
+    };
+
+    if (params instanceof URLSearchParams) {
+      params.forEach((value, key) => appendQueryParam(key, value));
+    } else if (params && typeof params === 'object') {
+      Object.entries(params).forEach(([key, value]) => appendQueryParam(key, value));
+    }
+
+    const queryString = queryParams.toString();
+    const baseUrl = `${this.baseURL}${endpoint}`;
+    const url = queryString
+      ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${queryString}`
+      : baseUrl;
     console.log('📤 API Request:', {
       url,
-      method: options.method || 'GET',
+      method: fetchOptions.method || 'GET',
       endpoint: endpoint,
       originalEndpoint: originalEndpoint !== endpoint ? originalEndpoint : undefined
     });
@@ -150,17 +177,17 @@ class ApiClient {
     let token = authService.getToken();
     
     // ✅ CORRECTION CRITIQUE : Vérifier si le body est un FormData
-    const isFormData = options.body instanceof FormData;
+    const isFormData = fetchOptions.body instanceof FormData;
     
     // Configuration de la requête
     // ✅ NE PAS définir Content-Type pour FormData (le navigateur le génère automatiquement avec la boundary)
     const config = {
-      method: options.method || 'GET',
+      method: fetchOptions.method || 'GET',
       headers: {
         ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-        ...options.headers,
+        ...fetchOptions.headers,
       },
-      ...options,
+      ...fetchOptions,
     };
 
     // Ajouter le token d'authentification s'il existe

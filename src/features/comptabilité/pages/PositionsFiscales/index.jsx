@@ -503,15 +503,7 @@ export default function PositionsFiscalesIndex() {
       onSelectionChange={setSelectedIds}
       selectionActions={selectionActions}
       renderSelectionSummary={() => <span>{selectedIds.length} position(s) sélectionnée(s)</span>}
-      onRowClick={(position, { event }) => {
-        if (event.detail > 1) return;
-        setSelectedIds((current) => current.includes(position.id)
-          ? current.filter((id) => id !== position.id)
-          : [...current, position.id]);
-      }}
-      onRowDoubleClick={(position, { event, saveNow }) => {
-        event.preventDefault();
-        event.stopPropagation();
+      onRowOpen={(position, { saveNow }) => {
         saveNow();
         navigate(`/comptabilite/positions-fiscales/${position.id}`, {
           state: { fiscalPositionRecord: position },
