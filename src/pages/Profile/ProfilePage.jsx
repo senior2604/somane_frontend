@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FiAlertCircle,
+  FiCamera,
   FiCheck,
   FiEye,
   FiEyeOff,
@@ -11,6 +12,7 @@ import {
   FiSave,
   FiShield,
   FiUser,
+  FiUploadCloud,
   FiX,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
@@ -22,6 +24,8 @@ const initialForm = {
   telephone: '',
   lang: 'fr',
   tz: 'Africa/Lome',
+  photo: null,
+  photo_url: null,
 };
 
 const LANGUAGES = [
@@ -80,6 +84,18 @@ function passwordStrength(pwd) {
   return { score, label: labels[score] };
 }
 
+function resolveMediaUrl(value) {
+  if (!value || typeof value !== 'string') return null;
+  if (/^(https?:|data:|blob:)/i.test(value)) return value;
+
+  try {
+    const backendOrigin = new URL(apiClient.baseURL, window.location.origin).origin;
+    return `${backendOrigin}${value.startsWith('/') ? value : `/${value}`}`;
+  } catch {
+    return value;
+  }
+}
+
 export default function ProfilePage() {
   const [form, setForm] = useState(initialForm);
   const [original, setOriginal] = useState(initialForm);
@@ -90,8 +106,11 @@ export default function ProfilePage() {
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null);
+  const [avatarBroken, setAvatarBroken] = useState(false);
 
   const toastTimerRef = useRef(null);
+  const photoInputRef = useRef(null);
 
   const hasChanges = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(original),
@@ -110,6 +129,21 @@ export default function ProfilePage() {
     () => getInitials(form.first_name, form.last_name, form.email),
     [form.first_name, form.last_name, form.email]
   );
+
+  const avatarUrl = avatarPreviewUrl || resolveMediaUrl(form.photo_url);
+
+  useEffect(() => {
+    if (!(form.photo instanceof File)) {
+      setAvatarPreviewUrl(null);
+      setAvatarBroken(false);
+      return undefined;
+    }
+
+    const objectUrl = URL.createObjectURL(form.photo);
+    setAvatarPreviewUrl(objectUrl);
+    setAvatarBroken(false);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [form.photo]);
 
   useEffect(() => {
     loadProfile();
@@ -132,6 +166,8 @@ export default function ProfilePage() {
     telephone: data?.telephone || '',
     lang: data?.lang || 'fr',
     tz: data?.tz || 'Africa/Lome',
+    photo: null,
+    photo_url: data?.photo || data?.photo_url || data?.avatar || null,
     is_staff: !!data?.is_staff,
     is_superuser: !!data?.is_superuser,
   });
@@ -176,6 +212,7 @@ export default function ProfilePage() {
   const revertChanges = () => {
     setForm(original);
     setFieldErrors({});
+    if (photoInputRef.current) photoInputRef.current.value = '';
   };
 
   const saveProfile = async () => {
@@ -187,7 +224,7 @@ export default function ProfilePage() {
     setSaving(true);
 
     try {
-      const payload = {
+      const values = {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         telephone: form.telephone.trim(),
@@ -195,7 +232,16 @@ export default function ProfilePage() {
         tz: form.tz,
       };
 
-      const response = await apiClient.patch('/profile/me/', payload);
+      let payload = values;
+      if (form.photo instanceof File) {
+        payload = new FormData();
+        Object.entries(values).forEach(([key, value]) => payload.append(key, value));
+        payload.append('photo', form.photo);
+      }
+
+      const response = payload instanceof FormData
+        ? await apiClient.request('/profile/me/', { method: 'PATCH', body: payload })
+        : await apiClient.patch('/profile/me/', payload);
       const profile = normalizeProfile(response?.data ?? response);
 
       setForm(profile);
@@ -236,11 +282,35 @@ export default function ProfilePage() {
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="relative bg-gradient-to-r from-violet-600 to-violet-500 px-6 py-8">
             <div className="flex items-center gap-4">
-              <div
-                className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full text-xl font-semibold ring-4 ring-white/30"
-                style={{ backgroundColor: avatarColors.bg, color: avatarColors.fg }}
-              >
-                {initials}
+              <div className="group relative flex-shrink-0">
+                <div
+                  className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl text-2xl font-bold shadow-xl ring-4 ring-white/30"
+                  style={{ backgroundColor: avatarColors.bg, color: avatarColors.fg }}
+                >
+                  {avatarUrl && !avatarBroken ? (
+                    <img
+                      src={avatarUrl}
+                      alt={`Photo de ${fullName}`}
+                      className="h-full w-full object-cover"
+                      onError={() => setAvatarBroken(true)}
+                    />
+                  ) : initials}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-slate-900 text-white shadow-lg transition hover:scale-105 hover:bg-slate-800"
+                  aria-label="Modifier la photo"
+                >
+                  <FiCamera size={16} />
+                </button>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(event) => setField('photo', event.target.files?.[0] || null)}
+                />
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-bold text-white">{fullName}</h1>
@@ -297,6 +367,27 @@ export default function ProfilePage() {
           <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <SectionHeader icon={<FiUser size={15} />} title="Informations personnelles" />
             <div className="space-y-4 p-5">
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-dashed border-violet-200 bg-violet-50/60 p-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">Photo de profil</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-500">
+                    {form.photo instanceof File
+                      ? `${form.photo.name} · ${Math.ceil(form.photo.size / 1024)} Ko`
+                      : avatarUrl
+                        ? 'Une photo est actuellement enregistrée.'
+                        : 'Ajoutez une photo JPG, PNG ou WebP.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-violet-700 shadow-sm ring-1 ring-violet-200 transition hover:bg-violet-100"
+                >
+                  <FiUploadCloud size={15} />
+                  {avatarUrl ? 'Remplacer' : 'Ajouter'}
+                </button>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Prénom" error={fieldErrors.first_name}>
                   <input

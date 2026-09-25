@@ -1,223 +1,523 @@
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+
 import {
-  FiDollarSign,
-  FiTrendingUp,
-  FiShoppingCart,
-  FiPackage,
-  FiUsers,
-  FiBriefcase,
-  FiClipboard,
-  FiUser,
+  FiAlertCircle,
   FiBarChart2,
-  FiSettings,
-  FiShoppingBag,
-  FiFileText,
-  FiTool,
-  FiDatabase,
+  FiBriefcase,
   FiCreditCard,
-  FiZap
+  FiDatabase,
+  FiDollarSign,
+  FiFileText,
+  FiGrid,
+  FiPackage,
+  FiRefreshCw,
+  FiSearch,
+  FiSettings,
+  FiShoppingCart,
+  FiTrendingUp,
+  FiUsers,
+  FiZap,
 } from "react-icons/fi";
+
+import { useUi } from "../../context/UiContext";
+
+
+const COLOR_SCHEMES = [
+  "from-blue-500 to-blue-600",
+  "from-emerald-500 to-emerald-600",
+  "from-violet-500 to-violet-600",
+  "from-amber-500 to-amber-600",
+  "from-rose-500 to-rose-600",
+  "from-cyan-500 to-cyan-600",
+  "from-indigo-500 to-indigo-600",
+  "from-orange-500 to-orange-600",
+  "from-purple-500 to-purple-600",
+  "from-teal-500 to-teal-600",
+  "from-pink-500 to-pink-600",
+  "from-green-500 to-green-600",
+  "from-red-500 to-red-600",
+  "from-sky-500 to-sky-600",
+  "from-lime-500 to-lime-600",
+];
+
+
+/*
+ * Applications qui utilisent encore leurs routes React.
+ * Elles resteront affichées pendant leur migration vers
+ * IrUiMenu, IrAction et IrUiView.
+ */
+const LEGACY_APPLICATIONS = [
+  {
+    id: "legacy-accounting",
+    name: "Comptabilité",
+    path: "/comptabilite/dashboard",
+    Icon: FiDollarSign,
+    color: "from-blue-500 to-blue-600",
+  },
+  {
+    id: "legacy-financial-reports",
+    name: "États financiers",
+    path: "/financial-reports/dashboard",
+    Icon: FiBarChart2,
+    color: "from-emerald-500 to-emerald-600",
+  },
+];
+
+
+const ICON_RULES = [
+  {
+    keywords: [
+      "client",
+      "partenaire",
+      "partner",
+      "utilisateur",
+      "user",
+      "rh",
+    ],
+    Icon: FiUsers,
+  },
+  {
+    keywords: [
+      "vente",
+      "sales",
+      "crm",
+    ],
+    Icon: FiTrendingUp,
+  },
+  {
+    keywords: [
+      "achat",
+      "purchase",
+    ],
+    Icon: FiShoppingCart,
+  },
+  {
+    keywords: [
+      "stock",
+      "inventaire",
+      "inventory",
+      "produit",
+      "catalogue",
+    ],
+    Icon: FiPackage,
+  },
+  {
+    keywords: [
+      "comptabilité",
+      "comptabilite",
+      "accounting",
+      "finance",
+      "reporting",
+    ],
+    Icon: FiBarChart2,
+  },
+  {
+    keywords: [
+      "banque",
+      "bancaire",
+      "bank",
+    ],
+    Icon: FiCreditCard,
+  },
+  {
+    keywords: [
+      "document",
+      "fichier",
+    ],
+    Icon: FiFileText,
+  },
+  {
+    keywords: [
+      "paramètre",
+      "parametre",
+      "configuration",
+      "administration",
+      "admin",
+      "setting",
+    ],
+    Icon: FiSettings,
+  },
+  {
+    keywords: [
+      "entité",
+      "entite",
+      "organisation",
+      "société",
+      "societe",
+      "company",
+    ],
+    Icon: FiBriefcase,
+  },
+  {
+    keywords: [
+      "base de données",
+      "database",
+    ],
+    Icon: FiDatabase,
+  },
+];
+
+
+/*
+ * Recherche la première action disponible dans un menu
+ * ou dans l'un de ses sous-menus.
+ */
+function findFirstActionId(menu) {
+  if (menu?.action_id) {
+    return menu.action_id;
+  }
+
+  for (const child of menu?.children || []) {
+    const actionId = findFirstActionId(child);
+
+    if (actionId) {
+      return actionId;
+    }
+  }
+
+  return null;
+}
+
+
+/*
+ * Choisit une icône React selon le nom du menu
+ * ou son icône technique.
+ */
+function getMenuIcon(menu) {
+  const source = `
+    ${menu?.name || ""}
+    ${menu?.icon || ""}
+  `.toLocaleLowerCase("fr");
+
+  const rule = ICON_RULES.find((item) =>
+    item.keywords.some((keyword) =>
+      source.includes(keyword)
+    )
+  );
+
+  return rule?.Icon || FiGrid;
+}
+
+
+function normalizeName(value) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("fr");
+}
+
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [hoveredModule, setHoveredModule] = useState(null);
 
-  // Couleurs dynamiques pour chaque module
-  const colorSchemes = [
-    'from-blue-500 to-blue-600',
-    'from-emerald-500 to-emerald-600',
-    'from-violet-500 to-violet-600',
-    'from-amber-500 to-amber-600',
-    'from-rose-500 to-rose-600',
-    'from-cyan-500 to-cyan-600',
-    'from-indigo-500 to-indigo-600',
-    'from-orange-500 to-orange-600',
-    'from-purple-500 to-purple-600',
-    'from-teal-500 to-teal-600',
-    'from-pink-500 to-pink-600',
-    'from-green-500 to-green-600',
-    'from-red-500 to-red-600',
-    'from-sky-500 to-sky-600',
-    'from-lime-500 to-lime-600'
-  ];
+  const {
+    configuration,
+    loading,
+    error,
+    reload,
+  } = useUi();
 
-  const modules = [
-    { id: 'accounting', name: 'Comptabilité', icon: <FiDollarSign /> },
-    { id: 'sales', name: 'Ventes', icon: <FiTrendingUp /> },
-    { id: 'achats', name: 'Achats', icon: <FiShoppingCart /> },
-    { id: 'inventory', name: 'Stock', icon: <FiPackage /> },
-    { id: 'hr', name: 'RH', icon: <FiUsers /> },
-    { id: 'manufacturing', name: 'Production', icon: <FiBriefcase /> },
-    { id: 'projects', name: 'Projets', icon: <FiClipboard /> },
-    { id: 'crm', name: 'CRM', icon: <FiUser /> },
-    { id: 'reports', name: 'Reporting', icon: <FiBarChart2 /> },
-    { id: 'catalogue', name: 'Catalogue', icon: <FiShoppingBag /> },
-    { id: 'documents', name: 'Documents', icon: <FiFileText /> },
-    { id: 'administration', name: 'Admin', icon: <FiSettings /> },
-    { id: 'maintenance', name: 'Maintenance', icon: <FiTool /> },
-    { id: 'database', name: 'Base de données', icon: <FiDatabase /> },
-    { id: 'bank', name: 'Bancaire', icon: <FiCreditCard /> }
-  ];
+  const [search, setSearch] = useState("");
 
-  // Chemins correspondants (tu peux adapter selon ta structure)
-  const getModulePath = (id) => {
-    const paths = {
-      accounting: '/comptabilite/Dashboard',
-      sales: '/sales',
-      achats: '/achats',
-      inventory: '/inventory',
-      hr: '/hr',
-      manufacturing: '/manufacturing',
-      projects: '/projects',
-      crm: '/crm',
-      reports: '/financial-reports',
-      catalogue: '/catalogue',
-      documents: '/documents',
-      administration: '/admin',
-      maintenance: '/maintenance',
-      database: '/database',
-      bank: '/bank'
-    };
-    return paths[id] || '/';
+
+  /*
+   * Fusion :
+   * - anciennes applications React ;
+   * - applications dynamiques venant de IrUiMenu.
+   */
+  const applications = useMemo(() => {
+    const normalizedSearch =
+      normalizeName(search);
+
+    const dynamicApplications =
+      (configuration?.menus || [])
+        .map((menu, index) => ({
+          ...menu,
+
+          actionId:
+            findFirstActionId(menu),
+
+          Icon:
+            getMenuIcon(menu),
+
+          color:
+            COLOR_SCHEMES[
+              (
+                index +
+                LEGACY_APPLICATIONS.length
+              ) %
+              COLOR_SCHEMES.length
+            ],
+        }))
+        .filter((application) =>
+          Boolean(application.actionId)
+        );
+
+
+    /*
+     * Évite les doublons lorsqu'une application
+     * historique est ensuite convertie en IrUiMenu.
+     */
+    const dynamicNames = new Set(
+      dynamicApplications.map(
+        (application) =>
+          normalizeName(application.name)
+      )
+    );
+
+
+    const legacyApplications =
+      LEGACY_APPLICATIONS.filter(
+        (application) =>
+          !dynamicNames.has(
+            normalizeName(application.name)
+          )
+      );
+
+
+    return [
+      ...legacyApplications,
+      ...dynamicApplications,
+    ].filter((application) => {
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return normalizeName(
+        application.name
+      ).includes(normalizedSearch);
+    });
+  }, [
+    configuration?.menus,
+    search,
+  ]);
+
+
+  const openApplication = (application) => {
+    /*
+     * Application utilisant encore une route React.
+     */
+    if (application.path) {
+      navigate(application.path);
+      return;
+    }
+
+
+    /*
+     * Application utilisant IrUiMenu et IrAction.
+     */
+    if (application.actionId) {
+      navigate(
+        `/ui/action/${application.actionId}`
+      );
+    }
   };
 
-  // Animation d'entrée progressive
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      document.querySelectorAll('.module-card').forEach((card, index) => {
-        card.style.animationDelay = `${index * 0.05}s`;
-        card.classList.add('animate-fade-in-up');
-      });
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleModuleClick = (id) => {
-    navigate(getModulePath(id));
-  };
 
   return (
-    <div className="min-h-screen p-6 bg-gradient-to-br from-gray-50 to-white">
-      {/* Header simple */}
-      <div className="mb-10 text-center">
-        <div className="inline-flex items-center gap-3 mb-3">
-          <div className="p-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600">
+    <div className="min-h-full bg-gradient-to-br from-gray-50 to-white px-6 py-8">
+
+      {/* En-tête */}
+
+      <div className="mb-8 text-center">
+
+        <div className="mb-3 inline-flex items-center gap-3">
+
+          <div className="rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 p-3 shadow-md">
+
             <FiZap className="text-2xl text-white" />
+
           </div>
-          <h1 className="text-3xl font-bold text-gray-800">Modules ERP</h1>
+
+          <h1 className="text-3xl font-bold text-gray-800">
+            Modules ERP
+          </h1>
+
         </div>
+
         <p className="text-gray-500">
-          Accédez à tous les modules de votre système
+          Accédez aux applications autorisées de votre système
         </p>
+
       </div>
 
-      {/* Grille de modules */}
-      <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
-          {modules.map((module, index) => {
-            const colorIndex = index % colorSchemes.length;
-            const isHovered = hoveredModule === module.id;
-            
-            return (
-              <button
-                key={module.id}
-                onClick={() => handleModuleClick(module.id)}
-                onMouseEnter={() => setHoveredModule(module.id)}
-                onMouseLeave={() => setHoveredModule(null)}
-                className="module-card opacity-0 relative group"
-              >
-                {/* Carte principale */}
-                <div className={`
-                  relative h-48 rounded-2xl border-2 border-white
-                  bg-gradient-to-br ${colorSchemes[colorIndex]}
-                  shadow-lg hover:shadow-2xl
-                  transform transition-all duration-300
-                  ${isHovered ? 'scale-105 -translate-y-2' : 'scale-100'}
-                  overflow-hidden
-                `}>
-                  
-                  {/* Effet de brillance au hover */}
-                  <div className={`
-                    absolute inset-0 bg-gradient-to-t from-white/20 to-transparent
-                    transition-opacity duration-300
-                    ${isHovered ? 'opacity-100' : 'opacity-0'}
-                  `} />
-                  
-                  {/* Contenu */}
-                  <div className="relative h-full flex flex-col items-center justify-center p-4 text-white">
-                    <div className={`
-                      p-4 rounded-2xl bg-white/20 backdrop-blur-sm mb-4
-                      transform transition-transform duration-300
-                      ${isHovered ? 'scale-110 rotate-3' : 'scale-100'}
-                    `}>
-                      <div className="text-2xl">
-                        {module.icon}
-                      </div>
-                    </div>
-                    
-                    <h3 className="text-lg font-semibold text-center mb-2">
-                      {module.name}
-                    </h3>
-                    
-                    {/* Indicateur de clic */}
-                    <div className={`
-                      flex items-center gap-1 text-sm font-medium text-white/80
-                      transition-all duration-300
-                      ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}
-                    `}>
-                      <span>Cliquer pour ouvrir</span>
-                      <svg 
-                        className={`w-4 h-4 transition-transform duration-300 ${isHovered ? 'translate-x-1' : ''}`}
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
+
+      {/* Recherche et actualisation */}
+
+      <div className="mx-auto mb-10 flex max-w-xl items-center gap-2">
+
+        <label className="flex flex-1 items-center rounded-xl border border-gray-200 bg-white px-3 shadow-sm transition focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100">
+
+          <FiSearch className="shrink-0 text-gray-400" />
+
+          <input
+            type="search"
+            value={search}
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
+            placeholder="Rechercher une application…"
+            className="w-full bg-transparent px-3 py-2.5 text-sm text-gray-700 outline-none placeholder:text-gray-400"
+          />
+
+        </label>
+
+
+        <button
+          type="button"
+          onClick={reload}
+          title="Actualiser les applications"
+          className="rounded-xl border border-gray-200 bg-white p-3 text-violet-600 shadow-sm transition hover:bg-violet-50"
+        >
+
+          <FiRefreshCw
+            className={
+              loading
+                ? "animate-spin"
+                : ""
+            }
+          />
+
+        </button>
+
+      </div>
+
+
+      {/* Erreur du bootstrap UI */}
+
+      {error && (
+        <div className="mx-auto mb-8 flex max-w-3xl items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+
+          <FiAlertCircle className="shrink-0" />
+
+          <span>
+            {error}
+          </span>
+
+        </div>
+      )}
+
+
+      {/* Liste des applications */}
+
+      <div className="mx-auto max-w-7xl">
+
+        {loading && !configuration ? (
+
+          <div className="py-20 text-center text-sm text-gray-500">
+            Chargement des applications…
+          </div>
+
+        ) : applications.length > 0 ? (
+
+          <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+
+            {applications.map((application) => {
+              const Icon = application.Icon;
+
+              return (
+                <button
+                  type="button"
+                  key={application.id}
+                  onClick={() =>
+                    openApplication(application)
+                  }
+                  className="group flex min-w-0 flex-col items-center rounded-2xl p-3 text-center transition duration-200 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-violet-300"
+                >
+
+                  {/* Icône d'application */}
+
+                  <div
+                    className={`
+                      relative
+                      flex h-24 w-24
+                      items-center justify-center
+                      overflow-hidden
+                      rounded-2xl
+                      bg-gradient-to-br
+                      ${application.color}
+                      shadow-lg
+                      transition duration-300
+                      group-hover:-translate-y-1
+                      group-hover:scale-105
+                      group-hover:shadow-xl
+                    `}
+                  >
+
+                    <div className="absolute inset-0 bg-gradient-to-t from-white/5 to-white/25" />
+
+                    <div className="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/10" />
+
+                    <Icon className="relative text-4xl text-white drop-shadow" />
+
                   </div>
-                </div>
-                
-                {/* Ombre portée dynamique */}
-                <div className={`
-                  absolute inset-0 rounded-2xl bg-gradient-to-br ${colorSchemes[colorIndex].replace('500', '700').replace('600', '800')}
-                  blur-xl opacity-0 group-hover:opacity-50
-                  transition-opacity duration-500
-                  -z-10
-                `} />
-              </button>
-            );
-          })}
-        </div>
+
+
+                  {/* Nom */}
+
+                  <span className="mt-3 w-full truncate text-sm font-semibold text-gray-700 transition group-hover:text-violet-700">
+                    {application.name}
+                  </span>
+
+
+                  {/* Indication au survol */}
+
+                  <span className="mt-1 text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">
+                    Ouvrir
+                  </span>
+
+                </button>
+              );
+            })}
+
+          </div>
+
+        ) : (
+
+          <div className="rounded-2xl border border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
+
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
+
+              <FiGrid className="text-3xl text-gray-300" />
+
+            </div>
+
+            <h2 className="font-semibold text-gray-700">
+              Aucune application disponible
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-md text-sm text-gray-400">
+              Aucun menu autorisé ne correspond à votre recherche,
+              à votre entité active ou à vos permissions.
+            </p>
+
+          </div>
+
+        )}
+
       </div>
 
-      {/* Footer minimal */}
+
+      {/* Pied de page */}
+
       <div className="mt-16 text-center">
+
         <div className="inline-flex items-center gap-4 text-sm text-gray-400">
-          <span>{modules.length} modules disponibles</span>
-          <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-          <span>Système ERP</span>
+
+          <span>
+            {applications.length} application(s) disponible(s)
+          </span>
+
+          <span className="h-1 w-1 rounded-full bg-gray-300" />
+
+          <span>
+            SOMANE ERP
+          </span>
+
         </div>
+
       </div>
 
-      {/* Styles d'animation */}
-      <style jsx>{`
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in-up {
-          animation: fadeInUp 0.5s ease-out forwards;
-        }
-      `}</style>
     </div>
   );
 }

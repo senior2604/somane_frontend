@@ -1,3 +1,4 @@
+// C:\python\django\somane_frontend\src\pages\Partners\PartnerShared.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { FiAlertCircle, FiCheck, FiChevronDown, FiChevronUp, FiGlobe, FiMap, FiMapPin, FiSearch } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
@@ -70,8 +71,9 @@ export const INITIAL_FORM = {
 export const PARTNER_TYPES = [
   { value: 'client', label: 'Client' },
   { value: 'fournisseur', label: 'Fournisseur' },
-  { value: 'client_fournisseur', label: 'Client / Fournisseur' },
-  { value: 'autre', label: 'Autre' },
+  { value: 'employe', label: 'Employé' },
+  { value: 'debiteur', label: 'Débiteur divers' },
+  { value: 'crediteur', label: 'Créditeur divers' },
 ];
 
 export function validatePartnerForm(formData) {

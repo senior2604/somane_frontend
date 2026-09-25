@@ -1,12 +1,15 @@
-
 // C:\python\django\somane_fronten\somane_frontend\src\pages\Users\Create.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FiAlertCircle,
   FiCheck,
+  FiChevronDown,
   FiCopy,
   FiInfo,
+  FiGlobe,
+  FiMap,
+  FiMapPin,
   FiPlus,
   FiRotateCcw,
   FiSettings,
@@ -24,7 +27,9 @@ import {
   Section,
   Tooltip,
   buildPayload,
+  getAccessType,
   getGroupName,
+  getPermissionName,
   getResourceMeta,
   getUserName,
   initialForms,
@@ -32,6 +37,252 @@ import {
   useSecurityData,
   validateSecurityForm,
 } from './SecurityShared';
+import { SearchableDropdown, parseResponse } from '../Partners/PartnerShared';
+
+// ==========================================
+// PERMISSIONS : catégorisation + détail
+// ==========================================
+
+// Liste des actions elementaires d'une permission — reprise du bloc "Droits"
+// du formulaire de creation de permission, pour rester coherent partout.
+export const PERMISSION_ACTION_FIELDS = [
+  ['perm_read', 'Lire'],
+  ['perm_create', 'Créer'],
+  ['perm_write', 'Modifier'],
+  ['perm_unlink', 'Supprimer'],
+  ['perm_validate', 'Valider'],
+  ['perm_cancel', 'Annuler'],
+  ['perm_export', 'Exporter'],
+  ['perm_import', 'Importer'],
+  ['perm_print', 'Imprimer'],
+];
+
+// Retrouve le module (categorie) d'une permission, quelle que soit la forme
+// sous laquelle l'API le renvoie (objet imbrique, id brut, ou via model_id).
+export function getPermissionCategory(permission, modules = []) {
+  const nested =
+    (typeof permission?.module === 'object' ? permission.module : null) ||
+    permission?.module_details ||
+    (typeof permission?.model_id === 'object' ? permission.model_id?.module_details : null);
+
+  if (nested) {
+    return nested.nom_affiche || nested.nom || nested.name || 'Sans catégorie';
+  }
+
+  const moduleId = permission?.module ?? permission?.model_id?.module;
+  const found = (modules || []).find((m) => String(m.id) === String(moduleId));
+  return found ? (found.nom_affiche || found.nom || found.name || 'Sans catégorie') : 'Sans catégorie';
+}
+
+// Libellés des actions activées sur une permission (Lire, Créer, ...)
+export function getPermissionActions(permission) {
+  return PERMISSION_ACTION_FIELDS.filter(([field]) => !!permission?.[field]).map(([, label]) => label);
+}
+
+// Regroupe une liste de permissions par catégorie (module), triées par nom.
+export function groupPermissionsByCategory(permissions, modules) {
+  const map = new Map();
+  (permissions || []).forEach((permission) => {
+    const category = getPermissionCategory(permission, modules);
+    if (!map.has(category)) map.set(category, []);
+    map.get(category).push(permission);
+  });
+  return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+// Petit badge reutilisable pour mode / type d'acces / action
+function PermissionBadge({ tone, children }) {
+  const toneClass = {
+    green: 'bg-green-50 text-green-700 border-green-200',
+    red: 'bg-red-50 text-red-700 border-red-200',
+    gray: 'bg-gray-50 text-gray-600 border-gray-200',
+  }[tone] || 'bg-gray-50 text-gray-600 border-gray-200';
+
+  return (
+    <span className={`px-1.5 py-0.5 text-[10px] font-medium border ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
+
+// Ligne de detail d'une permission : nom + badges (mode, acces, actions).
+// Utilisee aussi bien en lecture seule (showCheckbox=false) que dans un
+// formulaire a cocher (showCheckbox=true).
+export function PermissionDetailRow({ permission, groups, modules, users, checked, onToggle, showCheckbox = true }) {
+  const accessType = getAccessType(permission.acces);
+  const actions = getPermissionActions(permission);
+  const name = getPermissionName(permission, groups, modules, users);
+
+  const content = (
+    <div className="min-w-0 flex-1">
+      <div className="text-sm text-gray-900 truncate">{name}</div>
+      <div className="mt-1 flex flex-wrap items-center gap-1">
+        {permission.mode && (
+          <PermissionBadge tone={permission.mode === 'deny' ? 'red' : 'green'}>
+            {permission.mode === 'deny' ? 'Refuser' : 'Autoriser'}
+          </PermissionBadge>
+        )}
+        {accessType && <PermissionBadge tone="gray">{accessType.label}</PermissionBadge>}
+        {actions.map((action) => (
+          <PermissionBadge key={action} tone="gray">{action}</PermissionBadge>
+        ))}
+        {actions.length === 0 && !accessType && (
+          <span className="text-[11px] text-gray-400 italic">Aucun detail d'action</span>
+        )}
+      </div>
+    </div>
+  );
+
+  if (!showCheckbox) {
+    return (
+      <div className="px-3 py-2.5 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 flex items-start gap-2">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <label className="flex items-start gap-2 px-3 py-2.5 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 cursor-pointer">
+      <input type="checkbox" checked={!!checked} onChange={onToggle} className="mt-1" />
+      {content}
+    </label>
+  );
+}
+
+// Liste de permissions categorisee par module, avec en-tete pliable et
+// "Tout cocher / Tout decocher" par categorie. Utilisee pour les permissions
+// d'un groupe et pour les "Permissions directes" d'un utilisateur.
+export function CategorizedPermissionsList({ permissions, value, onChange, modules, groups, users }) {
+  const [collapsed, setCollapsed] = useState({});
+  const selected = new Set((value || []).map(String));
+  const categorized = groupPermissionsByCategory(permissions, modules);
+
+  const toggleOne = (id) => {
+    const idStr = String(id);
+    const next = selected.has(idStr)
+      ? (value || []).filter((v) => String(v) !== idStr)
+      : [...(value || []), id];
+    onChange(next);
+  };
+
+  const toggleCategory = (items, allSelected) => {
+    const ids = items.map((p) => String(p.id));
+    if (allSelected) {
+      onChange((value || []).filter((v) => !ids.includes(String(v))));
+    } else {
+      const merged = new Set([...(value || []).map(String), ...ids]);
+      onChange(Array.from(merged));
+    }
+  };
+
+  if (categorized.length === 0) {
+    return (
+      <div className="px-3 py-6 text-xs text-gray-500 text-center border border-gray-200">
+        Aucune permission disponible.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {categorized.map(([category, items]) => {
+        const allSelected = items.every((p) => selected.has(String(p.id)));
+        const isCollapsed = !!collapsed[category];
+
+        return (
+          <div key={category} className="border border-gray-300">
+            <div className="bg-gray-100 border-b border-gray-300 px-3 py-2 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setCollapsed((prev) => ({ ...prev, [category]: !prev[category] }))}
+                className="flex items-center gap-2 text-xs font-medium text-gray-800"
+              >
+                <FiChevronDown
+                  size={12}
+                  className={`transition-transform duration-150 ${isCollapsed ? '-rotate-90' : ''}`}
+                />
+                {category}
+                <span className="text-gray-400 font-normal">
+                  ({items.filter((p) => selected.has(String(p.id))).length}/{items.length})
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleCategory(items, allSelected)}
+                className="text-[11px] text-purple-600 hover:text-purple-800 hover:underline"
+              >
+                {allSelected ? 'Tout décocher' : 'Tout cocher'}
+              </button>
+            </div>
+
+            {!isCollapsed && items.map((permission) => (
+              <PermissionDetailRow
+                key={permission.id}
+                permission={permission}
+                groups={groups}
+                modules={modules}
+                users={users}
+                checked={selected.has(String(permission.id))}
+                onToggle={() => toggleOne(permission.id)}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Meme rendu que ci-dessus mais en lecture seule (pas de cases a cocher) —
+// pour l'affichage des permissions deja attribuees (ex: fiche utilisateur).
+export function CategorizedPermissionsView({ permissions, modules, groups, users, emptyLabel = 'Aucune permission.' }) {
+  const [collapsed, setCollapsed] = useState({});
+  const categorized = groupPermissionsByCategory(permissions, modules);
+
+  if (categorized.length === 0) {
+    return (
+      <div className="px-3 py-6 text-xs text-gray-500 text-center border border-gray-200">
+        {emptyLabel}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {categorized.map(([category, items]) => {
+        const isCollapsed = !!collapsed[category];
+        return (
+          <div key={category} className="border border-gray-300">
+            <button
+              type="button"
+              onClick={() => setCollapsed((prev) => ({ ...prev, [category]: !prev[category] }))}
+              className="w-full bg-gray-100 border-b border-gray-300 px-3 py-2 flex items-center gap-2 text-xs font-medium text-gray-800"
+            >
+              <FiChevronDown
+                size={12}
+                className={`transition-transform duration-150 ${isCollapsed ? '-rotate-90' : ''}`}
+              />
+              {category}
+              <span className="text-gray-400 font-normal">({items.length})</span>
+            </button>
+
+            {!isCollapsed && items.map((permission) => (
+              <PermissionDetailRow
+                key={permission.id}
+                permission={permission}
+                groups={groups}
+                modules={modules}
+                users={users}
+                showCheckbox={false}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 // ==========================================
 // COMPOSANT PRINCIPAL
@@ -77,7 +328,7 @@ export default function SecurityCreate() {
 
   // Si on change de type via l'URL, on repart d'un formulaire propre
   useEffect(() => {
-    setFormData(initialForms[type]);
+    setFormData(type === 'users' ? createInitialUserForm() : initialForms[type]);
     setFieldErrors({});
     setHasUnsavedChanges(false);
   }, [type]);
@@ -123,8 +374,10 @@ const setField = (field, value) => {
     if (!silent) setError(null);
     setSuccess(null);
     try {
-      const payload = buildPayload(type, formData, null, data.eligiblePartenaires);
-      if (type === 'users') await apiClient.post('/users/create-from-partenaire/', payload);
+      const payload = type === 'users'
+        ? buildUserRequest(formData)
+        : buildPayload(type, formData, null, data.partenaires);
+      if (type === 'users') await apiClient.post('/users/', payload);
       if (type === 'groups') await apiClient.post('/groupes/', payload);
       if (type === 'permissions') await apiClient.post('/permissions/', payload);
       setHasUnsavedChanges(false);
@@ -134,7 +387,22 @@ const setField = (field, value) => {
       }
       return true;
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Création impossible.');
+      const apiErrors = err?.data || err?.response?.data || {};
+      setFieldErrors((prev) => ({
+        ...prev,
+        ...(apiErrors.email?.[0] ? { email: apiErrors.email[0] } : {}),
+        ...(apiErrors.first_name?.[0] ? { first_name: apiErrors.first_name[0] } : {}),
+        ...(apiErrors.last_name?.[0] ? { last_name: apiErrors.last_name[0] } : {}),
+        ...(apiErrors.telephone?.[0] ? { telephone: apiErrors.telephone[0] } : {}),
+        ...(apiErrors.groups?.[0] ? { groups: apiErrors.groups[0] } : {}),
+      }));
+      setError(
+        apiErrors.detail ||
+        apiErrors.email?.[0] ||
+        apiErrors.non_field_errors?.[0] ||
+        err?.message ||
+        'Création impossible.'
+      );
       return false;
     } finally {
       setLoading(false);
@@ -142,7 +410,7 @@ const setField = (field, value) => {
   };
 
   const resetForm = () => {
-    setFormData(initialForms[type]);
+    setFormData(type === 'users' ? createInitialUserForm() : initialForms[type]);
     setFieldErrors({});
     setError(null);
     setSuccess(null);
@@ -409,75 +677,254 @@ function StatusPair({ active }) {
 // ==========================================
 // FORMULAIRE PAR TYPE (utilise par Create et Show)
 // ==========================================
-export function SecurityForm({ type, formData, setField, errors, data }) {
-  if (type === 'users') {
-    const partnerOptions = data.eligiblePartenaires?.length ? data.eligiblePartenaires : data.partenaires;
+function UserPhotoField({ formData, setField }) {
+  const inputRef = useRef(null);
+  const [previewUrl, setPreviewUrl] = useState(formData.photo_url || null);
+  const [previewBroken, setPreviewBroken] = useState(false);
 
+  useEffect(() => {
+    if (!(formData.photo instanceof File)) {
+      setPreviewUrl(formData.photo_url || null);
+      setPreviewBroken(false);
+      return undefined;
+    }
+
+    const objectUrl = URL.createObjectURL(formData.photo);
+    setPreviewUrl(objectUrl);
+    setPreviewBroken(false);
+
+    // Libère l'URL temporaire quand la photo change ou au démontage.
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [formData.photo, formData.photo_url]);
+
+  const removePhoto = () => {
+    setField('photo', null);
+    setPreviewUrl(null);
+    setPreviewBroken(false);
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  return (
+    <FormField label="Photo">
+      <div className="flex items-center gap-3">
+        <div className="w-16 h-16 shrink-0 border border-gray-300 bg-gray-100 overflow-hidden flex items-center justify-center">
+          {previewUrl && !previewBroken ? (
+            <img
+              src={previewUrl}
+              alt="Aperçu de la photo utilisateur"
+              className="w-full h-full object-cover"
+              onError={() => setPreviewBroken(true)}
+            />
+          ) : (
+            <span className="text-xl font-semibold text-gray-400">
+              {(formData.first_name || formData.last_name || '?').trim().charAt(0).toUpperCase() || '?'}
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-1">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => setField('photo', e.target.files?.[0] || null)}
+            className={inputClass()}
+          />
+          {formData.photo instanceof File && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] text-gray-500">{formData.photo.name}</span>
+              <button
+                type="button"
+                onClick={removePhoto}
+                className="shrink-0 text-[11px] text-red-600 hover:text-red-700"
+              >
+                Supprimer
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </FormField>
+  );
+}
+
+export function SecurityForm({ type, formData, setField, errors, data, editing = false }) {
+  if (type === 'users') {
     return (
       <div className="space-y-4">
-        <Section title="Utilisateur">
+        <Section title="Informations utilisateur">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <FormField label="Partenaire" required error={errors.partenaire}>
-                <select value={formData.partenaire} onChange={(e) => setField('partenaire', e.target.value)} className={inputClass(errors.partenaire)} style={{ height: 26 }}>
-                  <option value="">Sélectionner un partenaire</option>
-                  {partnerOptions.map((p) => (
-                    <option key={p.id} value={p.id}>{p.nom || p.raison_sociale || p.email}</option>
-                  ))}
-                </select>
+              <FormField label="Email" required error={errors.email}>
+                <input
+                  type="email"
+                  value={formData.email || ''}
+                  onChange={(e) => setField('email', e.target.value)}
+                  disabled={editing}
+                  className={`${inputClass(errors.email)} ${editing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                  style={{ height: 26 }}
+                  autoComplete="email"
+                />
               </FormField>
-              <p className="ml-[148px] text-[11px] text-gray-500">
-                {partnerOptions.length} partenaire(s) éligible(s)
-              </p>
+
+              <FormField label="Prénom" required error={errors.first_name}>
+                <input type="text" value={formData.first_name || ''} onChange={(e) => setField('first_name', e.target.value)} className={inputClass(errors.first_name)} style={{ height: 26 }} autoComplete="given-name" />
+              </FormField>
+
+              <FormField label="Nom" required error={errors.last_name}>
+                <input type="text" value={formData.last_name || ''} onChange={(e) => setField('last_name', e.target.value)} className={inputClass(errors.last_name)} style={{ height: 26 }} autoComplete="family-name" />
+              </FormField>
+
+              <FormField label="Nom utilisateur">
+                <input type="text" value={formData.username || ''} onChange={(e) => setField('username', e.target.value)} className={inputClass()} style={{ height: 26 }} autoComplete="username" />
+              </FormField>
+
+              <UserPhotoField formData={formData} setField={setField} />
             </div>
 
             <div className="space-y-2">
+              <FormField label="Téléphone" error={errors.telephone}>
+                <input type="tel" value={formData.telephone || ''} onChange={(e) => setField('telephone', e.target.value)} className={inputClass(errors.telephone)} style={{ height: 26 }} autoComplete="tel" />
+              </FormField>
+
               <FormField label="Statut">
-                <select value={formData.statut} onChange={(e) => setField('statut', e.target.value)} className={inputClass()} style={{ height: 26 }}>
+                <select value={formData.statut || 'actif'} onChange={(e) => setField('statut', e.target.value)} className={inputClass()} style={{ height: 26 }}>
                   <option value="actif">Actif</option>
                   <option value="inactif">Inactif</option>
+                  <option value="suspendu">Suspendu</option>
                 </select>
               </FormField>
+
+              <FormField label="Fuseau horaire">
+                <input type="text" value={formData.tz || 'UTC'} onChange={(e) => setField('tz', e.target.value)} className={inputClass()} style={{ height: 26 }} placeholder="UTC" />
+              </FormField>
+
+              <FormField label="Langue">
+                <select value={formData.lang || 'fr_FR'} onChange={(e) => setField('lang', e.target.value)} className={inputClass()} style={{ height: 26 }}>
+                  <option value="fr_FR">Français</option>
+                  <option value="en_US">English</option>
+                </select>
+              </FormField>
+
+              <p className="ml-[148px] text-[11px] text-gray-500">
+                Le partenaire pourra être créé ensuite depuis la fiche de l'utilisateur.
+              </p>
             </div>
           </div>
         </Section>
 
+        <UserLocationFields formData={formData} setField={setField} errors={errors} />
+
+        <Section title="Entités et sociétés">
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Entité">
+              <select value={formData.entite || ''} onChange={(e) => setField('entite', e.target.value)} className={inputClass()} style={{ height: 26 }}>
+                <option value="">Aucune</option>
+                {(data.entites || []).map((entity) => <option key={entity.id} value={entity.id}>{entity.raison_sociale || entity.nom || `Entité ${entity.id}`}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Société principale">
+              <select value={formData.company_id || ''} onChange={(e) => setField('company_id', e.target.value)} className={inputClass()} style={{ height: 26 }}>
+                <option value="">Aucune</option>
+                {(data.entites || []).map((entity) => <option key={entity.id} value={entity.id}>{entity.raison_sociale || entity.nom || `Entité ${entity.id}`}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <div className="mt-3">
+            <div className="mb-2 text-xs font-medium text-gray-700">Sociétés accessibles</div>
+            <CheckList items={data.entites || []} value={formData.company_ids || []} onChange={(value) => setField('company_ids', value)} getLabel={(entity) => entity.raison_sociale || entity.nom || `Entité ${entity.id}`} />
+          </div>
+        </Section>
+
         <Section title="Groupes">
+          {errors.groups && <p className="mb-2 text-xs text-red-600">{errors.groups}</p>}
           <CheckList items={data.groups} value={formData.groups} onChange={(value) => setField('groups', value)} getLabel={getGroupName} />
+        </Section>
+
+        <Section title="Permissions directes">
+          <CategorizedPermissionsList
+            permissions={data.permissions || []}
+            value={formData.user_permissions || []}
+            onChange={(value) => setField('user_permissions', value)}
+            modules={data.modules}
+            groups={data.groups}
+            users={data.users}
+          />
+        </Section>
+
+        <Section title="Accès">
+          <div className="grid grid-cols-1 gap-4 text-xs">
+            <label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setField('is_active', e.target.checked)} /> Compte actif</label>
+          </div>
         </Section>
       </div>
     );
   }
 
-  if (type === 'groups') {
+if (type === 'groups') {
     return (
       <div className="space-y-4">
-        <Section title="Groupe">
+        <Section title="Informations du groupe">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <FormField label="Nom" required error={errors.name}>
-                <input value={formData.name} onChange={(e) => setField('name', e.target.value)} className={inputClass(errors.name)} style={{ height: 26 }} />
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setField('name', e.target.value)}
+                  className={inputClass(errors.name)}
+                  style={{ height: 26 }}
+                  autoComplete="off"
+                />
               </FormField>
 
               <FormField label="Catégorie">
-                <input value={formData.category} onChange={(e) => setField('category', e.target.value)} className={inputClass()} style={{ height: 26 }} />
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={(e) => setField('category', e.target.value)}
+                  className={inputClass()}
+                  style={{ height: 26 }}
+                  autoComplete="off"
+                />
               </FormField>
             </div>
 
             <div className="space-y-2">
               <FormField label="Description">
-                <textarea value={formData.description} onChange={(e) => setField('description', e.target.value)} className={inputClass()} rows={2} />
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setField('description', e.target.value)}
+                  className={inputClass()}
+                  rows={4}
+                />
               </FormField>
+
+              <p className="ml-[148px] text-[11px] text-gray-500">
+                Les membres, permissions et groupes hérités se configurent ci-dessous.
+              </p>
             </div>
           </div>
         </Section>
 
         <Section title="Membres">
-          <CheckList items={data.users} value={formData.members} onChange={(value) => setField('members', value)} getLabel={getUserName} />
+          <CheckList
+            items={data.users}
+            value={formData.members}
+            onChange={(value) => setField('members', value)}
+            getLabel={getUserName}
+          />
         </Section>
 
         <Section title="Permissions">
-          <CheckList items={data.permissions} value={formData.permissions} onChange={(value) => setField('permissions', value)} getLabel={(p) => p.name || p.acces || `Permission ${p.id}`} />
+          <CategorizedPermissionsList
+            permissions={data.permissions}
+            value={formData.permissions}
+            onChange={(value) => setField('permissions', value)}
+            modules={data.modules}
+            groups={data.groups}
+            users={data.users}
+          />
         </Section>
 
         <Section title="Groupes hérités">
@@ -522,17 +969,7 @@ const filteredModels = selectedModule && selectedModuleKeys.length
     })
   : data.models;
 
-  const actionFields = [
-    ['perm_read', 'Lire'],
-    ['perm_create', 'Créer'],
-    ['perm_write', 'Modifier'],
-    ['perm_unlink', 'Supprimer'],
-    ['perm_validate', 'Valider'],
-    ['perm_cancel', 'Annuler'],
-    ['perm_export', 'Exporter'],
-    ['perm_import', 'Importer'],
-    ['perm_print', 'Imprimer'],
-  ];
+  const actionFields = PERMISSION_ACTION_FIELDS;
 
   return (
     <div className="space-y-4">
@@ -683,5 +1120,167 @@ onChange={(e) => setField('target_type', e.target.value)}
         </div>
       </Section>
     </div>
+  );
+}
+
+export function createInitialUserForm(user = null) {
+  return {
+    ...initialForms.users,
+    email: user?.email || '', username: user?.username || '',
+    first_name: user?.first_name || '', last_name: user?.last_name || '',
+    telephone: user?.telephone || '', photo: null, photo_url: user?.photo || null,
+    pays: user?.pays?.id || user?.pays || '',
+    region: user?.region?.id || user?.region || '',
+    ville: user?.ville?.id || user?.ville || '',
+    tz: user?.tz || 'UTC', lang: user?.lang || 'fr_FR',
+    statut: user?.statut || 'actif', is_active: user ? !!user.is_active : true,
+    entite: user?.entite?.id || user?.entite || '',
+    company_id: user?.company_id?.id || user?.company_id || '',
+    company_ids: (user?.company_ids_details || []).map((entry) => entry.id),
+    groups: (user?.groups || []).map((entry) => entry?.id ?? entry),
+    user_permissions: (user?.user_permissions || []).map((entry) => entry?.id ?? entry),
+  };
+}
+
+export function buildUserRequest(
+  formData,
+  editing = false
+) {
+  const payload = {
+    email: formData.email?.trim().toLowerCase() || '',
+    username: formData.username?.trim() || '',
+    first_name: formData.first_name?.trim() || '',
+    last_name: formData.last_name?.trim() || '',
+    telephone: formData.telephone?.trim() || '',
+    tz: formData.tz?.trim() || 'UTC',
+    lang: formData.lang || 'fr_FR',
+    statut: formData.statut || 'actif',
+    is_active: !!formData.is_active,
+
+    pays: formData.pays
+      ? Number(formData.pays)
+      : null,
+
+    region: formData.region
+      ? Number(formData.region)
+      : null,
+
+    ville: formData.ville
+      ? Number(formData.ville)
+      : null,
+
+    entite: formData.entite
+      ? Number(formData.entite)
+      : null,
+
+    company_id: formData.company_id
+      ? Number(formData.company_id)
+      : null,
+
+    company_ids: (
+      formData.company_ids || []
+    ).map(Number),
+
+    groups: (
+      formData.groups || []
+    ).map(Number),
+
+    user_permissions: (
+      formData.user_permissions || []
+    ).map(Number),
+  };
+
+  // Ne surtout plus supprimer payload.email ici.
+
+  if (!(formData.photo instanceof File)) {
+    return payload;
+  }
+
+  const multipart = new FormData();
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        multipart.append(key, entry);
+      });
+    } else if (
+      value !== null &&
+      value !== undefined
+    ) {
+      multipart.append(key, value);
+    }
+  });
+
+  multipart.append('photo', formData.photo);
+
+  return multipart;
+}
+
+export function UserLocationFields({ formData, setField, errors }) {
+  const [countries, setCountries] = useState([]);
+  const [regions, setRegions] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [searchCountry, setSearchCountry] = useState('');
+  const [searchRegion, setSearchRegion] = useState('');
+  const [searchCity, setSearchCity] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    apiClient.get('/pays/').then((response) => {
+      if (mounted) setCountries(parseResponse(response));
+    }).catch(() => {
+      if (mounted) setCountries([]);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!formData.pays) {
+      setRegions([]);
+      setCities([]);
+      return undefined;
+    }
+    let mounted = true;
+    apiClient.get(`/subdivisions/?pays=${formData.pays}`).then((response) => {
+      if (mounted) setRegions(parseResponse(response));
+    }).catch(() => {
+      if (mounted) setRegions([]);
+    });
+    return () => { mounted = false; };
+  }, [formData.pays]);
+
+  useEffect(() => {
+    if (!formData.region) {
+      setCities([]);
+      return undefined;
+    }
+    let mounted = true;
+    apiClient.get(`/villes/?subdivision=${formData.region}`).then((response) => {
+      if (mounted) setCities(parseResponse(response));
+    }).catch(() => {
+      if (mounted) setCities([]);
+    });
+    return () => { mounted = false; };
+  }, [formData.region]);
+
+  return (
+    <Section title="Localisation">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <FormField label="Pays" error={errors.pays}>
+            <SearchableDropdown value={formData.pays || null} onChange={(value) => { setField('pays', value); setField('region', ''); setField('ville', ''); }} options={countries} searchValue={searchCountry} onSearchChange={setSearchCountry} placeholder="Sélectionner un pays" icon={FiGlobe} getOptionLabel={(country) => `${country.emoji || ''} ${country.nom_fr || country.nom || ''} (${country.code_iso || ''})`} getOptionValue={(country) => country.id} errorClass={errors.pays ? 'border-red-500' : ''} />
+          </FormField>
+          <FormField label="Région" error={errors.region}>
+            <SearchableDropdown value={formData.region || null} onChange={(value) => { setField('region', value); setField('ville', ''); }} options={regions} searchValue={searchRegion} onSearchChange={setSearchRegion} placeholder="Sélectionner une région" disabled={!formData.pays} icon={FiMap} getOptionLabel={(region) => `${region.nom || ''} (${region.type_subdivision || ''})`} getOptionValue={(region) => region.id} errorClass={errors.region ? 'border-red-500' : ''} />
+          </FormField>
+          <FormField label="Ville" error={errors.ville}>
+            <SearchableDropdown value={formData.ville || null} onChange={(value) => setField('ville', value)} options={cities} searchValue={searchCity} onSearchChange={setSearchCity} placeholder="Sélectionner une ville" disabled={!formData.region} icon={FiMapPin} getOptionLabel={(city) => `${city.nom || ''}${city.subdivision_nom ? ` (${city.subdivision_nom})` : ''}`} getOptionValue={(city) => city.id} errorClass={errors.ville ? 'border-red-500' : ''} />
+          </FormField>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 p-3 text-xs text-gray-600">
+          Le choix est dépendant : le pays charge ses régions, puis la région charge ses villes. Ces informations seront reprises lors de la création du partenaire associé.
+        </div>
+      </div>
+    </Section>
   );
 }

@@ -1,6 +1,7 @@
+// C:\python\django\somane_frontend\src\pages\Partners\List.jsx
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiAlertCircle, FiEdit2, FiEye, FiFilter, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiUserPlus } from 'react-icons/fi';
+import { FiAlertCircle, FiEdit2, FiEye, FiFilter, FiPlus, FiRefreshCw, FiSearch, FiTrash2 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
 import { useEntity } from '../../context/EntityContext';
 import { PARTNER_TYPES, getPartnerName, parseResponse } from './PartnerShared';
@@ -63,7 +64,7 @@ export default function PartnersList() {
   const stats = {
     total: partners.length,
     actifs: partners.filter(p => p.statut).length,
-    avecCompte: partners.filter(p => p.user).length,
+    avecCompte: partners.filter(p => p.utilisateur_details).length,
   };
 
   return (
@@ -150,10 +151,10 @@ export default function PartnersList() {
                     <div className="text-gray-500">{partner.pays_details?.nom || ''}</div>
                   </td>
                   <td className="border border-gray-300 px-2 py-1.5 text-xs">
-                    {partner.user ? (
+                    {partner.utilisateur_details ? (
                       <span className="px-2 py-1 bg-green-50 text-green-700 border border-green-200">Compte cree</span>
                     ) : (
-                      <span className="px-2 py-1 bg-yellow-50 text-yellow-700 border border-yellow-200">A creer</span>
+                      <span className="px-2 py-1 bg-gray-50 text-gray-600 border border-gray-200">Aucun compte</span>
                     )}
                   </td>
                   <td className="border border-gray-300 px-2 py-1.5 text-center text-xs">
@@ -165,7 +166,6 @@ export default function PartnersList() {
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => navigate(String(partner.id))} className="p-1 text-blue-600 hover:bg-blue-50" title="Afficher"><FiEye size={14} /></button>
                       <button onClick={() => navigate(String(partner.id))} className="p-1 text-purple-600 hover:bg-purple-50" title="Modifier"><FiEdit2 size={14} /></button>
-                      {!partner.user && <button onClick={() => navigate(`${partner.id}?tab=user`)} className="p-1 text-green-600 hover:bg-green-50" title="Creer utilisateur"><FiUserPlus size={14} /></button>}
                       <button onClick={() => deletePartner(partner)} className="p-1 text-red-600 hover:bg-red-50" title="Supprimer"><FiTrash2 size={14} /></button>
                     </div>
                   </td>
