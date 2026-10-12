@@ -5,11 +5,12 @@ export const API = {
   assets: 'compta/assets/',
   categories: 'compta/asset-categories/',
   modifications: 'compta/asset-modifications/',
+  moves: 'compta/moves/',
   accounts: 'compta/accounts/',
   journals: 'compta/journals/',
   currencies: 'devises/',
   entities: 'entites/',
-  users: 'utilisateurs/',
+  users: 'users/',
   traceability: 'compta/module-traceability/',
 };
 
@@ -79,6 +80,15 @@ export const getActiveEntityId = () => {
 export const relationId = (value) => {
   if (value === null || value === undefined || value === '') return '';
   return typeof value === 'object' ? (value.id ?? value.value ?? '') : value;
+};
+
+export const isOperationalAccount = (account) => {
+  return Boolean(account?.id)
+    && account?.active !== false
+    && account?.can_be_used_in_entry === true
+    && account?.locked !== true
+    && account?.is_root !== true
+    && account?.is_root_account !== true;
 };
 
 export const normalizeText = (value) => String(value || '')
@@ -223,7 +233,7 @@ const readTablePreferences = (storageKey) => {
   catch { return {}; }
 };
 
-export const AssetTable = ({ storageKey, columns, rows, renderCell, renderAction, totals = {}, emptyLabel }) => {
+export const AssetTable = ({ storageKey, columns, rows, renderCell, renderAction, totals = {}, emptyLabel, footer }) => {
   const [preferences, setPreferences] = useState(() => readTablePreferences(storageKey));
   const [menuPosition, setMenuPosition] = useState(null);
   const buttonRef = useRef(null);
@@ -315,6 +325,7 @@ export const AssetTable = ({ storageKey, columns, rows, renderCell, renderAction
         </tr>) : <tr><td colSpan={visibleColumns.length + 1} className="border border-gray-300 px-2 py-6 text-center text-gray-500">{emptyLabel}</td></tr>}</tbody>
         {Object.keys(totals).length > 0 && <tfoot><tr>{visibleColumns.map((column) => <td key={column.key} className="px-2 py-2 text-right text-sm font-semibold tabular-nums">{totals[column.key] ?? ''}</td>)}<td /></tr></tfoot>}
       </table>
+      {footer && <div className="sticky left-0 w-fit py-2">{footer}</div>}
     </div>
     {menuPosition && createPortal(<div ref={popupRef} className="border border-gray-300 bg-white p-2 text-xs text-gray-700 shadow-xl" style={menuPosition}>
       <div className="border-b border-gray-100 px-2 py-1.5 font-semibold">Colonnes à afficher</div>

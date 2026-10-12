@@ -152,12 +152,13 @@ export default function UnifiedFormPage({
   pageLabel,
   mode = 'create',
   fallbackPath = '/dashboard',
-  pullToHeader = 16,
+  pullToHeader = 24,
   className = '',
 
   primaryAction = { label: 'Nouveau', icon: <FiPlus size={12} /> },
   onTitleClick,
   headerActions = [],
+  headerActionsCentered = false,
   actionsMenu,
 
   onSave,
@@ -191,6 +192,7 @@ export default function UnifiedFormPage({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const isAccountingModulePage = location.pathname.startsWith('/comptabilite/');
   const currentPath = `${location.pathname}${location.search || ''}`;
   const resolvedPageLabel = pageLabel || (mode === 'show' ? `Détail ${title}` : `Création ${title}`);
   const resolvedMemoryKey = memoryKey
@@ -415,7 +417,10 @@ export default function UnifiedFormPage({
     });
   };
 
-  const history = useMemo(() => previousPages.slice(-2), [previousPages]);
+  const history = useMemo(() => previousPages.slice(-1), [previousPages]);
+  const recordLabelIsCurrentItem = Boolean(
+    recordLabel && history[0]?.label?.trim().toLowerCase() === String(title).trim().toLowerCase(),
+  );
 
   if (noContext) {
     return (
@@ -423,7 +428,7 @@ export default function UnifiedFormPage({
         className="flex min-h-0 flex-col overflow-hidden bg-gray-50"
         style={{ height: `calc(100% + ${pullToHeader}px)`, marginTop: `-${pullToHeader}px` }}
       >
-        <section className="flex min-h-0 flex-1 flex-col border border-gray-300 bg-white">
+        <section className="flex min-h-0 flex-1 flex-col border-x border-b border-gray-300 bg-white">
           <div className="border-b border-gray-300 px-4 py-3 text-lg font-bold text-gray-900">
             {title}
           </div>
@@ -436,7 +441,13 @@ export default function UnifiedFormPage({
   return (
     <div
       className={classNames('unified-form-root relative flex min-h-0 flex-col overflow-visible bg-gray-50', className)}
-      style={{ height: `calc(100% + ${pullToHeader}px)`, marginTop: `-${pullToHeader}px` }}
+      style={{
+        width: isAccountingModulePage ? 'calc(100% + 3rem)' : undefined,
+        marginLeft: isAccountingModulePage ? '-1.5rem' : undefined,
+        marginRight: isAccountingModulePage ? '-1.5rem' : undefined,
+        height: `calc(100% + ${pullToHeader}px)`,
+        marginTop: `-${pullToHeader}px`,
+      }}
     >
       <style>{`
         .unified-form-scroll { scrollbar-width: none; -ms-overflow-style: none; }
@@ -448,7 +459,142 @@ export default function UnifiedFormPage({
         .unified-form-message { animation: unified-form-message-in 180ms ease-out; }
       `}</style>
 
-      <section className="flex min-h-0 flex-1 flex-col overflow-visible border border-gray-300 bg-white">
+      <section className="flex min-h-0 flex-1 flex-col overflow-visible border-x border-b border-gray-300 bg-white">
+        <header className={classNames(
+          'relative z-20 shrink-0 border-b border-gray-300 py-1.5 pointer-events-auto',
+          isAccountingModulePage ? 'px-4' : 'px-3',
+        )}>
+          <div className="flex min-h-[46px] items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {primaryAction && (
+                <button
+                  type="button"
+                  onClick={() => executeHeaderAction(primaryAction)}
+                  disabled={primaryAction.disabled}
+                  title={primaryAction.title || primaryAction.label}
+                  className={classNames(
+                    'flex h-9 shrink-0 items-center gap-2 rounded border border-purple-600 bg-purple-600 px-3 text-xs font-semibold text-white transition-all duration-200 hover:scale-105 hover:border-purple-700 hover:bg-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+                    primaryAction.className,
+                  )}
+                >
+                  {primaryAction.icon || <FiPlus size={12} />}
+                  <span>{primaryAction.label || 'Nouveau'}</span>
+                </button>
+              )}
+
+              <div className="flex min-w-0 flex-col justify-center">
+                {history.length > 0 && (
+                  <div className="mb-0.5 flex h-3 max-w-[440px] items-center gap-1 overflow-hidden text-[10px] leading-none text-gray-500">
+                    {history.map((page, index) => (
+                      <React.Fragment key={`${page.path}-${index}`}>
+                        {index > 0 && (
+                          <FiChevronRight className="shrink-0 text-gray-400" size={10} strokeWidth={2.4} />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => requestExit({
+                            path: page.path,
+                            state: { restoredFromSmartBack: true },
+                          })}
+                          className="max-w-44 truncate transition-colors hover:text-purple-700"
+                          title={`Revenir à ${page.label}`}
+                        >
+                          {page.label}
+                        </button>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
+                <div className="flex min-w-0 items-baseline gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onTitleClick) onTitleClick({ requestExit, getReturnTarget });
+                      else requestExit({ path: fallbackPath, state: { restoredFromSmartBack: true } });
+                    }}
+                    className="min-w-0 truncate text-left text-base font-bold leading-tight text-gray-900 transition-all duration-200 hover:text-purple-600"
+                  >
+                    {recordLabelIsCurrentItem && title !== 'Pièces comptables'
+                      ? recordLabel
+                      : title === 'Pièces comptables' ? 'Écriture' : title}
+                  </button>
+                  {recordLabel && (!recordLabelIsCurrentItem || title === 'Pièces comptables') && (
+                    <span className="max-w-48 truncate text-xs font-medium text-gray-700">
+                      {recordLabel}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="relative z-30 ml-auto flex shrink-0 items-center gap-2">
+              {!headerActionsCentered && headerActions.map(action => (
+                <button
+                  key={action.id || action.label}
+                  type="button"
+                  onClick={() => executeHeaderAction(action)}
+                  disabled={action.disabled}
+                  title={action.title || action.label}
+                  className={classNames(
+                    'flex h-9 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+                    action.className,
+                  )}
+                >
+                  {action.icon}{action.label && <span>{action.label}</span>}
+                </button>
+              ))}
+
+              {actionsMenu}
+
+              {onSave && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    debugUnifiedForm('Clic sur le bouton Enregistrer', { currentPath, saveLabel });
+                    void save();
+                  }}
+                  disabled={saving || saveDisabled}
+                  title={saveLabel}
+                  aria-label={saveLabel}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-600 text-white shadow-sm transition-all duration-200 hover:scale-110 hover:bg-purple-700 hover:shadow-lg active:scale-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saveIcon}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => requestExit()}
+                title="Quitter la page"
+                aria-label="Quitter la page"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white transition-all duration-200 hover:scale-110 hover:bg-gray-800 hover:shadow-lg active:scale-90"
+              >
+                <FiX size={16} />
+              </button>
+            </div>
+
+            {headerActionsCentered && headerActions.length > 0 && (
+              <div className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-2 lg:flex">
+                {headerActions.map((action) => (
+                  <button
+                    key={action.id || action.label}
+                    type="button"
+                    onClick={() => executeHeaderAction(action)}
+                    disabled={action.disabled}
+                    title={action.title || action.label}
+                    className={classNames(
+                      'pointer-events-auto flex h-9 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+                      action.className,
+                    )}
+                  >
+                    {action.icon}{action.label && <span>{action.label}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </header>
+
         <div
           className="grid min-h-0 flex-1 gap-0"
           style={{
@@ -458,114 +604,6 @@ export default function UnifiedFormPage({
           }}
         >
           <div className="flex min-h-0 min-w-0 flex-col">
-            <header className="relative z-20 shrink-0 border-b border-gray-300 px-4 py-3 pointer-events-auto">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-3">
-                  {primaryAction && (
-                    <button
-                      type="button"
-                      onClick={() => executeHeaderAction(primaryAction)}
-                      disabled={primaryAction.disabled}
-                      title={primaryAction.title || primaryAction.label}
-                      className={classNames(
-                        'flex h-[60px] shrink-0 items-center gap-1 border border-purple-600 bg-purple-600 px-4 text-xs font-semibold text-white transition-all duration-200 hover:scale-105 hover:border-purple-700 hover:bg-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
-                        primaryAction.className,
-                      )}
-                    >
-                      {primaryAction.icon || <FiPlus size={12} />}
-                      <span>{primaryAction.label || 'Nouveau'}</span>
-                    </button>
-                  )}
-
-                  <div className="flex min-w-0 flex-col justify-center">
-                    {history.length > 0 && (
-                      <div className="mb-0.5 flex h-3 max-w-[440px] items-center gap-1 overflow-hidden text-[10px] leading-none text-gray-500">
-                        {history.map((page, index) => (
-                          <React.Fragment key={`${page.path}-${index}`}>
-                            {index > 0 && (
-                              <FiChevronRight className="shrink-0 text-gray-400" size={10} strokeWidth={2.4} />
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => requestExit({
-                                path: page.path,
-                                state: { restoredFromSmartBack: true },
-                              })}
-                              className="max-w-44 truncate transition-colors hover:text-purple-700"
-                              title={`Revenir à ${page.label}`}
-                            >
-                              {page.label}
-                            </button>
-                          </React.Fragment>
-                        ))}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onTitleClick) onTitleClick({ requestExit, getReturnTarget });
-                        else requestExit({ path: fallbackPath, state: { restoredFromSmartBack: true } });
-                      }}
-                      className="w-fit truncate text-left text-lg font-bold leading-tight text-gray-900 transition-all duration-200 hover:text-purple-600"
-                    >
-                      {title}
-                    </button>
-                    {recordLabel && (
-                      <div className="mt-0.5 truncate text-sm font-medium text-gray-700">
-                        {recordLabel}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  {headerActions.map(action => (
-                    <button
-                      key={action.id || action.label}
-                      type="button"
-                      onClick={() => executeHeaderAction(action)}
-                      disabled={action.disabled}
-                      title={action.title || action.label}
-                      className={classNames(
-                        'flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
-                        action.className,
-                      )}
-                    >
-                      {action.icon}{action.label && <span>{action.label}</span>}
-                    </button>
-                  ))}
-
-                  {actionsMenu}
-
-                  {onSave && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        debugUnifiedForm('Clic sur le bouton Enregistrer', { currentPath, saveLabel });
-                        void save();
-                      }}
-                      disabled={saving || saveDisabled}
-                      title={saveLabel}
-                      aria-label={saveLabel}
-                      className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-white shadow-sm transition-all duration-200 hover:scale-110 hover:bg-purple-700 hover:shadow-lg active:scale-90 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {saveIcon}
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => requestExit()}
-                    title="Quitter la page"
-                    aria-label="Quitter la page"
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition-all duration-200 hover:scale-110 hover:bg-gray-800 hover:shadow-lg active:scale-90"
-                  >
-                    <FiX size={16} />
-                  </button>
-                </div>
-              </div>
-            </header>
-
             {visibleFeedback?.message && (
               <div className="unified-form-message shrink-0 border-b border-gray-300 px-4 py-2">
                 <div className={classNames(

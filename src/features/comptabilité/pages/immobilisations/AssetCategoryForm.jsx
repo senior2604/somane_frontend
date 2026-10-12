@@ -18,6 +18,7 @@ import {
   journalLabel,
   normalizeApiList,
   relationId,
+  isOperationalAccount,
 } from './assetShared.jsx';
 
 const EMPTY_FORM = {
@@ -37,10 +38,10 @@ const loadOptions = async (entityId) => {
   if (optionsCache?.entityId === String(entityId)) return optionsCache.data;
   if (!optionsPromise) {
     optionsPromise = Promise.all([
-      axiosInstance.get(API.accounts, { params: { company: entityId, company_id: entityId, page_size: 2000 } }),
+      axiosInstance.get(API.accounts, { params: { company: entityId, page_size: 10000 } }),
       axiosInstance.get(API.journals, { params: { company: entityId, company_id: entityId, page_size: 500 } }),
     ]).then(([accounts, journals]) => ({
-      accounts: normalizeApiList(accounts.data).filter((account) => account.company || account.company_id),
+      accounts: normalizeApiList(accounts.data).filter(isOperationalAccount),
       journals: normalizeApiList(journals.data),
     })).finally(() => { optionsPromise = null; });
   }
@@ -249,7 +250,7 @@ export default function AssetCategoryForm({ mode = 'create' }) {
               <Field label="Nombre de périodes" required><input type="number" min="1" className={inputClass} value={form.method_number ?? ''} onChange={(event) => setField('method_number', event.target.value)} /></Field>
               <Field label="Unité de période" required><SearchSelect value={form.method_period} onChange={(value) => setField('method_period', value)} options={PERIODS} getLabel={(item) => item.label} /></Field>
               <Field label="Valeur résiduelle (%)"><input type="number" min="0" max="100" className={inputClass} value={form.salvage_value_percent ?? ''} onChange={(event) => setField('salvage_value_percent', event.target.value)} /></Field>
-              {['declining', 'declining_constant'].includes(form.method) && <Field label="Coefficient dégressif"><input type="number" min="0" step="0.0001" className={inputClass} value={form.method_progress_factor ?? ''} onChange={(event) => setField('method_progress_factor', event.target.value)} /></Field>}
+              {form.method === 'declining_constant' && <Field label="Coefficient constant"><input type="number" min="0" step="0.0001" className={inputClass} value={form.method_progress_factor ?? ''} onChange={(event) => setField('method_progress_factor', event.target.value)} /></Field>}
               <Field label="Prorata temporis"><StatusSwitch checked={Boolean(form.prorata)} onChange={(value) => setField('prorata', value)} /></Field>
             </div>
           </div>}

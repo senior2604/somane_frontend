@@ -43,6 +43,7 @@ export default function AssetList() {
   const navigate = useNavigate();
   const location = useLocation();
   const entityId = getActiveEntityId();
+  const parentFilterId = new URLSearchParams(location.search).get('parent_id') || '';
   const [assets, setAssets] = useState(readCache);
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState('all');
@@ -62,31 +63,31 @@ export default function AssetList() {
     setError('');
     try {
       const response = await axiosInstance.get(API.assets, {
-        params: { company_id: entityId || undefined, page_size: 1000, ordering: '-acquisition_date,-id' },
+        params: { company_id: entityId || undefined, parent_id: parentFilterId || undefined, page_size: 1000, ordering: '-acquisition_date,-id' },
       });
       const rows = normalizeApiList(response.data);
       setAssets(rows);
-      writeCache(rows);
+      if (!parentFilterId) writeCache(rows);
     } catch (requestError) {
       setError(getActionErrorMessage(requestError, 'Impossible de charger les immobilisations.'));
     } finally {
       setLoading(false);
     }
-  }, [entityId]);
+  }, [entityId, parentFilterId]);
 
   useEffect(() => {
     const returned = location.state?.createdRecord || location.state?.updatedRecord;
     const returnedId = returned?.id || returned?.pk;
-    if (returnedId) {
+    if (returnedId && (!parentFilterId || String(relationId(returned.parent_id)) === String(parentFilterId))) {
       setAssets((current) => {
         const exists = current.some((row) => String(row.id) === String(returnedId));
         const rows = exists ? current.map((row) => String(row.id) === String(returnedId) ? returned : row) : [returned, ...current];
-        writeCache(rows);
+        if (!parentFilterId) writeCache(rows);
         return rows;
       });
     }
     loadAssets({ silent: true });
-  }, [loadAssets, location.state]);
+  }, [loadAssets, location.state, parentFilterId]);
 
   const categories = useMemo(() => {
     const values = new Map();
@@ -100,6 +101,7 @@ export default function AssetList() {
   const filteredRows = useMemo(() => {
     const query = normalizeText(search);
     return assets.filter((asset) => {
+      if (parentFilterId && String(relationId(asset.parent_id)) !== String(parentFilterId)) return false;
       if (stateFilter !== 'all' && asset.state !== stateFilter) return false;
       if (typeFilter !== 'all' && asset.asset_type !== typeFilter) return false;
       if (categoryFilter !== 'all' && String(relationId(asset.category_id || asset.category)) !== String(categoryFilter)) return false;
@@ -109,7 +111,7 @@ export default function AssetList() {
         asset.barcode, ASSET_STATES[asset.state], ASSET_TYPES.find((item) => item.id === asset.asset_type)?.label,
       ].filter(Boolean).join(' ')).includes(query);
     });
-  }, [assets, categoryFilter, search, stateFilter, typeFilter]);
+  }, [assets, categoryFilter, parentFilterId, search, stateFilter, typeFilter]);
 
   const selectedRows = useMemo(() => {
     const ids = new Set(selectedIds.map(String));
