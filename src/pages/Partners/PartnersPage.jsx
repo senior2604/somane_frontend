@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
 import { useEntity } from '../../context/EntityContext';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import {
   FiPlus, FiEdit2, FiTrash2, FiSearch, FiEye,
   FiUserPlus, FiMail, FiCheckCircle, FiXCircle,
@@ -24,7 +26,7 @@ const parseResponse = (response) => {
 // SEARCHABLE DROPDOWN
 // ============================================================================
 const SearchableDropdown = ({
-  label, value, onChange, options, searchValue, onSearchChange,
+  label, helpField, value, onChange, options, searchValue, onSearchChange,
   placeholder, required = false, disabled = false, icon: Icon,
   getOptionLabel = (o) => o, getOptionValue = (o) => o, errorClass = '',
 }) => {
@@ -65,7 +67,7 @@ const SearchableDropdown = ({
     <div className="relative" ref={dropdownRef}>
       {label && (
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          {label} {required && <span className="text-red-500">*</span>}
+          {label} <FieldHelp field={helpField} /> {required && <span className="text-red-500">*</span>}
         </label>
       )}
       <button
@@ -218,6 +220,7 @@ function LocalisationSection({ formData, setFormData, fieldErrors, setFieldError
         <div>
           <SearchableDropdown
             label="Pays"
+            helpField="pays"
             required={true}
             value={formData.pays || null}
             onChange={(v) => {
@@ -244,6 +247,7 @@ function LocalisationSection({ formData, setFormData, fieldErrors, setFieldError
         <div>
           <SearchableDropdown
             label="Région / Subdivision"
+            helpField="region"
             required={true}
             value={formData.region || null}
             onChange={(v) => {
@@ -271,6 +275,7 @@ function LocalisationSection({ formData, setFormData, fieldErrors, setFieldError
         <div>
           <SearchableDropdown
             label="Ville"
+            helpField="ville"
             required={true}
             value={formData.ville || null}
             onChange={(v) => {
@@ -296,7 +301,7 @@ function LocalisationSection({ formData, setFormData, fieldErrors, setFieldError
 
         {/* Code postal */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Code postal</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Code postal <FieldHelp field="code_postal" /></label>
           <input
             type="text"
             value={formData.code_postal}
@@ -309,7 +314,7 @@ function LocalisationSection({ formData, setFormData, fieldErrors, setFieldError
         {/* Adresse principale — OBLIGATOIRE */}
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Adresse principale <span className="text-red-500">*</span>
+            Adresse principale <FieldHelp field="adresse" /> <span className="text-red-500">*</span>
           </label>
           <textarea
             value={formData.adresse}
@@ -425,6 +430,41 @@ const RequiredBadge = () => (
     <FiAlertCircle size={10} />requis
   </span>
 );
+
+const PARTNER_FIELD_HELP = {
+  nom: 'Nom de la personne ou raison sociale de l’organisation.',
+  type_partenaire: 'Catégorie du partenaire : client, fournisseur ou autre type.',
+  is_company: 'Précise si le partenaire est une organisation ou une personne physique.',
+  statut: 'Un partenaire inactif reste dans l’historique, mais n’est plus proposé dans les choix courants.',
+  email: 'Adresse de contact enregistrée sur cette fiche Partenaire.',
+  telephone: 'Numéro de téléphone principal du partenaire.',
+  site_web: 'Adresse du site web du partenaire.',
+  pays: 'Pays de l’adresse principale du partenaire.',
+  region: 'Région ou subdivision administrative du pays choisi.',
+  ville: 'Ville située dans la région choisie.',
+  code_postal: 'Code postal associé à l’adresse, s’il existe.',
+  adresse: 'Adresse principale : rue, numéro et quartier.',
+  numero_fiscal: 'Identifiant fiscal attribué par l’administration.',
+  registre_commerce: 'Numéro d’inscription au registre du commerce.',
+  securite_sociale: 'Numéro de sécurité sociale, si applicable.',
+};
+
+function FieldHelp({ field }) {
+  const text = PARTNER_FIELD_HELP[field];
+  if (!text) return null;
+  return (
+    <details className="group relative inline-flex align-middle ml-1">
+      <summary
+        aria-label={`Aide pour ${field}`}
+        className="list-none cursor-pointer select-none inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-400 text-[10px] leading-none text-gray-500 hover:border-violet-500 hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-400"
+      >?
+      </summary>
+      <span role="tooltip" className="absolute z-[70] bottom-full left-1/2 mb-2 hidden w-64 -translate-x-1/2 rounded-md bg-gray-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-lg group-open:block">
+        {text}
+      </span>
+    </details>
+  );
+}
 
 // ============================================================================
 // MODAL CRÉATION
@@ -613,7 +653,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                 {/* Nom */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Nom / Raison sociale <span className="text-red-500">*</span>
+                    Nom / Raison sociale <FieldHelp field="nom" /> <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -632,7 +672,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                 {/* Type */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Type <span className="text-red-500">*</span>
+                    Type <FieldHelp field="type_partenaire" /> <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.type_partenaire}
@@ -650,7 +690,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
 
                 {/* Type personne */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Type de personne</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Type de personne <FieldHelp field="is_company" /></label>
                   <select
                     value={formData.is_company ? 'company' : 'person'}
                     onChange={(e) => setFormData(prev => ({ ...prev, is_company: e.target.value === 'company' }))}
@@ -664,7 +704,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
 
                 {/* Statut */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Statut</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Statut <FieldHelp field="statut" /></label>
                   <select
                     value={formData.statut ? 'actif' : 'inactif'}
                     onChange={(e) => setFormData(prev => ({ ...prev, statut: e.target.value === 'actif' }))}
@@ -692,7 +732,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                 {/* Email — OBLIGATOIRE */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Email <span className="text-red-500">*</span>
+                    Email <FieldHelp field="email" /> <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
@@ -714,7 +754,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                 {/* Téléphone — OBLIGATOIRE */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Téléphone <span className="text-red-500">*</span>
+                    Téléphone <FieldHelp field="telephone" /> <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <FiPhone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
@@ -735,7 +775,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
 
                 {/* Site web */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Site web</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Site web <FieldHelp field="site_web" /></label>
                   <input
                     type="url"
                     value={formData.site_web}
@@ -768,7 +808,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Numéro fiscal (NIF)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Numéro fiscal (NIF) <FieldHelp field="numero_fiscal" /></label>
                   <input
                     type="text"
                     value={formData.numero_fiscal}
@@ -783,7 +823,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                   {renderErr('numero_fiscal')}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Registre de commerce</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Registre de commerce <FieldHelp field="registre_commerce" /></label>
                   <input
                     type="text"
                     value={formData.registre_commerce}
@@ -798,7 +838,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                   {renderErr('registre_commerce')}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Sécurité sociale</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Sécurité sociale <FieldHelp field="securite_sociale" /></label>
                   <input
                     type="text"
                     value={formData.securite_sociale}
@@ -1042,7 +1082,7 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Nom <span className="text-red-500">*</span>
+                    Nom <FieldHelp field="nom" /> <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -1059,7 +1099,7 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Type <span className="text-red-500">*</span>
+                    Type <FieldHelp field="type_partenaire" /> <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.type_partenaire}
@@ -1076,7 +1116,7 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Statut</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Statut <FieldHelp field="statut" /></label>
                   <select
                     value={formData.statut ? 'actif' : 'inactif'}
                     onChange={(e) => setFormData(prev => ({ ...prev, statut: e.target.value === 'actif' }))}
@@ -1104,7 +1144,7 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
                 {/* Email — OBLIGATOIRE */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Email <span className="text-red-500">*</span>
+                    Email <FieldHelp field="email" /> <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
@@ -1125,7 +1165,7 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
                 {/* Téléphone — OBLIGATOIRE */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Téléphone <span className="text-red-500">*</span>
+                    Téléphone <FieldHelp field="telephone" /> <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <FiPhone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
@@ -1255,6 +1295,10 @@ function PartnerDetailModal({ partner, onClose }) {
 // PAGE PRINCIPALE
 // ============================================================================
 export default function PartnersPage() {
+  const { security } = useUi();
+  const canCreatePartner = can(security, 'core.Partenaire', 'create');
+  const canWritePartner = can(security, 'core.Partenaire', 'write');
+  const canDeletePartner = can(security, 'core.Partenaire', 'delete');
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1316,6 +1360,7 @@ export default function PartnersPage() {
   );
 
   const handleDelete = async (partner) => {
+    if (!canDeletePartner) return;
     if (!window.confirm(`Supprimer "${partner?.nom}" ?`)) return;
     try {
       await apiClient.delete(`/partenaires/${partner.id}/`);
@@ -1393,7 +1438,7 @@ const isProfileComplete = (p) =>
             >
               <FiRefreshCw className={loading ? 'animate-spin' : ''} />Actualiser
             </button>
-            <button
+            {canCreatePartner && <button
               onClick={() => setShowCreateModal(true)}
               disabled={!activeEntity}
               className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
@@ -1403,7 +1448,7 @@ const isProfileComplete = (p) =>
               }`}
             >
               <FiPlus />Nouveau partenaire
-            </button>
+            </button>}
           </div>
         </div>
       </div>
@@ -1601,20 +1646,20 @@ const isProfileComplete = (p) =>
                         >
                           <FiEye className="w-4 h-4" />
                         </button>
-                        <button
+                        {canWritePartner && <button
                           onClick={() => { setSelectedPartner(partner); setShowEditModal(true); }}
                           className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded"
                           title="Modifier"
                         >
                           <FiEdit2 className="w-4 h-4" />
-                        </button>
-                        <button
+                        </button>}
+                        {canDeletePartner && <button
                           onClick={() => handleDelete(partner)}
                           className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded"
                           title="Supprimer"
                         >
                           <FiTrash2 className="w-4 h-4" />
-                        </button>
+                        </button>}
                       </div>
                     </td>
 

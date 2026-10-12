@@ -272,12 +272,13 @@ export default function UnifiedIndexPage({
   previousPageLabel,
   previousPagePath,
   lockMainScroll = true,
-  pullToHeader = 16,
+  pullToHeader = 24,
   className = '',
   toolbarClassName = '',
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const isAccountingModulePage = location.pathname.startsWith('/comptabilite/');
   const currentPagePath = `${location.pathname}${location.search}`;
   const resolvePreviousPages = useCallback(() => {
     const chronologicalPages = readPreviousPages(currentPagePath);
@@ -1065,6 +1066,9 @@ export default function UnifiedIndexPage({
       ref={rootRef}
       className={classNames('unified-index-root flex min-h-0 flex-col overflow-hidden bg-gray-50', className)}
       style={{
+        width: isAccountingModulePage ? 'calc(100% + 3rem)' : undefined,
+        marginLeft: isAccountingModulePage ? '-1.5rem' : undefined,
+        marginRight: isAccountingModulePage ? '-1.5rem' : undefined,
         height: `calc(100% + ${pullToHeader}px)`,
         marginTop: `-${pullToHeader}px`,
       }}
@@ -1079,9 +1083,12 @@ export default function UnifiedIndexPage({
         .unified-index-message { animation: unified-index-message-in 180ms ease-out; }
       `}</style>
 
-      <section className="flex min-h-0 flex-1 flex-col border border-gray-300 bg-white">
+      <section className="flex min-h-0 flex-1 flex-col border-x border-b border-gray-300 bg-white">
         <div className={classNames('relative z-30 shrink-0 bg-white', toolbarClassName)}>
-          <div className="flex min-h-[46px] items-center gap-2 px-3 py-1.5">
+          <div className={classNames(
+            'flex min-h-[46px] items-center gap-2 py-1.5',
+            isAccountingModulePage ? 'px-9' : 'px-3',
+          )}>
             {primaryAction && (
               <button
                 type="button"

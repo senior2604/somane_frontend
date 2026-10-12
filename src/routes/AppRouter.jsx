@@ -2,6 +2,7 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedLayout from "../components/Layout/ProtectedLayout";
+import PermissionGate from "../components/PermissionGate";
 import ActivationPage from "../pages/Auth/ActivationPage";
 import ConfirmResetPage from "../pages/Auth/ConfirmResetPage";
 import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
@@ -27,10 +28,12 @@ import PartnersCreate from "../pages/Partners/Create.jsx";
 import PartnersShow from "../pages/Partners/Show.jsx";
 import PartnersList from "../pages/Partners/List.jsx";
 
-import PermissionsPage from "../pages/Permissions/PermissionsPage";
 import SettingsPage from "../pages/Settings/SettingsPage";
+import AccountingSettingsPage from "../features/comptabilité/pages/AccountingSettingsPage.jsx";
 import StatesPage from "../pages/States/StatesPage";
 import SystemPage from "../pages/System/SystemPage";
+import ModelsPage from "../pages/System/ModelsPage";
+import ModelFieldsPage from "../pages/System/ModelFieldsPage";
 import TasksPage from "../pages/Tasks/TasksPage";
 import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
 // import UsersPage from "../pages/Users/UsersPage";
@@ -38,6 +41,7 @@ import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
 import SecurityList from "../pages/Users/List.jsx";
 import SecurityCreate from "../pages/Users/Create.jsx";
 import SecurityShow from "../pages/Users/Show.jsx";
+import SecurityRouteGate from "../pages/Users/SecurityRouteGate.jsx";
 
 import DynamicActionPage from '../pages/DynamicUI/DynamicActionPage';
 
@@ -196,6 +200,7 @@ import BalanceAgee from "../features/comptabilité/pages/BalanceAgee/Index.jsx";
 import EtatsFinanciersComptabilite from "../features/comptabilité/pages/EtatsFinanciers/Index.jsx";
 
 import ProfilePage from '../pages/Profile/ProfilePage';
+import HelpPage from '../pages/Help/HelpPage';
 // ========== COMPOSANTS UTILITAIRES ==========
 const LoadingFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -287,30 +292,31 @@ export default function AppRouter() {
         {/* ROUTES PROTEGEES PRINCIPALES */}
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/aide" element={<HelpPage />} />
           {/* <Route path="/entities" element={<EntitiesPage />} /> */}
-          <Route path="/entities/create" element={<EntitiesCreate />} />
-          <Route path="/entities" element={<EntitiesList />} />
-          <Route path="/entities/:id" element={<EntitiesShow />} />
-          <Route path="/partner" element={<PartnersPage />} />
-          <Route path="/partners/create" element={<PartnersCreate />} />
-          <Route path="/partners" element={<PartnersList />} />
-          <Route path="/partners/:id" element={<PartnersShow />} />
+          <Route path="/entities/create" element={<PermissionGate model="core.Entite" action="create"><EntitiesCreate /></PermissionGate>} />
+          <Route path="/entities" element={<PermissionGate model="core.Entite"><EntitiesList /></PermissionGate>} />
+          <Route path="/entities/:id" element={<PermissionGate model="core.Entite"><EntitiesShow /></PermissionGate>} />
+          <Route path="/partner" element={<PermissionGate model="core.Partenaire"><PartnersPage /></PermissionGate>} />
+          <Route path="/partners/create" element={<PermissionGate model="core.Partenaire" action="create"><PartnersCreate /></PermissionGate>} />
+          <Route path="/partners" element={<PermissionGate model="core.Partenaire"><PartnersList /></PermissionGate>} />
+          <Route path="/partners/:id" element={<PermissionGate model="core.Partenaire"><PartnersShow /></PermissionGate>} />
 
 
           {/* <Route path="/user" element={<UsersPage />} /> */}
-          // Routes
-          <Route path="/UsersGestions" element={<SecurityList />} />
-          <Route path="/security/create" element={<SecurityCreate />} />
-          <Route path="/security/:type/:id" element={<SecurityShow />} />
+          {/* Routes */}
+          <Route path="/UsersGestions" element={<PermissionGate checks={[{ model: "core.Utilisateur" }, { model: "core.Groupe" }, { model: "core.Permission" }]}><SecurityList /></PermissionGate>} />
+          <Route path="/security/create" element={<SecurityRouteGate mode="create"><SecurityCreate /></SecurityRouteGate>} />
+          <Route path="/security/:type/:id" element={<SecurityRouteGate mode="detail"><SecurityShow /></SecurityRouteGate>} />
 
           <Route
           path="/ui/action/:actionId"
           element={<DynamicActionPage />}
             />
-          <Route path="/userentities" element={<UserEntitiesPage />} />
+          <Route path="/userentities" element={<PermissionGate model="core.UtilisateurEntite"><UserEntitiesPage /></PermissionGate>} />
           <Route path="/groupes" element={<GroupesPage />} />
-          <Route path="/permissions" element={<PermissionsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/permissions" element={<Navigate to="/UsersGestions?tab=permissions" replace />} />
+          <Route path="/settings" element={<PermissionGate model="core.ParametreGeneral"><SettingsPage /></PermissionGate>} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/modules" element={<ModulesPage />} />
           <Route path="/countries" element={<CountriesPage />} />
@@ -323,6 +329,8 @@ export default function AppRouter() {
           <Route path="/States" element={<StatesPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/system" element={<SystemPage />} />
+          <Route path="/models" element={<PermissionGate model="core.IrModel"><ModelsPage /></PermissionGate>} />
+          <Route path="/model-fields" element={<PermissionGate model="core.IrModelFields"><ModelFieldsPage /></PermissionGate>} />
         </Route>
 
         {/* COMPTABILITE */}
@@ -334,6 +342,25 @@ export default function AppRouter() {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardComptabilitePage />} />
           <Route path="plan-comptable" element={<PlanComptablePage />} />
+
+          {/* Centre de configuration Comptabilité et page Core réutilisée. */}
+          <Route path="parametres" element={
+            <PermissionGate model="core.ParametreGeneral"><AccountingSettingsPage /></PermissionGate>
+          } />
+          <Route path="parametres/generaux" element={
+            <PermissionGate model="core.ParametreGeneral"><SettingsPage /></PermissionGate>
+          } />
+          <Route path="partenaires">
+            <Route index element={
+              <PermissionGate model="core.Partenaire"><PartnersList /></PermissionGate>
+            } />
+            <Route path="create" element={
+              <PermissionGate model="core.Partenaire" action="create"><PartnersCreate /></PermissionGate>
+            } />
+            <Route path=":id" element={
+              <PermissionGate model="core.Partenaire"><PartnersShow /></PermissionGate>
+            } />
+          </Route>
 
           <Route path="positions-fiscales">
             <Route index element={<PositionsFiscalesIndex />} />

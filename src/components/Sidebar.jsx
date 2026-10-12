@@ -27,10 +27,12 @@ import {
   FiChevronLeft,
   FiChevronRight as FiChevronRightIcon,
   FiShoppingCart,
-  FiZap
+  FiZap,
+  FiCode
 } from "react-icons/fi";
 import { useState, useEffect, useRef } from "react";
 import { useUi } from "../context/UiContext";
+import { can } from "../services/securityAccess";
 
 // Composant pour texte avec tooltip automatique
 const TruncatedTextWithTooltip = ({ text, className = "", maxWidth = "none" }) => {
@@ -80,7 +82,7 @@ const TruncatedTextWithTooltip = ({ text, className = "", maxWidth = "none" }) =
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { configuration } = useUi();
+  const { configuration, security, loading: uiLoading } = useUi();
   
   const [openCategories, setOpenCategories] = useState({
     organisation: true,
@@ -142,14 +144,15 @@ export default function Sidebar() {
       name: "Organisation",
       icon: <FiBriefcase />,
       items: [
-        { name: "Entités", path: "/entities", icon: <FiBriefcase /> },
-        { name: "Partenaires", path: "/partners", icon: <FiUserPlus /> },
+        { name: "Entités", path: "/entities", model: "core.Entite", icon: <FiBriefcase /> },
+        { name: "Partenaires", path: "/partners", model: "core.Partenaire", icon: <FiUserPlus /> },
         { 
           name: "Gestion des utilisateurs", 
           path: "/UsersGestions", 
+          anyModels: ["core.Utilisateur", "core.Groupe", "core.Permission"],
           icon: <FiUsers />,
         },
-        { name: "Utilisateurs & Entités", path: "/userentities", icon: <FiLink /> },
+        { name: "Utilisateurs & Entités", path: "/userentities", model: "core.UtilisateurEntite", icon: <FiLink /> },
       ]
     },
     {
@@ -157,7 +160,7 @@ export default function Sidebar() {
       name: "Géographie",
       icon: <FiGlobe />,
       items: [
-        { name: "Taux de change", path: "/ExchangeRates", icon: <FiTrendingUp /> },
+        { name: "Taux de change", path: "/ExchangeRates", model: "core.HistoriqueTauxChange", icon: <FiTrendingUp /> },
       ]
     },
     {
@@ -165,8 +168,8 @@ export default function Sidebar() {
       name: "Banques",
       icon: <FiCreditCard />,
       items: [
-        { name: "Banques", path: "/banks", icon: <FiCreditCard /> },
-        { name: "Comptes Partenaires", path: "/PartnerBanks", icon: <FiList /> },
+        { name: "Banques", path: "/banks", model: "core.Banque", icon: <FiCreditCard /> },
+        { name: "Comptes Partenaires", path: "/PartnerBanks", model: "core.BanquePartenaire", icon: <FiList /> },
       ]
     },
 
@@ -177,11 +180,13 @@ export default function Sidebar() {
       name: "Système",
       icon: <FiSettings />,
       items: [
-        { name: "Paramètres", path: "/settings", icon: <FiSettings /> },
-        { name: "Modules", path: "/modules", icon: <FiGrid /> },
-        { name: "Journal", path: "/journal", icon: <FiBook /> },
-        { name: "Tâches Auto", path: "/tasks", icon: <FiClock /> },
-        { name: "Infos Système", path: "/system", icon: <FiInfo /> },
+        { name: "Paramètres", path: "/settings", model: "core.ParametreGeneral", icon: <FiSettings /> },
+        { name: "Modules", path: "/modules", model: "core.Module", icon: <FiGrid /> },
+        { name: "Journal", path: "/journal", model: "core.Journal", icon: <FiBook /> },
+        { name: "Tâches Auto", path: "/tasks", model: "core.TacheAutomatique", icon: <FiClock /> },
+        { name: "Infos Système", path: "/system", model: "core.InformationSysteme", icon: <FiInfo /> },
+        { name: "Modèles", path: "/models", model: "core.IrModel", icon: <FiGrid /> },
+        { name: "Champs des modèles", path: "/model-fields", model: "core.IrModelFields", icon: <FiCode /> },
       ]
     }
   ];
@@ -201,7 +206,22 @@ export default function Sidebar() {
       })),
   })).filter((menu) => menu.isSimpleLink || menu.items.length);
 
-  const menuCategories = [...staticMenuCategories, ...dynamicMenuCategories];
+  const visibleStaticMenuCategories = staticMenuCategories
+    .map((category) => {
+      if (!category.items) return category;
+      const items = category.items.filter((item) => {
+        // Keep navigation visible while access data is unavailable. Protected
+        // routes and backend APIs still enforce the actual permissions.
+        if (uiLoading || !security) return true;
+        const models = item.models || (item.model ? [item.model] : []);
+        if (item.anyModels) return item.anyModels.some((model) => can(security, model, 'read'));
+        return models.length === 0 || models.every((model) => can(security, model, 'read'));
+      });
+      return { ...category, items };
+    })
+    .filter((category) => !category.items || category.items.length > 0);
+
+  const menuCategories = [...visibleStaticMenuCategories, ...dynamicMenuCategories];
 
   const handleLogout = () => {
     localStorage.removeItem("authToken");

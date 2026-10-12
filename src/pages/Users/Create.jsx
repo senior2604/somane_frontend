@@ -17,6 +17,8 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import {
   ACCESS_TYPES,
   CheckList,
@@ -290,8 +292,14 @@ export function CategorizedPermissionsView({ permissions, modules, groups, users
 export default function SecurityCreate() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { security } = useUi();
   const type = searchParams.get('type') || 'users';
   const meta = getResourceMeta(type);
+  const resourceModels = { users: 'core.Utilisateur', groups: 'core.Groupe', permissions: 'core.Permission' };
+  const canCreate = can(security, resourceModels[type], 'create');
+  const allowedTypes = Object.entries(resourceModels)
+    .filter(([, model]) => can(security, model, 'create'))
+    .map(([resourceType]) => resourceType);
   const data = useSecurityData();
 
   const [formData, setFormData] = useState(initialForms[type]);
@@ -363,6 +371,10 @@ const setField = (field, value) => {
   const isReady = Object.keys(validateSecurityForm(type, formData)).length === 0;
 
   const submit = async (silent = false) => {
+    if (!can(security, resourceModels[type], 'create')) {
+      setError("Vous n'avez pas le droit de créer cette ressource.");
+      return false;
+    }
     const nextErrors = validateSecurityForm(type, formData);
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
@@ -465,16 +477,18 @@ const setField = (field, value) => {
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-start gap-3">
-              <Tooltip text="Réinitialiser le formulaire">
-                <button
-                  onClick={handleNewItem}
-                  className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
-                  style={{ minWidth: '100px' }}
-                >
-                  <FiPlus size={16} className="mr-1" />
-                  <span>Nouveau</span>
-                </button>
-              </Tooltip>
+              {canCreate && (
+                <Tooltip text="Réinitialiser le formulaire">
+                  <button
+                    onClick={handleNewItem}
+                    className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
+                    style={{ minWidth: '100px' }}
+                  >
+                    <FiPlus size={16} className="mr-1" />
+                    <span>Nouveau</span>
+                  </button>
+                </Tooltip>
+              )}
               <div className="flex flex-col h-12 justify-center">
                 <div
                   className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
@@ -510,7 +524,7 @@ const setField = (field, value) => {
                   </div>
                 )}
               </div>
-              <Tooltip text="Enregistrer">
+              {canCreate && <Tooltip text="Enregistrer">
                 <button
                   onClick={() => submit(false)}
                   disabled={loading}
@@ -518,7 +532,7 @@ const setField = (field, value) => {
                 >
                   <FiUploadCloud size={16} />
                 </button>
-              </Tooltip>
+              </Tooltip>}
               <Tooltip text="Annuler">
                 <button
                   onClick={handleDiscardChanges}
@@ -584,7 +598,7 @@ const setField = (field, value) => {
         {/* Onglets de type (users / groups / permissions) */}
         <div className="border-b border-gray-300">
           <div className="px-4 flex">
-            {getResourceMeta('users') && ['users', 'groups', 'permissions'].map((t) => (
+            {getResourceMeta('users') && allowedTypes.map((t) => (
               <button
                 key={t}
                 onClick={() => navigate(`/security/create?type=${t}`)}

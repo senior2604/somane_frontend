@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import { 
   FiRefreshCw, 
   FiPlus, 
@@ -46,6 +48,10 @@ import {
 import { TbSettings, TbBuildingSkyscraper } from "react-icons/tb";
 
 export default function ParametresPage() {
+  const { security } = useUi();
+  const canCreate = can(security, 'core.ParametreGeneral', 'create');
+  const canWrite = can(security, 'core.ParametreGeneral', 'write');
+  const canDelete = can(security, 'core.ParametreGeneral', 'delete');
   const [parametres, setParametres] = useState([]);
   const [entites, setEntites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -161,16 +167,19 @@ export default function ParametresPage() {
 
   // Gestion des actions
   const handleNewParametre = () => {
+    if (!canCreate) return;
     setEditingParametre(null);
     setShowForm(true);
   };
 
   const handleEdit = (parametre) => {
+    if (!canWrite) return;
     setEditingParametre(parametre);
     setShowForm(true);
   };
 
   const handleDelete = async (parametre) => {
+    if (!canDelete) return;
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer le paramètre "${parametre.cle}" ?`)) {
       try {
         await apiClient.delete(`/parametres/${parametre.id}/`);
@@ -183,6 +192,7 @@ export default function ParametresPage() {
   };
 
   const handleToggleModifiable = async (parametre) => {
+    if (!canWrite) return;
     try {
       await apiClient.patch(`/parametres/${parametre.id}/`, {
         modifiable: !parametre.modifiable
@@ -378,13 +388,13 @@ export default function ParametresPage() {
               <span>Actualiser</span>
             </button>
             
-            <button 
+            {canCreate && <button
               onClick={handleNewParametre}
               className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
             >
               <FiPlus size={14} />
               <span>Nouveau Paramètre</span>
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -600,7 +610,7 @@ export default function ParametresPage() {
                           ? 'Commencez par créer votre premier paramètre' 
                           : 'Essayez de modifier vos critères de recherche'}
                       </p>
-                      {parametres.length === 0 && (
+                      {parametres.length === 0 && canCreate && (
                         <button 
                           onClick={handleNewParametre}
                           className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
@@ -726,7 +736,7 @@ export default function ParametresPage() {
                         >
                           <FiEye size={12} />
                         </button>
-                        <button
+                        {canWrite && <button
                           onClick={() => handleToggleModifiable(parametre)}
                           className={`p-1 rounded hover:shadow transition-all duration-200 ${
                             parametre.modifiable
@@ -736,21 +746,21 @@ export default function ParametresPage() {
                           title={parametre.modifiable ? 'Verrouiller' : 'Déverrouiller'}
                         >
                           {parametre.modifiable ? <FiLock size={12} /> : <FiUnlock size={12} />}
-                        </button>
-                        <button
+                        </button>}
+                        {canWrite && <button
                           onClick={() => handleEdit(parametre)}
                           className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
                           title="Modifier"
                         >
                           <FiEdit2 size={12} />
-                        </button>
-                        <button
+                        </button>}
+                        {canDelete && <button
                           onClick={() => handleDelete(parametre)}
                           className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
                           title="Supprimer"
                         >
                           <FiTrash2 size={12} />
-                        </button>
+                        </button>}
                       </div>
                     </td>
                   </tr>

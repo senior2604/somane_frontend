@@ -1,6 +1,8 @@
 // C:\python\django\somane_fronten\somane_frontend\src\pages\Users\SecurityShared.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 
 export const ACCESS_TYPES = [
   { value: 'aucun', label: 'Aucun acces', dot: 'bg-red-500', badge: 'bg-red-50 text-red-700 border-red-200' },
@@ -318,7 +320,8 @@ if (type === 'users') {
   };
 }
 
-export function useSecurityData() {
+export function useSecurityData({ includePartners = true } = {}) {
+  const { security, loading: permissionsLoading, error: permissionsError } = useUi();
   const [data, setData] = useState({
     users: [],
     groups: [],
@@ -331,44 +334,63 @@ export function useSecurityData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (permissionsLoading) return;
+
     setLoading(true);
     setError(null);
 
     try {
-      const [users, groups, permissions, modules, models, entites, partenaires] = await Promise.all([
-        apiClient.get('/users/'),
-        apiClient.get('/groupes/'),
-        apiClient.get('/permissions/'),
-        apiClient.get('/modules/'),
-        apiClient.get('/ir-models/'),
-        apiClient.get('/entites/'),
-        apiClient.get('/partenaires/'),
-      ]);
+      if (!security) {
+        setError(permissionsError || 'Impossible de vérifier vos permissions.');
+        return;
+      }
 
-      setData({
-        users: parseResponse(users),
-        groups: parseResponse(groups),
-        permissions: parseResponse(permissions),
-        modules: parseResponse(modules),
-        models: parseResponse(models),
-        entites: parseResponse(entites),
-        partenaires: parseResponse(partenaires),
+      const resources = [
+        ['users', 'core.Utilisateur', '/users/'],
+        ['groups', 'core.Groupe', '/groupes/'],
+        ['permissions', 'core.Permission', '/permissions/'],
+        ['modules', 'core.Module', '/modules/'],
+        ['models', 'core.IrModel', '/ir-models/'],
+        ['entites', 'core.Entite', '/entites/'],
+        ...(includePartners ? [['partenaires', 'core.Partenaire', '/partenaires/']] : []),
+      ];
+      const readableResources = resources.filter(([, model]) => can(security, model, 'read'));
+      const results = await Promise.allSettled(
+        readableResources.map(([, , endpoint]) => apiClient.get(endpoint))
+      );
+      const nextData = {
+        users: [], groups: [], permissions: [], modules: [], models: [], entites: [], partenaires: [],
+      };
+      const failedResources = [];
+
+      results.forEach((result, index) => {
+        const [key] = readableResources[index];
+        if (result.status === 'fulfilled') {
+          nextData[key] = parseResponse(result.value);
+        } else {
+          failedResources.push(key);
+        }
       });
+
+      setData(nextData);
+      if (failedResources.length) {
+        setError(`Chargement impossible pour : ${failedResources.join(', ')}.`);
+      }
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Chargement impossible');
     } finally {
       setLoading(false);
     }
-  };
+  }, [includePartners, permissionsLoading, permissionsError, security]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const eligiblePartenaires = getEligiblePartenaires(data.partenaires, data.entites);
 
-  return { ...data, eligiblePartenaires, loading, error, fetchData };
+  return { ...data, eligiblePartenaires, loading: loading || permissionsLoading, error, fetchData };
 }
 
 export const Tooltip = ({ children, text, position = 'top' }) => {

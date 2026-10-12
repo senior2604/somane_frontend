@@ -12,10 +12,16 @@ import {
 } from 'react-icons/fi';
 import { TbBuildingSkyscraper } from 'react-icons/tb';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import { getEntityName, getVilleName, parseResponse } from './EntityShared';
 
 export default function EntitiesList() {
   const navigate = useNavigate();
+  const { security } = useUi();
+  const canCreate = can(security, 'core.Entite', 'create');
+  const canWrite = can(security, 'core.Entite', 'write');
+  const canDelete = can(security, 'core.Entite', 'delete');
   const [entities, setEntities] = useState([]);
   const [pays, setPays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +79,7 @@ export default function EntitiesList() {
   }, [entities, search, filterCountry, filterStatus]);
 
   const deleteEntity = async (entity) => {
+    if (!canDelete) return;
     if (!window.confirm(`Supprimer "${getEntityName(entity)}" ?`)) return;
     try {
       await apiClient.delete(`/entites/${entity.id}/`);
@@ -106,13 +113,15 @@ export default function EntitiesList() {
               <FiRefreshCw size={13} />
               Actualiser
             </button>
-            <button
-              onClick={() => navigate('/entities/create')}
-              className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 flex items-center gap-1"
-            >
-              <FiPlus size={13} />
-              Nouvelle entite
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => navigate('/entities/create')}
+                className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 flex items-center gap-1"
+              >
+                <FiPlus size={13} />
+                Nouvelle entite
+              </button>
+            )}
           </div>
         </div>
 
@@ -245,20 +254,24 @@ export default function EntitiesList() {
                       >
                         <FiEye size={14} />
                       </button>
-                      <button
-                        onClick={() => navigate(`/entities/${entity.id}?edit=1`)}
-                        className="p-1 text-purple-600 hover:bg-purple-50"
-                        title="Modifier"
-                      >
-                        <FiEdit2 size={14} />
-                      </button>
-                      <button
-                        onClick={() => deleteEntity(entity)}
-                        className="p-1 text-red-600 hover:bg-red-50"
-                        title="Supprimer"
-                      >
-                        <FiTrash2 size={14} />
-                      </button>
+                      {canWrite && (
+                        <button
+                          onClick={() => navigate(`/entities/${entity.id}?edit=1`)}
+                          className="p-1 text-purple-600 hover:bg-purple-50"
+                          title="Modifier"
+                        >
+                          <FiEdit2 size={14} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={() => deleteEntity(entity)}
+                          className="p-1 text-red-600 hover:bg-red-50"
+                          title="Supprimer"
+                        >
+                          <FiTrash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

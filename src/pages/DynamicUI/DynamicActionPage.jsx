@@ -43,22 +43,38 @@ function parseJson(value, fallback) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
-function readListFields(architecture) {
+function readListFields(architecture, definitions = []) {
   if (!architecture || typeof DOMParser === 'undefined') return [];
   const xml = new DOMParser().parseFromString(architecture, 'application/xml');
   if (xml.querySelector('parsererror')) return [];
+  const definitionsByName = new Map(definitions.map((field) => [field.name, field]));
   return Array.from(xml.querySelectorAll('tree > field, list > field')).map((node) => {
     const name = node.getAttribute('name');
+    const definition = definitionsByName.get(name);
     return {
       name,
-      label: node.getAttribute('string') || FALLBACK_LABELS[name] || name,
+      label: node.getAttribute('string') || definition?.label || FALLBACK_LABELS[name] || name,
+      type: definition?.type || '',
+      relation: definition?.relation || '',
     };
   }).filter((field) => field.name);
 }
 
-function formatValue(value) {
+function formatValue(value, field = {}) {
   if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
   if (value === null || value === undefined || value === '') return '—';
+  if (field.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    const [, year, month, day] = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return `${day}/${month}/${year}`;
+  }
+  if (field.type === 'datetime') {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date.toLocaleString('fr-FR');
+  }
+  if (field.type === 'monetary' || field.type === 'decimal' || field.type === 'float') {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  }
   if (Array.isArray(value)) return value.join(', ');
   if (typeof value === 'object') return value.name || value.nom || value.label || value.id || '—';
   return String(value);
@@ -89,8 +105,12 @@ export default function DynamicActionPage() {
   const view = listReference
     ? configuration?.views?.[String(listReference.view_id)]
     : null;
-  const fields = useMemo(() => readListFields(view?.architecture), [view?.architecture]);
+  const fields = useMemo(
+    () => readListFields(view?.architecture, action?.fields || []),
+    [action?.fields, view?.architecture],
+  );
   const routes = MODEL_ROUTES[action?.model];
+  const canCreate = Boolean(action?.access?.create);
 
   const loadRows = async () => {
     if (!action) return;
@@ -130,7 +150,7 @@ export default function DynamicActionPage() {
     const normalized = query.trim().toLocaleLowerCase('fr');
     const result = normalized
       ? rows.filter((row) => fields.some(({ name }) =>
-          formatValue(row[name]).toLocaleLowerCase('fr').includes(normalized)))
+          formatValue(row[name], fields.find((field) => field.name === name)).toLocaleLowerCase('fr').includes(normalized)))
       : [...rows];
     if (sort.field) {
       result.sort((a, b) => {
@@ -176,7 +196,7 @@ export default function DynamicActionPage() {
             <button onClick={loadRows} title="Actualiser" className="rounded border border-slate-300 p-2 text-slate-600 hover:bg-slate-50">
               <FiRefreshCw className={loading ? 'animate-spin' : ''} />
             </button>
-            {routes?.create && (
+            {routes?.create && canCreate && (
               <button onClick={() => navigate(routes.create)} className="flex items-center gap-2 rounded bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-800">
                 <FiPlus /> Nouveau
               </button>
@@ -235,7 +255,7 @@ export default function DynamicActionPage() {
                         <td className="px-3 py-2.5" onClick={(event) => event.stopPropagation()}>
                           <input type="checkbox" checked={selected.includes(row.id)} onChange={() => setSelected((current) => current.includes(row.id) ? current.filter((id) => id !== row.id) : [...current, row.id])} />
                         </td>
-                        {fields.map((field, index) => <td key={field.name} onClick={() => openRecord(row)} className={`px-3 py-2.5 ${index === 0 ? 'font-medium text-violet-700' : 'text-slate-700'}`}>{formatValue(row[field.name])}</td>)}
+                        {fields.map((field, index) => <td key={field.name} onClick={() => openRecord(row)} className={`px-3 py-2.5 ${index === 0 ? 'font-medium text-violet-700' : 'text-slate-700'}`}>{formatValue(row[field.name], field)}</td>)}
                       </tr>
                     ))}
                 </tbody>
@@ -246,8 +266,8 @@ export default function DynamicActionPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visibleRows.map((row) => (
               <button key={row.id} onClick={() => openRecord(row)} className="rounded border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-violet-300 hover:shadow">
-                <div className="mb-3 font-semibold text-violet-700">{formatValue(row[fields[0]?.name])}</div>
-                <dl className="space-y-2 text-sm">{fields.slice(1, 5).map((field) => <div key={field.name} className="flex justify-between gap-4"><dt className="text-slate-400">{field.label}</dt><dd className="text-right text-slate-700">{formatValue(row[field.name])}</dd></div>)}</dl>
+                <div className="mb-3 font-semibold text-violet-700">{formatValue(row[fields[0]?.name], fields[0])}</div>
+                <dl className="space-y-2 text-sm">{fields.slice(1, 5).map((field) => <div key={field.name} className="flex justify-between gap-4"><dt className="text-slate-400">{field.label}</dt><dd className="text-right text-slate-700">{formatValue(row[field.name], field)}</dd></div>)}</dl>
               </button>
             ))}
           </div>

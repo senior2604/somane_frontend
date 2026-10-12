@@ -4,11 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import { FiAlertCircle, FiEdit2, FiEye, FiFilter, FiPlus, FiRefreshCw, FiSearch, FiTrash2 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
 import { useEntity } from '../../context/EntityContext';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import { PARTNER_TYPES, getPartnerName, parseResponse } from './PartnerShared';
 
 export default function PartnersList() {
   const navigate = useNavigate();
   const { activeEntity } = useEntity();
+  const { security } = useUi();
+  const canCreate = can(security, 'core.Partenaire', 'create');
+  const canWrite = can(security, 'core.Partenaire', 'write');
+  const canDelete = can(security, 'core.Partenaire', 'delete');
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -79,9 +85,11 @@ export default function PartnersList() {
             <button onClick={fetchPartners} className="h-8 px-3 border border-gray-300 text-xs hover:bg-gray-50 flex items-center gap-1">
               <FiRefreshCw size={13} /> Actualiser
             </button>
-            <button onClick={() => navigate('create')} className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 flex items-center gap-1">
-              <FiPlus size={13} /> Nouveau partenaire
-            </button>
+            {canCreate && (
+              <button onClick={() => navigate('create')} className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 flex items-center gap-1">
+                <FiPlus size={13} /> Nouveau partenaire
+              </button>
+            )}
           </div>
         </div>
 
@@ -164,9 +172,9 @@ export default function PartnersList() {
                   </td>
                   <td className="border border-gray-300 px-2 py-1.5">
                     <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => navigate(String(partner.id))} className="p-1 text-blue-600 hover:bg-blue-50" title="Afficher"><FiEye size={14} /></button>
-                      <button onClick={() => navigate(String(partner.id))} className="p-1 text-purple-600 hover:bg-purple-50" title="Modifier"><FiEdit2 size={14} /></button>
-                      <button onClick={() => deletePartner(partner)} className="p-1 text-red-600 hover:bg-red-50" title="Supprimer"><FiTrash2 size={14} /></button>
+                      <button onClick={() => navigate(String(partner.id))} className="p-1 text-blue-600 hover:bg-blue-50" title="Afficher" aria-label="Afficher"><FiEye size={14} /></button>
+                      {canWrite && <button onClick={() => navigate(String(partner.id))} className="p-1 text-purple-600 hover:bg-purple-50" title="Modifier" aria-label="Modifier"><FiEdit2 size={14} /></button>}
+                      {canDelete && <button onClick={() => deletePartner(partner)} className="p-1 text-red-600 hover:bg-red-50" title="Supprimer" aria-label="Supprimer"><FiTrash2 size={14} /></button>}
                     </div>
                   </td>
                 </tr>

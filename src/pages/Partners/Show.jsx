@@ -19,10 +19,13 @@ import {
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
 import { useEntity } from '../../context/EntityContext';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import {
   PartnerForm,
   Tooltip,
   buildPartnerPayload,
+  getRequiredPartnerCustomFields,
   getPartnerName,
   parseResponse,
   partnerToForm,
@@ -85,6 +88,13 @@ export default function PartnerShow() {
   const navigate = useNavigate();
   const location = useLocation();
   const { activeEntity } = useEntity();
+  const { security, configuration } = useUi();
+  const requiredCustomFields = getRequiredPartnerCustomFields(configuration);
+  const canCreatePartner = can(security, 'core.Partenaire', 'create');
+  const canWritePartner = can(security, 'core.Partenaire', 'write');
+  const canDeletePartner = can(security, 'core.Partenaire', 'delete');
+  const canCreateUser = can(security, 'core.Utilisateur', 'create');
+  const canReadGroups = can(security, 'core.Groupe', 'read');
 
   const [partner, setPartner] = useState(null);
   const [formData, setFormData] = useState(null);
@@ -141,6 +151,7 @@ export default function PartnerShow() {
   };
 
   const loadPartner = useCallback(async () => {
+    if (!can(security, 'core.Partenaire', 'read')) return;
     setLoading(true);
     setError(null);
     try {
@@ -161,20 +172,22 @@ export default function PartnerShow() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, security]);
 
   useEffect(() => { loadPartner(); }, [loadPartner]);
 
   useEffect(() => {
+    if (!canCreateUser || !canReadGroups) return;
     apiClient.get('/groupes/')
       .then(res => setGroups(parseResponse(res)))
       .catch(() => {});
-  }, []);
+  }, [canCreateUser, canReadGroups]);
 
-  const isReady = formData ? Object.keys(validatePartnerForm(formData)).length === 0 : false;
+  const isReady = formData ? Object.keys(validatePartnerForm(formData, requiredCustomFields)).length === 0 : false;
 
   const save = async (silent = false) => {
-    const errors = validatePartnerForm(formData);
+    if (!canWritePartner) return false;
+    const errors = validatePartnerForm(formData, requiredCustomFields);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       setError('Veuillez corriger les champs obligatoires.');
@@ -196,7 +209,13 @@ export default function PartnerShow() {
       if (!silent) setSuccess('Partenaire enregistré.');
       return savedPartner;
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Modification impossible.');
+      const customErrors = err?.data?.custom_fields;
+      if (customErrors && typeof customErrors === 'object') {
+        setFieldErrors((current) => ({ ...current, ...customErrors }));
+        setError('Vérifie les champs personnalisés signalés dans le formulaire.');
+      } else {
+        setError(err?.data?.detail || err?.message || 'Modification impossible.');
+      }
       return false;
     } finally {
       setSaving(false);
@@ -204,6 +223,7 @@ export default function PartnerShow() {
   };
 
   const handleToggleStatus = async () => {
+    if (!canWritePartner) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -223,6 +243,7 @@ export default function PartnerShow() {
   };
 
   const remove = async () => {
+    if (!canDeletePartner) return;
     if (!window.confirm(`Supprimer "${getPartnerName(partner)}" ?`)) return;
     setShowActionsMenu(false);
     try {
@@ -234,11 +255,13 @@ export default function PartnerShow() {
   };
 
   const handleDuplicate = () => {
+    if (!canCreatePartner) return;
     setSuccess('Duplication à implémenter');
     setShowActionsMenu(false);
   };
 
   const handleNewPartner = () => {
+    if (!canCreatePartner) return;
     if (hasUnsavedChanges) {
       setShowConfirmDialog(true);
     } else {
@@ -255,6 +278,7 @@ export default function PartnerShow() {
   };
 
   const handleDiscardChanges = () => {
+    if (!canWritePartner) return;
     setShowConfirmDialog(true);
   };
 
@@ -301,6 +325,7 @@ export default function PartnerShow() {
 
   const createUser = async (e) => {
     e.preventDefault();
+    if (!canCreateUser) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -351,7 +376,7 @@ export default function PartnerShow() {
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-start gap-3">
-              <Tooltip text="Créer un nouveau partenaire">
+              {canCreatePartner && <Tooltip text="Créer un nouveau partenaire">
                 <button
                   onClick={handleNewPartner}
                   className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
@@ -360,7 +385,7 @@ export default function PartnerShow() {
                   <FiPlus size={16} className="mr-1" />
                   <span>Nouveau</span>
                 </button>
-              </Tooltip>
+              </Tooltip>}
               <div className="flex flex-col h-12 justify-center">
                 <div
                   className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
@@ -387,19 +412,19 @@ export default function PartnerShow() {
                 </Tooltip>
                 {showActionsMenu && (
                   <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
-                    <button onClick={handleDuplicate} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
+                    {canCreatePartner && <button onClick={handleDuplicate} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
                       <FiCopy size={12} /> Dupliquer
-                    </button>
+                    </button>}
                     <button onClick={() => { setShowActionsMenu(false); loadPartner(); }} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
                       <FiRefreshCw size={12} /> Actualiser
                     </button>
-                    <button onClick={remove} className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 hover:pl-4 transition-all duration-200 flex items-center gap-2">
+                    {canDeletePartner && <button onClick={remove} className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 hover:pl-4 transition-all duration-200 flex items-center gap-2">
                       <FiTrash2 size={12} /> Supprimer
-                    </button>
+                    </button>}
                   </div>
                 )}
               </div>
-              <Tooltip text="Enregistrer les modifications">
+              {canWritePartner && <Tooltip text="Enregistrer les modifications">
                 <button
                   onClick={() => save(false).then(savedPartner => {
                     if (savedPartner && location.state?.returnTo) navigateAfterSave(savedPartner);
@@ -409,15 +434,15 @@ export default function PartnerShow() {
                 >
                   <FiUploadCloud size={16} />
                 </button>
-              </Tooltip>
-              <Tooltip text="Annuler les modifications">
+              </Tooltip>}
+              {canWritePartner && <Tooltip text="Annuler les modifications">
                 <button
                   onClick={handleDiscardChanges}
                   className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 hover:scale-110 hover:shadow-lg active:scale-90 transition-all duration-200 flex items-center justify-center"
                 >
                   <FiX size={16} />
                 </button>
-              </Tooltip>
+              </Tooltip>}
             </div>
           </div>
         </div>
@@ -427,7 +452,7 @@ export default function PartnerShow() {
           <div className="flex flex-col">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Tooltip text={isActive ? 'Désactiver ce partenaire' : 'Activer ce partenaire'}>
+                {canWritePartner && <Tooltip text={isActive ? 'Désactiver ce partenaire' : 'Activer ce partenaire'}>
                   <button
                     type="button"
                     onClick={handleToggleStatus}
@@ -441,7 +466,7 @@ export default function PartnerShow() {
                     <FiToggleRight size={13} />
                     {isActive ? 'Désactiver' : 'Activer'}
                   </button>
-                </Tooltip>
+                </Tooltip>}
 
                 {error ? (
                   <div className="flex items-center gap-1 text-xs text-red-600">
@@ -544,6 +569,7 @@ export default function PartnerShow() {
               setFormData={updateForm}
               fieldErrors={fieldErrors}
               setFieldErrors={setFieldErrors}
+              readOnly={!canWritePartner}
             />
           )}
 
@@ -559,6 +585,10 @@ export default function PartnerShow() {
                       <div className="text-xs text-gray-500">Statut : {partner.user.is_active ? 'Actif' : 'Inactif'}</div>
                     </div>
                   </div>
+                </div>
+              ) : !canCreateUser ? (
+                <div className="p-4 text-sm text-gray-600">
+                  Vous ne disposez pas du droit de création d'un compte utilisateur.
                 </div>
               ) : (
                 <form onSubmit={createUser} className="p-4 space-y-3">
@@ -590,7 +620,7 @@ export default function PartnerShow() {
                     </div>
                   </div>
 
-                  <div className="border border-gray-300">
+                  {canReadGroups && <div className="border border-gray-300">
                     <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">Groupes</div>
                     <div className="p-2 grid grid-cols-3 gap-2">
                       {groups.length === 0 ? (
@@ -602,7 +632,7 @@ export default function PartnerShow() {
                         </label>
                       ))}
                     </div>
-                  </div>
+                  </div>}
 
                   <label className="text-xs flex items-center gap-2">
                     <input
@@ -634,6 +664,7 @@ export default function PartnerShow() {
               setFormData={updateForm}
               fieldErrors={fieldErrors}
               setFieldErrors={setFieldErrors}
+              readOnly={!canWritePartner}
             />
           )}
         </div>

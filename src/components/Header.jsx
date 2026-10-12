@@ -11,10 +11,15 @@ import {
   FiBriefcase,
   FiHelpCircle,
   FiSettings,
-  FiWifi
+  FiWifi,
+  FiCode
 } from "react-icons/fi";
 import { useEntity } from '../context/EntityContext';
+import { useOptionalUi } from '../context/UiContext';
 import { apiClient } from '../services/apiClient';
+import { can } from '../services/securityAccess';
+import { readDeveloperMode, subscribeDeveloperMode, writeDeveloperMode } from '../services/developerMode';
+import { getHeaderNavigation } from './headerNavigation';
 
 // ===== CONFIGURATION CENTRALISEE DES MODULES =====
 const MODULES_CONFIG = [
@@ -104,7 +109,8 @@ const MODULES_CONFIG = [
       {
         name: "Configuration",
         items: [
-          { label: "Partenaires", path: "/partners" },
+          { label: "Paramètres", path: "/comptabilite/parametres", model: "core.ParametreGeneral" },
+          { label: "Partenaires", path: "/comptabilite/partenaires", model: "core.Partenaire" },
           { label: "Plans comptables", path: "/comptabilite/plans" },
           { label: "Référentiels comptables", path: "/comptabilite/frameworks" },
           { label: "Classes / Groupes", path: "/comptabilite/groups" },
@@ -376,6 +382,7 @@ const getCurrentUserName = () => {
 export default function UnifiedHeader() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isAccountingModulePage = location.pathname.startsWith('/comptabilite/');
   const [showModules, setShowModules] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState(null);
   const [showEntityMenu, setShowEntityMenu] = useState(false);
@@ -383,12 +390,27 @@ export default function UnifiedHeader() {
   const [userEntities, setUserEntities] = useState([]);
   const [loadingEntities, setLoadingEntities] = useState(true);
   const [currentUserName, setCurrentUserName] = useState(getCurrentUserName);
+  const [developerMode, setDeveloperMode] = useState(false);
   const modulesMenuRef = useRef(null);
   const navMenuRef = useRef(null);
   const entityMenuRef = useRef(null);
   const userMenuRef = useRef(null);
 
   const { activeEntity, selectEntity } = useEntity();
+  const ui = useOptionalUi();
+  const security = ui?.security || null;
+  const securityLoading = ui?.loading || false;
+  const currentUserId = security?.user?.id || security?.user?.user_id || null;
+  const isSystemAdministrator = Boolean(security?.user?.is_superuser);
+
+  useEffect(() => {
+    if (!currentUserId || !isSystemAdministrator) {
+      setDeveloperMode(false);
+      return undefined;
+    }
+    setDeveloperMode(readDeveloperMode(currentUserId));
+    return subscribeDeveloperMode(currentUserId, setDeveloperMode);
+  }, [currentUserId, isSystemAdministrator]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -445,7 +467,20 @@ export default function UnifiedHeader() {
     return matched || MODULES_CONFIG[0];
   }, [location.pathname]);
 
-  const { color, navigation } = currentModule;
+  const { color } = currentModule;
+  const navigation = useMemo(
+    () => getHeaderNavigation(ui?.configuration, currentModule),
+    [ui?.configuration, currentModule],
+  );
+  const visibleNavigation = useMemo(() => navigation
+    .map((category) => ({
+      ...category,
+      items: category.items?.filter((item) => (
+        !item.model || !security || securityLoading || can(security, item.model, 'read')
+      )),
+    }))
+    .filter((category) => !category.items || category.items.length > 0 || category.path),
+  [navigation, security, securityLoading]);
 
   // === PAGE DE SELECTION D'ENTITE ===
   const isOnEntitySelectionPage = location.pathname === '/select-entite';
@@ -521,10 +556,12 @@ export default function UnifiedHeader() {
   const dotClass = getColorClasses(color, "dot");
 
   // === UTILITAIRES ===
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => Boolean(path && (
+    location.pathname === path || location.pathname.startsWith(`${path}/`)
+  ));
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+    <header className={isAccountingModulePage ? "sticky top-0 z-40 bg-white" : "sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm"}>
       <div className="px-6 py-3">
         <div className="flex items-center justify-between">
           {/* GAUCHE - SIMPLIFIEE : Seulement icone menu */}
@@ -578,9 +615,9 @@ export default function UnifiedHeader() {
           {/* CENTRE : Navigation specifique au module - UNIQUEMENT SI ELLE EXISTE */}
           {!isOnEntitySelectionPage && navigation.length > 0 && (
             <nav className="flex items-center gap-6" ref={navMenuRef}>
-              {navigation.map((item) => {
+              {visibleNavigation.map((item) => {
                 const hasItems = item.items?.length > 0;
-                const hasActiveItem = (item.path && location.pathname === item.path) || item.items?.some((sub) => location.pathname === sub.path) || false;
+                const hasActiveItem = isActive(item.path) || item.items?.some((sub) => isActive(sub.path)) || false;
 
                 return (
                   <div
@@ -756,6 +793,20 @@ export default function UnifiedHeader() {
                         <FiSettings size={14} />
                         Mes préférences
                       </button>
+                      {isSystemAdministrator && (
+                        <button
+                          onClick={() => writeDeveloperMode(currentUserId, !developerMode)}
+                          className={`flex w-full items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-50 ${developerMode ? 'text-violet-700 font-medium' : 'text-gray-700'}`}
+                          aria-pressed={developerMode}
+                          title="Afficher ou masquer les réglages techniques avancés"
+                        >
+                          <FiCode size={14} />
+                          <span>Mode développeur</span>
+                          <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] ${developerMode ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {developerMode ? 'Activé' : 'Désactivé'}
+                          </span>
+                        </button>
+                      )}
                       <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700" title="En ligne, Absent, Ne pas déranger">
                         <FiWifi size={14} />
                         État de connexion

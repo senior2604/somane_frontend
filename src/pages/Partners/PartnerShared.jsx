@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FiAlertCircle, FiCheck, FiChevronDown, FiChevronUp, FiGlobe, FiMap, FiMapPin, FiSearch } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
 
 // ==========================================
 // COMPOSANT TOOLTIP
@@ -51,6 +52,7 @@ export const INITIAL_FORM = {
   type_partenaire: 'client',
   email: '',
   telephone: '',
+  mobile: '',
   adresse: '',
   complement_adresse: '',
   statut: true,
@@ -62,6 +64,7 @@ export const INITIAL_FORM = {
   site_web: '',
   notes: '',
   numero_fiscal: '',
+  vat: '',
   registre_commerce: '',
   securite_sociale: '',
   ville_legacy: '',
@@ -76,7 +79,91 @@ export const PARTNER_TYPES = [
   { value: 'crediteur', label: 'Créditeur divers' },
 ];
 
-export function validatePartnerForm(formData) {
+function getPartnerFormSchema(configuration) {
+  if (typeof DOMParser === 'undefined') return null;
+  const actions = Object.values(configuration?.actions || {});
+  const candidates = [];
+  for (const action of actions) {
+    if (action.model !== 'core.Partenaire') continue;
+    const formRef = (action.views || []).find((item) => item.mode === 'form');
+    const view = formRef && configuration?.views?.[String(formRef.view_id)];
+    if (view?.architecture) candidates.push({ action, view });
+  }
+  candidates.sort((left, right) => Number(right.view.key === 'somane_ui.clients_form') - Number(left.view.key === 'somane_ui.clients_form'));
+
+  for (const { action, view } of candidates) {
+    const document = new DOMParser().parseFromString(view.architecture, 'application/xml');
+    if (document.querySelector('parsererror')) continue;
+    const definitions = new Map((action.fields || []).map((field) => [field.name, field]));
+    const sections = Array.from(document.querySelectorAll('form > group')).map((group, index) => ({
+      title: group.getAttribute('string') || `Informations ${index + 1}`,
+      fields: Array.from(group.querySelectorAll(':scope > field')).map((node) => {
+        const name = node.getAttribute('name');
+        const definition = definitions.get(name);
+        if (!name || !definition) return null;
+        return {
+          name,
+          label: node.getAttribute('string') || definition.label || name,
+          type: definition.type || 'char',
+          state: definition.state || 'base',
+          relation: definition.relation || '',
+          size: definition.size || null,
+          defaultValue: definition.default_value ?? null,
+          selection: Array.isArray(definition.selection) ? definition.selection : [],
+          help: node.getAttribute('help') || definition.help || PARTNER_FIELD_HELP[name] || '',
+          required: node.hasAttribute('required')
+            ? ['1', 'true'].includes(node.getAttribute('required').toLowerCase())
+            : Boolean(definition.required),
+          readonly: node.hasAttribute('readonly')
+            ? ['1', 'true'].includes(node.getAttribute('readonly').toLowerCase())
+            : Boolean(definition.readonly),
+        };
+      }).filter(Boolean),
+    })).filter((section) => section.fields.length);
+
+    if (sections.length) return sections;
+  }
+  return null;
+}
+
+export function getRequiredPartnerCustomFields(configuration) {
+  const fieldsByName = new Map();
+  for (const action of Object.values(configuration?.actions || {})) {
+    if (action.model !== 'core.Partenaire') continue;
+    for (const field of action.fields || []) {
+      if (field.state === 'manual' && field.required && field.name?.startsWith('x_')) {
+        fieldsByName.set(field.name, { name: field.name, label: field.label || field.name });
+      }
+    }
+  }
+  return Array.from(fieldsByName.values());
+}
+
+export function getPartnerFieldDefaults(configuration) {
+  const defaults = {};
+  for (const action of Object.values(configuration?.actions || {})) {
+    if (action.model !== 'core.Partenaire') continue;
+    for (const field of action.fields || []) {
+      if (field.default_value !== null && field.default_value !== undefined) {
+        defaults[field.name] = field.default_value;
+      }
+    }
+  }
+  return defaults;
+}
+
+export function validateRequiredPartnerCustomFields(formData, requiredCustomFields = []) {
+  const errors = {};
+  for (const field of requiredCustomFields) {
+    const value = formData[field.name];
+    if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) {
+      errors[field.name] = `${field.label} est obligatoire`;
+    }
+  }
+  return errors;
+}
+
+export function validatePartnerForm(formData, requiredCustomFields = []) {
   const errors = {};
   if (!formData.nom?.trim()) errors.nom = 'Le nom / raison sociale est obligatoire';
   if (!formData.type_partenaire) errors.type_partenaire = 'Le type de partenaire est obligatoire';
@@ -87,7 +174,7 @@ export function validatePartnerForm(formData) {
   if (!formData.region) errors.region = 'La region est obligatoire';
   if (!formData.ville) errors.ville = 'La ville est obligatoire';
   if (!formData.adresse?.trim()) errors.adresse = "L'adresse est obligatoire";
-  return errors;
+  return { ...errors, ...validateRequiredPartnerCustomFields(formData, requiredCustomFields) };
 }
 
 export function partnerToForm(partner) {
@@ -97,6 +184,7 @@ export function partnerToForm(partner) {
     type_partenaire: partner.type_partenaire || 'client',
     email: partner.email || '',
     telephone: partner.telephone || '',
+    mobile: partner.mobile || '',
     adresse: partner.adresse || '',
     complement_adresse: partner.complement_adresse || '',
     statut: partner.statut !== undefined ? partner.statut : true,
@@ -108,10 +196,12 @@ export function partnerToForm(partner) {
     site_web: partner.site_web || '',
     notes: partner.notes || '',
     numero_fiscal: partner.numero_fiscal || '',
+    vat: partner.vat || '',
     registre_commerce: partner.registre_commerce || '',
     securite_sociale: partner.securite_sociale || '',
     ville_legacy: partner.ville_legacy || '',
     region_legacy: partner.region_legacy || '',
+    ...(partner.custom_fields && typeof partner.custom_fields === 'object' ? partner.custom_fields : {}),
   };
 }
 
@@ -121,6 +211,7 @@ export function buildPartnerPayload(formData) {
     type_partenaire: formData.type_partenaire,
     email: formData.email?.trim() || '',
     telephone: formData.telephone?.trim() || '',
+    mobile: formData.mobile?.trim() || '',
     adresse: formData.adresse?.trim() || '',
     complement_adresse: formData.complement_adresse?.trim() || '',
     statut: formData.statut,
@@ -132,10 +223,14 @@ export function buildPartnerPayload(formData) {
     site_web: formData.site_web?.trim() || '',
     notes: formData.notes?.trim() || '',
     numero_fiscal: formData.numero_fiscal?.trim() || '',
+    vat: formData.vat?.trim() || '',
     registre_commerce: formData.registre_commerce?.trim() || '',
     securite_sociale: formData.securite_sociale?.trim() || '',
     ville_legacy: formData.ville_legacy?.trim() || null,
     region_legacy: formData.region_legacy?.trim() || null,
+    custom_fields: Object.fromEntries(
+      Object.entries(formData).filter(([name]) => name.startsWith('x_')),
+    ),
   };
 }
 
@@ -278,13 +373,45 @@ function FieldError({ message }) {
 // (meme gabarit que la section infos de la piece comptable :
 //  label a gauche, largeur fixe, champ a droite, hauteur 26px)
 // ==========================================
-function FormField({ label, required, error, children }) {
+const PARTNER_FIELD_HELP = {
+  nom: 'Nom de la personne ou raison sociale de l’organisation. Ce nom sert à retrouver et identifier le partenaire.',
+  is_company: 'Indique si ce partenaire représente une organisation ou une personne physique.',
+  type_partenaire: 'Catégorie utilisée pour distinguer les clients, fournisseurs et autres partenaires.',
+  statut: 'Un partenaire inactif reste dans l’historique, mais peut être masqué des choix courants.',
+  email: 'Adresse de contact de ce partenaire. Elle est enregistrée sur sa fiche Partenaire ; un email d’un autre modèle reste indépendant sans lien explicite.',
+  site_web: 'Adresse du site web du partenaire, par exemple https://exemple.com.',
+  telephone: 'Numéro de téléphone principal à utiliser pour contacter ce partenaire.',
+  pays: 'Pays de l’adresse principale du partenaire.',
+  region: 'Région, province ou subdivision administrative du pays sélectionné.',
+  ville: 'Ville du partenaire, dans la région sélectionnée.',
+  code_postal: 'Code postal associé à l’adresse du partenaire, s’il existe.',
+  complement_adresse: 'Précision complémentaire : bâtiment, étage, quartier ou boîte postale.',
+  adresse: 'Adresse principale du partenaire : rue, numéro et autres indications utiles.',
+  numero_fiscal: 'Identifiant fiscal attribué au partenaire par l’administration compétente.',
+  securite_sociale: 'Numéro d’immatriculation à la sécurité sociale, si cela s’applique à ce partenaire.',
+  registre_commerce: 'Numéro d’inscription de l’entreprise au registre du commerce.',
+};
+
+function FormField({ label, required, error, help, children }) {
   return (
     <div>
       <div className="flex items-center" style={{ minHeight: '26px' }}>
-        <label className="text-xs text-gray-700 min-w-[140px] flex-shrink-0 font-medium">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
+        <div className="text-xs text-gray-700 min-w-[140px] flex-shrink-0 font-medium flex items-center gap-1">
+          <span>{label} {required && <span className="text-red-500">*</span>}</span>
+          {help && (
+            <details className="group relative flex-shrink-0">
+              <summary
+                aria-label={`Aide pour ${label}`}
+                className="list-none cursor-pointer select-none w-4 h-4 rounded-full border border-gray-400 text-gray-500 hover:border-purple-500 hover:text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400 flex items-center justify-center text-[10px] leading-none"
+              >
+                ?
+              </summary>
+              <span role="tooltip" className="absolute z-50 left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-open:block w-64 rounded-md bg-gray-900 px-3 py-2 text-xs leading-relaxed font-normal text-white shadow-lg">
+                {help}
+              </span>
+            </details>
+          )}
+        </div>
         <div className="flex-1 ml-2">
           {children}
         </div>
@@ -294,7 +421,8 @@ function FormField({ label, required, error, children }) {
   );
 }
 
-export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors, mode = 'all' }) {
+export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors, mode = 'all', readOnly = false }) {
+  const { configuration } = useUi();
   const [searchPays, setSearchPays] = useState('');
   const [searchRegion, setSearchRegion] = useState('');
   const [searchVille, setSearchVille] = useState('');
@@ -311,17 +439,81 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
   const inputClass = (field) =>
     `w-full border px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none ${fieldErrors?.[field] ? 'border-red-500' : 'border-gray-300'}`;
 
+  const viewSections = mode === 'main' ? getPartnerFormSchema(configuration) : null;
+  if (viewSections) {
+    const renderField = (field) => {
+      const { name, type, label, required, readonly, help } = field;
+      const disabled = readOnly || readonly;
+      const commonProps = {
+        className: inputClass(name),
+        disabled,
+        onChange: (event) => setField(name, event.target.value),
+      };
+      let control;
+
+      if (name === 'pays') {
+        control = <SearchableDropdown value={formData.pays || null} onChange={(value) => setFormData((previous) => ({ ...previous, pays: value, region: '', ville: '' }))} options={paysList} searchValue={searchPays} onSearchChange={setSearchPays} placeholder={label} disabled={disabled} icon={FiGlobe} getOptionLabel={(country) => `${country.emoji || ''} ${country.nom_fr || country.nom || ''} (${country.code_iso || ''})`} getOptionValue={(country) => country.id} errorClass={fieldErrors?.[name] ? 'border-red-500' : ''} />;
+      } else if (name === 'region') {
+        control = <SearchableDropdown value={formData.region || null} onChange={(value) => setFormData((previous) => ({ ...previous, region: value, ville: '' }))} options={regionsList} searchValue={searchRegion} onSearchChange={setSearchRegion} placeholder={label} disabled={disabled || !formData.pays} icon={FiMap} getOptionLabel={(region) => `${region.nom || ''} (${region.type_subdivision || ''})`} getOptionValue={(region) => region.id} errorClass={fieldErrors?.[name] ? 'border-red-500' : ''} />;
+      } else if (name === 'ville') {
+        control = <SearchableDropdown value={formData.ville || null} onChange={(value) => setField(name, value)} options={villesList} searchValue={searchVille} onSearchChange={setSearchVille} placeholder={label} disabled={disabled || !formData.region} icon={FiMapPin} getOptionLabel={(city) => `${city.nom || ''}${city.subdivision_nom ? ` (${city.subdivision_nom})` : ''}`} getOptionValue={(city) => city.id} errorClass={fieldErrors?.[name] ? 'border-red-500' : ''} />;
+      } else if (name === 'type_partenaire') {
+        const options = field.selection.length
+          ? field.selection.map((option) => ({ value: option.value, label: option.label || option.name || option.value }))
+          : PARTNER_TYPES;
+        control = <select value={formData[name] || ''} onChange={(event) => setField(name, event.target.value)} className={inputClass(name)} disabled={disabled}>
+          {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>;
+      } else if (name === 'statut' || name === 'is_company') {
+        const trueLabel = name === 'statut' ? 'Actif' : 'Société';
+        const falseLabel = name === 'statut' ? 'Inactif' : 'Personne';
+        control = <select value={formData[name] ? 'true' : 'false'} onChange={(event) => setField(name, event.target.value === 'true')} className={inputClass(name)} disabled={disabled}>
+          <option value="true">{trueLabel}</option><option value="false">{falseLabel}</option>
+        </select>;
+      } else if (type === 'selection') {
+        control = <select value={formData[name] ?? ''} onChange={(event) => setField(name, event.target.value)} className={inputClass(name)} disabled={disabled}>
+          <option value="">— Sélectionner —</option>
+          {field.selection.map((option) => <option key={option.value} value={option.value}>{option.label || option.name || option.value}</option>)}
+        </select>;
+      } else if (type === 'boolean') {
+        const booleanValue = formData[name] === true ? 'true' : formData[name] === false ? 'false' : '';
+        control = <select value={booleanValue} onChange={(event) => setField(name, event.target.value === '' ? '' : event.target.value === 'true')} className={inputClass(name)} disabled={disabled}>
+          <option value="">— Sélectionner —</option><option value="true">Oui</option><option value="false">Non</option>
+        </select>;
+      } else if (type === 'text' || type === 'html') {
+        control = <textarea {...commonProps} value={formData[name] ?? ''} rows={3} readOnly={disabled} />;
+      } else {
+        const inputType = name === 'email' ? 'email' : name === 'site_web' ? 'url' : name === 'telephone' || name === 'mobile' ? 'tel' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : ['integer', 'float', 'decimal', 'monetary'].includes(type) ? 'number' : 'text';
+        const step = type === 'integer' ? '1' : ['float', 'decimal', 'monetary'].includes(type) ? 'any' : undefined;
+        control = <input {...commonProps} type={inputType} step={step} maxLength={type === 'char' && field.size ? field.size : undefined} value={formData[name] ?? ''} readOnly={disabled} style={{ height: 26 }} />;
+      }
+
+      return <FormField key={name} label={label} required={required} error={fieldErrors?.[name]} help={help}>{control}</FormField>;
+    };
+
+    return (
+      <fieldset disabled={readOnly} className={`w-full min-w-0 border-0 p-0 m-0 space-y-4 ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
+        {viewSections.map((section) => (
+          <section key={section.title} className="border border-gray-300 p-3">
+            <h3 className="-m-3 mb-3 border-b border-gray-300 bg-gray-100 px-3 py-1.5 text-xs font-medium">{section.title}</h3>
+            <div className="grid grid-cols-1 gap-x-4 gap-y-2 md:grid-cols-2">{section.fields.map(renderField)}</div>
+          </section>
+        ))}
+      </fieldset>
+    );
+  }
+
   return (
-    <div className="space-y-4">
+    <fieldset disabled={readOnly} className={`w-full min-w-0 border-0 p-0 m-0 space-y-4 ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
       {(mode === 'all' || mode === 'main' || mode === 'identity') && (
         <div className="border border-gray-300 p-3">
           <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Identité</div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <FormField label="Nom / Raison sociale" required error={fieldErrors?.nom}>
+              <FormField label="Nom / Raison sociale" required error={fieldErrors?.nom} help={PARTNER_FIELD_HELP.nom}>
                 <input value={formData.nom} onChange={(e) => setField('nom', e.target.value)} className={inputClass('nom')} style={{ height: 26 }} />
               </FormField>
-              <FormField label="Nature">
+              <FormField label="Nature" help={PARTNER_FIELD_HELP.is_company}>
                 <select value={formData.is_company ? 'company' : 'person'} onChange={(e) => setField('is_company', e.target.value === 'company')} className={inputClass('is_company')} style={{ height: 26 }}>
                   <option value="company">Société</option>
                   <option value="person">Personne</option>
@@ -329,12 +521,12 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
               </FormField>
             </div>
             <div className="space-y-2">
-              <FormField label="Type" required error={fieldErrors?.type_partenaire}>
+              <FormField label="Type" required error={fieldErrors?.type_partenaire} help={PARTNER_FIELD_HELP.type_partenaire}>
                 <select value={formData.type_partenaire} onChange={(e) => setField('type_partenaire', e.target.value)} className={inputClass('type_partenaire')} style={{ height: 26 }}>
                   {PARTNER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </FormField>
-              <FormField label="Statut">
+              <FormField label="Statut" help={PARTNER_FIELD_HELP.statut}>
                 <select value={formData.statut ? 'actif' : 'inactif'} onChange={(e) => setField('statut', e.target.value === 'actif')} className={inputClass('statut')} style={{ height: 26 }}>
                   <option value="actif">Actif</option>
                   <option value="inactif">Inactif</option>
@@ -350,15 +542,15 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
           <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Contact</div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <FormField label="Email" required error={fieldErrors?.email}>
+              <FormField label="Email" required error={fieldErrors?.email} help={PARTNER_FIELD_HELP.email}>
                 <input type="email" value={formData.email} onChange={(e) => setField('email', e.target.value)} className={inputClass('email')} style={{ height: 26 }} />
               </FormField>
-              <FormField label="Site web">
+              <FormField label="Site web" help={PARTNER_FIELD_HELP.site_web}>
                 <input value={formData.site_web} onChange={(e) => setField('site_web', e.target.value)} className={inputClass('site_web')} style={{ height: 26 }} />
               </FormField>
             </div>
             <div className="space-y-2">
-              <FormField label="Téléphone" required error={fieldErrors?.telephone}>
+              <FormField label="Téléphone" required error={fieldErrors?.telephone} help={PARTNER_FIELD_HELP.telephone}>
                 <input value={formData.telephone} onChange={(e) => setField('telephone', e.target.value)} className={inputClass('telephone')} style={{ height: 26 }} />
               </FormField>
             </div>
@@ -371,7 +563,7 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
           <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Localisation</div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <FormField label="Pays" required error={fieldErrors?.pays}>
+              <FormField label="Pays" required error={fieldErrors?.pays} help={PARTNER_FIELD_HELP.pays}>
                 <SearchableDropdown
                   value={formData.pays || null}
                   onChange={(v) => setFormData(prev => ({ ...prev, pays: v, region: '', ville: '' }))}
@@ -385,7 +577,7 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
                   errorClass={fieldErrors?.pays ? 'border-red-500' : ''}
                 />
               </FormField>
-              <FormField label="Région" required error={fieldErrors?.region}>
+              <FormField label="Région" required error={fieldErrors?.region} help={PARTNER_FIELD_HELP.region}>
                 <SearchableDropdown
                   value={formData.region || null}
                   onChange={(v) => setFormData(prev => ({ ...prev, region: v, ville: '' }))}
@@ -400,7 +592,7 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
                   errorClass={fieldErrors?.region ? 'border-red-500' : ''}
                 />
               </FormField>
-              <FormField label="Ville" required error={fieldErrors?.ville}>
+              <FormField label="Ville" required error={fieldErrors?.ville} help={PARTNER_FIELD_HELP.ville}>
                 <SearchableDropdown
                   value={formData.ville || null}
                   onChange={(v) => setField('ville', v)}
@@ -417,13 +609,13 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
               </FormField>
             </div>
             <div className="space-y-2">
-              <FormField label="Code postal">
+              <FormField label="Code postal" help={PARTNER_FIELD_HELP.code_postal}>
                 <input value={formData.code_postal} onChange={(e) => setField('code_postal', e.target.value)} className={inputClass('code_postal')} style={{ height: 26 }} />
               </FormField>
-              <FormField label="Complément adresse">
+              <FormField label="Complément adresse" help={PARTNER_FIELD_HELP.complement_adresse}>
                 <input value={formData.complement_adresse} onChange={(e) => setField('complement_adresse', e.target.value)} className={inputClass('complement_adresse')} style={{ height: 26 }} />
               </FormField>
-              <FormField label="Adresse" required error={fieldErrors?.adresse}>
+              <FormField label="Adresse" required error={fieldErrors?.adresse} help={PARTNER_FIELD_HELP.adresse}>
                 <textarea value={formData.adresse} onChange={(e) => setField('adresse', e.target.value)} className={inputClass('adresse')} rows={2} />
               </FormField>
             </div>
@@ -436,15 +628,15 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
           <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Informations fiscales</div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <FormField label="Numéro fiscal">
+              <FormField label="Numéro fiscal" help={PARTNER_FIELD_HELP.numero_fiscal}>
                 <input value={formData.numero_fiscal} onChange={(e) => setField('numero_fiscal', e.target.value)} className={inputClass('numero_fiscal')} style={{ height: 26 }} />
               </FormField>
-              <FormField label="Sécurité sociale">
+              <FormField label="Sécurité sociale" help={PARTNER_FIELD_HELP.securite_sociale}>
                 <input value={formData.securite_sociale} onChange={(e) => setField('securite_sociale', e.target.value)} className={inputClass('securite_sociale')} style={{ height: 26 }} />
               </FormField>
             </div>
             <div className="space-y-2">
-              <FormField label="Registre commerce">
+              <FormField label="Registre commerce" help={PARTNER_FIELD_HELP.registre_commerce}>
                 <input value={formData.registre_commerce} onChange={(e) => setField('registre_commerce', e.target.value)} className={inputClass('registre_commerce')} style={{ height: 26 }} />
               </FormField>
             </div>
@@ -458,6 +650,6 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
           <textarea value={formData.notes} onChange={(e) => setField('notes', e.target.value)} className="w-full border-0 px-2 py-2 text-xs focus:ring-1 focus:ring-purple-500" rows={4} />
         </div>
       )}
-    </div>
+    </fieldset>
   );
 }

@@ -5,10 +5,8 @@ import {
   FiAlertCircle,
   FiCheck,
   FiInfo,
-  FiPlus,
-  FiUploadCloud,
-  FiX,
 } from 'react-icons/fi';
+import UnifiedFormPage from '../../../../components/UnifiedFormPage';
 import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
 
@@ -228,72 +226,34 @@ export default function SequencesCreate() {
     setError('');
     setSuccess('');
     try {
-      await apiClient.post('/sequences/', buildPayload());
+      const response = await apiClient.post('/sequences/', buildPayload());
       setSuccess('Sequence creee. Elle sera utilisee uniquement pour les prochains numeros.');
       setHasUnsavedChanges(false);
       setTimeout(() => navigate('/comptabilite/sequences'), 700);
+      return response?.data || true;
     } catch (err) {
       console.error('Erreur creation sequence', err);
       setError(stringifyBackendError(err));
+      return false;
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="mx-auto max-w-7xl border border-gray-300 bg-white">
-        <div className="border-b border-gray-300 px-4 py-3">
-          <div className="mb-2 flex items-start justify-between">
-            <div className="flex items-start gap-3">
-              <Tooltip text="Nouvelle sequence">
-                <button
-                  type="button"
-                  onClick={() => navigate('/comptabilite/sequences/create')}
-                  className="flex h-8 items-center gap-1 border border-purple-600 bg-purple-600 px-3 text-xs text-white transition-all duration-200 hover:border-purple-700 hover:bg-purple-700 hover:shadow-md active:scale-95"
-                >
-                  <FiPlus size={12} />
-                  <span>Nouveau</span>
-                </button>
-              </Tooltip>
-              <div className="flex flex-col">
-                <button
-                  type="button"
-                  onClick={() => navigate('/comptabilite/sequences')}
-                  className="text-left text-lg font-bold text-gray-900 transition-all duration-200 hover:text-purple-600"
-                >
-                  Sequences
-                </button>
-                <div className="mt-0.5 text-sm text-gray-600">
-                  Creation - {selectedType?.label || 'Choisir un type de document'}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Tooltip text="Enregistrer la sequence">
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={isSubmitting}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-white shadow-sm transition-all duration-200 hover:bg-purple-700 hover:shadow-lg active:scale-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <FiUploadCloud size={16} />
-                </button>
-              </Tooltip>
-              <Tooltip text="Annuler">
-                <button
-                  type="button"
-                  onClick={() => navigate('/comptabilite/sequences')}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition-all duration-200 hover:bg-gray-800 hover:shadow-lg active:scale-90"
-                >
-                  <FiX size={16} />
-                </button>
-              </Tooltip>
-            </div>
-          </div>
-        </div>
-
+    <UnifiedFormPage
+      title="Séquences"
+      recordLabel={selectedType?.label || 'Nouvelle séquence'}
+      pageLabel="Création d’une séquence"
+      fallbackPath="/comptabilite/sequences"
+      primaryAction={{ label: 'Nouveau', path: '/comptabilite/sequences/create' }}
+      onSave={handleSave}
+      saving={isSubmitting}
+      saveLabel="Enregistrer la séquence"
+      hasUnsavedChanges={hasUnsavedChanges}
+      rememberForm={false}
+    >
+      <div className="min-w-0">
         <div className="flex items-center justify-between border-b border-gray-300 px-4 py-3">
           <div className="flex items-center gap-3">
             <Tooltip text={formData.active ? 'Desactiver la sequence' : 'Activer la sequence'}>
@@ -462,6 +422,6 @@ export default function SequencesCreate() {
           </div>
         </div>
       </div>
-    </div>
+    </UnifiedFormPage>
   );
 }

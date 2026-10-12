@@ -15,6 +15,8 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import {
   ACCESS_TYPES,
   PERMISSION_MODES,
@@ -45,6 +47,8 @@ const TABS = [
   { id: 'groups', label: 'Groupes', icon: FiShield },
   { id: 'permissions', label: 'Permissions', icon: FiKey },
 ];
+
+const PAGE_SIZE = 25;
 
 const RIGHT_FIELDS = [
   { key: 'perm_read', label: 'Lire' },
@@ -251,19 +255,40 @@ function SecurityList() {
   const navigate = useNavigate();
   const filterRef = useRef(null);
   const [searchParams] = useSearchParams();
+  const { security } = useUi();
 
-  const securityData = useSecurityData();
+  const securityData = useSecurityData({ includePartners: false });
   const data = { ...EMPTY_SECURITY_DATA, ...(securityData || {}) };
   const loading = data.loading || false;
   const error = data.error || '';
   const refetch = typeof data.fetchData === 'function' ? data.fetchData : () => {};
 
-  const [activeTab, setActiveTab] = useState(() => getInitialTab(searchParams));
+  const allowedTabs = TABS.filter((tab) => can(security, {
+    users: 'core.Utilisateur',
+    groups: 'core.Groupe',
+    permissions: 'core.Permission',
+  }[tab.id], 'read'));
+  const requestedTab = getInitialTab(searchParams);
+  const firstAllowedTab = allowedTabs[0]?.id;
+  const [activeTab, setActiveTab] = useState(() => (
+    allowedTabs.some((tab) => tab.id === requestedTab) ? requestedTab : firstAllowedTab
+  ));
+  const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [savingId, setSavingId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+
+  const currentModel = {
+    users: 'core.Utilisateur',
+    groups: 'core.Groupe',
+    permissions: 'core.Permission',
+  }[activeTab];
+  const canWriteCurrent = can(security, currentModel, 'write');
+  const canCreateCurrent = can(security, currentModel, 'create');
+  const canDeleteCurrent = can(security, currentModel, 'delete');
+  const canCreatePartner = can(security, 'core.Partenaire', 'create');
 
   useEffect(() => {
     const onClickOutside = (event) => {
@@ -281,7 +306,7 @@ function SecurityList() {
     const groupId = searchParams.get('group');
     const userId = searchParams.get('user');
 
-    if (groupId) {
+    if (groupId && can(security, 'core.Permission', 'read') && can(security, 'core.Groupe', 'read')) {
       const group = (data.groups || []).find((item) => sameId(item.id, groupId));
 
       setActiveTab('permissions');
@@ -299,7 +324,7 @@ function SecurityList() {
       return;
     }
 
-    if (userId) {
+    if (userId && can(security, 'core.Permission', 'read') && can(security, 'core.Utilisateur', 'read')) {
       const user = (data.users || []).find((item) => sameId(item.id, userId));
 
       setActiveTab('permissions');
@@ -317,10 +342,29 @@ function SecurityList() {
       return;
     }
 
-    if (tab === 'users' || tab === 'groups' || tab === 'permissions') {
+    if ((tab === 'users' || tab === 'groups' || tab === 'permissions')
+      && can(security, { users: 'core.Utilisateur', groups: 'core.Groupe', permissions: 'core.Permission' }[tab], 'read')) {
       setActiveTab(tab);
     }
-  }, [searchParams, data.groups, data.users]);
+  }, [searchParams, data.groups, data.users, security]);
+
+  useEffect(() => {
+    if (!allowedTabs.some((tab) => tab.id === activeTab) && firstAllowedTab) {
+      setActiveTab(firstAllowedTab);
+      navigate(`${SECURITY_LIST_ROUTE}?tab=${firstAllowedTab}`, { replace: true });
+    }
+  }, [allowedTabs, activeTab, firstAllowedTab, navigate]);
+
+  useEffect(() => {
+    const requestedModel = {
+      users: 'core.Utilisateur',
+      groups: 'core.Groupe',
+      permissions: 'core.Permission',
+    }[requestedTab];
+    if (requestedModel && !can(security, requestedModel, 'read') && firstAllowedTab) {
+      navigate(`${SECURITY_LIST_ROUTE}?tab=${firstAllowedTab}`, { replace: true });
+    }
+  }, [firstAllowedTab, navigate, requestedTab, security]);
 
   const currentItems = useMemo(() => {
     if (activeTab === 'users') return data.users || [];
@@ -330,6 +374,7 @@ function SecurityList() {
 
   const removeFilter = (filterId) => {
     setActiveFilters((prev) => prev.filter((filter) => filter.id !== filterId));
+    setCurrentPage(1);
   };
 
   const upsertFilter = (filter) => {
@@ -356,6 +401,7 @@ function SecurityList() {
     });
 
     setShowFilters(true);
+    setCurrentPage(1);
   };
 
   const hasFilter = (type, value) => activeFilters.some((filter) => (
@@ -369,6 +415,7 @@ function SecurityList() {
   const clearFilters = () => {
     setSearch('');
     setActiveFilters([]);
+    setCurrentPage(1);
     setShowFilters(false);
     navigate(`${SECURITY_LIST_ROUTE}?tab=${activeTab}`);
   };
@@ -450,6 +497,13 @@ function SecurityList() {
     return next;
   }, [activeFilters, activeTab, currentItems, search, data.groups, data.modules, data.users]);
 
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const visiblePage = Math.min(currentPage, pageCount);
+  const pageItems = useMemo(() => {
+    const startIndex = (visiblePage - 1) * PAGE_SIZE;
+    return filteredItems.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredItems, visiblePage]);
+
   const counts = {
     users: (data.users || []).length,
     groups: (data.groups || []).length,
@@ -457,6 +511,7 @@ function SecurityList() {
   };
 
   const updatePermissionRight = async (permission, field, nextValue) => {
+    if (!can(security, 'core.Permission', 'write')) return;
     setSavingId(`${permission.id}-${field}`);
 
     try {
@@ -475,6 +530,7 @@ function SecurityList() {
   };
 
   const updatePermissionAccess = async (permission, acces) => {
+    if (!can(security, 'core.Permission', 'write')) return;
     setSavingId(`${permission.id}-acces`);
 
     try {
@@ -493,6 +549,7 @@ function SecurityList() {
   };
 
   const toggleStatus = async (item) => {
+    if (!can(security, currentModel, 'write')) return;
     setSavingId(`${item.id}-status`);
 
     try {
@@ -530,6 +587,7 @@ function SecurityList() {
   };
 
   const deleteItem = async (item) => {
+    if (!can(security, currentModel, 'delete')) return;
     const meta = getResourceMeta(activeTab);
 
     if (!window.confirm(`Supprimer ${meta.label.toLowerCase()} ?`)) return;
@@ -548,6 +606,7 @@ function SecurityList() {
   };
 
   const goToCreate = () => {
+    if (!can(security, currentModel, 'create')) return;
     navigate(`/security/create?type=${activeTab}`);
   };
 
@@ -556,6 +615,7 @@ function SecurityList() {
   };
 
   const goToEdit = (item) => {
+    if (!can(security, currentModel, 'write')) return;
     navigate(`/security/${activeTab}/${item.id}?edit=1`);
   };
 
@@ -663,16 +723,18 @@ function SecurityList() {
           <tr>
             <td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-500">Aucun utilisateur trouve</td>
           </tr>
-        ) : filteredItems.map((user) => (
+        ) : pageItems.map((user) => (
           <tr key={user.id} className="border-b border-gray-200 hover:bg-gray-50">
             <td className="border-r border-gray-200 px-2 py-2 text-xs font-medium">{getUserName(user)}</td>
             <td className="border-r border-gray-200 px-2 py-2 text-xs">{user.email || '-'}</td>
             <td className="border-r border-gray-200 px-2 py-2 text-xs">{user.telephone || '-'}</td>
 
             <td className="border-r border-gray-200 px-2 py-2 text-center">
-              <button type="button" onClick={() => toggleStatus(user)} disabled={savingId === `${user.id}-status`}>
-                <StatusBadge active={user.statut !== false && user.is_active !== false} />
-              </button>
+              {canWriteCurrent ? (
+                <button type="button" onClick={() => toggleStatus(user)} disabled={savingId === `${user.id}-status`}>
+                  <StatusBadge active={user.statut !== false && user.is_active !== false} />
+                </button>
+              ) : <StatusBadge active={user.statut !== false && user.is_active !== false} />}
             </td>
 
             <td className="px-2 py-2">
@@ -680,10 +742,12 @@ function SecurityList() {
                 <button type="button" onClick={() => goToShow(user)} className="text-blue-600 hover:text-blue-800">
                   <FiEye size={14} />
                 </button>
-                <button type="button" onClick={() => goToEdit(user)} className="text-purple-600 hover:text-purple-800">
-                  <FiEdit2 size={14} />
-                </button>
-                {!user.partner_id && !user.partner_details && (
+                {canWriteCurrent && (
+                  <button type="button" onClick={() => goToEdit(user)} className="text-purple-600 hover:text-purple-800" title="Modifier">
+                    <FiEdit2 size={14} />
+                  </button>
+                )}
+                {canCreatePartner && !user.partner_id && !user.partner_details && (
                   <button
                     type="button"
                     onClick={() => navigate('/partners/create', { state: { userId: user.id } })}
@@ -693,9 +757,11 @@ function SecurityList() {
                     <FiUserPlus size={14} />
                   </button>
                 )}
-                <button type="button" onClick={() => deleteItem(user)} disabled={deleteId === user.id} className="text-red-600 hover:text-red-800 disabled:opacity-50">
-                  <FiTrash2 size={14} />
-                </button>
+                {canDeleteCurrent && (
+                  <button type="button" onClick={() => deleteItem(user)} disabled={deleteId === user.id} className="text-red-600 hover:text-red-800 disabled:opacity-50" title="Supprimer">
+                    <FiTrash2 size={14} />
+                  </button>
+                )}
               </div>
             </td>
           </tr>
@@ -721,7 +787,7 @@ function SecurityList() {
           <tr>
             <td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-500">Aucun groupe trouve</td>
           </tr>
-        ) : filteredItems.map((group) => (
+        ) : pageItems.map((group) => (
           <tr key={group.id} className="border-b border-gray-200 hover:bg-gray-50">
             <td className="border-r border-gray-200 px-2 py-2 text-xs font-medium">
               {getGroupName(group)}
@@ -743,12 +809,16 @@ function SecurityList() {
                 <button type="button" onClick={() => goToShow(group)} className="text-blue-600 hover:text-blue-800">
                   <FiEye size={14} />
                 </button>
-                <button type="button" onClick={() => goToEdit(group)} className="text-purple-600 hover:text-purple-800">
-                  <FiEdit2 size={14} />
-                </button>
-                <button type="button" onClick={() => deleteItem(group)} disabled={deleteId === group.id} className="text-red-600 hover:text-red-800 disabled:opacity-50">
-                  <FiTrash2 size={14} />
-                </button>
+                {canWriteCurrent && (
+                  <button type="button" onClick={() => goToEdit(group)} className="text-purple-600 hover:text-purple-800" title="Modifier">
+                    <FiEdit2 size={14} />
+                  </button>
+                )}
+                {canDeleteCurrent && (
+                  <button type="button" onClick={() => deleteItem(group)} disabled={deleteId === group.id} className="text-red-600 hover:text-red-800 disabled:opacity-50" title="Supprimer">
+                    <FiTrash2 size={14} />
+                  </button>
+                )}
               </div>
             </td>
           </tr>
@@ -786,7 +856,7 @@ function SecurityList() {
           <tr>
             <td colSpan={19} className="px-4 py-10 text-center text-sm text-gray-500">Aucune permission trouvee</td>
           </tr>
-        ) : filteredItems.map((permission) => {
+        ) : pageItems.map((permission) => {
           const module = (data.modules || []).find((item) => sameId(item.id, permission.module));
           const model = (data.models || []).find((item) => sameId(item.id, permission.model_id));
           const entite = (data.entites || []).find((item) => sameId(item.id, permission.entite));
@@ -811,37 +881,41 @@ function SecurityList() {
               <td className="border-r border-gray-200 px-2 py-2 text-xs">{permission.entite_nom || getEntityLabel(entite) || 'Toutes les entites'}</td>
 
               <td className="border-r border-gray-200 px-2 py-2 text-center">
-                <select
-                  value={permission.acces || 'personnalise'}
-                  disabled={isSavingAccess}
-                  onChange={(event) => updatePermissionAccess(permission, event.target.value)}
-                  className="h-7 rounded border border-gray-300 px-1 text-xs outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
-                >
-                  {ACCESS_TYPES.map((access) => (
-                    <option key={access.value} value={access.value}>{access.label}</option>
-                  ))}
-                </select>
+                {canWriteCurrent ? (
+                  <select
+                    value={permission.acces || 'personnalise'}
+                    disabled={isSavingAccess}
+                    onChange={(event) => updatePermissionAccess(permission, event.target.value)}
+                    className="h-7 rounded border border-gray-300 px-1 text-xs outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
+                  >
+                    {ACCESS_TYPES.map((access) => (
+                      <option key={access.value} value={access.value}>{access.label}</option>
+                    ))}
+                  </select>
+                ) : <span className="text-xs">{ACCESS_TYPES.find((access) => access.value === permission.acces)?.label || permission.acces || '-'}</span>}
               </td>
 
               {RIGHT_FIELDS.map((right) => (
                 <td key={right.key} className="border-r border-gray-200 px-2 py-2 text-center">
                   <PermissionCheckbox
                     checked={permission[right.key]}
-                    disabled={savingId === `${permission.id}-${right.key}`}
+                    disabled={!canWriteCurrent || savingId === `${permission.id}-${right.key}`}
                     onChange={(nextValue) => updatePermissionRight(permission, right.key, nextValue)}
                   />
                 </td>
               ))}
 
               <td className="border-r border-gray-200 px-2 py-2 text-center">
-                <button
-                  type="button"
-                  onClick={() => toggleStatus(permission)}
-                  disabled={savingId === `${permission.id}-status`}
-                  className="disabled:opacity-50"
-                >
-                  <StatusBadge active={permission.active !== false && permission.statut !== false} />
-                </button>
+                {canWriteCurrent ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleStatus(permission)}
+                    disabled={savingId === `${permission.id}-status`}
+                    className="disabled:opacity-50"
+                  >
+                    <StatusBadge active={permission.active !== false && permission.statut !== false} />
+                  </button>
+                ) : <StatusBadge active={permission.active !== false && permission.statut !== false} />}
               </td>
 
               <td className="px-2 py-2">
@@ -849,17 +923,22 @@ function SecurityList() {
                   <button type="button" onClick={() => goToShow(permission)} className="text-blue-600 hover:text-blue-800">
                     <FiEye size={14} />
                   </button>
-                  <button type="button" onClick={() => goToEdit(permission)} className="text-purple-600 hover:text-purple-800">
-                    <FiEdit2 size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteItem(permission)}
-                    disabled={deleteId === permission.id}
-                    className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                  >
-                    <FiTrash2 size={14} />
-                  </button>
+                  {canWriteCurrent && (
+                    <button type="button" onClick={() => goToEdit(permission)} className="text-purple-600 hover:text-purple-800" title="Modifier">
+                      <FiEdit2 size={14} />
+                    </button>
+                  )}
+                  {canDeleteCurrent && (
+                    <button
+                      type="button"
+                      onClick={() => deleteItem(permission)}
+                      disabled={deleteId === permission.id}
+                      className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                      title="Supprimer"
+                    >
+                      <FiTrash2 size={14} />
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>
@@ -903,7 +982,10 @@ function SecurityList() {
 
                   <input
                     value={search}
-                    onChange={(event) => setSearch(event.target.value)}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setCurrentPage(1);
+                    }}
                     placeholder="Rechercher..."
                     className="min-w-[140px] flex-1 px-2 py-1 text-sm outline-none"
                   />
@@ -997,19 +1079,19 @@ function SecurityList() {
               </div>
             </div>
 
-            <button
+            {canCreateCurrent && <button
               type="button"
               onClick={goToCreate}
               className="inline-flex h-8 items-center gap-2 rounded bg-purple-600 px-3 text-xs font-medium text-white transition hover:bg-purple-700"
             >
               + Nouveau {getResourceMeta(activeTab).label.toLowerCase()}
-            </button>
+            </button>}
           </div>
         </div>
 
         <div className="border-b border-gray-300 px-4">
           <div className="flex gap-1">
-            {TABS.map((tab) => {
+            {allowedTabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
 
@@ -1019,6 +1101,7 @@ function SecurityList() {
                   type="button"
                   onClick={() => {
                     setActiveTab(tab.id);
+                    setCurrentPage(1);
                     setSearch('');
                     setActiveFilters([]);
                     setShowFilters(false);
@@ -1060,6 +1143,33 @@ function SecurityList() {
             </>
           )}
         </div>
+
+        {filteredItems.length > 0 && pageCount > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-300 bg-gray-50 px-4 py-2 text-xs text-gray-600">
+            <span>
+              Affichage de {(visiblePage - 1) * PAGE_SIZE + 1} à {Math.min(visiblePage * PAGE_SIZE, filteredItems.length)} sur {filteredItems.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={visiblePage === 1}
+                className="rounded border border-gray-300 bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Précédent
+              </button>
+              <span>Page {visiblePage} sur {pageCount}</span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}
+                disabled={visiblePage === pageCount}
+                className="rounded border border-gray-300 bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Suivant
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

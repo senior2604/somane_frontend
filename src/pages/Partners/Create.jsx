@@ -15,14 +15,18 @@ import {
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
 import { useEntity } from '../../context/EntityContext';
+import { useUi } from '../../context/UiContext';
 import {
   INITIAL_FORM,
   PARTNER_TYPES,
   PartnerForm,
   Tooltip,
   buildPartnerPayload,
+  getPartnerFieldDefaults,
+  getRequiredPartnerCustomFields,
   parseResponse,
   validatePartnerForm,
+  validateRequiredPartnerCustomFields,
 } from './PartnerShared';
 
 const normalizeSavedPartner = (payload, fallback = {}) => {
@@ -79,6 +83,9 @@ export default function PartnerCreate() {
   const navigate = useNavigate();
   const location = useLocation();
   const { activeEntity } = useEntity();
+  const { configuration } = useUi();
+  const requiredCustomFields = getRequiredPartnerCustomFields(configuration);
+  const partnerFieldDefaults = getPartnerFieldDefaults(configuration);
 
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -95,6 +102,24 @@ export default function PartnerCreate() {
   const selectedUser = users.find((user) => String(user.id) === String(selectedUserId)) || null;
 
   const actionsMenuRef = useRef(null);
+  const defaultsAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (defaultsAppliedRef.current) return;
+    const hasPartnerFormMetadata = Object.values(configuration?.actions || {}).some(
+      (action) => action.model === 'core.Partenaire' && Array.isArray(action.fields),
+    );
+    if (!hasPartnerFormMetadata) return;
+    if (hasUnsavedChanges) return;
+    defaultsAppliedRef.current = true;
+    setFormData((current) => {
+      const next = { ...current };
+      Object.entries(partnerFieldDefaults).forEach(([name, value]) => {
+        next[name] = value;
+      });
+      return next;
+    });
+  }, [configuration, partnerFieldDefaults, hasUnsavedChanges]);
 
   useEffect(() => {
     let mounted = true;
@@ -138,10 +163,20 @@ export default function PartnerCreate() {
     markAsModified();
   };
 
-  const isReady = Object.keys(validatePartnerForm(formData)).length === 0;
+  const isReady = Object.keys(selectedUser
+    ? {
+        ...(!formData.type_partenaire ? { type_partenaire: true } : {}),
+        ...validateRequiredPartnerCustomFields(formData, requiredCustomFields),
+      }
+    : validatePartnerForm(formData, requiredCustomFields)).length === 0;
 
   const submit = async (silent = false) => {
-    const errors = selectedUser ? (!formData.type_partenaire ? { type_partenaire: 'Le type est obligatoire.' } : {}) : validatePartnerForm(formData);
+    const errors = selectedUser
+      ? {
+          ...(!formData.type_partenaire ? { type_partenaire: 'Le type est obligatoire.' } : {}),
+          ...validateRequiredPartnerCustomFields(formData, requiredCustomFields),
+        }
+      : validatePartnerForm(formData, requiredCustomFields);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       setError(selectedUser ? 'Le type de partenaire est obligatoire.' : 'Champs obligatoires manquants : nom, type, email, téléphone, pays, région, ville et adresse sont requis.');
@@ -159,7 +194,10 @@ export default function PartnerCreate() {
 
     try {
       const response = selectedUser
-        ? await apiClient.post(`/users/${selectedUser.id}/create-partenaire/`, { type_partenaire: formData.type_partenaire })
+        ? await apiClient.post(`/users/${selectedUser.id}/create-partenaire/`, {
+            type_partenaire: formData.type_partenaire,
+            custom_fields: buildPartnerPayload(formData).custom_fields,
+          })
         : await apiClient.post('/partenaires/', buildPartnerPayload(formData));
       const savedPartner = selectedUser
         ? normalizeSavedPartner(response?.partenaire || response, formData)
@@ -171,7 +209,13 @@ export default function PartnerCreate() {
       }
       return savedPartner;
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Erreur lors de la création du partenaire.');
+      const customErrors = err?.data?.custom_fields;
+      if (customErrors && typeof customErrors === 'object') {
+        setFieldErrors((current) => ({ ...current, ...customErrors }));
+        setError('Vérifie les champs personnalisés signalés dans le formulaire.');
+      } else {
+        setError(err?.data?.detail || err?.message || 'Erreur lors de la création du partenaire.');
+      }
       return false;
     } finally {
       setLoading(false);
@@ -179,7 +223,7 @@ export default function PartnerCreate() {
   };
 
   const resetForm = () => {
-    setFormData(INITIAL_FORM);
+    setFormData({ ...INITIAL_FORM, ...partnerFieldDefaults });
     setSelectedUserId('');
     setFieldErrors({});
     setActiveTab('fiche');

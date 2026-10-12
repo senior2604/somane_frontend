@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import { 
   FiRefreshCw, 
   FiPlus, 
@@ -31,6 +33,10 @@ import {
 } from "react-icons/fi";
 
 export default function UtilisateurEntitePage() {
+  const { security } = useUi();
+  const canCreate = can(security, 'core.UtilisateurEntite', 'create');
+  const canWrite = can(security, 'core.UtilisateurEntite', 'write');
+  const canDelete = can(security, 'core.UtilisateurEntite', 'delete');
   const [affiliations, setAffiliations] = useState([]);
   const [utilisateurs, setUtilisateurs] = useState([]);
   const [entites, setEntites] = useState([]);
@@ -139,16 +145,19 @@ export default function UtilisateurEntitePage() {
 
   // Gestion des actions - COMME DANS ENTITÉS
   const handleNewAffiliation = () => {
+    if (!canCreate) return;
     setEditingAffiliation(null);
     setShowForm(true);
   };
 
   const handleEdit = (affiliation) => {
+    if (!canWrite) return;
     setEditingAffiliation(affiliation);
     setShowForm(true);
   };
 
   const handleDelete = async (affiliation) => {
+    if (!canDelete) return;
     const utilisateurNom = affiliation.utilisateur?.email || affiliation.utilisateur?.username || 'Utilisateur';
     const entiteNom = affiliation.entite?.raison_sociale || 'Entité';
     
@@ -164,6 +173,7 @@ export default function UtilisateurEntitePage() {
   };
 
   const handleToggleActif = async (affiliation) => {
+    if (!canWrite) return;
     try {
       await apiClient.patch(`/utilisateurentites/${affiliation.id}/`, {
         actif: !affiliation.actif
@@ -176,6 +186,7 @@ export default function UtilisateurEntitePage() {
   };
 
   const handleSetDefault = async (affiliation) => {
+    if (!canWrite) return;
     try {
       // Désactiver toutes les entités par défaut pour cet utilisateur
       const autresAffiliations = affiliations.filter(
@@ -295,13 +306,15 @@ export default function UtilisateurEntitePage() {
               <span>Actualiser</span>
             </button>
             
-            <button 
-              onClick={handleNewAffiliation}
-              className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
-            >
-              <FiPlus size={14} />
-              <span>Nouvelle Affiliation</span>
-            </button>
+            {canCreate && (
+              <button
+                onClick={handleNewAffiliation}
+                className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
+              >
+                <FiPlus size={14} />
+                <span>Nouvelle Affiliation</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -484,7 +497,7 @@ export default function UtilisateurEntitePage() {
                           ? 'Commencez par créer votre première affiliation' 
                           : 'Essayez de modifier vos critères de recherche'}
                       </p>
-                      {affiliations.length === 0 && (
+                      {affiliations.length === 0 && canCreate && (
                         <button 
                           onClick={handleNewAffiliation}
                           className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
@@ -588,22 +601,24 @@ export default function UtilisateurEntitePage() {
                         >
                           <FiEye size={12} />
                         </button>
-                        <button
-                          onClick={() => handleToggleActif(affiliation)}
-                          className={`p-1 rounded transition-all duration-200 shadow-sm hover:shadow ${
-                            affiliation.actif
-                              ? 'bg-gradient-to-r from-orange-50 to-orange-100 text-orange-700 hover:from-orange-100 hover:to-orange-200'
-                              : 'bg-gradient-to-r from-green-50 to-green-100 text-green-700 hover:from-green-100 hover:to-green-200'
-                          }`}
-                          title={affiliation.actif ? 'Désactiver' : 'Activer'}
-                        >
-                          {affiliation.actif ? (
-                            <FiToggleRight size={12} />
-                          ) : (
-                            <FiToggleLeft size={12} />
-                          )}
-                        </button>
-                        {!affiliation.est_defaut && (
+                        {canWrite && (
+                          <button
+                            onClick={() => handleToggleActif(affiliation)}
+                            className={`p-1 rounded transition-all duration-200 shadow-sm hover:shadow ${
+                              affiliation.actif
+                                ? 'bg-gradient-to-r from-orange-50 to-orange-100 text-orange-700 hover:from-orange-100 hover:to-orange-200'
+                                : 'bg-gradient-to-r from-green-50 to-green-100 text-green-700 hover:from-green-100 hover:to-green-200'
+                            }`}
+                            title={affiliation.actif ? 'Désactiver' : 'Activer'}
+                          >
+                            {affiliation.actif ? (
+                              <FiToggleRight size={12} />
+                            ) : (
+                              <FiToggleLeft size={12} />
+                            )}
+                          </button>
+                        )}
+                        {canWrite && !affiliation.est_defaut && (
                           <button
                             onClick={() => handleSetDefault(affiliation)}
                             className="p-1 bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 rounded hover:from-purple-100 hover:to-purple-200 transition-all duration-200 shadow-sm hover:shadow"
@@ -612,20 +627,24 @@ export default function UtilisateurEntitePage() {
                             <FiStar size={12} />
                           </button>
                         )}
-                        <button
-                          onClick={() => handleEdit(affiliation)}
-                          className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
-                          title="Modifier"
-                        >
-                          <FiEdit2 size={12} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(affiliation)}
-                          className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
-                          title="Supprimer"
-                        >
-                          <FiTrash2 size={12} />
-                        </button>
+                        {canWrite && (
+                          <button
+                            onClick={() => handleEdit(affiliation)}
+                            className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow"
+                            title="Modifier"
+                          >
+                            <FiEdit2 size={12} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDelete(affiliation)}
+                            className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow"
+                            title="Supprimer"
+                          >
+                            <FiTrash2 size={12} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

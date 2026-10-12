@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FiAlertCircle,
@@ -13,6 +13,8 @@ import {
 } from 'react-icons/fi';
 import { TbBuildingSkyscraper } from 'react-icons/tb';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import {
   EntityForm,
   INITIAL_ENTITY_FORM,
@@ -33,12 +35,16 @@ export default function EntityShow() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const { security } = useUi();
+  const canCreate = can(security, 'core.Entite', 'create');
+  const canWrite = can(security, 'core.Entite', 'write');
+  const canDelete = can(security, 'core.Entite', 'delete');
   const [entity, setEntity] = useState(null);
   const [entities, setEntities] = useState([]);
   const [formData, setFormData] = useState(INITIAL_ENTITY_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [activeTab, setActiveTab] = useState('fiche');
-  const [isEditing, setIsEditing] = useState(searchParams.get('edit') === '1');
+  const [isEditing, setIsEditing] = useState(searchParams.get('edit') === '1' && canWrite);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -49,13 +55,13 @@ export default function EntityShow() {
   const actionsMenuRef = useRef(null);
   const logoInputRef = useRef(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const [entityRes, entitiesRes] = await Promise.all([
         apiClient.get(`/entites/${id}/`),
-        apiClient.get('/entites/'),
+        canWrite ? apiClient.get('/entites/') : Promise.resolve([]),
       ]);
       setEntity(entityRes);
       setFormData(entityToForm(entityRes));
@@ -66,11 +72,11 @@ export default function EntityShow() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canWrite, id]);
 
   useEffect(() => {
     fetchData();
-  }, [id]);
+  }, [fetchData]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -94,11 +100,13 @@ export default function EntityShow() {
   }, [hasUnsavedChanges]);
 
   const markAsModified = () => {
+    if (!canWrite) return;
     if (!isEditing) setIsEditing(true);
     if (!hasUnsavedChanges) setHasUnsavedChanges(true);
   };
 
   const save = async () => {
+    if (!canWrite) return;
     const errors = validateEntityForm(formData);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
@@ -124,6 +132,7 @@ export default function EntityShow() {
   };
 
   const remove = async () => {
+    if (!canDelete) return;
     if (!window.confirm(`Supprimer l'entite "${getEntityName(entity)}" ?`)) return;
     try {
       await apiClient.delete(`/entites/${id}/`);
@@ -151,7 +160,7 @@ export default function EntityShow() {
   };
 
   const importLogo = (file) => {
-    if (!file) return;
+    if (!file || !canWrite) return;
     if (!file.type?.startsWith('image/')) {
       setError('Le logo doit etre un fichier image.');
       return;
@@ -207,13 +216,15 @@ export default function EntityShow() {
       <div className="max-w-7xl mx-auto bg-white border border-gray-300">
         <div className="border-b border-gray-300 px-5 py-4 flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
-            <button
-              onClick={() => navigate('/entities/create')}
-              className="h-12 px-5 bg-purple-600 text-white font-semibold flex items-center gap-2 hover:bg-purple-700"
-            >
-              <FiBriefcase size={18} />
-              Nouveau
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => navigate('/entities/create')}
+                className="h-12 px-5 bg-purple-600 text-white font-semibold flex items-center gap-2 hover:bg-purple-700"
+              >
+                <FiBriefcase size={18} />
+                Nouveau
+              </button>
+            )}
             <div className="flex items-start gap-3">
               <button
                 type="button"
@@ -236,7 +247,7 @@ export default function EntityShow() {
               <div>
                 <h1 className="text-xl font-bold text-gray-950">{getEntityName(entity)}</h1>
                 <p className="text-sm text-gray-600">Fiche entite #{entity?.id}</p>
-                {isEditing && (
+                {isEditing && canWrite && (
                   <button
                     type="button"
                     onClick={() => logoInputRef.current?.click()}
@@ -257,43 +268,51 @@ export default function EntityShow() {
               <FiX size={16} />
               Retour
             </button>
-            <div className="relative" ref={actionsMenuRef}>
-              <button
-                onClick={() => setShowActionsMenu((current) => !current)}
-                className="h-10 px-4 border border-gray-300 bg-white text-sm hover:bg-gray-50 flex items-center gap-2"
-              >
-                <FiSettings size={16} />
-                Actions
-              </button>
-              {showActionsMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-300 shadow-lg z-30">
-                  <button
-                    onClick={() => {
-                      setIsEditing(true);
-                      setShowActionsMenu(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                  >
-                    <FiEdit2 size={15} />
-                    Modifier
-                  </button>
-                  <button
-                    onClick={() => logoInputRef.current?.click()}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                  >
-                    <FiUploadCloud size={15} />
-                    Importer logo
-                  </button>
-                  <button
-                    onClick={remove}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-700 flex items-center gap-2"
-                  >
-                    <FiTrash2 size={15} />
-                    Supprimer
-                  </button>
-                </div>
-              )}
-            </div>
+            {(canWrite || canDelete) && (
+              <div className="relative" ref={actionsMenuRef}>
+                <button
+                  onClick={() => setShowActionsMenu((current) => !current)}
+                  className="h-10 px-4 border border-gray-300 bg-white text-sm hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <FiSettings size={16} />
+                  Actions
+                </button>
+                {showActionsMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-300 shadow-lg z-30">
+                    {canWrite && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setIsEditing(true);
+                            setShowActionsMenu(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <FiEdit2 size={15} />
+                          Modifier
+                        </button>
+                        <button
+                          onClick={() => logoInputRef.current?.click()}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <FiUploadCloud size={15} />
+                          Importer logo
+                        </button>
+                      </>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={remove}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-700 flex items-center gap-2"
+                      >
+                        <FiTrash2 size={15} />
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {isEditing ? (
               <>
                 <button
@@ -312,13 +331,15 @@ export default function EntityShow() {
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="h-10 px-5 bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 flex items-center gap-2"
-              >
-                <FiEdit2 size={16} />
-                Modifier
-              </button>
+              canWrite && (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="h-10 px-5 bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 flex items-center gap-2"
+                >
+                  <FiEdit2 size={16} />
+                  Modifier
+                </button>
+              )
             )}
           </div>
         </div>
@@ -341,7 +362,7 @@ export default function EntityShow() {
           </div>
           <div className="text-xs text-gray-500 flex items-center gap-1">
             <FiInfo size={13} />
-            Les champs sont modifiables directement sur la fiche.
+            {canWrite ? 'Les champs sont modifiables directement sur la fiche.' : 'Vous disposez d’un accès en lecture seule à cette fiche.'}
           </div>
         </div>
 

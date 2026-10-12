@@ -7,10 +7,7 @@ import {
   FiCheck,
   FiCopy,
   FiInfo,
-  FiKey,
   FiLock,
-  FiMail,
-  FiPhone,
   FiPlus,
   FiRefreshCw,
   FiSend,
@@ -23,6 +20,8 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
+import { can } from '../../services/securityAccess';
 import {
   CheckList,
   FormField,
@@ -504,10 +503,17 @@ export default function SecurityShow() {
   const navigate = useNavigate();
   const params = useParams();
   const [searchParams] = useSearchParams();
+  const { security } = useUi();
 
   const type = searchParams.get('type') || params.type || 'users';
   const id = searchParams.get('id') || params.id;
   const meta = getResourceMeta(type);
+  const resourceModels = { users: 'core.Utilisateur', groups: 'core.Groupe', permissions: 'core.Permission' };
+  const resourceModel = resourceModels[type];
+  const canWrite = can(security, resourceModel, 'write');
+  const canCreate = can(security, resourceModel, 'create');
+  const canDelete = can(security, resourceModel, 'delete');
+  const canCreatePartner = can(security, 'core.Partenaire', 'create') && canWrite;
   const data = useSecurityData();
 
   const [item, setItem] = useState(null);
@@ -590,6 +596,7 @@ export default function SecurityShow() {
   };
 
   const setField = (field, value) => {
+    if (!canWrite) return;
     setFormData((prev) => {
       const next = { ...prev, [field]: value };
 
@@ -615,6 +622,7 @@ export default function SecurityShow() {
   const isReady = formData ? Object.keys(validateSecurityForm(type, formData)).length === 0 : false;
 
   const save = async (silent = false) => {
+    if (!canWrite) return false;
     const nextErrors = validateSecurityForm(type, formData);
     setFieldErrors(nextErrors);
 
@@ -650,7 +658,7 @@ export default function SecurityShow() {
   };
 
   const handleToggleStatus = async () => {
-    if (type === 'groups') return;
+    if (!canWrite || type === 'groups') return;
 
     setSaving(true);
     setError(null);
@@ -691,7 +699,7 @@ export default function SecurityShow() {
   };
 
 const handleSendResetPassword = async () => {
-  if (type !== 'users') return;
+  if (type !== 'users' || !canWrite) return;
 
   const newEmail = String(
     formData?.email || ''
@@ -758,7 +766,7 @@ const handleSendResetPassword = async () => {
   };
 
   const createPartner = async () => {
-    if (type !== 'users' || !id) return;
+    if (!canCreatePartner || type !== 'users' || !id) return;
 
     if (hasPartner) {
       setError('Cet utilisateur possède déjà un partenaire.');
@@ -798,6 +806,7 @@ const handleSendResetPassword = async () => {
   };
 
   const remove = async () => {
+    if (!canDelete) return;
     if (!window.confirm(`Supprimer ${meta.label.toLowerCase()} "${getTitle(type, item, data)}" ?`)) return;
 
     setShowActionsMenu(false);
@@ -816,6 +825,7 @@ const handleSendResetPassword = async () => {
   };
 
   const handleNewItem = () => {
+    if (!canCreate) return;
     if (hasUnsavedChanges) {
       setShowConfirmDialog(true);
     } else {
@@ -882,7 +892,7 @@ const handleSendResetPassword = async () => {
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <Tooltip text="Creer une nouvelle fiche">
+              {canCreate && <Tooltip text="Creer une nouvelle fiche">
                 <button
                   onClick={handleNewItem}
                   className="h-9 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0 flex-shrink-0"
@@ -890,7 +900,7 @@ const handleSendResetPassword = async () => {
                   <FiPlus size={16} className="mr-1" />
                   <span>Nouveau</span>
                 </button>
-              </Tooltip>
+              </Tooltip>}
 
               <div className="flex items-center gap-1.5 text-sm min-w-0">
                 <span
@@ -940,13 +950,13 @@ const handleSendResetPassword = async () => {
                         Actualiser
                       </button>
 
-                      <button
+                      {canDelete && <button
                         onClick={remove}
                         className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 hover:pl-4 transition-all duration-200 flex items-center gap-2"
                       >
                         <FiTrash2 size={12} />
                         Supprimer
-                      </button>
+                      </button>}
                     </div>
                   )}
                 </div>
@@ -954,7 +964,7 @@ const handleSendResetPassword = async () => {
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Tooltip text="Enregistrer les modifications">
+              {canWrite && <Tooltip text="Enregistrer les modifications">
                 <button
                   onClick={() => save(false)}
                   disabled={saving}
@@ -962,7 +972,7 @@ const handleSendResetPassword = async () => {
                 >
                   <FiUploadCloud size={16} />
                 </button>
-              </Tooltip>
+              </Tooltip>}
 
               <Tooltip text="Annuler les modifications">
                 <button
@@ -999,7 +1009,7 @@ const handleSendResetPassword = async () => {
 
                 {type === 'users' && (
                   <>
-                    <Tooltip text="Changer la photo">
+                    {canWrite && <Tooltip text="Changer la photo">
                       <button
                         type="button"
                         onClick={() => photoInputRef.current?.click()}
@@ -1007,14 +1017,14 @@ const handleSendResetPassword = async () => {
                       >
                         <FiCamera size={13} />
                       </button>
-                    </Tooltip>
-                    <input
+                    </Tooltip>}
+                    {canWrite && <input
                       ref={photoInputRef}
                       type="file"
                       accept="image/*"
                       className="hidden"
                       onChange={(e) => setField('photo', e.target.files?.[0] || null)}
-                    />
+                    />}
                   </>
                 )}
               </div>
@@ -1022,7 +1032,9 @@ const handleSendResetPassword = async () => {
               <div className="min-w-0 pt-1">
                 {type === 'users' ? (
                   <>
-                    <UserIdentityFields formData={formData} setField={setField} errors={fieldErrors} />
+                    <fieldset disabled={!canWrite} className="contents">
+                      <UserIdentityFields formData={formData} setField={setField} errors={fieldErrors} />
+                    </fieldset>
 
                     <div className="mt-2 flex items-center gap-2 text-sm">
                       <span className="text-gray-500">Partenaire associé :</span>
@@ -1033,14 +1045,14 @@ const handleSendResetPassword = async () => {
                       ) : (
                         <>
                           <span className="text-gray-400 italic">Aucun</span>
-                          <button
+                          {canCreatePartner && <button
                             type="button"
                             onClick={() => setShowPartnerPanel((v) => !v)}
                             className="text-xs text-purple-600 hover:text-purple-800 hover:underline flex items-center gap-1"
                           >
                             <FiUserPlus size={12} />
                             Créer le partenaire
-                          </button>
+                          </button>}
                         </>
                       )}
                     </div>
@@ -1103,7 +1115,7 @@ const handleSendResetPassword = async () => {
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-              {type !== 'groups' && (
+              {canWrite && type !== 'groups' && (
                 <Tooltip text={isActive ? 'Desactiver' : 'Activer'}>
                   <button
                     type="button"
@@ -1171,49 +1183,59 @@ const handleSendResetPassword = async () => {
         {/* Contenu de l'onglet actif (un seul rendu a la fois) */}
         <div className="p-6">
           {!showTabs && (
-            <SecurityForm
-              type={type}
-              formData={formData}
-              setField={setField}
-              errors={fieldErrors}
-              data={data}
-              editing
-            />
+            <fieldset disabled={!canWrite} className="contents">
+              <SecurityForm
+                type={type}
+                formData={formData}
+                setField={setField}
+                errors={fieldErrors}
+                data={data}
+                editing
+              />
+            </fieldset>
           )}
 
           {showTabs && activeTab === 'droits_acces' && (
-            <UserDroitsAccesSection
-              formData={formData}
-              setField={setField}
-              data={data}
-              userGroups={userGroups}
-              userPermissions={userPermissions}
-              navigate={navigate}
-            />
+            <fieldset disabled={!canWrite} className="contents">
+              <UserDroitsAccesSection
+                formData={formData}
+                setField={setField}
+                data={data}
+                userGroups={userGroups}
+                userPermissions={userPermissions}
+                navigate={navigate}
+              />
+            </fieldset>
           )}
 
           {showTabs && activeTab === 'securite' && (
-            <UserSecuriteSection
-              formData={formData}
-              setField={setField}
-              errors={fieldErrors}
-              onChangePassword={handleChangePassword}
-              onSendReset={handleSendResetPassword}
-              onToggle2fa={handleToggle2fa}
-              sending={saving}
-            />
+            <fieldset disabled={!canWrite} className="contents">
+              <UserSecuriteSection
+                formData={formData}
+                setField={setField}
+                errors={fieldErrors}
+                onChangePassword={handleChangePassword}
+                onSendReset={handleSendResetPassword}
+                onToggle2fa={handleToggle2fa}
+                sending={saving}
+              />
+            </fieldset>
           )}
 
           {showTabs && activeTab === 'preference' && (
-            <UserPreferenceSection
-              formData={formData}
-              setField={setField}
-              errors={fieldErrors}
-            />
+            <fieldset disabled={!canWrite} className="contents">
+              <UserPreferenceSection
+                formData={formData}
+                setField={setField}
+                errors={fieldErrors}
+              />
+            </fieldset>
           )}
 
           {showTabs && activeTab === 'notes' && (
-            <UserNotesSection formData={formData} setField={setField} />
+            <fieldset disabled={!canWrite} className="contents">
+              <UserNotesSection formData={formData} setField={setField} />
+            </fieldset>
           )}
         </div>
 
@@ -1236,7 +1258,7 @@ const handleSendResetPassword = async () => {
             </p>
 
             <div className="flex justify-end gap-3">
-              <button
+              {canWrite && <button
                 onClick={async () => {
                   setShowConfirmDialog(false);
                   const saved = await save(true);
@@ -1245,7 +1267,7 @@ const handleSendResetPassword = async () => {
                 className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 active:scale-95 transition-all duration-200"
               >
                 Enregistrer
-              </button>
+              </button>}
 
               <button
                 onClick={confirmDiscardChanges}
