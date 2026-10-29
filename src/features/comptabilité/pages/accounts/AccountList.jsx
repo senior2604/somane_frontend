@@ -11,6 +11,7 @@ import axiosInstance from '../../../../config/axiosInstance';
 import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import useAccountStore from '../../../../stores/comptabilite/accountStore';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const FRAMEWORK_SESSION_KEY = 'account_list_selected_framework';
 const MEMORY_KEY = 'comptabilite:accounts:index:v3';
@@ -220,11 +221,11 @@ export default function AccountList() {
 
   const renderFilters = useCallback(() => (
     <div className="grid grid-cols-2 gap-4 p-4 text-xs">
-      <label className="col-span-2"><span className="mb-1 block font-semibold text-gray-700">Référentiel comptable</span><select value={frameworkId} onChange={(event) => changeFramework(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">{frameworks.map((item) => <option key={item.id} value={item.id}>{optionLabel(item)}</option>)}</select></label>
-      <label><span className="mb-1 block font-semibold text-gray-700">Nature</span><select value={typeId} onChange={(event) => setTypeId(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2"><option value="">Toutes</option>{types.map((item) => <option key={item.id} value={item.id}>{optionLabel(item)}</option>)}</select></label>
-      <label><span className="mb-1 block font-semibold text-gray-700">Classe / Groupe</span><select value={groupId} onChange={(event) => setGroupId(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2"><option value="">Tous</option>{groups.map((item) => <option key={item.id} value={item.id}>{optionLabel(item)}</option>)}</select></label>
-      <label><span className="mb-1 block font-semibold text-gray-700">Statut</span><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2"><option value="all">Tous</option><option value="active">Actifs</option><option value="inactive">Inactifs</option></select></label>
-      <label><span className="mb-1 block font-semibold text-gray-700">Lettrage</span><select value={reconcile} onChange={(event) => setReconcile(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2"><option value="all">Tous</option><option value="yes">Lettrables</option><option value="no">Non lettrables</option></select></label>
+      <label className="col-span-2"><span className="mb-1 block font-semibold text-gray-700">Référentiel comptable</span><SomaneSelect value={frameworkId} onChange={(event) => changeFramework(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">{frameworks.map((item) => <option key={item.id} value={item.id}>{optionLabel(item)}</option>)}</SomaneSelect></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">Nature</span><SomaneSelect value={typeId} onChange={(event) => setTypeId(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2"><option value="">Toutes</option>{types.map((item) => <option key={item.id} value={item.id}>{optionLabel(item)}</option>)}</SomaneSelect></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">Classe / Groupe</span><SomaneSelect value={groupId} onChange={(event) => setGroupId(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2"><option value="">Tous</option>{groups.map((item) => <option key={item.id} value={item.id}>{optionLabel(item)}</option>)}</SomaneSelect></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">Statut</span><SomaneSelect value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2"><option value="all">Tous</option><option value="active">Actifs</option><option value="inactive">Inactifs</option></SomaneSelect></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">Lettrage</span><SomaneSelect value={reconcile} onChange={(event) => setReconcile(event.target.value)} className="h-9 w-full border border-gray-300 bg-white px-2"><option value="all">Tous</option><option value="yes">Lettrables</option><option value="no">Non lettrables</option></SomaneSelect></label>
     </div>
   ), [changeFramework, frameworkId, frameworks, groupId, groups, reconcile, status, typeId, types]);
 

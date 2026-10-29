@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { FiSave, FiPlus, FiChevronDown, FiCopy, FiTrash2, FiRotateCcw } from 'react-icons/fi';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 export default function PrixFournisseursCreate() {
   const navigate = useNavigate();
@@ -280,7 +281,7 @@ export default function PrixFournisseursCreate() {
           {/* Fournisseur */}
           <div>
             <p className="text-xs text-gray-500 mb-1">Fournisseur *</p>
-            <select
+            <SomaneSelect
               name="fournisseur_id"
               value={formData.fournisseur_id}
               onChange={handleChange}
@@ -291,13 +292,13 @@ export default function PrixFournisseursCreate() {
               {fournisseurs.map(f => (
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
           
           {/* Produit */}
           <div>
             <p className="text-xs text-gray-500 mb-1">Produit *</p>
-            <select
+            <SomaneSelect
               name="product_id"
               value={formData.product_id}
               onChange={handleChange}
@@ -308,7 +309,7 @@ export default function PrixFournisseursCreate() {
               {produits.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
           
           {/* Prix */}
@@ -328,7 +329,7 @@ export default function PrixFournisseursCreate() {
           {/* Devise */}
           <div>
             <p className="text-xs text-gray-500 mb-1">Devise *</p>
-            <select
+            <SomaneSelect
               name="currency_id"
               value={formData.currency_id}
               onChange={handleChange}
@@ -339,7 +340,7 @@ export default function PrixFournisseursCreate() {
               {devises.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
           
           {/* Quantité Minimale */}
@@ -376,7 +377,7 @@ export default function PrixFournisseursCreate() {
                 {lignes.map((ligne, index) => (
                   <tr key={ligne.id}>
                     <td className="px-2 py-1.5 border border-gray-300 w-32">
-                      <select
+                      <SomaneSelect
                         value={ligne.fournisseur}
                         onChange={(e) => handleLigneChange(index, 'fournisseur', e.target.value)}
                         className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent"
@@ -385,10 +386,10 @@ export default function PrixFournisseursCreate() {
                         {fournisseurs.map(f => (
                           <option key={f.id} value={f.id}>{f.name}</option>
                         ))}
-                      </select>
+                      </SomaneSelect>
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300 w-32">
-                      <select
+                      <SomaneSelect
                         value={ligne.produit}
                         onChange={(e) => handleLigneChange(index, 'produit', e.target.value)}
                         className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent"
@@ -397,7 +398,7 @@ export default function PrixFournisseursCreate() {
                         {produits.map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
-                      </select>
+                      </SomaneSelect>
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300 w-20">
                       <input
@@ -408,7 +409,7 @@ export default function PrixFournisseursCreate() {
                       />
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300 w-24">
-                      <select
+                      <SomaneSelect
                         value={ligne.devise}
                         onChange={(e) => handleLigneChange(index, 'devise', e.target.value)}
                         className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent"
@@ -417,7 +418,7 @@ export default function PrixFournisseursCreate() {
                         {devises.map(d => (
                           <option key={d.id} value={d.id}>{d.name}</option>
                         ))}
-                      </select>
+                      </SomaneSelect>
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300 w-20">
                       <input

@@ -814,6 +814,17 @@ export default function UnifiedHeader() {
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
+                          navigate('/profile');
+                        }}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50"
+                        title={t('Gérer les informations de votre compte')}
+                      >
+                        <FiUser size={14} />
+                        {t('Profil')}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
                           navigate('/preferences');
                         }}
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50"

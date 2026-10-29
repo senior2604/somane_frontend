@@ -11,6 +11,7 @@ import {
   FiMoreVertical, FiLink, FiCreditCard, FiGrid, FiCalendar, FiClock,
   FiImage, FiPercent, FiHash, FiUsers, FiShield, FiNavigation
 } from "react-icons/fi";
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function PaysSubdivisionAssociationPage() {
   const { configuration } = useUi();
@@ -408,7 +409,7 @@ export default function PaysSubdivisionAssociationPage() {
                         <>
                           <div className="mb-2">
                             <p className="text-xs text-gray-600 mb-1">Par pays</p>
-                            <select
+                            <SomaneSelect
                               value={filterCountry}
                               onChange={(e) => {
                                 setFilterCountry(e.target.value);
@@ -422,12 +423,12 @@ export default function PaysSubdivisionAssociationPage() {
                                   {p.emoji} {p.nom_fr || p.nom}
                                 </option>
                               ))}
-                            </select>
+                            </SomaneSelect>
                           </div>
                           
                           <div className="mb-2">
                             <p className="text-xs text-gray-600 mb-1">Par type</p>
-                            <select
+                            <SomaneSelect
                               value={filterType}
                               onChange={(e) => {
                                 setFilterType(e.target.value);
@@ -443,7 +444,7 @@ export default function PaysSubdivisionAssociationPage() {
                               <option value="canton">Canton</option>
                               <option value="district">District</option>
                               <option value="other">Autre</option>
-                            </select>
+                            </SomaneSelect>
                           </div>
                         </>
                       )}
@@ -625,7 +626,7 @@ export default function PaysSubdivisionAssociationPage() {
               <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600 focus:outline-none focus:ring-1 focus:ring-violet-500">
                 <FiUpload size={14} />
               </button>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
@@ -637,7 +638,7 @@ export default function PaysSubdivisionAssociationPage() {
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
                 <option value={50}>50 lignes</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -906,8 +907,8 @@ function PaysDetailModal({ item, paysSubdivisions, subdivisions, devises, getDev
   const paysSubs = subdivisions.filter(sub => sub.pays?.id === item.id);
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1057,8 +1058,8 @@ function PaysDetailModal({ item, paysSubdivisions, subdivisions, devises, getDev
 // MODAL DE DÉTAILS SUBDIVISION
 function SubdivisionDetailModal({ item, getTypeSubdivisionLabel, getTypeSubdivisionBadge, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1247,8 +1248,8 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1361,7 +1362,7 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Devise par défaut
                 </label>
-                <select
+                <SomaneSelect
                   value={formData.devise_par_defaut}
                   onChange={(e) => handleChange('devise_par_defaut', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
@@ -1372,7 +1373,7 @@ function PaysFormModal({ pays, devises, onClose, onSuccess }) {
                       {devise.code} - {devise.nom} ({devise.symbole})
                     </option>
                   ))}
-                </select>
+                </SomaneSelect>
               </div>
               
               <div className="lg:col-span-2">
@@ -1505,8 +1506,8 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1579,7 +1580,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Type de subdivision *
                 </label>
-                <select
+                <SomaneSelect
                   required
                   value={formData.type_subdivision}
                   onChange={(e) => handleChange('type_subdivision', e.target.value)}
@@ -1592,14 +1593,14 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
                   <option value="canton">Canton</option>
                   <option value="district">District</option>
                   <option value="other">Autre</option>
-                </select>
+                </SomaneSelect>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Pays *
                 </label>
-                <select
+                <SomaneSelect
                   required
                   value={formData.pays}
                   onChange={(e) => handleChange('pays', e.target.value)}
@@ -1611,7 +1612,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
                       {paysItem.emoji} {paysItem.nom_fr || paysItem.nom} ({paysItem.code_iso})
                     </option>
                   ))}
-                </select>
+                </SomaneSelect>
               </div>
 
               <div>

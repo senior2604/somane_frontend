@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { FiSave, FiSettings, FiDatabase, FiCheckCircle } from 'react-icons/fi';
 import { apiClient } from '../../../services/apiClient';
+import SomaneSelect from '../../../components/SomaneSelect';
 
 export default function SettingsPage() {
   const [dataSources, setDataSources] = useState([]);
@@ -206,7 +207,7 @@ export default function SettingsPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Type de fichier *
                       </label>
-                      <select
+                      <SomaneSelect
                         value={newDataSource.source_type}
                         onChange={(e) => setNewDataSource({ ...newDataSource, source_type: e.target.value })}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
@@ -214,14 +215,14 @@ export default function SettingsPage() {
                         <option value="excel_8cols">Excel 8 colonnes</option>
                         <option value="csv_8cols">CSV 8 colonnes</option>
                         <option value="fixed_width">Largeur fixe</option>
-                      </select>
+                      </SomaneSelect>
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Encodage
                       </label>
-                      <select
+                      <SomaneSelect
                         value={newDataSource.file_encoding}
                         onChange={(e) => setNewDataSource({ ...newDataSource, file_encoding: e.target.value })}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
@@ -229,7 +230,7 @@ export default function SettingsPage() {
                         <option value="UTF-8">UTF-8</option>
                         <option value="ISO-8859-1">ISO-8859-1</option>
                         <option value="Windows-1252">Windows-1252</option>
-                      </select>
+                      </SomaneSelect>
                     </div>
 
                     <div>

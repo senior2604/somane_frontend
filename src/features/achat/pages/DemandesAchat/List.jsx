@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiEye, FiRefreshCw } from 'react-icons/fi';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const getStatusColor = (status) => {
   const colors = {
@@ -188,7 +189,7 @@ export default function DemandesAchatList() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <label className="text-sm text-gray-600">Afficher</label>
-          <select
+          <SomaneSelect
             value={itemsPerPage}
             onChange={(e) => {
               setItemsPerPage(Number(e.target.value));
@@ -200,7 +201,7 @@ export default function DemandesAchatList() {
             <option value={10}>10</option>
             <option value={25}>25</option>
             <option value={50}>50</option>
-          </select>
+          </SomaneSelect>
           <span className="text-sm text-gray-600">éléments</span>
         </div>
         

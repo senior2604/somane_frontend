@@ -1,14 +1,12 @@
 // src/features/vente/layouts/VenteLayout.jsx
-import { Outlet } from "react-router-dom";
+import { Outlet } from 'react-router-dom';
 import Header from "../../../components/Header"; // ← UN SEUL import
+import ApplicationLayout from "../../../components/ApplicationLayout";
 
 export default function VenteLayout() {
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      <Header />
-      <main className="flex-1 overflow-auto p-6">
-        <Outlet />
-      </main>
-    </div>
+    <ApplicationLayout header={<Header />} contentClassName="somane-app-shell__main--padded">
+      <Outlet />
+    </ApplicationLayout>
   );
 }

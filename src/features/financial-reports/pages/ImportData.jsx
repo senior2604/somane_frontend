@@ -8,6 +8,7 @@ import {
   FiAlertTriangle,
 } from 'react-icons/fi';
 import { apiClient } from '../../../services/apiClient';
+import SomaneSelect from '../../../components/SomaneSelect';
 
 const STATE_CONFIG = {
   processed: { label: 'Traité',    bg: '#dcfce7', color: '#15803d', icon: FiCheckCircle },
@@ -384,13 +385,13 @@ export default function ImportData() {
               <label style={s.label}>Source de données <span style={s.req}>*</span></label>
               <div style={s.inputWrap}>
                 <FiDatabase size={15} style={s.inputIcon} />
-                <select value={form.data_source} onChange={e => setField('data_source', e.target.value)}
+                <SomaneSelect value={form.data_source} onChange={e => setField('data_source', e.target.value)}
                   style={{ ...s.input, ...s.select, borderColor: touched.data_source && !form.data_source ? '#ef4444' : '#e5e7eb' }}>
                   <option value="">Sélectionner une source…</option>
                   {dataSources.map(src => (
                     <option key={src.id} value={src.id}>{src.name} — {src.source_type}</option>
                   ))}
-                </select>
+                </SomaneSelect>
               </div>
               {touched.data_source && !form.data_source && <span style={s.fieldErr}>Champ obligatoire</span>}
             </div>
@@ -401,13 +402,13 @@ export default function ImportData() {
             <label style={s.label}>Période comptable <span style={s.req}>*</span></label>
             <div style={s.inputWrap}>
               <FiCalendar size={15} style={s.inputIcon} />
-              <select value={form.period} onChange={e => handlePeriodChange(e.target.value)}
+              <SomaneSelect value={form.period} onChange={e => handlePeriodChange(e.target.value)}
                 style={{ ...s.input, ...s.select, borderColor: touched.period && !form.period ? '#ef4444' : '#e5e7eb' }}>
                 <option value="">Sélectionner une période…</option>
                 {periods.map(p => (
                   <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
             {touched.period && !form.period && <span style={s.fieldErr}>Champ obligatoire</span>}
           </div>

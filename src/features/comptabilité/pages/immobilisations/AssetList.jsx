@@ -20,6 +20,7 @@ import {
   normalizeText,
   relationId,
 } from './assetShared.jsx';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const MEMORY_KEY = 'comptabilite:assets:index:v1';
 const CACHE_KEY = 'somane:assets:list-cache:v1';
@@ -194,9 +195,9 @@ export default function AssetList() {
 
   const renderFilters = useCallback(() => (
     <div className="grid grid-cols-1 gap-4 p-4 text-xs sm:grid-cols-3">
-      <label><span className="mb-1 block font-semibold text-gray-700">État</span><select className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500" value={stateFilter} onChange={(event) => { setStateFilter(event.target.value); setPage(1); }}><option value="all">Tous les états</option>{Object.entries(ASSET_STATES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-      <label><span className="mb-1 block font-semibold text-gray-700">Nature</span><select className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500" value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setPage(1); }}><option value="all">Toutes les natures</option>{ASSET_TYPES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-      <label><span className="mb-1 block font-semibold text-gray-700">Catégorie</span><select className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}><option value="all">Toutes les catégories</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">État</span><SomaneSelect className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500" value={stateFilter} onChange={(event) => { setStateFilter(event.target.value); setPage(1); }}><option value="all">Tous les états</option>{Object.entries(ASSET_STATES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</SomaneSelect></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">Nature</span><SomaneSelect className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500" value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setPage(1); }}><option value="all">Toutes les natures</option>{ASSET_TYPES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</SomaneSelect></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">Catégorie</span><SomaneSelect className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}><option value="all">Toutes les catégories</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</SomaneSelect></label>
     </div>
   ), [categories, categoryFilter, stateFilter, typeFilter]);
 

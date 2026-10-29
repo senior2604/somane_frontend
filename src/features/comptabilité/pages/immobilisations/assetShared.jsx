@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import ColumnVisibilityMenu from '../../../../components/ColumnVisibilityMenu';
+import StatusTrack from '../../../../components/StatusTrack';
 
 export const API = {
   assets: 'compta/assets/',
@@ -235,9 +237,6 @@ const readTablePreferences = (storageKey) => {
 
 export const AssetTable = ({ storageKey, columns, rows, renderCell, renderAction, totals = {}, emptyLabel, footer }) => {
   const [preferences, setPreferences] = useState(() => readTablePreferences(storageKey));
-  const [menuPosition, setMenuPosition] = useState(null);
-  const buttonRef = useRef(null);
-  const popupRef = useRef(null);
   const resizeRef = useRef(null);
   const isColumnVisible = (column, saved = preferences) => column.required || (
     typeof saved.hidden?.[column.key] === 'boolean' ? !saved.hidden[column.key] : column.defaultVisible !== false
@@ -248,27 +247,6 @@ export const AssetTable = ({ storageKey, columns, rows, renderCell, renderAction
   useEffect(() => {
     try { localStorage.setItem(storageKey, JSON.stringify(preferences)); } catch {}
   }, [preferences, storageKey]);
-
-  useEffect(() => {
-    if (!menuPosition) return undefined;
-    const closeOutside = (event) => {
-      if (!buttonRef.current?.contains(event.target) && !popupRef.current?.contains(event.target)) setMenuPosition(null);
-    };
-    const closeOnEscape = (event) => { if (event.key === 'Escape') setMenuPosition(null); };
-    const closeOnMove = (event) => {
-      if (!popupRef.current?.contains(event.target)) setMenuPosition(null);
-    };
-    document.addEventListener('mousedown', closeOutside);
-    document.addEventListener('keydown', closeOnEscape);
-    window.addEventListener('scroll', closeOnMove, true);
-    window.addEventListener('resize', closeOnMove);
-    return () => {
-      document.removeEventListener('mousedown', closeOutside);
-      document.removeEventListener('keydown', closeOnEscape);
-      window.removeEventListener('scroll', closeOnMove, true);
-      window.removeEventListener('resize', closeOnMove);
-    };
-  }, [menuPosition]);
 
   useEffect(() => () => resizeRef.current?.(), []);
 
@@ -290,34 +268,25 @@ export const AssetTable = ({ storageKey, columns, rows, renderCell, renderAction
     document.addEventListener('mouseup', stop);
   };
 
-  const toggleMenu = () => {
-    if (menuPosition) { setMenuPosition(null); return; }
-    const rect = buttonRef.current.getBoundingClientRect();
-    const height = Math.min(300, 44 + columns.length * 32);
-    setMenuPosition({
-      position: 'fixed', zIndex: 10000, width: Math.min(224, window.innerWidth - 16),
-      left: Math.max(8, Math.min(rect.right - 224, window.innerWidth - 232)),
-      top: rect.bottom + height > window.innerHeight ? Math.max(8, rect.top - height) : rect.bottom + 2,
-      maxHeight: Math.min(height, window.innerHeight - 16), overflowY: 'auto',
-    });
-  };
-
   return <>
-    <style>{`
-      .asset-lines-scroll { scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent; }
-      .asset-lines-scroll::-webkit-scrollbar { width: 1px; height: 1px; }
-      .asset-lines-scroll::-webkit-scrollbar-track { background: transparent; }
-      .asset-lines-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 999px; }
-    `}</style>
-    <div className="asset-lines-scroll mb-3 max-h-[52vh] overflow-auto">
-      <table className="table-fixed border-collapse text-xs" style={{ width: '100%', minWidth: visibleColumns.reduce((sum, column) => sum + columnWidth(column), 40) }}>
+    <div className="somane-form-table-scroll mb-3 max-h-[52vh] overflow-auto">
+      <table className="somane-form-table table-fixed" style={{ width: '100%', minWidth: visibleColumns.reduce((sum, column) => sum + columnWidth(column), 40) }}>
         <colgroup>{visibleColumns.map((column) => <col key={column.key} style={{ width: columnWidth(column) }} />)}<col style={{ width: 40 }} /></colgroup>
         <thead className="sticky top-0 z-10"><tr className="bg-gray-100">
           {visibleColumns.map((column) => <th key={column.key} className="relative border border-gray-300 px-2 py-1.5 text-left font-medium text-gray-700">
             {column.label}
             <span role="separator" aria-label={`Redimensionner ${column.label}`} onMouseDown={(event) => startResize(event, column)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none hover:bg-purple-400" />
           </th>)}
-          <th className="border border-gray-300 px-2 py-1.5"><button ref={buttonRef} type="button" onClick={toggleMenu} aria-label="Afficher ou masquer les colonnes" title="Afficher ou masquer les colonnes" className="w-full text-left hover:text-purple-600">...</button></th>
+          <th className="text-center"><ColumnVisibilityMenu
+            columns={columns.map((column) => ({ ...column, disabled: column.required }))}
+            isVisible={(key) => isColumnVisible(columns.find((column) => column.key === key))}
+            onToggle={(key) => {
+              const column = columns.find((item) => item.key === key);
+              if (!column || column.required) return;
+              setPreferences((current) => ({ ...current, hidden: { ...current.hidden, [key]: isColumnVisible(column, current) } }));
+            }}
+            title="Colonnes"
+          /></th>
         </tr></thead>
         <tbody>{rows.length ? rows.map((row, index) => <tr key={row.id ?? row.sequence ?? index} className="odd:bg-white even:bg-gray-50/60">
           {visibleColumns.map((column) => <td key={column.key} className={`border border-gray-300 p-1 ${column.numeric ? 'text-right tabular-nums' : 'text-left'}`}><div className="min-w-0">{renderCell(row, column)}</div></td>)}
@@ -327,13 +296,6 @@ export const AssetTable = ({ storageKey, columns, rows, renderCell, renderAction
       </table>
       {footer && <div className="sticky left-0 w-fit py-2">{footer}</div>}
     </div>
-    {menuPosition && createPortal(<div ref={popupRef} className="border border-gray-300 bg-white p-2 text-xs text-gray-700 shadow-xl" style={menuPosition}>
-      <div className="border-b border-gray-100 px-2 py-1.5 font-semibold">Colonnes à afficher</div>
-      {columns.map((column) => <label key={column.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-purple-50">
-        <input type="checkbox" checked={isColumnVisible(column)} disabled={column.required} onChange={() => setPreferences((current) => ({ ...current, hidden: { ...current.hidden, [column.key]: isColumnVisible(column, current) } }))} className="accent-purple-600" />
-        {column.label}
-      </label>)}
-    </div>, document.body)}
   </>;
 };
 
@@ -373,14 +335,15 @@ export const StateBadge = ({ state }) => {
 };
 
 export const AssetProcess = ({ state }) => (
-  <div className="flex items-center justify-end gap-2 px-4 py-3 text-xs font-semibold">
-    {[
-      ['draft', 'Brouillon'],
-      ['running', 'En cours'],
-      ['waiting', 'En attente'],
-      ['disposed', 'Décomptabilisé'],
-    ].map(([value, label]) => (
-      <span key={value} className={`border px-4 py-2 ${state === value ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-300 bg-gray-50 text-gray-500'}`}>{label}</span>
-    ))}
-  </div>
+  <StatusTrack
+    steps={[
+      { id: 'draft', label: 'Brouillon' },
+      { id: 'running', label: 'En cours' },
+      { id: 'waiting', label: 'En attente' },
+      { id: 'disposed', label: 'Décomptabilisé' },
+    ]}
+    currentState={state}
+    label="États de l’immobilisation"
+    className="px-4 py-3"
+  />
 );

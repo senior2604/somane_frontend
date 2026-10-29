@@ -15,6 +15,7 @@ import {
 } from 'react-icons/fi';
 import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const getYearStart = () => `${new Date().getFullYear()}-01-01`;
 const getYearEnd = () => `${new Date().getFullYear()}-12-31`;
@@ -527,11 +528,11 @@ export default function BalanceGenerale() {
                   <div className="border-b border-gray-200 p-2">
                     <p className="mb-2 text-xs font-medium text-gray-700">Compte / État</p>
                     <input type="text" value={filters.account_code} onChange={(event) => handleFilterChange('account_code', event.target.value)} placeholder="Compte : 411" className="mb-2 h-8 w-full border border-gray-300 px-2 text-xs" />
-                    <select value={filters.state} onChange={(event) => handleFilterChange('state', event.target.value)} className="h-8 w-full border border-gray-300 px-2 text-xs">
+                    <SomaneSelect value={filters.state} onChange={(event) => handleFilterChange('state', event.target.value)} className="h-8 w-full border border-gray-300 px-2 text-xs">
                       <option value="all">Toutes les écritures</option>
                       <option value="posted">Validées</option>
                       <option value="draft">Brouillons</option>
-                    </select>
+                    </SomaneSelect>
                   </div>
                   <div className="border-b border-gray-200 p-2 text-xs text-gray-700">
                     <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-gray-50"><input type="checkbox" checked={filters.show_zero} onChange={(event) => handleFilterChange('show_zero', event.target.checked)} /> Soldes nuls</label>

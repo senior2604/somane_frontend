@@ -4,6 +4,7 @@ import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
 import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
 import { useUi } from '../../context/UiContext';
 import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function LanguesPage() {
   const { configuration } = useUi();
@@ -249,7 +250,7 @@ export default function LanguesPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Sens d'écriture</label>
-            <select
+            <SomaneSelect
               value={filterSens}
               onChange={(e) => {
                 setFilterSens(e.target.value);
@@ -260,7 +261,7 @@ export default function LanguesPage() {
               <option value="">Tous les sens</option>
               <option value="LTR">Gauche → Droite</option>
               <option value="RTL">Droite → Gauche</option>
-            </select>
+            </SomaneSelect>
           </div>
           <div className="flex items-end">
             <button
@@ -381,7 +382,7 @@ export default function LanguesPage() {
                 <span className="text-sm text-gray-700">
                   Lignes par page:
                 </span>
-                <select
+                <SomaneSelect
                   value={itemsPerPage}
                   onChange={(e) => {
                     setItemsPerPage(Number(e.target.value));
@@ -393,7 +394,7 @@ export default function LanguesPage() {
                   <option value={10}>10</option>
                   <option value={20}>20</option>
                   <option value={50}>50</option>
-                </select>
+                </SomaneSelect>
                 <span className="text-sm text-gray-700">
                   {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredLangues.length)} sur {filteredLangues.length}
                 </span>
@@ -547,16 +548,17 @@ function LangueFormModal({ langue, onClose, onSuccess, configuredView }) {
     }));
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between gap-3 p-6 border-b border-gray-200">
+return (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 somane-overlay-backdrop">
+    <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
+      <div className="flex items-center justify-between gap-3 p-6 border-b border-gray-200">
+        <div>
           <h2 className="text-xl font-semibold text-gray-800">
             {langue ? 'Modifier la langue' : 'Créer une nouvelle langue'}
           </h2>
           {langue && <RecordTraceabilityPanel model="langue" recordId={langue.id} />}
         </div>
-        
+      </div>
         {error && (
           <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex items-center">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const StockPickingsList = () => {
   const [pickings, setPickings] = useState([]);
@@ -135,7 +136,7 @@ const StockPickingsList = () => {
       <div className="bg-white rounded-lg shadow p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
-            <select
+            <SomaneSelect
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -147,7 +148,7 @@ const StockPickingsList = () => {
               <option value="waiting">En attente</option>
               <option value="done">Terminé</option>
               <option value="cancel">Annulé</option>
-            </select>
+            </SomaneSelect>
           </div>
           <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
             Réinitialiser

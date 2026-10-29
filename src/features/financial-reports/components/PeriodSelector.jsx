@@ -8,6 +8,7 @@ import {
 } from 'react-icons/fi';
 import { apiClient } from '../../../services/apiClient';
 import { useEntity } from '../../../context/EntityContext';
+import SomaneSelect from '../../../components/SomaneSelect';
 
 const PERIOD_TYPES = [
   { value: 'ANNUAL',    label: 'Annuel'      },
@@ -287,8 +288,8 @@ export default function PeriodsList() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 somane-overlay-backdrop">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl somane-modal-surface">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
               <h2 className="text-lg font-bold text-gray-900">
                 {editingPeriod ? `Modifier — ${editingPeriod.code}` : 'Nouvelle période'}
@@ -344,10 +345,10 @@ export default function PeriodsList() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Type <span className="text-red-500">*</span></label>
-                  <select value={formData.period_type} onChange={e => field('period_type', e.target.value)}
+                  <SomaneSelect value={formData.period_type} onChange={e => field('period_type', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 text-sm outline-none">
                     {PERIOD_TYPES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                  </select>
+                  </SomaneSelect>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Exercice comptable <span className="text-red-500">*</span></label>
@@ -368,7 +369,7 @@ export default function PeriodsList() {
                     Chargement des référentiels…
                   </div>
                 ) : (
-                  <select value={formData.finance_account_framework}
+                  <SomaneSelect value={formData.finance_account_framework}
                     onChange={e => field('finance_account_framework', e.target.value)}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 text-sm outline-none">
@@ -381,7 +382,7 @@ export default function PeriodsList() {
                           </option>
                         ))
                     }
-                  </select>
+                  </SomaneSelect>
                 )}
                 {frameworks.length === 0 && !fwLoading && (
                   <p className="text-xs text-amber-600 mt-1">
@@ -411,7 +412,7 @@ export default function PeriodsList() {
                   <FiLink size={13} className="inline mr-1 text-indigo-500" />
                   Période N-1 (référence)
                 </label>
-                <select value={formData.previous_period} onChange={e => field('previous_period', e.target.value)}
+                <SomaneSelect value={formData.previous_period} onChange={e => field('previous_period', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 text-sm outline-none">
                   <option value="">— Aucune (première balance) —</option>
                   {periods.filter(p => !editingPeriod || p.id !== editingPeriod.id).map(p => (
@@ -419,7 +420,7 @@ export default function PeriodsList() {
                       {p.code} — {p.name}{hasValidatedImport(p.id) ? ' ✓' : ' ⚠ non importée'}
                     </option>
                   ))}
-                </select>
+                </SomaneSelect>
                 <p className="text-xs text-gray-400 mt-1">
                   Détermine automatiquement la balance N-1 lors de l'import. Si vide → première balance, Règle 2 désactivée.
                 </p>
@@ -455,14 +456,14 @@ export default function PeriodsList() {
                   <div className="px-4 py-4 space-y-4 bg-white">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">Référence d'ouverture spécifique</label>
-                      <select value={formData.opening_reference_period}
+                      <SomaneSelect value={formData.opening_reference_period}
                         onChange={e => field('opening_reference_period', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 text-sm outline-none">
                         <option value="">— Utiliser la période N-1 par défaut —</option>
                         {periods.filter(p => !editingPeriod || p.id !== editingPeriod.id).map(p => (
                           <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
                         ))}
-                      </select>
+                      </SomaneSelect>
                       <p className="text-xs text-gray-400 mt-1">Prioritaire sur la période N-1. À utiliser uniquement en cas de reprise de données.</p>
                     </div>
                     <div className="flex items-center gap-3">

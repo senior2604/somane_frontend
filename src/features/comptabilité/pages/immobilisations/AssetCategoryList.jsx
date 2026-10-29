@@ -15,6 +15,7 @@ import {
   normalizeApiList,
   normalizeText,
 } from './assetShared.jsx';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const CACHE_KEY = 'somane:asset-categories:list-cache:v1';
 const DEFAULT_COLUMNS = ['code', 'name', 'method', 'duration', 'asset_account', 'journal', 'active'];
@@ -129,8 +130,8 @@ export default function AssetCategoryList() {
 
   const renderFilters = useCallback(() => (
     <div className="grid grid-cols-2 gap-4 p-4 text-xs">
-      <label><span className="mb-1 block font-semibold text-gray-700">État</span><select className="h-9 w-full border border-gray-300 bg-white px-2" value={activeFilter} onChange={(event) => { setActiveFilter(event.target.value); setPage(1); }}><option value="all">Tous</option><option value="true">Actif</option><option value="false">Inactif</option></select></label>
-      <label><span className="mb-1 block font-semibold text-gray-700">Méthode</span><select className="h-9 w-full border border-gray-300 bg-white px-2" value={methodFilter} onChange={(event) => { setMethodFilter(event.target.value); setPage(1); }}><option value="all">Toutes les méthodes</option>{METHODS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">État</span><SomaneSelect className="h-9 w-full border border-gray-300 bg-white px-2" value={activeFilter} onChange={(event) => { setActiveFilter(event.target.value); setPage(1); }}><option value="all">Tous</option><option value="true">Actif</option><option value="false">Inactif</option></SomaneSelect></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">Méthode</span><SomaneSelect className="h-9 w-full border border-gray-300 bg-white px-2" value={methodFilter} onChange={(event) => { setMethodFilter(event.target.value); setPage(1); }}><option value="all">Toutes les méthodes</option>{METHODS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</SomaneSelect></label>
     </div>
   ), [activeFilter, methodFilter]);
 

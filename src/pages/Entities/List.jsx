@@ -9,6 +9,7 @@ import { getConfiguredModelView } from '../../services/metadataViews';
 import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
 import UnifiedIndexPage from '../../components/UnifiedIndexPage';
 import { getEntityName, getVilleName, parseResponse } from './EntityShared';
+import SomaneSelect from '../../components/SomaneSelect';
 
 const FALLBACK_LIST_FIELDS = [
   { name: 'raison_sociale', label: 'Raison sociale', type: 'char' },
@@ -108,6 +109,7 @@ export default function EntitiesList() {
     ...listFields.map((field) => ({
       id: field.name,
       label: field.label,
+      className: field.name === 'raison_sociale' ? 'somane-list-table__cell--entity-logo' : undefined,
       value: (entity) => getEntityFieldValue(entity, field.name),
       render: (value, entity) => field.name === 'raison_sociale' ? (
         <div className="flex min-w-0 items-center gap-2">
@@ -149,6 +151,5 @@ export default function EntitiesList() {
       pageSizeOptions={[15, 25, 50, 100]}
       defaultVisibleColumnIds={columns.map((column) => column.id)}
       showHistoryNavigation={false}
-    />
-  );
+    />  );
 }

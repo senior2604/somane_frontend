@@ -12,6 +12,7 @@ import {
   FiChevronRight
 } from 'react-icons/fi';
 import { apiClient } from '../../../../services/apiClient';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 export default function BonsCommandeList() {
   const navigate = useNavigate();
@@ -165,12 +166,12 @@ export default function BonsCommandeList() {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
             />
           </div>
-          <select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="border border-gray-300 rounded-lg px-3 py-2">
+          <SomaneSelect value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="border border-gray-300 rounded-lg px-3 py-2">
             <option value={5}>5 par page</option>
             <option value={10}>10 par page</option>
             <option value={25}>25 par page</option>
             <option value={50}>50 par page</option>
-          </select>
+          </SomaneSelect>
         </div>
       </div>
 

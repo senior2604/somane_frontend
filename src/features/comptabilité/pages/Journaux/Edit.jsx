@@ -24,40 +24,14 @@ import {
 } from "react-icons/fi";
 import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 // ==========================================
 // COMPOSANT TOOLTIP
 // ==========================================
-const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-  
-  return (
-    <div className="relative inline-block">
-      <div
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-      >
-        {children}
-      </div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-            'right-full top-1/2 -translate-y-1/2 -mr-1'
-          }`} />
-        </div>
-      )}
-    </div>
-  );
-};
+const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 // ==========================================
 // COMPOSANT AUTOCOMPLETE
@@ -1211,7 +1185,7 @@ export default function JournauxEdit() {
                         <div className="flex items-center" style={{ height: '26px' }}>
                           <RequiredLabel required={false}>Source des relevés</RequiredLabel>
                           <div className="flex-1 ml-2 relative">
-                            <select
+                            <SomaneSelect
                               value={formData.bank_statements_source || 'manual'}
                               onChange={(e) => handleChange('bank_statements_source', e.target.value)}
                               className="w-full px-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none"
@@ -1220,7 +1194,7 @@ export default function JournauxEdit() {
                               <option value="manual">Saisie manuelle</option>
                               <option value="file">Fichier importé</option>
                               <option value="online">Connexion en ligne</option>
-                            </select>
+                            </SomaneSelect>
                           </div>
                         </div>
                       </div>
@@ -1415,7 +1389,7 @@ export default function JournauxEdit() {
                   <RequiredLabel required={false}>Mode de paiement entrant</RequiredLabel>
                   <div className="flex-1 ml-2 relative">
                     <FiCreditCard className="absolute left-2 top-1.5 text-gray-400" size={12} />
-                    <select
+                    <SomaneSelect
                       value={formData.payment_method_in[0] || ''}
                       onChange={(e) => handleChange('payment_method_in', e.target.value ? [e.target.value] : [])}
                       className="w-full pl-7 pr-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none"
@@ -1425,7 +1399,7 @@ export default function JournauxEdit() {
                       {paymentMethods.map(method => (
                         <option key={method.id} value={method.id}>{method.name}</option>
                       ))}
-                    </select>
+                    </SomaneSelect>
                   </div>
                 </div>
                 
@@ -1433,7 +1407,7 @@ export default function JournauxEdit() {
                   <RequiredLabel required={false}>Mode de paiement sortant</RequiredLabel>
                   <div className="flex-1 ml-2 relative">
                     <FiDollarSign className="absolute left-2 top-1.5 text-gray-400" size={12} />
-                    <select
+                    <SomaneSelect
                       value={formData.payment_method_out[0] || ''}
                       onChange={(e) => handleChange('payment_method_out', e.target.value ? [e.target.value] : [])}
                       className="w-full pl-7 pr-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none"
@@ -1443,7 +1417,7 @@ export default function JournauxEdit() {
                       {paymentMethods.map(method => (
                         <option key={method.id} value={method.id}>{method.name}</option>
                       ))}
-                    </select>
+                    </SomaneSelect>
                   </div>
                 </div>
               </div>
@@ -1601,8 +1575,8 @@ export default function JournauxEdit() {
       </div>
 
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">
               Voulez-vous enregistrer les modifications avant de quitter ?

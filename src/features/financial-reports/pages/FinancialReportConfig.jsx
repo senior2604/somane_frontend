@@ -12,7 +12,8 @@ import {
   FiArrowLeft, FiInfo,
 } from 'react-icons/fi';
 import { apiClient } from '../../../services/apiClient';
-import LineDetailEditor from './Linedetaileditor'; // ← ajuste le chemin si besoin
+import LineDetailEditor from './Linedetaileditor';
+import SomaneSelect from '../../../components/SomaneSelect'; // ← ajuste le chemin si besoin
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 
@@ -208,7 +209,7 @@ function ExpressionRow({ expr, index, isFirst, lineId, onUpdate, onDelete }) {
           : "Opérateur de combinaison : appliqué au total accumulé"} 
         placement="top"
       >
-        <select
+        <SomaneSelect
           value={expr.operator}
           onChange={e => upd('operator', e.target.value)}
           style={{ 
@@ -227,12 +228,12 @@ function ExpressionRow({ expr, index, isFirst, lineId, onUpdate, onDelete }) {
           {OPERATOR_OPTIONS.map(o => (
             <option key={o.value} value={o.value}>{o.sym}</option>
           ))}
-        </select>
+        </SomaneSelect>
       </Tip>
 
       {/* Type d'expression */}
       <Tip text={`${typeOpt.label} — ${typeOpt.hint}`}>
-        <select
+        <SomaneSelect
           value={expr.expression_type}
           onChange={e => upd('expression_type', e.target.value)}
           style={{ ...styles.sel, width: 32, padding: '0 2px', background: '#f8fafc' }}
@@ -240,7 +241,7 @@ function ExpressionRow({ expr, index, isFirst, lineId, onUpdate, onDelete }) {
           {EXP_TYPE_OPTIONS.map(o => (
             <option key={o.value} value={o.value}>{o.label.slice(0, 3)}</option>
           ))}
-        </select>
+        </SomaneSelect>
       </Tip>
 
       {/* Formule / préfixes */}
@@ -262,7 +263,7 @@ function ExpressionRow({ expr, index, isFirst, lineId, onUpdate, onDelete }) {
     || COLUMN_TARGET_OPTIONS[0];
   return (
     <Tip text={ctOpt.hint}>
-      <select
+      <SomaneSelect
         value={expr.column_target || 'net'}
         onChange={e => upd('column_target', e.target.value)}
         style={{
@@ -282,7 +283,7 @@ function ExpressionRow({ expr, index, isFirst, lineId, onUpdate, onDelete }) {
             {o.badge} — {o.label}
           </option>
         ))}
-      </select>
+      </SomaneSelect>
     </Tip>
   );
 })()}
@@ -290,7 +291,7 @@ function ExpressionRow({ expr, index, isFirst, lineId, onUpdate, onDelete }) {
       {/* Colonne de balance (date_scope) */}
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
         <ScopeBadge value={expr.date_scope} size="xs" />
-        <select
+        <SomaneSelect
           value={expr.date_scope}
           onChange={e => upd('date_scope', e.target.value)}
           style={{ ...styles.sel, flex: 1, fontSize: 10, padding: '2px 3px' }}
@@ -298,7 +299,7 @@ function ExpressionRow({ expr, index, isFirst, lineId, onUpdate, onDelete }) {
           {DATE_SCOPE_OPTIONS.map(o => (
             <option key={o.value} value={o.value}>{o.col} — {o.label}</option>
           ))}
-        </select>
+        </SomaneSelect>
       </div>
 
           

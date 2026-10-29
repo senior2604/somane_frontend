@@ -16,6 +16,8 @@ import {
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
+import ColumnVisibilityMenu from '../../../../components/ColumnVisibilityMenu';
+import StatusTrack from '../../../../components/StatusTrack';
 import axiosInstance from '../../../../config/axiosInstance';
 import {
   SearchSelect,
@@ -703,13 +705,11 @@ function ActionsMenu({ state, disabled, canDuplicate, canResetToDraft, onAction,
 }
 
 const StateProcess = ({ state }) => (
-  <div className="flex items-center justify-end gap-2">
-    {Object.entries(LOAN_STATES).filter(([value]) => value !== 'cancelled').map(([value, label]) => (
-      <div key={value} className={`flex h-8 items-center border px-3 text-xs font-medium ${state === value ? (value === 'in_progress' ? 'border-green-300 bg-green-100 text-green-700' : value === 'closed' ? 'border-blue-300 bg-blue-100 text-blue-700' : value === 'cancelled' ? 'border-red-300 bg-red-100 text-red-700' : 'border-amber-300 bg-amber-100 text-amber-700') : 'border-gray-300 bg-gray-100 text-gray-500'}`}>
-        {label}
-      </div>
-    ))}
-  </div>
+  <StatusTrack
+    steps={Object.entries(LOAN_STATES).filter(([value]) => value !== 'cancelled').map(([id, label]) => ({ id, label }))}
+    currentState={state}
+    label="États de l’emprunt"
+  />
 );
 
 export default function LoanForm({ mode = 'create' }) {
@@ -1889,10 +1889,10 @@ export default function LoanForm({ mode = 'create' }) {
   const process = (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
       <div className="flex items-center gap-2">
-        {editable && lines.length > 0 && <button type="button" onClick={resetSchedule} disabled={saving} className="h-8 border border-gray-300 px-3 text-xs hover:bg-gray-50 disabled:opacity-50">Réinitialiser</button>}
-        {isShowMode && formData.state === 'draft' && <button type="button" onClick={() => requestStateAction('in_progress')} disabled={saving || hasChanges} className="h-8 bg-purple-600 px-3 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50">Confirmer</button>}
-        {isShowMode && formData.state === 'in_progress' && <button type="button" onClick={() => requestStateAction('closed')} disabled={saving} className="h-8 border border-purple-600 px-3 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50">Clôturer</button>}
-        {isShowMode && formData.state === 'cancelled' && <button type="button" onClick={() => requestStateAction('draft')} disabled={saving || hasGeneratedAccountingEntries} className="h-8 border border-gray-300 px-3 text-xs hover:bg-gray-50 disabled:opacity-50">Remettre en brouillon</button>}
+        {editable && lines.length > 0 && <button type="button" onClick={resetSchedule} disabled={saving} className="somane-form-action-button">Réinitialiser</button>}
+        {isShowMode && formData.state === 'draft' && <button type="button" onClick={() => requestStateAction('in_progress')} disabled={saving || hasChanges} className="somane-form-action-button">Confirmer</button>}
+        {isShowMode && formData.state === 'in_progress' && <button type="button" onClick={() => requestStateAction('closed')} disabled={saving} className="somane-form-action-button">Clôturer</button>}
+        {isShowMode && formData.state === 'cancelled' && <button type="button" onClick={() => requestStateAction('draft')} disabled={saving || hasGeneratedAccountingEntries} className="somane-form-action-button">Remettre en brouillon</button>}
       </div>
       <StateProcess state={formData.state || 'draft'} />
     </div>
@@ -1971,7 +1971,7 @@ export default function LoanForm({ mode = 'create' }) {
   ];
 
   const validationDialog = validationErrors.length > 0 && (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/35 p-4" role="presentation">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/35 p-4 somane-overlay-backdrop" role="presentation">
       <div role="dialog" aria-modal="true" aria-labelledby="loan-validation-title" className="w-full max-w-lg border border-gray-300 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <div>
@@ -1994,7 +1994,7 @@ export default function LoanForm({ mode = 'create' }) {
   );
 
   const actionDialog = pendingAction && (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/35 p-4" role="presentation">
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/35 p-4 somane-overlay-backdrop" role="presentation">
       <div role="dialog" aria-modal="true" aria-labelledby="loan-action-title" className="w-full max-w-lg border border-gray-300 bg-white shadow-2xl">
         <div className="flex items-start gap-3 border-b border-gray-200 px-5 py-4">
           <FiAlertCircle className={pendingAction.danger ? 'mt-0.5 text-red-600' : 'mt-0.5 text-purple-600'} size={18} />
@@ -2214,8 +2214,8 @@ export default function LoanForm({ mode = 'create' }) {
 
           {activeTab === 'schedule' && (
             <div className="px-4 py-3">
-              <div className="loan-lines-scroll mb-3 max-h-[52vh] overflow-auto">
-                <table className="table-fixed border-collapse text-xs" style={{ minWidth: `${scheduleTableWidth}px` }}>
+              <div className="somane-form-table-scroll loan-lines-scroll mb-3 max-h-[52vh] overflow-auto">
+                <table className="somane-form-table table-fixed" style={{ minWidth: `${scheduleTableWidth}px` }}>
                   <colgroup>
                     {visibleScheduleColumns.map((column) => <col key={column.key} style={scheduleColumnStyle(column)} />)}
                   </colgroup>
@@ -2227,16 +2227,12 @@ export default function LoanForm({ mode = 'create' }) {
                         className="relative border border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700"
                       >
                         {column.key === 'actions' ? (
-                          <button
-                            ref={scheduleColumnsButtonRef}
-                            type="button"
-                            onClick={toggleScheduleColumnsMenu}
-                            className="w-full text-left text-sm font-bold tracking-widest transition-colors hover:text-purple-600"
-                            aria-label="Afficher ou masquer les colonnes"
-                            title="Afficher ou masquer les colonnes"
-                          >
-                            ...
-                          </button>
+                          <ColumnVisibilityMenu
+                            columns={SCHEDULE_COLUMNS.filter((item) => !item.required)}
+                            isVisible={(key) => scheduleVisibleColumns[key] !== false}
+                            onToggle={toggleScheduleColumn}
+                            allowEmpty
+                          />
                         ) : column.label}
                         <span role="separator" aria-label={`Redimensionner ${column.label || 'la colonne'}`} onMouseDown={(event) => startScheduleColumnResize(event, column.key)} className="absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize select-none hover:bg-purple-400" />
                       </th>
@@ -2261,34 +2257,14 @@ export default function LoanForm({ mode = 'create' }) {
                   </tfoot>
                 </table>
               </div>
-              {showScheduleColumnsMenu && (
-                <div
-                  ref={scheduleColumnsPopupRef}
-                  className="w-56 border border-gray-300 bg-white p-2 text-xs font-normal text-gray-700 shadow-xl"
-                  style={scheduleColumnsMenuStyle}
-                >
-                  <div className="border-b border-gray-100 px-2 py-1.5 font-semibold text-gray-900">Colonnes à afficher</div>
-                  {SCHEDULE_COLUMNS.filter((item) => !item.required).map((item) => (
-                    <label key={item.key} className="flex cursor-pointer items-center gap-2 px-2 py-1.5 hover:bg-purple-50">
-                      <input
-                        type="checkbox"
-                        checked={scheduleVisibleColumns[item.key] !== false}
-                        onChange={() => toggleScheduleColumn(item.key)}
-                        className="h-3.5 w-3.5 accent-purple-600"
-                      />
-                      <span>{item.label}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
               {editable && <button type="button" onClick={() => { scheduleManuallyEditedRef.current = true; setLines((current) => [...current, emptyLine(current.length + 1)]); setHasChanges(true); }} className="flex h-8 items-center gap-1 bg-purple-600 px-3 text-xs text-white transition-all hover:bg-purple-700"><FiPlus size={13} /> Ajouter une échéance</button>}
             </div>
           )}
 
           {activeTab === 'loan_settings' && (
             <div className="px-4 py-2.5">
-              <div className="loan-lines-scroll max-h-[46vh] overflow-auto border border-gray-300">
-                <table className="w-full min-w-[480px] table-fixed border-collapse text-xs">
+              <div className="somane-form-table-scroll loan-lines-scroll max-h-[46vh] overflow-auto border border-gray-300">
+                <table className="somane-form-table w-full min-w-[480px] table-fixed">
                   <colgroup>
                     <col style={{ width: 'calc((100% - 36px) / 2)' }} />
                     <col style={{ width: 'calc((100% - 36px) / 2)' }} />

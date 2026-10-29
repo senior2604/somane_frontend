@@ -38,6 +38,7 @@ import {
   FiInfo
 } from "react-icons/fi";
 import { TbBuildingBank } from "react-icons/tb";
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function PartnerBanksPage() {
   const { configuration } = useUi();
@@ -396,7 +397,7 @@ export default function PartnerBanksPage() {
               <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
                 <FiUpload size={14} />
               </button>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
@@ -408,7 +409,7 @@ export default function PartnerBanksPage() {
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
                 <option value={50}>50 lignes</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -640,8 +641,8 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
   const entite = partnerBank.entite_details || partnerBank.entite;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
@@ -954,8 +955,8 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, conf
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal avec gradient */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
@@ -1001,45 +1002,120 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, conf
               <h3 className="text-sm font-semibold text-gray-900">{group.title}</h3>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {group.fields.map((field) => {
-                const name = field.name;
-                const label = field.label || field.field_description || name;
-                const required = Boolean(field.required);
-                const disabled = Boolean(field.readonly);
-                const controlClass = "w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm disabled:bg-gray-100 disabled:text-gray-500";
-                const renderSelect = (options, getLabel) => <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    {label}{required && <span className="ml-1 text-red-500">*</span>}
-                  </label>
-                  <select required={required} disabled={disabled} value={formData[name] ?? ''} onChange={(event) => handleChange(name, event.target.value)} className={controlClass}>
-                    <option value="">Sélectionnez {label.toLowerCase()}</option>
-                    {options.map((option) => <option key={option.id} value={option.id}>{getLabel(option)}</option>)}
-                  </select>
-                  {field.help && <p className="mt-1 text-xs text-gray-500">{field.help}</p>}
-                </div>;
 
-                if (name === 'partenaire') return <div key={name}>{renderSelect(partenaireArray, (partner) => `${partner.nom} (${partner.type_partenaire})`)}</div>;
-                if (name === 'banque') return <div key={name}>{renderSelect(banquesArray, (bank) => `${bank.nom}${bank.code_bic ? ` (${bank.code_bic})` : ''}`)}</div>;
-                if (name === 'entite') return <div key={name} className="lg:col-span-2">{renderSelect(entitesArray, (entity) => entity.raison_sociale)}</div>;
+{group.fields.map((field) => {
+  const name = field.name;
+  const label = field.label || field.field_description || name;
+  const required = Boolean(field.required);
+  const disabled = Boolean(field.readonly);
 
-                return <div key={name} className={name === 'numero_compte' ? 'lg:col-span-2' : ''}>
-                  <label className="block text-xs font-medium text-gray-700 mb-1" htmlFor={`partner-bank-${name}`}>
-                    {label}{required && <span className="ml-1 text-red-500">*</span>}
-                  </label>
-                  <div className="relative">
-                    {name === 'numero_compte' && <FiCreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />}
-                    <MetadataFieldInput
-                      field={field}
-                      value={formData[name] ?? ''}
-                      onChange={(event) => handleChange(name, event.target.value)}
-                      disabled={disabled}
-                      className={`${controlClass} ${name === 'numero_compte' ? 'pl-9 font-mono' : ''}`}
-                    />
-                  </div>
-                  {field.help && <p className="mt-1 text-xs text-gray-500">{field.help}</p>}
-                  {name === 'numero_compte' && <p className="mt-1 text-xs text-gray-500">IBAN ou numéro du compte bancaire.</p>}
-                </div>;
-              })}
+  const controlClass =
+    "w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm disabled:bg-gray-100 disabled:text-gray-500";
+
+  const renderSelect = (options, getLabel) => (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">
+        {label}
+        {required && <span className="ml-1 text-red-500">*</span>}
+      </label>
+
+      <select
+        required={required}
+        disabled={disabled}
+        value={formData[name] ?? ""}
+        onChange={(event) => handleChange(name, event.target.value)}
+        className={controlClass}
+      >
+        <option value="">Sélectionnez {label.toLowerCase()}</option>
+
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {getLabel(option)}
+          </option>
+        ))}
+      </select>
+
+      {field.help && (
+        <p className="mt-1 text-xs text-gray-500">{field.help}</p>
+      )}
+    </div>
+  );
+
+  if (name === "partenaire") {
+    return (
+      <div key={name}>
+        {renderSelect(
+          partenaireArray,
+          (partner) => `${partner.nom} (${partner.type_partenaire})`
+        )}
+      </div>
+    );
+  }
+
+  if (name === "banque") {
+    return (
+      <div key={name}>
+        {renderSelect(
+          banquesArray,
+          (bank) =>
+            `${bank.nom}${bank.code_bic ? ` (${bank.code_bic})` : ""}`
+        )}
+      </div>
+    );
+  }
+
+  if (name === "entite") {
+    return (
+      <div key={name} className="lg:col-span-2">
+        {renderSelect(entitesArray, (entity) => entity.raison_sociale)}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      key={name}
+      className={name === "numero_compte" ? "lg:col-span-2" : ""}
+    >
+      <label
+        className="block text-xs font-medium text-gray-700 mb-1"
+        htmlFor={`partner-bank-${name}`}
+      >
+        {label}
+        {required && <span className="ml-1 text-red-500">*</span>}
+      </label>
+
+      <div className="relative">
+        {name === "numero_compte" && (
+          <FiCreditCard
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            size={16}
+          />
+        )}
+
+        <MetadataFieldInput
+          field={field}
+          value={formData[name] ?? ""}
+          onChange={(event) => handleChange(name, event.target.value)}
+          disabled={disabled}
+          className={`${controlClass} ${
+            name === "numero_compte" ? "pl-9 font-mono" : ""
+          }`}
+        />
+      </div>
+
+      {field.help && (
+        <p className="mt-1 text-xs text-gray-500">{field.help}</p>
+      )}
+
+      {name === "numero_compte" && (
+        <p className="mt-1 text-xs text-gray-500">
+          IBAN ou numéro du compte bancaire.
+        </p>
+      )}
+    </div>
+  );
+})}
             </div>
           </section>)}
 

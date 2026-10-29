@@ -15,6 +15,7 @@ import {
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
 import { useEntity } from '../../../../context/EntityContext';
 import { apiClient } from '../../../../services/apiClient';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const MESSAGE_DURATION = 15000;
 const RECORD_CACHE_PREFIX = 'comptabilite:position-fiscale:record:';
@@ -627,7 +628,7 @@ export default function FiscalPositionForm({ mode = 'create', positionId: explic
             <div className="grid grid-cols-1 gap-x-8 gap-y-1 lg:grid-cols-2">
               <Field label="Statut"><div className="flex items-center gap-2"><Toggle checked={form.active} onChange={(value) => updateForm('active', value)} label="Statut" /><span className="text-xs text-gray-600">{form.active ? 'Actif' : 'Inactif'}</span></div></Field>
               <Field label="TVA étrangère"><input value={form.foreign_vat} onChange={(event) => updateForm('foreign_vat', event.target.value)} className={inputClass} /></Field>
-              <Field label="Mode d’en-tête TVA"><select value={form.foreign_vat_header_mode} onChange={(event) => updateForm('foreign_vat_header_mode', event.target.value)} className={selectClass}><option value="">Aucun</option><option value="replace">Remplacer</option><option value="append">Ajouter</option></select></Field>
+              <Field label="Mode d’en-tête TVA"><SomaneSelect value={form.foreign_vat_header_mode} onChange={(event) => updateForm('foreign_vat_header_mode', event.target.value)} className={selectClass}><option value="">Aucun</option><option value="replace">Remplacer</option><option value="append">Ajouter</option></SomaneSelect></Field>
               <Field label="Code postal début"><input value={form.zip_from} onChange={(event) => updateForm('zip_from', event.target.value)} className={inputClass} /></Field>
               <Field label="Code postal fin"><input value={form.zip_to} onChange={(event) => updateForm('zip_to', event.target.value)} className={inputClass} /></Field>
             </div>

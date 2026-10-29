@@ -8,6 +8,7 @@ import { useUi } from '../../../../context/UiContext';
 import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 import useGroupStore from '../../../../stores/comptabilite/groupStore';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const FRAMEWORK_SESSION_KEY = 'group_list_selected_framework';
 const MEMORY_KEY = 'comptabilite:groups:index:v2';
@@ -262,9 +263,9 @@ function GroupList() {
   const renderFilters = useCallback(() => (
     <div className="p-4 text-xs">
       <label className="mb-1 block font-semibold text-gray-700">Référentiel comptable</label>
-      <select value={frameworkId} onChange={(event) => setFrameworkId(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">
+      <SomaneSelect value={frameworkId} onChange={(event) => setFrameworkId(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">
         {frameworks.map((framework) => <option key={framework.id} value={framework.id}>{frameworkLabel(framework)}</option>)}
-      </select>
+      </SomaneSelect>
       <div className="mt-3 flex gap-2 border-t border-gray-200 pt-3">
         <button type="button" onClick={() => { const next = new Set(all.filter((group) => group._treeChildren?.length).map((group) => String(group.id))); setExpandedIds(next); }} className="rounded border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-purple-50">Tout ouvrir</button>
         <button type="button" onClick={() => setExpandedIds(new Set())} className="rounded border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-purple-50">Tout fermer</button>
@@ -316,6 +317,7 @@ function GroupList() {
       onSearchChange={(value) => { setSearch(value); setPage(1); }}
       searchPlaceholder="Rechercher une classe..."
       filterChips={filterChips}
+      onRemoveFilterChip={() => setFrameworkId('')}
       renderFilters={renderFilters}
       primaryAction={{ label: 'Nouvelle classe', icon: <FiPlus size={14} />, onClick: () => navigate('/comptabilite/groups/new', { state: { frameworkId } }) }}
       selectedRowKeys={selectedIds}

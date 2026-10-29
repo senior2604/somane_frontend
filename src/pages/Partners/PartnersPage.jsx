@@ -12,6 +12,7 @@ import {
   FiSave, FiMapPin, FiGlobe, FiCreditCard, FiUser,
   FiPackage, FiHome, FiChevronDown, FiChevronUp, FiMap
 } from "react-icons/fi";
+import SomaneSelect from '../../components/SomaneSelect';
 
 const parseResponse = (response) => {
   if (!response) return [];
@@ -456,12 +457,10 @@ function FieldHelp({ field }) {
     <details className="group relative inline-flex align-middle ml-1">
       <summary
         aria-label={`Aide pour ${field}`}
+        data-tooltip={text}
         className="list-none cursor-pointer select-none inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-400 text-[10px] leading-none text-gray-500 hover:border-violet-500 hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-400"
       >?
       </summary>
-      <span role="tooltip" className="absolute z-[70] bottom-full left-1/2 mb-2 hidden w-64 -translate-x-1/2 rounded-md bg-gray-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-lg group-open:block">
-        {text}
-      </span>
     </details>
   );
 }
@@ -571,8 +570,8 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl flex flex-col" style={{ maxHeight: '90vh' }}>
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl flex flex-col somane-modal-surface" style={{ maxHeight: '90vh' }}>
 
         {/* Header */}
         <div className="bg-violet-600 text-white rounded-t-lg p-4 flex-shrink-0">
@@ -674,7 +673,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Type <FieldHelp field="type_partenaire" /> <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <SomaneSelect
                     value={formData.type_partenaire}
                     onChange={(e) => {
                       setFormData(prev => ({ ...prev, type_partenaire: e.target.value }));
@@ -684,14 +683,14 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                     disabled={!activeEntity || loading}
                   >
                     {PARTNER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
+                  </SomaneSelect>
                   {renderErr('type_partenaire')}
                 </div>
 
                 {/* Type personne */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Type de personne <FieldHelp field="is_company" /></label>
-                  <select
+                  <SomaneSelect
                     value={formData.is_company ? 'company' : 'person'}
                     onChange={(e) => setFormData(prev => ({ ...prev, is_company: e.target.value === 'company' }))}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-violet-500"
@@ -699,13 +698,13 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                   >
                     <option value="company">Entreprise / Organisation</option>
                     <option value="person">Particulier / Personne physique</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
 
                 {/* Statut */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Statut <FieldHelp field="statut" /></label>
-                  <select
+                  <SomaneSelect
                     value={formData.statut ? 'actif' : 'inactif'}
                     onChange={(e) => setFormData(prev => ({ ...prev, statut: e.target.value === 'actif' }))}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-violet-500"
@@ -713,7 +712,7 @@ function CreatePartnerModal({ open, onClose, onSuccess }) {
                   >
                     <option value="actif">Actif</option>
                     <option value="inactif">Inactif</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
 
               </div>
@@ -1021,8 +1020,8 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
   if (!open || !partner) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl flex flex-col" style={{ maxHeight: '90vh' }}>
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl flex flex-col somane-modal-surface" style={{ maxHeight: '90vh' }}>
 
         <div className="bg-violet-600 text-white rounded-t-lg p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -1101,7 +1100,7 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Type <FieldHelp field="type_partenaire" /> <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <SomaneSelect
                     value={formData.type_partenaire}
                     onChange={(e) => {
                       setFormData(prev => ({ ...prev, type_partenaire: e.target.value }));
@@ -1111,13 +1110,13 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
                     disabled={loading}
                   >
                     {PARTNER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
+                  </SomaneSelect>
                   {renderErr('type_partenaire')}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Statut <FieldHelp field="statut" /></label>
-                  <select
+                  <SomaneSelect
                     value={formData.statut ? 'actif' : 'inactif'}
                     onChange={(e) => setFormData(prev => ({ ...prev, statut: e.target.value === 'actif' }))}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-violet-500"
@@ -1125,7 +1124,7 @@ function EditPartnerModal({ open, onClose, partner, onSuccess }) {
                   >
                     <option value="actif">Actif</option>
                     <option value="inactif">Inactif</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
 
               </div>
@@ -1233,8 +1232,8 @@ function PartnerDetailModal({ partner, onClose }) {
   const linkedUser = partner.utilisateur_details || null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-3xl flex flex-col" style={{ maxHeight: '90vh' }}>
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-3xl flex flex-col somane-modal-surface" style={{ maxHeight: '90vh' }}>
         <div className="bg-violet-600 text-white rounded-t-lg p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1508,20 +1507,20 @@ const isProfileComplete = (p) =>
             </div>
           </div>
           <div className="flex gap-2">
-            <select
+            <SomaneSelect
               value={filterType}
               onChange={(e) => { setFilterType(e.target.value); setCurrentPage(1); }}
               className="border border-gray-300 rounded-lg px-3 py-3 focus:ring-2 focus:ring-violet-500"
             >
               {partnerTypeOptions.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <select
+            </SomaneSelect>
+            <SomaneSelect
               value={filterStatus}
               onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
               className="border border-gray-300 rounded-lg px-3 py-3 focus:ring-2 focus:ring-violet-500"
             >
               {statusOptions.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
+            </SomaneSelect>
           </div>
         </div>
       </div>

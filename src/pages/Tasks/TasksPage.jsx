@@ -30,6 +30,7 @@ import {
   FiChevronUp
 } from "react-icons/fi";
 import { TbClock } from "react-icons/tb";
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function TasksPage() {
   const [taches, setTaches] = useState([]);
@@ -606,7 +607,7 @@ export default function TasksPage() {
               <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
                 <FiUpload size={14} />
               </button>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
@@ -618,7 +619,7 @@ export default function TasksPage() {
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
                 <option value={50}>50 lignes</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -1098,8 +1099,8 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
@@ -1211,7 +1212,7 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Fréquence <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SomaneSelect
                   required
                   value={formData.frequence}
                   onChange={(e) => handleChange('frequence', e.target.value)}
@@ -1221,7 +1222,7 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
                   <option value="daily">Quotidienne</option>
                   <option value="weekly">Hebdomadaire</option>
                   <option value="monthly">Mensuelle</option>
-                </select>
+                </SomaneSelect>
               </div>
               
               {/* Heure d'exécution */}
@@ -1256,7 +1257,7 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Portée d'exécution
               </label>
-              <select
+              <SomaneSelect
                 value={formData.entite}
                 onChange={(e) => handleChange('entite', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent text-sm"
@@ -1267,7 +1268,7 @@ function TacheFormModal({ tache, entites, onClose, onSuccess }) {
                     Société: {entite.raison_sociale}
                   </option>
                 ))}
-              </select>
+              </SomaneSelect>
               <p className="text-xs text-gray-500 mt-1">
                 Sélectionnez une société spécifique ou laissez vide pour une tâche globale
               </p>
@@ -1380,8 +1381,8 @@ function LogsModal({ tache, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[80vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[80vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

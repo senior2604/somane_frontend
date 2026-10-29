@@ -207,7 +207,7 @@ export default function AccountCompanyConfigWizard({ onClose }) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 somane-overlay-backdrop">
       {/* 
         max-w-xl (576px) au lieu de max-w-2xl (672px)
         On garde une largeur raisonnable sans que la longueur déborde 

@@ -19,6 +19,7 @@ import {
   FiList,
   FiXCircle
 } from "react-icons/fi";
+import SomaneSelect from '../../../components/SomaneSelect';
 
 export default function LignesDemandeAchatPage() {
   const { configuration } = useUi();
@@ -190,7 +191,7 @@ export default function LignesDemandeAchatPage() {
           <div className="flex items-center gap-4">
             <div>
               <label className="text-sm text-gray-600 mr-2">Demande d'achat:</label>
-              <select
+              <SomaneSelect
                 value={selectedDemande}
                 onChange={(e) => setSelectedDemande(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2"
@@ -199,10 +200,10 @@ export default function LignesDemandeAchatPage() {
                 {demandes.map(demande => (
                   <option key={demande.id} value={demande.id}>{demande.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
             
-            <select
+            <SomaneSelect
               value={itemsPerPage}
               onChange={(e) => setItemsPerPage(Number(e.target.value))}
               className="border border-gray-300 rounded-lg px-3 py-2"
@@ -211,7 +212,7 @@ export default function LignesDemandeAchatPage() {
               <option value={10}>10 par page</option>
               <option value={25}>25 par page</option>
               <option value={50}>50 par page</option>
-            </select>
+            </SomaneSelect>
           </div>
         </div>
       </div>
@@ -340,8 +341,8 @@ function LigneDemandeAchatFormModal({ item, demandes, produits, onSubmit, onClos
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
         <div className="flex justify-between items-center bg-violet-600 text-white p-4 rounded-t-lg">
           <h3 className="text-lg font-semibold">
             {item ? 'Modifier' : 'Nouvelle'} Ligne de Demande d'Achat
@@ -356,7 +357,7 @@ function LigneDemandeAchatFormModal({ item, demandes, produits, onSubmit, onClos
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Demande d'achat *
             </label>
-            <select
+            <SomaneSelect
               value={formData.requisition_id}
               onChange={(e) => setFormData({ ...formData, requisition_id: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -366,14 +367,14 @@ function LigneDemandeAchatFormModal({ item, demandes, produits, onSubmit, onClos
               {demandes.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Article demandé *
             </label>
-            <select
+            <SomaneSelect
               value={formData.product_id}
               onChange={(e) => setFormData({ ...formData, product_id: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -383,7 +384,7 @@ function LigneDemandeAchatFormModal({ item, demandes, produits, onSubmit, onClos
               {produits.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
 
           <div>
@@ -446,8 +447,8 @@ function LigneDemandeAchatDetailModal({ item, demandes, produits, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold flex items-center">
             <FiEye className="mr-2 text-violet-600" />

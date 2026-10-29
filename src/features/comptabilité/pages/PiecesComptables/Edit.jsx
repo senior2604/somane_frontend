@@ -25,36 +25,9 @@ import { piecesService } from "../../services";
 // ==========================================
 // COMPOSANT TOOLTIP
 // ==========================================
-const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-  
-  return (
-    <div className="relative inline-block">
-      <div
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-      >
-        {children}
-      </div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-            'right-full top-1/2 -translate-y-1/2 -mr-1'
-          }`} />
-        </div>
-      )}
-    </div>
-  );
-};
+const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 // ==========================================
 // COMPOSANT AUTOCOMPLETE RÉUTILISABLE
@@ -1153,17 +1126,30 @@ export default function Edit() {
         </div>
 
         {/* Onglets */}
-        <div className="border-b border-gray-300">
-          <div className="px-4 flex">
+        <div className="px-4">
+          <div className="somane-tabs" role="tablist" aria-label="Sections de la pièce comptable">
             {['ecritures', 'notes', 'pieces-jointes'].map(tab => (
               <button 
                 key={tab} 
+                id={`piece-edit-tab-${tab}`}
+                type="button"
+                role="tab"
+                data-tab={tab}
+                aria-selected={activeTab === tab}
+                aria-controls="piece-edit-tabpanel"
+                tabIndex={activeTab === tab ? 0 : -1}
+                onKeyDown={(event) => {
+                  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                  event.preventDefault();
+                  const tabs = Array.from(event.currentTarget.parentElement.querySelectorAll('[role="tab"]'));
+                  const currentIndex = tabs.indexOf(event.currentTarget);
+                  const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (currentIndex + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
+                  const nextTab = tabs[nextIndex];
+                  nextTab.focus();
+                  setActiveTab(nextTab.dataset.tab);
+                }}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-xs font-medium border-b-2 transition-all duration-200 ${
-                  activeTab === tab 
-                    ? 'border-purple-600 text-purple-600 hover:text-purple-800' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                className="somane-tab"
               >
                 {tab === 'ecritures' ? 'Écritures comptables' : 
                  tab === 'notes' ? 'Notes' : 
@@ -1174,7 +1160,7 @@ export default function Edit() {
         </div>
 
         {/* Contenu onglets */}
-        <div className="p-4">
+        <div id="piece-edit-tabpanel" className="somane-tabpanel p-4" role="tabpanel" aria-labelledby={`piece-edit-tab-${activeTab}`} tabIndex={0}>
           {activeTab === 'ecritures' ? (
             <>
               <div className="border border-gray-300 mb-3 overflow-x-auto">
@@ -1425,10 +1411,10 @@ export default function Edit() {
               </div>
 
               {/* Zone de notes */}
-              <textarea 
+              <textarea
                 value={formData.notes}
                 onChange={(e) => handleChange('notes', e.target.value)}
-                className="w-full h-48 px-3 py-2 border-0 text-xs focus:ring-2 focus:ring-blue-500"
+                className="somane-notes-field w-full h-48 px-3 py-2 border-0 text-xs focus:ring-2 focus:ring-blue-500"
                 placeholder="Ajouter des notes complémentaires..." 
               />
             </div>
@@ -1464,8 +1450,8 @@ export default function Edit() {
 
       {/* Dialogue confirmation */}
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">
               Voulez-vous enregistrer les modifications avant de quitter ?

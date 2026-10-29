@@ -1,0 +1,366 @@
+:root {
+  --somane-primary: #1E3A8A;
+  --somane-primary-rgb: 30 58 138;
+  --somane-primary-hover: #2563EB;
+  --somane-primary-hover-rgb: 37 99 235;
+  --somane-primary-light: #DBEAFE;
+  --somane-primary-light-rgb: 219 234 254;
+  --somane-primary-dark: #172554;
+  --somane-primary-dark-rgb: 23 37 84;
+  --somane-primary-foreground: #FFFFFF;
+  --somane-accent: #06B6D4;
+  --somane-accent-rgb: 6 182 212;
+  --somane-accent-hover: #0891B2;
+  --somane-accent-light: #CFFAFE;
+
+  --somane-success: #10B981;
+  --somane-success-rgb: 16 185 129;
+  --somane-success-light: #D1FAE5;
+  --somane-success-dark: #065F46;
+  --somane-warning: #F59E0B;
+  --somane-warning-rgb: 245 158 11;
+  --somane-warning-light: #FEF3C7;
+  --somane-warning-dark: #92400E;
+  --somane-danger: #EF4444;
+  --somane-danger-rgb: 239 68 68;
+  --somane-danger-light: #FEE2E2;
+  --somane-danger-dark: #991B1B;
+  --somane-info: #3B82F6;
+  --somane-info-rgb: 59 130 246;
+  --somane-info-light: #DBEAFE;
+  --somane-info-dark: #1E40AF;
+
+  --somane-bg: #F8FAFC;
+  --somane-bg-rgb: 248 250 252;
+  --somane-bg-elevated: #FFFFFF;
+  --somane-bg-subtle: #F1F5F9;
+  --somane-sidebar-bg: #0F172A;
+  --somane-header-bg: #FFFFFF;
+  --somane-form-header-bg: #F5F8FF;
+  --somane-form-header-border: #DCE5F5;
+  --somane-header-center-width: clamp(360px, 40vw, 640px);
+  --somane-overlay: rgb(15 23 42 / 50%);
+  --somane-overlay-soft: rgb(15 23 42 / 35%);
+  --somane-overlay-padding: clamp(12px, 2vw, 24px);
+  --somane-modal-width-sm: 440px;
+  --somane-modal-width-md: 640px;
+  --somane-modal-width-lg: 960px;
+  --somane-side-panel-width: min(420px, 90vw);
+  --somane-overlay-duration: 180ms;
+  --somane-timeline-line: var(--somane-border);
+  --somane-timeline-dot-size: 9px;
+  --somane-content-card-radius: var(--somane-radius);
+  --somane-content-card-padding: 16px;
+  --somane-content-card-shadow: var(--somane-shadow-sm);
+  --somane-comment-bg: var(--somane-bg-subtle);
+  --somane-kpi-radius: var(--somane-radius);
+  --somane-kpi-padding: 16px;
+  --somane-kpi-shadow: var(--somane-shadow-sm);
+
+  --somane-text: #1E293B;
+  --somane-text-rgb: 30 41 59;
+  --somane-text-secondary: #64748B;
+  --somane-text-muted: #94A3B8;
+  --somane-text-inverse: #FFFFFF;
+  --somane-text-on-sidebar: #CBD5E1;
+
+  --somane-border: #E2E8F0;
+  --somane-border-rgb: 226 232 240;
+  --somane-border-strong: #CBD5E1;
+  --somane-border-focus: #2563EB;
+
+  --somane-neutral-50-rgb: 248 250 252;
+  --somane-neutral-100-rgb: 241 245 249;
+  --somane-neutral-200-rgb: 226 232 240;
+  --somane-neutral-300-rgb: 203 213 225;
+  --somane-neutral-400-rgb: 148 163 184;
+  --somane-neutral-500-rgb: 100 116 139;
+  --somane-neutral-600-rgb: 71 85 105;
+  --somane-neutral-700-rgb: 51 65 85;
+  --somane-neutral-800-rgb: 30 41 59;
+  --somane-neutral-900-rgb: 15 23 42;
+  --somane-neutral-950-rgb: 2 6 23;
+
+  --somane-brand-50-rgb: 239 246 255;
+  --somane-brand-100-rgb: 219 234 254;
+  --somane-brand-200-rgb: 191 219 254;
+  --somane-brand-300-rgb: 147 197 253;
+  --somane-brand-400-rgb: 96 165 250;
+  --somane-brand-500-rgb: 37 99 235;
+  --somane-brand-600-rgb: 30 58 138;
+  --somane-brand-700-rgb: 37 99 235;
+  --somane-brand-800-rgb: 23 37 84;
+  --somane-brand-900-rgb: 15 23 42;
+
+  --somane-radius-sm: 6px;
+  --somane-radius: 8px;
+  --somane-radius-lg: 12px;
+  --somane-radius-xl: 16px;
+  --somane-radius-pill: 999px;
+
+  --somane-control-height-compact: 28px;
+  --somane-control-height: 36px;
+  --somane-control-height-lg: 42px;
+  --somane-list-search-max-width: clamp(320px, 25vw, 420px);
+  /* Canonical responsive thresholds; mirror these values in @media rules. */
+  --somane-breakpoint-mobile: 520px;
+  --somane-breakpoint-tablet: 760px;
+  --somane-breakpoint-desktop: 1024px;
+  --somane-breakpoint-wide: 1280px;
+  --somane-target-size-min: 44px;
+  --somane-focus-ring-width: 2px;
+  --somane-focus-ring-offset: 2px;
+  --somane-field-padding-x: 10px;
+  --somane-field-label-gap: 6px;
+  --somane-form-column-gap: 16px;
+  --somane-form-row-gap: 10px;
+  --somane-button-min-width: 88px;
+  --somane-button-gap: 8px;
+
+  --somane-shadow-xs: 0 1px 2px rgb(15 23 42 / 4%);
+  --somane-shadow-sm: 0 1px 3px rgb(15 23 42 / 6%);
+  --somane-shadow-md: 0 4px 12px rgb(15 23 42 / 8%);
+  --somane-shadow-lg: 0 10px 24px rgb(15 23 42 / 10%);
+  --somane-shadow-focus: 0 0 0 3px rgb(37 99 235 / 15%);
+  --somane-tooltip-bg: #0F172A;
+  --somane-tooltip-text: #FFFFFF;
+  --somane-tooltip-border: #334155;
+  --somane-tooltip-shadow: 0 5px 16px rgb(15 23 42 / 28%);
+  --somane-tooltip-max-width: 360px;
+
+  --somane-icon-size-xs: 12px;
+  --somane-icon-size-sm: 14px;
+  --somane-icon-size-md: 18px;
+  --somane-icon-size-lg: 24px;
+  --somane-icon-color: currentColor;
+  --somane-icon-primary: var(--somane-primary);
+  --somane-icon-secondary: var(--somane-text-secondary);
+  --somane-icon-muted: var(--somane-text-muted);
+  --somane-icon-success: var(--somane-success);
+  --somane-icon-warning: var(--somane-warning);
+  --somane-icon-danger: var(--somane-danger);
+  --somane-icon-info: var(--somane-info);
+  --somane-avatar-size-sm: 28px;
+  --somane-avatar-size-md: 36px;
+  --somane-avatar-size-lg: 48px;
+
+  --somane-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --somane-font-heading: var(--somane-font-sans);
+  --somane-font-data: var(--somane-font-sans);
+  --somane-font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  --somane-font-serif: Georgia, "Times New Roman", serif;
+  --somane-font-system: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --somane-root-font-size: 16px;
+  --somane-user-spacing-scale: 1;
+  --somane-density-scale: 1;
+  --somane-text-xs: 0.75rem;
+  --somane-text-sm: 0.8125rem;
+  --somane-text-base: 0.875rem;
+  --somane-text-md: 0.9375rem;
+  --somane-text-lg: 1.125rem;
+  --somane-text-xl: 1.375rem;
+  --somane-text-2xl: 1.75rem;
+  --somane-weight-regular: 400;
+  --somane-weight-medium: 500;
+  --somane-weight-semibold: 600;
+  --somane-weight-bold: 700;
+  --somane-leading-tight: 1.25;
+  --somane-leading-normal: 1.5;
+  --somane-leading-relaxed: 1.7;
+
+  --somane-space-1: calc(4px * var(--somane-user-spacing-scale) * var(--somane-density-scale));
+  --somane-space-2: calc(8px * var(--somane-user-spacing-scale) * var(--somane-density-scale));
+  --somane-space-3: calc(12px * var(--somane-user-spacing-scale) * var(--somane-density-scale));
+  --somane-space-4: calc(16px * var(--somane-user-spacing-scale) * var(--somane-density-scale));
+  --somane-space-5: calc(20px * var(--somane-user-spacing-scale) * var(--somane-density-scale));
+  --somane-space-6: calc(24px * var(--somane-user-spacing-scale) * var(--somane-density-scale));
+  --somane-space-8: calc(32px * var(--somane-user-spacing-scale) * var(--somane-density-scale));
+  --somane-space-10: calc(40px * var(--somane-user-spacing-scale) * var(--somane-density-scale));
+  --somane-space-12: calc(48px * var(--somane-user-spacing-scale) * var(--somane-density-scale));
+  --somane-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --somane-transition-fast: 150ms var(--somane-ease);
+  --somane-transition: 200ms var(--somane-ease);
+  --somane-transition-slow: 300ms var(--somane-ease);
+
+  --somane-sidebar-width: 240px;
+  --somane-sidebar-collapsed-width: 56px;
+  --somane-sidebar-item-height: 36px;
+  --somane-header-height: 64px;
+  --somane-page-header-height: 58px;
+  --somane-content-padding: 24px;
+  --somane-z-dropdown: 1000;
+  --somane-z-sticky: 1020;
+  --somane-z-modal: 1050;
+  --somane-z-toast: 1080;
+  --somane-z-tooltip: 1100;
+}
+
+html[data-font="system"] { --somane-font-sans: var(--somane-font-system); }
+html[data-font="arial"] { --somane-font-sans: Arial, Helvetica, sans-serif; }
+html[data-font="segoe"] { --somane-font-sans: "Segoe UI", Tahoma, sans-serif; }
+html[data-font="tahoma"] { --somane-font-sans: Tahoma, "Segoe UI", sans-serif; }
+html[data-font="verdana"] { --somane-font-sans: Verdana, Geneva, sans-serif; }
+html[data-font="trebuchet"] { --somane-font-sans: "Trebuchet MS", Arial, sans-serif; }
+html[data-font="calibri"] { --somane-font-sans: Calibri, "Segoe UI", sans-serif; }
+html[data-font="candara"] { --somane-font-sans: Candara, Calibri, sans-serif; }
+html[data-font="lucida-sans"] { --somane-font-sans: "Lucida Sans", "Lucida Grande", sans-serif; }
+html[data-font="georgia"] { --somane-font-sans: Georgia, "Times New Roman", serif; }
+html[data-font="cambria"] { --somane-font-sans: Cambria, Georgia, serif; }
+html[data-font="times"] { --somane-font-sans: "Times New Roman", Times, serif; }
+html[data-font="garamond"] { --somane-font-sans: Garamond, "Times New Roman", serif; }
+html[data-font="palatino"] { --somane-font-sans: "Palatino Linotype", Palatino, Georgia, serif; }
+html[data-font="consolas"] { --somane-font-sans: Consolas, "Courier New", monospace; }
+html[data-font="courier"] { --somane-font-sans: "Courier New", Courier, monospace; }
+html[data-font="mono"] { --somane-font-sans: Consolas, "Courier New", monospace; }
+
+html[data-heading-font="system"] { --somane-font-heading: var(--somane-font-system); }
+html[data-heading-font="arial"] { --somane-font-heading: Arial, Helvetica, sans-serif; }
+html[data-heading-font="segoe"] { --somane-font-heading: "Segoe UI", Tahoma, sans-serif; }
+html[data-heading-font="tahoma"] { --somane-font-heading: Tahoma, "Segoe UI", sans-serif; }
+html[data-heading-font="verdana"] { --somane-font-heading: Verdana, Geneva, sans-serif; }
+html[data-heading-font="trebuchet"] { --somane-font-heading: "Trebuchet MS", Arial, sans-serif; }
+html[data-heading-font="calibri"] { --somane-font-heading: Calibri, "Segoe UI", sans-serif; }
+html[data-heading-font="candara"] { --somane-font-heading: Candara, Calibri, sans-serif; }
+html[data-heading-font="lucida-sans"] { --somane-font-heading: "Lucida Sans", "Lucida Grande", sans-serif; }
+html[data-heading-font="georgia"] { --somane-font-heading: Georgia, "Times New Roman", serif; }
+html[data-heading-font="cambria"] { --somane-font-heading: Cambria, Georgia, serif; }
+html[data-heading-font="times"] { --somane-font-heading: "Times New Roman", Times, serif; }
+html[data-heading-font="garamond"] { --somane-font-heading: Garamond, "Times New Roman", serif; }
+html[data-heading-font="palatino"] { --somane-font-heading: "Palatino Linotype", Palatino, Georgia, serif; }
+html[data-heading-font="consolas"] { --somane-font-heading: Consolas, "Courier New", monospace; }
+html[data-heading-font="courier"] { --somane-font-heading: "Courier New", Courier, monospace; }
+html[data-heading-font="mono"] { --somane-font-heading: Consolas, "Courier New", monospace; }
+html[data-data-font="system"] { --somane-font-data: var(--somane-font-sans); }
+html[data-data-font="arial"] { --somane-font-data: Arial, Helvetica, sans-serif; }
+html[data-data-font="segoe"] { --somane-font-data: "Segoe UI", Tahoma, sans-serif; }
+html[data-data-font="tahoma"] { --somane-font-data: Tahoma, "Segoe UI", sans-serif; }
+html[data-data-font="verdana"] { --somane-font-data: Verdana, Geneva, sans-serif; }
+html[data-data-font="trebuchet"] { --somane-font-data: "Trebuchet MS", Arial, sans-serif; }
+html[data-data-font="calibri"] { --somane-font-data: Calibri, "Segoe UI", sans-serif; }
+html[data-data-font="candara"] { --somane-font-data: Candara, Calibri, sans-serif; }
+html[data-data-font="lucida-sans"] { --somane-font-data: "Lucida Sans", "Lucida Grande", sans-serif; }
+html[data-data-font="georgia"] { --somane-font-data: Georgia, "Times New Roman", serif; }
+html[data-data-font="cambria"] { --somane-font-data: Cambria, Georgia, serif; }
+html[data-data-font="times"] { --somane-font-data: "Times New Roman", Times, serif; }
+html[data-data-font="garamond"] { --somane-font-data: Garamond, "Times New Roman", serif; }
+html[data-data-font="palatino"] { --somane-font-data: "Palatino Linotype", Palatino, Georgia, serif; }
+html[data-data-font="consolas"] { --somane-font-data: Consolas, "Courier New", monospace; }
+html[data-data-font="courier"] { --somane-font-data: "Courier New", Courier, monospace; }
+html[data-data-font="mono"] { --somane-font-data: Consolas, "Courier New", monospace; }
+
+html[data-accent="cyan"] {
+  --somane-primary: #0891B2;
+  --somane-primary-rgb: 8 145 178;
+  --somane-primary-hover: #0E7490;
+  --somane-primary-hover-rgb: 14 116 144;
+  --somane-primary-light: #CFFAFE;
+  --somane-primary-dark: #164E63;
+  --somane-border-focus: #0891B2;
+  --somane-brand-500-rgb: 8 145 178;
+  --somane-brand-600-rgb: 8 145 178;
+  --somane-brand-700-rgb: 14 116 144;
+}
+
+html[data-accent="emerald"] {
+  --somane-primary: #047857;
+  --somane-primary-rgb: 4 120 87;
+  --somane-primary-hover: #059669;
+  --somane-primary-hover-rgb: 5 150 105;
+  --somane-primary-light: #D1FAE5;
+  --somane-primary-dark: #064E3B;
+  --somane-border-focus: #047857;
+  --somane-brand-500-rgb: 4 120 87;
+  --somane-brand-600-rgb: 4 120 87;
+  --somane-brand-700-rgb: 5 150 105;
+}
+
+html[data-accent="violet"] {
+  --somane-primary: #6D28D9;
+  --somane-primary-rgb: 109 40 217;
+  --somane-primary-hover: #7C3AED;
+  --somane-primary-hover-rgb: 124 58 237;
+  --somane-primary-light: #EDE9FE;
+  --somane-primary-dark: #4C1D95;
+  --somane-border-focus: #7C3AED;
+  --somane-brand-500-rgb: 109 40 217;
+  --somane-brand-600-rgb: 109 40 217;
+  --somane-brand-700-rgb: 124 58 237;
+}
+
+html[data-density="compact"] {
+  --somane-density-scale: 0.88;
+  --somane-control-height-compact: 24px;
+  --somane-control-height: 32px;
+  --somane-control-height-lg: 38px;
+  --somane-content-padding: 16px;
+}
+
+html[data-density="comfortable"] {
+  --somane-density-scale: 1.12;
+  --somane-control-height-compact: 32px;
+  --somane-control-height: 42px;
+  --somane-control-height-lg: 48px;
+  --somane-content-padding: 32px;
+}
+
+html[data-density="standard"] { --somane-density-scale: 1; }
+
+html[data-contrast="high"] {
+  --somane-border: color-mix(in srgb, var(--somane-text) 55%, var(--somane-bg));
+  --somane-border-strong: var(--somane-text);
+  --somane-text-secondary: color-mix(in srgb, var(--somane-text) 82%, var(--somane-bg));
+  --somane-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--somane-primary) 45%, transparent);
+  --somane-focus-ring-width: 3px;
+  --somane-focus-ring-offset: 3px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --somane-bg: #0F172A;
+  --somane-bg-rgb: 15 23 42;
+  --somane-bg-elevated: #1E293B;
+  --somane-bg-subtle: #1E293B;
+  --somane-sidebar-bg: #020617;
+  --somane-header-bg: #1E293B;
+  --somane-form-header-bg: #172554;
+  --somane-form-header-border: #1E3A8A;
+  --somane-overlay: rgb(0 0 0 / 60%);
+  --somane-text: #F1F5F9;
+  --somane-text-rgb: 241 245 249;
+  --somane-text-secondary: #94A3B8;
+  --somane-text-muted: #64748B;
+  --somane-border: #334155;
+  --somane-border-rgb: 51 65 85;
+  --somane-border-strong: #475569;
+  --somane-neutral-50-rgb: 15 23 42;
+  --somane-neutral-100-rgb: 30 41 59;
+  --somane-neutral-200-rgb: 51 65 85;
+  --somane-neutral-300-rgb: 71 85 105;
+  --somane-neutral-400-rgb: 100 116 139;
+  --somane-neutral-500-rgb: 148 163 184;
+  --somane-neutral-600-rgb: 203 213 225;
+  --somane-neutral-700-rgb: 226 232 240;
+  --somane-neutral-800-rgb: 241 245 249;
+  --somane-neutral-900-rgb: 248 250 252;
+  --somane-neutral-950-rgb: 255 255 255;
+  --somane-brand-50-rgb: 15 23 42;
+  --somane-brand-100-rgb: 30 58 138;
+  --somane-brand-200-rgb: 30 64 175;
+  --somane-brand-300-rgb: 37 99 235;
+  --somane-brand-400-rgb: 59 130 246;
+  --somane-brand-500-rgb: 37 99 235;
+  --somane-brand-600-rgb: 30 58 138;
+  --somane-brand-700-rgb: 37 99 235;
+  --somane-brand-800-rgb: 219 234 254;
+  --somane-brand-900-rgb: 239 246 255;
+  --somane-primary-light: #1E3A8A;
+  --somane-primary-light-rgb: 30 58 138;
+  --somane-success-light: #064E3B;
+  --somane-warning-light: #78350F;
+  --somane-danger-light: #7F1D1D;
+  --somane-info-light: #1E3A8A;
+  --somane-shadow-xs: 0 1px 2px rgb(0 0 0 / 30%);
+  --somane-shadow-sm: 0 1px 3px rgb(0 0 0 / 40%);
+  --somane-shadow-md: 0 4px 12px rgb(0 0 0 / 50%);
+  --somane-shadow-lg: 0 10px 24px rgb(0 0 0 / 60%);
+}

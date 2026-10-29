@@ -3,6 +3,7 @@ import { apiClient } from '../../services/apiClient';
 import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
 import { useUi } from '../../context/UiContext';
 import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function SubdivisionsPage() {
   const { configuration } = useUi();
@@ -236,7 +237,7 @@ export default function SubdivisionsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Pays</label>
-            <select
+            <SomaneSelect
               value={filterPays}
               onChange={(e) => setFilterPays(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -247,11 +248,11 @@ export default function SubdivisionsPage() {
                   {paysItem.emoji} {paysItem.nom_fr || paysItem.nom}
                 </option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-            <select
+            <SomaneSelect
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -264,7 +265,7 @@ export default function SubdivisionsPage() {
               <option value="canton">Canton</option>
               <option value="district">District</option>
               <option value="other">Autre</option>
-            </select>
+            </SomaneSelect>
           </div>
         </div>
         <div className="flex justify-end mt-4">
@@ -383,7 +384,7 @@ export default function SubdivisionsPage() {
                 <span className="text-sm text-gray-700">
                   Lignes par page:
                 </span>
-                <select
+                <SomaneSelect
                   value={itemsPerPage}
                   onChange={(e) => {
                     setItemsPerPage(Number(e.target.value));
@@ -395,7 +396,7 @@ export default function SubdivisionsPage() {
                   <option value={10}>10</option>
                   <option value={20}>20</option>
                   <option value={50}>50</option>
-                </select>
+                </SomaneSelect>
                 <span className="text-sm text-gray-700">
                   {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredSubdivisions.length)} sur {filteredSubdivisions.length}
                 </span>
@@ -547,8 +548,8 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
             {subdivision ? 'Modifier la subdivision' : 'Créer une nouvelle subdivision'}
@@ -606,7 +607,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Type de subdivision *
               </label>
-              <select
+              <SomaneSelect
                 required
                 value={formData.type_subdivision}
                 onChange={(e) => handleChange('type_subdivision', e.target.value)}
@@ -619,7 +620,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
                 <option value="canton">Canton</option>
                 <option value="district">District</option>
                 <option value="other">Autre</option>
-              </select>
+              </SomaneSelect>
             </div>
 
             {/* Pays */}
@@ -627,7 +628,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Pays *
               </label>
-              <select
+              <SomaneSelect
                 required
                 value={formData.pays}
                 onChange={(e) => handleChange('pays', e.target.value)}
@@ -639,7 +640,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
                     {paysItem.emoji} {paysItem.nom_fr || paysItem.nom} ({paysItem.code_iso})
                   </option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
 
             {/* Coordonnées géographiques */}

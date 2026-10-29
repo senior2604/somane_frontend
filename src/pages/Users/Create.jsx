@@ -40,6 +40,7 @@ import {
   validateSecurityForm,
 } from './SecurityShared';
 import { SearchableDropdown, parseResponse } from '../Partners/PartnerShared';
+import SomaneSelect from '../../components/SomaneSelect';
 
 // ==========================================
 // PERMISSIONS : catégorisation + détail
@@ -634,8 +635,8 @@ const setField = (field, value) => {
 
       {/* Dialogue confirmation */}
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">
               Voulez-vous enregistrer les modifications avant de quitter ?
@@ -813,11 +814,11 @@ export function SecurityForm({ type, formData, setField, errors, data, editing =
               </FormField>
 
               <FormField label="Statut">
-                <select value={formData.statut || 'actif'} onChange={(e) => setField('statut', e.target.value)} className={inputClass()} style={{ height: 26 }}>
+                <SomaneSelect value={formData.statut || 'actif'} onChange={(e) => setField('statut', e.target.value)} className={inputClass()} style={{ height: 26 }}>
                   <option value="actif">Actif</option>
                   <option value="inactif">Inactif</option>
                   <option value="suspendu">Suspendu</option>
-                </select>
+                </SomaneSelect>
               </FormField>
 
               <FormField label="Fuseau horaire">
@@ -842,16 +843,16 @@ export function SecurityForm({ type, formData, setField, errors, data, editing =
         <Section title="Entités et sociétés">
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Entité">
-              <select value={formData.entite || ''} onChange={(e) => setField('entite', e.target.value)} className={inputClass()} style={{ height: 26 }}>
+              <SomaneSelect value={formData.entite || ''} onChange={(e) => setField('entite', e.target.value)} className={inputClass()} style={{ height: 26 }}>
                 <option value="">Aucune</option>
                 {(data.entites || []).map((entity) => <option key={entity.id} value={entity.id}>{entity.raison_sociale || entity.nom || `Entité ${entity.id}`}</option>)}
-              </select>
+              </SomaneSelect>
             </FormField>
             <FormField label="Société principale">
-              <select value={formData.company_id || ''} onChange={(e) => setField('company_id', e.target.value)} className={inputClass()} style={{ height: 26 }}>
+              <SomaneSelect value={formData.company_id || ''} onChange={(e) => setField('company_id', e.target.value)} className={inputClass()} style={{ height: 26 }}>
                 <option value="">Aucune</option>
                 {(data.entites || []).map((entity) => <option key={entity.id} value={entity.id}>{entity.raison_sociale || entity.nom || `Entité ${entity.id}`}</option>)}
-              </select>
+              </SomaneSelect>
             </FormField>
           </div>
           <div className="mt-3">
@@ -1005,7 +1006,7 @@ const filteredModels = selectedModule && selectedModuleKeys.length
             </FormField>
 
 <FormField label="Type de regle" required>
-  <select
+  <SomaneSelect
     value={formData.target_type}
 onChange={(e) => setField('target_type', e.target.value)}
     className={inputClass()}
@@ -1014,12 +1015,12 @@ onChange={(e) => setField('target_type', e.target.value)}
     {PERMISSION_TARGET_TYPES.map((type) => (
       <option key={type.value} value={type.value}>{type.label}</option>
     ))}
-  </select>
+  </SomaneSelect>
 </FormField>
 
 {formData.target_type === 'group' && (
   <FormField label="Groupe" required error={errors.groupe}>
-    <select
+    <SomaneSelect
       value={formData.groupe}
       onChange={(e) => setField('groupe', e.target.value)}
       className={inputClass(errors.groupe)}
@@ -1029,14 +1030,14 @@ onChange={(e) => setField('target_type', e.target.value)}
       {data.groups.map((g) => (
         <option key={g.id} value={g.id}>{g.name}</option>
       ))}
-    </select>
+    </SomaneSelect>
   </FormField>
 )}
 
 {formData.target_type === 'user' && (
   <>
     <FormField label="Utilisateur" required error={errors.user}>
-      <select
+      <SomaneSelect
         value={formData.user}
         onChange={(e) => setField('user', e.target.value)}
         className={inputClass(errors.user)}
@@ -1048,11 +1049,11 @@ onChange={(e) => setField('target_type', e.target.value)}
             {getUserName(u)}
           </option>
         ))}
-      </select>
+      </SomaneSelect>
     </FormField>
 
     <FormField label="Mode" required error={errors.mode}>
-      <select
+      <SomaneSelect
         value={formData.mode}
         onChange={(e) => setField('mode', e.target.value)}
         className={inputClass(errors.mode)}
@@ -1061,26 +1062,26 @@ onChange={(e) => setField('target_type', e.target.value)}
         {PERMISSION_MODES.map((mode) => (
           <option key={mode.value} value={mode.value}>{mode.label}</option>
         ))}
-      </select>
+      </SomaneSelect>
     </FormField>
   </>
 )}
 
 {formData.target_type !== 'user' && (
   <FormField label="Mode">
-    <select
+    <SomaneSelect
       value="allow"
       disabled
       className={inputClass()}
       style={{ height: 26 }}
     >
       <option value="allow">Autoriser</option>
-    </select>
+    </SomaneSelect>
   </FormField>
 )}
 
             <FormField label="Module" required error={errors.module}>
-              <select
+              <SomaneSelect
                 value={formData.module}
                 onChange={(e) => setField('module', e.target.value)}
                 className={inputClass(errors.module)}
@@ -1090,44 +1091,44 @@ onChange={(e) => setField('target_type', e.target.value)}
                 {data.modules.map((m) => (
                   <option key={m.id} value={m.id}>{m.nom_affiche || m.nom || m.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </FormField>
 
             <FormField label="Modèle / Table" required error={errors.model_id}>
-              <select value={formData.model_id} onChange={(e) => setField('model_id', e.target.value)} className={inputClass(errors.model_id)} style={{ height: 26 }}>
+              <SomaneSelect value={formData.model_id} onChange={(e) => setField('model_id', e.target.value)} className={inputClass(errors.model_id)} style={{ height: 26 }}>
                 <option value="">Sélectionner un modèle</option>
                 {filteredModels.map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.name || model.model} ({model.model})
                   </option>
                 ))}
-              </select>
+              </SomaneSelect>
             </FormField>
           </div>
 
           <div className="space-y-2">
             <FormField label="Entité">
-              <select value={formData.entite} onChange={(e) => setField('entite', e.target.value)} className={inputClass()} style={{ height: 26 }}>
+              <SomaneSelect value={formData.entite} onChange={(e) => setField('entite', e.target.value)} className={inputClass()} style={{ height: 26 }}>
                 <option value="">Toutes les entités</option>
                 {data.entites.map((e) => (
                   <option key={e.id} value={e.id}>{e.raison_sociale || e.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </FormField>
 
             <FormField label="Accès">
-              <select value={formData.acces} onChange={(e) => setField('acces', e.target.value)} className={inputClass(errors.acces)} style={{ height: 26 }}>
+              <SomaneSelect value={formData.acces} onChange={(e) => setField('acces', e.target.value)} className={inputClass(errors.acces)} style={{ height: 26 }}>
                 {ACCESS_TYPES.map((a) => (
                   <option key={a.value} value={a.value}>{a.label}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </FormField>
 
             <FormField label="Statut">
-              <select value={String(formData.statut)} onChange={(e) => setField('statut', e.target.value === 'true')} className={inputClass()} style={{ height: 26 }}>
+              <SomaneSelect value={String(formData.statut)} onChange={(e) => setField('statut', e.target.value === 'true')} className={inputClass()} style={{ height: 26 }}>
                 <option value="true">Actif</option>
                 <option value="false">Inactif</option>
-              </select>
+              </SomaneSelect>
             </FormField>
           </div>
         </div>

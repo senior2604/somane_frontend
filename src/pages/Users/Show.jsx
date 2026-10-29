@@ -47,6 +47,7 @@ import {
   buildUserRequest,
   createInitialUserForm,
 } from './Create';
+import SomaneSelect from '../../components/SomaneSelect';
 
 // Palette Odoo-like pour les avatars, tirée de manière stable a partir du nom
 const AVATAR_COLORS = [
@@ -220,7 +221,7 @@ function UserDroitsAccesSection({ formData, setField, data, userGroups, userPerm
       <Section title="Entité et sociétés">
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Entité par défaut">
-            <select
+            <SomaneSelect
               value={formData.entite || ''}
               onChange={(e) => setField('entite', e.target.value)}
               className={inputClass()}
@@ -232,11 +233,11 @@ function UserDroitsAccesSection({ formData, setField, data, userGroups, userPerm
                   {entity.raison_sociale || entity.nom || `Entité ${entity.id}`}
                 </option>
               ))}
-            </select>
+            </SomaneSelect>
           </FormField>
 
           <FormField label="Société principale">
-            <select
+            <SomaneSelect
               value={formData.company_id || ''}
               onChange={(e) => setField('company_id', e.target.value)}
               className={inputClass()}
@@ -248,7 +249,7 @@ function UserDroitsAccesSection({ formData, setField, data, userGroups, userPerm
                   {entity.raison_sociale || entity.nom || `Entité ${entity.id}`}
                 </option>
               ))}
-            </select>
+            </SomaneSelect>
           </FormField>
         </div>
 
@@ -371,7 +372,7 @@ function UserSecuriteSection({ formData, setField, errors, onChangePassword, onS
           </FormField>
 
           <FormField label="Statut">
-            <select
+            <SomaneSelect
               value={formData.statut || 'actif'}
               onChange={(e) => setField('statut', e.target.value)}
               className={inputClass()}
@@ -380,7 +381,7 @@ function UserSecuriteSection({ formData, setField, errors, onChangePassword, onS
               <option value="actif">Actif</option>
               <option value="inactif">Inactif</option>
               <option value="suspendu">Suspendu</option>
-            </select>
+            </SomaneSelect>
           </FormField>
         </div>
       </Section>
@@ -460,14 +461,14 @@ function UserPreferenceSection({ formData, setField, errors, languages = [] }) {
       <Section title="Préférences générales">
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Langue">
-            <select
+            <SomaneSelect
               value={formData.lang || 'fr_FR'}
               onChange={(e) => setField('lang', e.target.value)}
               className={inputClass()}
               style={{ height: 26 }}
             >
               {languageOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
+            </SomaneSelect>
           </FormField>
 
           <FormField label="Fuseau horaire">
@@ -1075,7 +1076,7 @@ const handleSendResetPassword = async () => {
                           Le partenaire sera créé depuis le nom, l'e-mail et le téléphone de cet utilisateur.
                         </p>
                         <div className="flex flex-wrap items-center gap-3">
-                          <select
+                          <SomaneSelect
                             value={partnerType}
                             onChange={(event) => setPartnerType(event.target.value)}
                             disabled={creatingPartner}
@@ -1086,7 +1087,7 @@ const handleSendResetPassword = async () => {
                             <option value="fournisseur">Fournisseur</option>
                             <option value="debiteur">Débiteur divers</option>
                             <option value="crediteur">Créditeur divers</option>
-                          </select>
+                          </SomaneSelect>
                           <button
                             type="button"
                             onClick={createPartner}
@@ -1263,8 +1264,8 @@ const handleSendResetPassword = async () => {
       </div>
 
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardees</h3>
             <p className="text-sm text-gray-600 mb-6">
               Voulez-vous enregistrer les modifications avant de quitter ?

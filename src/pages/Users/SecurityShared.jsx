@@ -396,27 +396,9 @@ export function useSecurityData({ includePartners = true } = {}) {
   return { ...data, eligiblePartenaires, loading: loading || permissionsLoading, error, fetchData };
 }
 
-export const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-        {children}
-      </div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-        </div>
-      )}
-    </div>
-  );
-};
+export const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 export function FormField({ label, required, error, children }) {
   return (

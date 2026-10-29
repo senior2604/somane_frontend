@@ -2,8 +2,8 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
+import ApplicationLayout from '../components/ApplicationLayout';
 import { isCorePage } from '../services/pageModule';
-
 
 export default function MainLayout({ children }) {
   const location = useLocation();
@@ -16,20 +16,16 @@ export default function MainLayout({ children }) {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <Sidebar currentPath={location.pathname} />
-      
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <Header onLogout={handleLogout} />
-        
-        {/* Page content */}
-        <main className={`flex-1 overflow-auto${isCorePage(location.pathname) ? ' core-module-main' : ''}`}>
-          {children}
-        </main>
-      </div>
-    </div>
+    <ApplicationLayout
+      header={<Header onLogout={handleLogout} />}
+      sidebar={<Sidebar currentPath={location.pathname} />}
+      contentClassName={
+        isCorePage(location.pathname)
+          ? 'core-module-main'
+          : 'somane-app-shell__main--flush'
+      }
+    >
+      {children}
+    </ApplicationLayout>
   );
 }

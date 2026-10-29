@@ -3,9 +3,12 @@ import { apiClient } from '../../services/apiClient';
 import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
 import MetadataFieldInput from '../../components/MetadataFieldInput';
 import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
+import SomaneSelect from '../../components/SomaneSelect';
 import { useUi } from '../../context/UiContext';
-import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
-
+import {
+  applyConfiguredListColumns,
+  getConfiguredModelView,
+} from '../../services/metadataViews';
 export default function DevisesPage() {
   const { configuration } = useUi();
   const configuredList = useMemo(
@@ -305,7 +308,7 @@ export default function DevisesPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-            <select
+            <SomaneSelect
               value={filterActif}
               onChange={(e) => setFilterActif(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -313,7 +316,7 @@ export default function DevisesPage() {
               <option value="">Tous les statuts</option>
               <option value="actif">Actives</option>
               <option value="inactif">Inactives</option>
-            </select>
+            </SomaneSelect>
           </div>
           <div className="md:col-span-2 flex items-end">
             <button
@@ -428,7 +431,7 @@ export default function DevisesPage() {
                 <span className="text-sm text-gray-700">
                   Lignes par page:
                 </span>
-                <select
+                <SomaneSelect
                   value={itemsPerPage}
                   onChange={(e) => {
                     setItemsPerPage(Number(e.target.value));
@@ -440,7 +443,7 @@ export default function DevisesPage() {
                   <option value={10}>10</option>
                   <option value={20}>20</option>
                   <option value={50}>50</option>
-                </select>
+                </SomaneSelect>
                 <span className="text-sm text-gray-700">
                   {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredDevises.length)} sur {filteredDevises.length}
                 </span>
@@ -679,8 +682,8 @@ function DeviseFormModal({ devise, devisesCourantes, configuredView, onClose, on
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
         <div className="flex items-center justify-between gap-3 p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
             {devise ? 'Modifier la devise' : 'Créer une nouvelle devise'}
@@ -731,18 +734,140 @@ function DeviseFormModal({ devise, devisesCourantes, configuredView, onClose, on
             </div>
           )}
 
-          <div className="space-y-5">
-            {formGroups.map((group, index) => <fieldset key={`${group.title}-${index}`} className="rounded-lg border border-gray-200 p-4">
-              <legend className="px-2 text-sm font-medium text-gray-700">{group.title}</legend>
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                {group.fields.map(renderField)}
-              </div>
-            </fieldset>)}
-            {!configuredFieldNames.has('arrondi') && <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700" htmlFor="currency-arrondi">Valeur d’arrondi</label>
-              <input id="currency-arrondi" type="number" step="0.000001" min="0.000001" value={formData.arrondi} onChange={(event) => handleChange('arrondi', parseFloat(event.target.value) || 1)} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="1" />
-              <p className="mt-1 text-xs text-gray-500">Multiple d’arrondi (ex. 1, 0.5, 0.01, 0.0001)</p>
-            </div>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Code devise */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Code devise *
+              </label>
+              {modeSelection === 'liste' && !devise ? (
+                <SomaneSelect
+                  required
+                  value={formData.code}
+                  onChange={(e) => handleChange('code', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono uppercase"
+                >
+                  <option value="">Sélectionnez un code</option>
+                  {devisesCourantes.map(devise => (
+                    <option key={devise.code} value={devise.code}>
+                      {devise.code} - {devise.nom}
+                    </option>
+                  ))}
+                </SomaneSelect>
+              ) : (
+                <input
+                  type="text"
+                  required
+                  maxLength={3}
+                  value={formData.code}
+                  onChange={(e) => handleChange('code', e.target.value.toUpperCase())}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono uppercase"
+                  placeholder="EUR"
+                />
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                3 lettres majuscules (ex: EUR, USD, XOF)
+              </p>
+            </div>
+            
+            {/* Nom complet */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nom complet *
+              </label>
+              {modeSelection === 'liste' && !devise ? (
+                <SomaneSelect
+                  required
+                  value={formData.nom}
+                  onChange={(e) => handleChange('nom', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Sélectionnez un nom</option>
+                  {devisesCourantes.map(devise => (
+                    <option key={devise.nom} value={devise.nom}>
+                      {devise.nom}
+                    </option>
+                  ))}
+                </SomaneSelect>
+              ) : (
+                <input
+                  type="text"
+                  required
+                  value={formData.nom}
+                  onChange={(e) => handleChange('nom', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Euro, Dollar US, Franc CFA..."
+                />
+              )}
+            </div>
+            
+            {/* Symbole */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Symbole *
+              </label>
+              {modeSelection === 'liste' && !devise ? (
+                <SomaneSelect
+                  required
+                  value={formData.symbole}
+                  onChange={(e) => handleChange('symbole', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Sélectionnez un symbole</option>
+                  {devisesCourantes.map(devise => (
+                    <option key={devise.symbole} value={devise.symbole}>
+                      {devise.symbole} ({devise.nom})
+                    </option>
+                  ))}
+                </SomaneSelect>
+              ) : (
+                <input
+                  type="text"
+                  required
+                  maxLength={10}
+                  value={formData.symbole}
+                  onChange={(e) => handleChange('symbole', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="€, $, CFA..."
+                />
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Symbole monétaire (max 10 caractères)
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Valeur d'arrondi
+              </label>
+              <input
+                type="number"
+                step="0.000001"
+                min="0.000001"
+                value={formData.arrondi}
+                onChange={(e) => handleChange('arrondi', parseFloat(e.target.value) || 1)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Multiple d'arrondi (ex: 1, 0.5, 0.01, 0.0001)
+              </p>
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.actif}
+                  onChange={(e) => handleChange('actif', e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-gray-700">Devise active</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Les devises inactives ne seront pas disponibles dans les sélections
+              </p>
+            </div>
           </div>
 
           {/* Aperçu */}

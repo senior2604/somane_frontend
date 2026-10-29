@@ -18,87 +18,14 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 // ==========================================
 // COMPOSANT TOOLTIP
 // ==========================================
-const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-  const triggerRef = useRef(null);
-  const [tooltipStyle, setTooltipStyle] = useState({});
-
-  const updateTooltipPosition = useCallback(() => {
-    if (!triggerRef.current) return;
-
-    const rect = triggerRef.current.getBoundingClientRect();
-    const gap = 6;
-
-    if (position === 'bottom') {
-      setTooltipStyle({
-        left: rect.left + rect.width / 2,
-        top: rect.bottom + gap,
-        transform: 'translateX(-50%)'
-      });
-    } else if (position === 'left') {
-      setTooltipStyle({
-        left: rect.left - gap,
-        top: rect.top + rect.height / 2,
-        transform: 'translate(-100%, -50%)'
-      });
-    } else if (position === 'right') {
-      setTooltipStyle({
-        left: rect.right + gap,
-        top: rect.top + rect.height / 2,
-        transform: 'translateY(-50%)'
-      });
-    } else {
-      setTooltipStyle({
-        left: rect.left + rect.width / 2,
-        top: rect.top - gap,
-        transform: 'translate(-50%, -100%)'
-      });
-    }
-  }, [position]);
-
-  useEffect(() => {
-    if (!show) return undefined;
-
-    updateTooltipPosition();
-    window.addEventListener('resize', updateTooltipPosition);
-    window.addEventListener('scroll', updateTooltipPosition, true);
-
-    return () => {
-      window.removeEventListener('resize', updateTooltipPosition);
-      window.removeEventListener('scroll', updateTooltipPosition, true);
-    };
-  }, [show, updateTooltipPosition]);
-  
-  return (
-    <div ref={triggerRef} className="relative inline-block">
-      <div
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-      >
-        {children}
-      </div>
-      {show && typeof document !== 'undefined' && createPortal(
-        <div
-          className="pointer-events-none fixed z-[10000] whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg"
-          style={tooltipStyle}
-        >
-          {text}
-          <div className={`absolute h-2 w-2 rotate-45 bg-gray-800 ${
-            position === 'top' ? 'left-1/2 top-full -mt-1 -translate-x-1/2' :
-            position === 'bottom' ? 'bottom-full left-1/2 -mb-1 -translate-x-1/2' :
-            position === 'left' ? 'left-full top-1/2 -ml-1 -translate-y-1/2' :
-            'right-full top-1/2 -mr-1 -translate-y-1/2'
-          }`} />
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-};
+const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 // ==========================================
 // COMPOSANT AUTOCOMPLETE
@@ -2222,19 +2149,19 @@ const handleSave = async (silent = false) => {
   );
 
   const traceabilityContent = (
-    <div className="px-4 py-3">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="somane-traceability-feed px-4 py-3">
+      <div className="somane-traceability-feed__summary mb-3 flex items-center justify-between">
         <span className="text-xs font-medium text-gray-700">Activité liée au journal</span>
         <span className="text-[11px] text-gray-500">{traceabilityLogs.length} événement(s)</span>
       </div>
       {traceabilityLoading ? (
-        <div className="border border-gray-200 bg-white px-3 py-4 text-center text-xs text-gray-500">
+        <div className="somane-traceability-feed__empty border border-gray-200 bg-white px-3 py-4 text-center text-xs text-gray-500">
           Chargement de la traçabilité...
         </div>
       ) : traceabilityLogs.length > 0 ? (
-        <div className="space-y-2 pr-1">
+        <div className="somane-traceability-feed__events space-y-2 pr-1">
           {traceabilityLogs.map(log => (
-            <div key={log.id} className="border border-gray-200 bg-white px-3 py-2">
+            <div key={log.id} className="somane-traceability-event border border-gray-200 bg-white px-3 py-2">
               <div className="flex items-center gap-2">
                 <span className={log.source === 'journal'
                   ? 'inline-flex items-center rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700'
@@ -2242,14 +2169,14 @@ const handleSave = async (silent = false) => {
                 }>
                   {log.source === 'journal' ? 'Journal' : 'Pièce'}
                 </span>
-                <div className="truncate text-xs font-medium text-gray-900">{log.action}</div>
+                <div className="somane-traceability-event__title truncate text-xs font-medium text-gray-900">{log.action}</div>
               </div>
               {(log.objectLabel || log.description) && (
-                <div className="mt-1 text-[11px] text-gray-500">
+                <div className="somane-traceability-event__description mt-1 text-[11px] text-gray-500">
                   {[log.objectLabel, log.description].filter(Boolean).join(' - ')}
                 </div>
               )}
-              <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500">
+              <div className="somane-traceability-event__meta mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500">
                 <span className="truncate">Par {log.user || 'Utilisateur'}</span>
                 <span className="whitespace-nowrap">{log.date ? getTraceDate(log.date) : ''}</span>
               </div>
@@ -2257,7 +2184,7 @@ const handleSave = async (silent = false) => {
           ))}
         </div>
       ) : (
-        <div className="border border-gray-200 bg-white px-3 py-5 text-center">
+        <div className="somane-traceability-feed__empty border border-gray-200 bg-white px-3 py-5 text-center">
           <FiClock className="mx-auto mb-2 h-7 w-7 text-gray-400" />
           <div className="text-xs text-gray-600">Aucune traçabilité trouvée</div>
           <div className="mt-1 text-[11px] text-gray-500">Les actions sur ce journal apparaîtront ici.</div>
@@ -2500,7 +2427,7 @@ const handleSave = async (silent = false) => {
                         <div className="flex items-center" style={{ height: '26px' }}>
                           <RequiredLabel required={false}>Source des relevés</RequiredLabel>
                           <div className="flex-1 ml-2 relative">
-                            <select
+                            <SomaneSelect
                               value={formData.bank_statements_source || 'manual'}
                               onChange={(e) => handleChange('bank_statements_source', e.target.value)}
                               className="w-full px-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none"
@@ -2510,7 +2437,7 @@ const handleSave = async (silent = false) => {
                               <option value="file">Importer le relevé</option>
                               <option value="online">Synchronisation en ligne</option>
                               <option value="all">Tous</option>
-                            </select>
+                            </SomaneSelect>
                           </div>
                         </div>
                       </div>

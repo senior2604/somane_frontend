@@ -22,6 +22,7 @@ import {
 import { useEntity } from '../../../context/EntityContext';
 import UnifiedIndexPage from '../../../components/UnifiedIndexPage';
 import { dashboardService, journauxService } from '../services';
+import SomaneSelect from '../../../components/SomaneSelect';
 
 const COLORS = ['#7c3aed', '#14b8a6', '#2563eb', '#f59e0b', '#ef4444', '#0f766e', '#334155', '#db2777', '#10b981', '#8b5cf6'];
 const DASHBOARD_CACHE_PREFIX = 'somane:compta-dashboard';
@@ -613,16 +614,11 @@ const MiniBars = ({ data = [], color = '#14b8a6' }) => {
           <div key={`${item.label}-${index}`} className="flex-1 min-w-0 h-full flex flex-col justify-end">
             <div
               className="relative w-full bg-gray-100 rounded-t overflow-visible h-full flex items-end"
+              data-tooltip={`${item.label}\n${formatAmount(item.value)} CFA`}
+              tabIndex={0}
               onMouseEnter={() => setHoveredIndex(index)}
               onMouseLeave={() => setHoveredIndex(null)}
             >
-              {hoveredIndex === index && (
-                <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 z-40 px-2 py-1 bg-gray-900 text-white text-[11px] rounded shadow-lg whitespace-nowrap">
-                  <div className="font-medium">{item.label}</div>
-                  <div>{formatAmount(item.value)} CFA</div>
-                  <div className="absolute left-1/2 top-full -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 -mt-1" />
-                </div>
-              )}
               <div
                 className={`w-full rounded-t cursor-pointer transition-all ${isZero ? 'border-t border-gray-300 bg-gray-300' : ''}`}
                 style={{
@@ -864,25 +860,12 @@ const HealthPanel = ({ health, selectedKey, onSelect }) => {
               key={item.key}
               type="button"
               onClick={() => onSelect(item.key)}
+              data-tooltip={[item.label, `Nombre : ${item.count}`, item.message, ...(item.details || []).slice(0, 6).map((detail) => `${detail.name}${detail.journal ? ` - ${detail.journal}` : ''}`)].join('\n')}
               className={`relative group border px-3 py-2 rounded text-left transition-all hover:shadow-sm ${color} ${selected ? 'ring-2 ring-purple-500 ring-offset-1' : ''}`}
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-medium truncate">{item.label}</p>
                 <p className="text-base font-bold">{item.count}</p>
-              </div>
-              <div className="pointer-events-none absolute left-0 top-full mt-2 hidden group-hover:block z-50 w-80 max-w-[calc(100vw-2rem)] bg-gray-900 text-white text-xs rounded shadow-lg p-3">
-                <div className="font-semibold">{item.label}</div>
-                <div className="mt-1">Nombre : {item.count}</div>
-                <div className="mt-1 text-gray-200">{item.message}</div>
-                {item.details?.length > 0 && (
-                  <div className="mt-2 border-t border-gray-700 pt-2 space-y-1">
-                    {item.details.slice(0, 6).map((detail) => (
-                      <div key={`${item.key}-${detail.id}-${detail.name}`} className="truncate">
-                        {detail.name}{detail.journal ? ` - ${detail.journal}` : ''}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </button>
           );
@@ -929,6 +912,7 @@ const FinancialFlowPanel = ({ flows, selectedKey, onSelect }) => {
               key={item.key}
               type="button"
               onClick={() => onSelect(item.key)}
+              data-tooltip={[item.label, `Montant : ${formatAmount(item.amount)} CFA`, `Nombre : ${item.count || 0}`, item.message].join('\n')}
               className={`relative group border px-3 py-2 rounded text-left transition-all hover:shadow-sm ${color} ${selected ? 'ring-2 ring-purple-500 ring-offset-1' : ''}`}
             >
               <div className="flex items-center justify-between gap-3">
@@ -939,12 +923,6 @@ const FinancialFlowPanel = ({ flows, selectedKey, onSelect }) => {
                 <span className="text-xs font-bold">{item.count || 0}</span>
               </div>
               <div className="mt-1 text-sm font-bold truncate">{formatAmount(item.amount)} CFA</div>
-              <div className="pointer-events-none absolute left-0 top-full mt-2 hidden group-hover:block z-50 w-80 max-w-[calc(100vw-2rem)] bg-gray-900 text-white text-xs rounded shadow-lg p-3">
-                <div className="font-semibold">{item.label}</div>
-                <div className="mt-1">Montant : {formatAmount(item.amount)} CFA</div>
-                <div className="mt-1">Nombre : {item.count || 0}</div>
-                <div className="mt-1 text-gray-200">{item.message}</div>
-              </div>
             </button>
           );
         })}
@@ -971,7 +949,7 @@ const ActivityPanel = ({ items, onOpen }) => {
           <p className="text-xs text-gray-500">Chronologie des pièces et des paiements</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <SomaneSelect
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value)}
             className="h-8 border border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
@@ -979,8 +957,8 @@ const ActivityPanel = ({ items, onOpen }) => {
             <option value="all">Tous</option>
             <option value="move">Pièces</option>
             <option value="payment">Paiements</option>
-          </select>
-          <select
+          </SomaneSelect>
+          <SomaneSelect
             value={stateFilter}
             onChange={(event) => setStateFilter(event.target.value)}
             className="h-8 border border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
@@ -989,7 +967,7 @@ const ActivityPanel = ({ items, onOpen }) => {
             <option value="draft">Brouillon</option>
             <option value="posted">Comptabilisé / validé</option>
             <option value="cancel">Annulé</option>
-          </select>
+          </SomaneSelect>
           <FiActivity size={18} className="shrink-0 text-purple-600" />
         </div>
       </div>
@@ -1095,7 +1073,7 @@ const KpiStrip = ({ summary, amounts, onNavigate }) => {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+    <div className="somane-kpi-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
       {kpis.map((kpi) => {
         const Icon = kpi.icon;
         return (
@@ -1103,7 +1081,7 @@ const KpiStrip = ({ summary, amounts, onNavigate }) => {
             key={kpi.label}
             type="button"
             onClick={() => kpi.route && onNavigate(kpi.route)}
-            className="group bg-purple-700 text-white px-4 py-4 text-left shadow-sm transition-all hover:bg-purple-800 hover:-translate-y-0.5 disabled:cursor-default"
+            className="somane-kpi-card group bg-purple-700 text-white px-4 py-4 text-left shadow-sm transition-all hover:bg-purple-800 hover:-translate-y-0.5 disabled:cursor-default"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1989,18 +1967,6 @@ export default function ComptaDashboard() {
       searchValue={searchText}
       onSearchChange={setSearchText}
       searchPlaceholder="Rechercher un journal..."
-      searchActions={[
-        {
-          id: 'refresh-dashboard',
-          label: 'Actualiser',
-          title: 'Actualiser le tableau de bord',
-          showLabel: true,
-          onClick: loadDashboard,
-          disabled: loading,
-          active: loading,
-          icon: <FiRefreshCcw size={16} className={loading ? 'animate-spin' : ''} />,
-        },
-      ]}
       filterChips={dashboardFilterChips}
       onRemoveFilterChip={(chip) => {
         if (chip.kind === 'period') {
@@ -2090,7 +2056,7 @@ export default function ComptaDashboard() {
                     <p className="text-xs text-gray-500">Vue compacte des indicateurs</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <select
+                    <SomaneSelect
                       value={analysis}
                       onChange={(event) => setAnalysis(event.target.value)}
                       className="h-8 px-2 border border-gray-300 bg-white text-xs focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
@@ -2099,7 +2065,7 @@ export default function ComptaDashboard() {
                       <option value="states">Etat des pieces</option>
                       <option value="payments">Paiements</option>
                       <option value="balance">Debit / Credit</option>
-                    </select>
+                    </SomaneSelect>
                     <ChartTypeButton active={chartType === 'pie'} icon={FiPieChart} label="Camembert" onClick={() => setChartType('pie')} />
                     <ChartTypeButton active={chartType === 'donut'} icon={FiCircle} label="Anneau" onClick={() => setChartType('donut')} />
                     <ChartTypeButton active={chartType === 'bar'} icon={FiBarChart2} label="Batons" onClick={() => setChartType('bar')} />

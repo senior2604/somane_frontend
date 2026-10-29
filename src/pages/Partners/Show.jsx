@@ -1,4 +1,3 @@
-// C:\python\django\somane_frontend\src\pages\Partners\Show.jsx
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -19,7 +18,10 @@ import {
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
 import UnifiedFormPage from '../../components/UnifiedFormPage';
-import { RecordTraceabilityContent, useRecordTraceability } from '../../components/RecordTraceabilityPanel';
+import {
+  RecordTraceabilityContent,
+  useRecordTraceability,
+} from '../../components/RecordTraceabilityPanel';
 import { useEntity } from '../../context/EntityContext';
 import { useUi } from '../../context/UiContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -34,9 +36,11 @@ import {
   partnerToForm,
   validatePartnerForm,
 } from './PartnerShared';
+import SomaneSelect from '../../components/SomaneSelect';
 
 const normalizeSavedPartner = (payload, fallback = {}) => {
   const data = payload?.data ?? payload ?? {};
+
   return {
     ...fallback,
     ...(data && typeof data === 'object' ? data : {}),
@@ -68,7 +72,9 @@ const buildPartnerReturnState = (locationState, partner) => {
     returnQuery: locationState?.returnQuery || locationState?.suggestedValue || label,
     suggestedValue: locationState?.suggestedValue || locationState?.returnQuery || label,
     restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
-    restorePaymentDraft: locationState?.restorePaymentDraft ?? (returnTo.includes('/payement') || returnTo.includes('/paiement')),
+    restorePaymentDraft: locationState?.restorePaymentDraft ?? (
+      returnTo.includes('/payement') || returnTo.includes('/paiement')
+    ),
   };
 };
 
@@ -78,7 +84,9 @@ const buildPartnerCancelReturnState = (locationState) => {
   return {
     ...(locationState || {}),
     restorePieceDraft: locationState?.restorePieceDraft ?? returnTo.includes('/pieces'),
-    restorePaymentDraft: locationState?.restorePaymentDraft ?? (returnTo.includes('/payement') || returnTo.includes('/paiement')),
+    restorePaymentDraft: locationState?.restorePaymentDraft ?? (
+      returnTo.includes('/payement') || returnTo.includes('/paiement')
+    ),
   };
 };
 
@@ -90,10 +98,13 @@ export default function PartnerShow() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
+
   const { activeEntity } = useEntity();
   const { security, configuration } = useUi();
   const { t } = useLanguage();
+
   const requiredCustomFields = getRequiredPartnerCustomFields(configuration);
+
   const canCreatePartner = can(security, 'core.Partenaire', 'create');
   const canWritePartner = can(security, 'core.Partenaire', 'write');
   const canDeletePartner = can(security, 'core.Partenaire', 'delete');
@@ -103,7 +114,9 @@ export default function PartnerShow() {
   const [partner, setPartner] = useState(null);
   const [formData, setFormData] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'user' ? 'utilisateur' : 'fiche');
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get('tab') === 'user' ? 'utilisateur' : 'fiche'
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -116,6 +129,7 @@ export default function PartnerShow() {
   ));
 
   const [groups, setGroups] = useState([]);
+
   const [userForm, setUserForm] = useState({
     first_name: '',
     last_name: '',
@@ -126,7 +140,12 @@ export default function PartnerShow() {
   });
 
   const actionsMenuRef = useRef(null);
-  const traceability = useRecordTraceability('partenaire', partner?.id, showTraceabilityPanel);
+
+  const traceability = useRecordTraceability(
+    'partenaire',
+    partner?.id,
+    showTraceabilityPanel
+  );
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -134,7 +153,9 @@ export default function PartnerShow() {
         setShowActionsMenu(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
+
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
@@ -145,86 +166,137 @@ export default function PartnerShow() {
         e.returnValue = '';
       }
     };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
   const markAsModified = () => {
-    if (!hasUnsavedChanges) setHasUnsavedChanges(true);
+    if (!hasUnsavedChanges) {
+      setHasUnsavedChanges(true);
+    }
   };
 
   const updateForm = (updater) => {
-    setFormData(prev => (typeof updater === 'function' ? updater(prev) : updater));
+    setFormData((prev) => (
+      typeof updater === 'function' ? updater(prev) : updater
+    ));
     markAsModified();
   };
 
   const loadPartner = useCallback(async () => {
     if (!can(security, 'core.Partenaire', 'read')) return;
+
     setLoading(true);
     setError(null);
+
     try {
       const data = await apiClient.get(`/partenaires/${id}/`);
+
       setPartner(data);
       setFormData(partnerToForm(data));
       setHasUnsavedChanges(false);
 
       const parts = (data?.nom || '').split(' ');
-      setUserForm(prev => ({
+
+      setUserForm((prev) => ({
         ...prev,
         first_name: parts[0] || '',
         last_name: parts.slice(1).join(' ') || '',
         telephone: data?.telephone || '',
       }));
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Impossible de charger le partenaire.');
+      setError(
+        err?.response?.data?.detail ||
+        err?.message ||
+        'Impossible de charger le partenaire.'
+      );
     } finally {
       setLoading(false);
     }
   }, [id, security]);
 
-  useEffect(() => { loadPartner(); }, [loadPartner]);
+  useEffect(() => {
+    loadPartner();
+  }, [loadPartner]);
 
   useEffect(() => {
     if (!canCreateUser || !canReadGroups) return;
+
     apiClient.get('/groupes/')
-      .then(res => setGroups(parseResponse(res)))
+      .then((res) => setGroups(parseResponse(res)))
       .catch(() => {});
   }, [canCreateUser, canReadGroups]);
 
-  const isReady = formData ? Object.keys(validatePartnerForm(formData, requiredCustomFields)).length === 0 : false;
+  const isReady = formData
+    ? Object.keys(validatePartnerForm(formData, requiredCustomFields)).length === 0
+    : false;
 
   const save = async (silent = false) => {
     if (!canWritePartner) return false;
+
     const errors = validatePartnerForm(formData, requiredCustomFields);
+
     setFieldErrors(errors);
+
     if (Object.keys(errors).length > 0) {
       setError('Veuillez corriger les champs obligatoires.');
       return false;
     }
 
     setSaving(true);
-    if (!silent) setError(null);
+
+    if (!silent) {
+      setError(null);
+    }
+
     setSuccess(null);
+
     try {
-      const data = await apiClient.put(`/partenaires/${id}/`, buildPartnerPayload(formData));
+      const data = await apiClient.put(
+        `/partenaires/${id}/`,
+        buildPartnerPayload(formData)
+      );
+
       const savedPartner = normalizeSavedPartner(data, {
         ...buildPartnerPayload(formData),
         id,
       });
+
       setPartner(savedPartner);
       setFormData(partnerToForm(savedPartner));
       setHasUnsavedChanges(false);
-      if (!silent) setSuccess('Partenaire enregistré.');
-      if (showTraceabilityPanel) await traceability.reload();
+
+      if (!silent) {
+        setSuccess('Partenaire enregistré.');
+      }
+
+      if (showTraceabilityPanel) {
+        await traceability.reload();
+      }
+
       return savedPartner;
     } catch (err) {
       const customErrors = err?.data?.custom_fields;
+
       if (customErrors && typeof customErrors === 'object') {
-        setFieldErrors((current) => ({ ...current, ...customErrors }));
-        setError('Vérifie les champs personnalisés signalés dans le formulaire.');
+        setFieldErrors((current) => ({
+          ...current,
+          ...customErrors,
+        }));
+
+        setError(
+          'Vérifie les champs personnalisés signalés dans le formulaire.'
+        );
       } else {
-        setError(err?.data?.detail || err?.message || 'Modification impossible.');
+        setError(
+          err?.data?.detail ||
+          err?.message ||
+          'Modification impossible.'
+        );
       }
+
       return false;
     } finally {
       setSaving(false);
@@ -233,20 +305,40 @@ export default function PartnerShow() {
 
   const handleToggleStatus = async () => {
     if (!canWritePartner) return;
+
     setSaving(true);
     setError(null);
     setSuccess(null);
+
     try {
       const newStatut = !formData.statut;
-      const payload = buildPartnerPayload({ ...formData, statut: newStatut });
+
+      const payload = buildPartnerPayload({
+        ...formData,
+        statut: newStatut,
+      });
+
       const data = await apiClient.put(`/partenaires/${id}/`, payload);
+
       setPartner(data);
       setFormData(partnerToForm(data));
       setHasUnsavedChanges(false);
-      setSuccess(newStatut ? 'Partenaire activé avec succès !' : 'Partenaire désactivé avec succès !');
-      if (showTraceabilityPanel) await traceability.reload();
+
+      setSuccess(
+        newStatut
+          ? 'Partenaire activé avec succès !'
+          : 'Partenaire désactivé avec succès !'
+      );
+
+      if (showTraceabilityPanel) {
+        await traceability.reload();
+      }
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Échec du changement de statut.');
+      setError(
+        err?.response?.data?.detail ||
+        err?.message ||
+        'Échec du changement de statut.'
+      );
     } finally {
       setSaving(false);
     }
@@ -254,28 +346,41 @@ export default function PartnerShow() {
 
   const remove = async () => {
     if (!canDeletePartner) return;
-    if (!window.confirm(`Supprimer "${getPartnerName(partner)}" ?`)) return;
+
+    if (!window.confirm(`Supprimer "${getPartnerName(partner)}" ?`)) {
+      return;
+    }
+
     setShowActionsMenu(false);
+
     try {
       await apiClient.delete(`/partenaires/${id}/`);
       handleClose();
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Suppression impossible.');
+      setError(
+        err?.response?.data?.detail ||
+        err?.message ||
+        'Suppression impossible.'
+      );
     }
   };
 
   const handleDuplicate = () => {
     if (!canCreatePartner) return;
+
     setSuccess('Duplication à implémenter');
     setShowActionsMenu(false);
   };
 
   const handleNewPartner = () => {
     if (!canCreatePartner) return;
+
     if (hasUnsavedChanges) {
       setShowConfirmDialog(true);
     } else {
-      navigate('../create', { state: location.state || undefined });
+      navigate('../create', {
+        state: location.state || undefined,
+      });
     }
   };
 
@@ -289,6 +394,7 @@ export default function PartnerShow() {
 
   const handleDiscardChanges = () => {
     if (!canWritePartner) return;
+
     setShowConfirmDialog(true);
   };
 
@@ -325,26 +431,34 @@ export default function PartnerShow() {
   };
 
   const toggleGroup = (groupId) => {
-    setUserForm(prev => ({
+    setUserForm((prev) => ({
       ...prev,
       groups: prev.groups.includes(groupId)
-        ? prev.groups.filter(g => g !== groupId)
+        ? prev.groups.filter((g) => g !== groupId)
         : [...prev.groups, groupId],
     }));
   };
 
   const createUser = async (e) => {
     e.preventDefault();
+
     if (!canCreateUser) return;
+
     setSaving(true);
     setError(null);
     setSuccess(null);
+
     try {
       if (hasUnsavedChanges) {
         const saved = await save(true);
+
         if (!saved) return;
       }
-      if (!partner?.email && !formData?.email) throw new Error('Le partenaire doit avoir un email.');
+
+      if (!partner?.email && !formData?.email) {
+        throw new Error('Le partenaire doit avoir un email.');
+      }
+
       await apiClient.post('/users/create-from-partenaire/', {
         partenaire: partner.id,
         first_name: userForm.first_name?.trim() || '',
@@ -354,11 +468,20 @@ export default function PartnerShow() {
         send_activation_email: userForm.send_activation_email,
         statut: userForm.statut,
       });
+
       setSuccess('Compte utilisateur créé.');
+
       await loadPartner();
-      if (showTraceabilityPanel) await traceability.reload();
+
+      if (showTraceabilityPanel) {
+        await traceability.reload();
+      }
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Création utilisateur impossible.');
+      setError(
+        err?.response?.data?.detail ||
+        err?.message ||
+        'Création utilisateur impossible.'
+      );
     } finally {
       setSaving(false);
     }
@@ -369,8 +492,10 @@ export default function PartnerShow() {
       <div className="min-h-screen bg-gray-50 p-2 md:p-3">
         <div className="mx-auto w-full bg-white border border-gray-300 p-8 flex items-center justify-center">
           <div className="text-center">
-            <div className="w-8 h-8 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-gray-600 text-sm">Chargement...</p>
+            <div className="w-8 h-8 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="mt-4 text-gray-600 text-sm">
+              {t('Chargement...')}
+            </p>
           </div>
         </div>
       </div>
@@ -381,37 +506,131 @@ export default function PartnerShow() {
 
   const actionsMenu = (
     <div className="relative" ref={actionsMenuRef}>
-      <button type="button" onClick={() => setShowActionsMenu((open) => !open)} className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 hover:bg-gray-50">
-        <FiSettings size={12} /><span>{t('Actions')}</span>
+      <button
+        type="button"
+        onClick={() => setShowActionsMenu((open) => !open)}
+        className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 hover:bg-gray-50"
+      >
+        <FiSettings size={12} />
+        <span>{t('Actions')}</span>
       </button>
-      {showActionsMenu && <div className="absolute right-0 z-50 mt-1 w-48 border border-gray-300 bg-white shadow-lg">
-        {canCreatePartner && <button type="button" onClick={handleDuplicate} className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"><FiCopy size={12} />{t('Dupliquer')}</button>}
-        <button type="button" onClick={() => { setShowActionsMenu(false); void loadPartner(); }} className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"><FiRefreshCw size={12} />{t('Actualiser')}</button>
-        {hasUnsavedChanges && canWritePartner && <button type="button" onClick={handleDiscardChanges} className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"><FiX size={12} />{t('Annuler les modifications')}</button>}
-        {canDeletePartner && <button type="button" onClick={remove} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-700 hover:bg-red-50"><FiTrash2 size={12} />{t('Supprimer')}</button>}
-      </div>}
+
+      {showActionsMenu && (
+        <div className="absolute right-0 z-50 mt-1 w-48 border border-gray-300 bg-white shadow-lg">
+          {canCreatePartner && (
+            <button
+              type="button"
+              onClick={handleDuplicate}
+              className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"
+            >
+              <FiCopy size={12} />
+              {t('Dupliquer')}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowActionsMenu(false);
+              void loadPartner();
+            }}
+            className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"
+          >
+            <FiRefreshCw size={12} />
+            {t('Actualiser')}
+          </button>
+
+          {hasUnsavedChanges && canWritePartner && (
+            <button
+              type="button"
+              onClick={handleDiscardChanges}
+              className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"
+            >
+              <FiX size={12} />
+              {t('Annuler les modifications')}
+            </button>
+          )}
+
+          {canDeletePartner && (
+            <button
+              type="button"
+              onClick={remove}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-700 hover:bg-red-50"
+            >
+              <FiTrash2 size={12} />
+              {t('Supprimer')}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 
   const process = (
     <div className="flex min-h-12 items-center justify-between gap-3 px-4 py-2">
       <div className="flex min-w-0 items-center gap-3">
-        {canWritePartner && <button type="button" onClick={handleToggleStatus} disabled={saving} className={`flex h-8 shrink-0 items-center gap-1 border px-3 text-xs font-medium disabled:opacity-50 ${isActive ? 'border-red-300 bg-white text-red-700 hover:bg-red-50' : 'border-purple-600 bg-purple-600 text-white hover:bg-purple-700'}`}>
-          <FiToggleRight size={13} />{isActive ? t('Désactiver') : t('Activer')}
-        </button>}
-        {!isReady && <span className="flex min-w-0 items-center gap-1 text-xs text-amber-700"><FiInfo size={14} />{t('Certains champs obligatoires sont incomplets')}</span>}
+        {canWritePartner && (
+          <button
+            type="button"
+            onClick={handleToggleStatus}
+            disabled={saving}
+            className={`flex h-8 shrink-0 items-center gap-1 border px-3 text-xs font-medium disabled:opacity-50 ${
+              isActive
+                ? 'border-red-300 bg-white text-red-700 hover:bg-red-50'
+                : 'border-purple-600 bg-purple-600 text-white hover:bg-purple-700'
+            }`}
+          >
+            <FiToggleRight size={13} />
+            {isActive ? t('Désactiver') : t('Activer')}
+          </button>
+        )}
+
+        {!isReady && (
+          <span className="flex min-w-0 items-center gap-1 text-xs text-amber-700">
+            <FiInfo size={14} />
+            {t('Certains champs obligatoires sont incomplets')}
+          </span>
+        )}
       </div>
+
       <div className="flex shrink-0 items-center gap-2 text-xs">
-        <span className={`border px-3 py-2 ${isActive ? 'border-green-300 bg-green-100 text-green-700' : 'border-gray-300 bg-gray-100 text-gray-500'}`}>{t('Actif')}</span>
-        <span className={`border px-3 py-2 ${!isActive ? 'border-red-300 bg-red-100 text-red-700' : 'border-gray-300 bg-gray-100 text-gray-500'}`}>{t('Inactif')}</span>
+        <span
+          className={`border px-3 py-2 ${
+            isActive
+              ? 'border-green-300 bg-green-100 text-green-700'
+              : 'border-gray-300 bg-gray-100 text-gray-500'
+          }`}
+        >
+          {t('Actif')}
+        </span>
+
+        <span
+          className={`border px-3 py-2 ${
+            !isActive
+              ? 'border-red-300 bg-red-100 text-red-700'
+              : 'border-gray-300 bg-gray-100 text-gray-500'
+          }`}
+        >
+          {t('Inactif')}
+        </span>
       </div>
     </div>
   );
 
   const traceabilityContent = (
-    <RecordTraceabilityContent rows={traceability.rows} loading={traceability.loading} error={traceability.error} entityLabel={t('ce partenaire')} />
+    <RecordTraceabilityContent
+      rows={traceability.rows}
+      loading={traceability.loading}
+      error={traceability.error}
+      entityLabel={t('ce partenaire')}
+    />
   );
-  const feedback = error ? { type: 'error', message: error } : success ? { type: 'success', message: success } : null;
+
+  const feedback = error
+    ? { type: 'error', message: error }
+    : success
+      ? { type: 'success', message: success }
+      : null;
 
   return (
     <UnifiedFormPage
@@ -421,7 +640,11 @@ export default function PartnerShow() {
       mode="show"
       fallbackPath="/partners"
       pullToHeader={0}
-      primaryAction={canCreatePartner ? { label: t('Nouveau'), onClick: handleNewPartner } : null}
+      primaryAction={
+        canCreatePartner
+          ? { label: t('Nouveau'), onClick: handleNewPartner }
+          : null
+      }
       onTitleClick={({ requestExit }) => requestExit()}
       actionsMenu={actionsMenu}
       onSave={canWritePartner ? () => save() : undefined}
@@ -431,366 +654,556 @@ export default function PartnerShow() {
       hasUnsavedChanges={hasUnsavedChanges}
       rememberForm={false}
       process={process}
-      feedback={feedback ? { ...feedback, message: t(feedback.message) } : null}
-      onDismissFeedback={() => { setError(null); setSuccess(null); }}
-      headerActions={[{
-        id: 'traceability',
-        label: t('Traçabilité'),
-        icon: <FiInfo size={13} />,
-        onClick: () => setShowTraceabilityPanel((open) => !open),
-        className: showTraceabilityPanel ? 'border-purple-300 bg-purple-50 text-purple-700' : '',
-      }]}
-      traceability={{ open: showTraceabilityPanel, onOpen: () => setShowTraceabilityPanel(true), onClose: () => setShowTraceabilityPanel(false), title: t('Traçabilité'), content: traceabilityContent, headerToggle: true }}
+      feedback={feedback ? {
+        ...feedback,
+        message: t(feedback.message),
+      } : null}
+      onDismissFeedback={() => {
+        setError(null);
+        setSuccess(null);
+      }}
+      headerActions={[
+        {
+          id: 'traceability',
+          label: t('Traçabilité'),
+          icon: <FiInfo size={13} />,
+          onClick: () => setShowTraceabilityPanel((open) => !open),
+          className: showTraceabilityPanel
+            ? 'border-purple-300 bg-purple-50 text-purple-700'
+            : '',
+        },
+      ]}
+      traceability={{
+        open: showTraceabilityPanel,
+        onOpen: () => setShowTraceabilityPanel(true),
+        onClose: () => setShowTraceabilityPanel(false),
+        title: t('Traçabilité'),
+        content: traceabilityContent,
+        headerToggle: true,
+      }}
     >
-    <div className="min-h-full bg-gray-50">
-      <div className="mx-auto w-full bg-white border border-gray-300">
+      <div className="min-h-full bg-gray-50">
+        <div className="mx-auto w-full bg-white border border-gray-300">
 
-        {/* En-tête ligne 1 */}
-        <div className="hidden border-b border-gray-300 px-4 py-1.5">
-          <div className="flex items-start justify-between mb-1">
-            <div className="flex items-start gap-3">
-              {canCreatePartner && <Tooltip text="Créer un nouveau partenaire">
-                <button
-                  onClick={handleNewPartner}
-                  className="h-9 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
-                  style={{ minWidth: '100px' }}
-                >
-                  <FiPlus size={16} className="mr-1" />
-                  <span>Nouveau</span>
-                </button>
-              </Tooltip>}
-              <div className="flex flex-col h-9 justify-center">
-                <div
-                  className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
-                  onClick={handleGoToList}
-                >
-                  {getPartnerName(partner)}
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`px-2 py-0.5 text-xs font-medium ${isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {isActive ? 'Actif' : 'Inactif'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Tooltip text="Menu des actions">
-                  <button
-                    onClick={() => setShowActionsMenu(!showActionsMenu)}
-                    className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
-                  >
-                    <FiSettings size={12} /><span>Actions</span>
-                  </button>
-                </Tooltip>
-                {showActionsMenu && (
-                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
-                    {canCreatePartner && <button onClick={handleDuplicate} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
-                      <FiCopy size={12} /> Dupliquer
-                    </button>}
-                    <button onClick={() => { setShowActionsMenu(false); loadPartner(); }} className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100">
-                      <FiRefreshCw size={12} /> Actualiser
+          {/* En-tête ligne 1 */}
+          <div className="hidden border-b border-gray-300 px-4 py-1.5">
+            <div className="flex items-start justify-between mb-1">
+              <div className="flex items-start gap-3">
+                {canCreatePartner && (
+                  <Tooltip text="Créer un nouveau partenaire">
+                    <button
+                      onClick={handleNewPartner}
+                      className="h-9 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
+                      style={{ minWidth: '100px' }}
+                    >
+                      <FiPlus size={16} className="mr-1" />
+                      <span>{t('Nouveau')}</span>
                     </button>
-                    {canDeletePartner && <button onClick={remove} className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 hover:pl-4 transition-all duration-200 flex items-center gap-2">
-                      <FiTrash2 size={12} /> Supprimer
-                    </button>}
-                  </div>
+                  </Tooltip>
                 )}
-              </div>
-              {canWritePartner && <Tooltip text="Enregistrer les modifications">
-                <button
-                  onClick={() => save(false).then(savedPartner => {
-                    if (savedPartner && location.state?.returnTo) navigateAfterSave(savedPartner);
-                  })}
-                  disabled={saving}
-                  className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 hover:scale-110 hover:shadow-lg active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm"
-                >
-                  <FiUploadCloud size={16} />
-                </button>
-              </Tooltip>}
-              {canWritePartner && <Tooltip text="Annuler les modifications">
-                <button
-                  onClick={handleDiscardChanges}
-                  className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 hover:scale-110 hover:shadow-lg active:scale-90 transition-all duration-200 flex items-center justify-center"
-                >
-                  <FiX size={16} />
-                </button>
-              </Tooltip>}
-            </div>
-          </div>
-        </div>
 
-        {/* En-tête ligne 2 */}
-        <div className="hidden border-b border-gray-300 px-4 py-2">
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {canWritePartner && <Tooltip text={isActive ? 'Désactiver ce partenaire' : 'Activer ce partenaire'}>
-                  <button
-                    type="button"
-                    onClick={handleToggleStatus}
-                    disabled={saving}
-                    className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center justify-center gap-1 ${
-                      isActive
-                        ? 'bg-white text-red-600 border-red-300 hover:bg-red-50 hover:scale-105 hover:shadow-md active:scale-95'
-                        : 'bg-purple-600 text-white border-purple-600 hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95'
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                <div className="flex flex-col h-9 justify-center">
+                  <div
+                    className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
+                    onClick={handleGoToList}
                   >
-                    <FiToggleRight size={13} />
-                    {isActive ? 'Désactiver' : 'Activer'}
-                  </button>
-                </Tooltip>}
+                    {getPartnerName(partner)}
+                  </div>
 
-                {error ? (
-                  <div className="flex items-center gap-1 text-xs text-red-600">
-                    <FiAlertCircle size={14} />
-                    <span>{error}</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span
+                      className={`px-2 py-0.5 text-xs font-medium ${
+                        isActive
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {isActive ? t('Actif') : t('Inactif')}
+                    </span>
                   </div>
-                ) : !isReady ? (
-                  <div className="flex items-center gap-1 text-xs text-amber-600">
-                    <FiInfo size={14} />
-                    <span>Certains champs obligatoires sont incomplets</span>
-                  </div>
-                ) : null}
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
-                  isActive
-                    ? 'bg-green-100 text-green-700 border-green-300'
-                    : 'bg-gray-100 text-gray-500 border-gray-300'
-                }`}>
-                  Actif
+                <div className="relative">
+                  <Tooltip text="Menu des actions">
+                    <button
+                      onClick={() => setShowActionsMenu(!showActionsMenu)}
+                      className="h-8 px-3 border border-gray-300 text-gray-700 text-xs hover:bg-gray-50 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center gap-1"
+                    >
+                      <FiSettings size={12} />
+                      <span>{t('Actions')}</span>
+                    </button>
+                  </Tooltip>
+
+                  {showActionsMenu && (
+                    <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded-sm z-50">
+                      {canCreatePartner && (
+                        <button
+                          onClick={handleDuplicate}
+                          className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100"
+                        >
+                          <FiCopy size={12} />
+                          {t('Dupliquer')}
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          setShowActionsMenu(false);
+                          void loadPartner();
+                        }}
+                        className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 hover:pl-4 transition-all duration-200 flex items-center gap-2 border-b border-gray-100"
+                      >
+                        <FiRefreshCw size={12} />
+                        {t('Actualiser')}
+                      </button>
+
+                      {canDeletePartner && (
+                        <button
+                          onClick={remove}
+                          className="w-full px-3 py-2 text-xs text-left hover:bg-red-50 hover:text-red-600 hover:pl-4 transition-all duration-200 flex items-center gap-2"
+                        >
+                          <FiTrash2 size={12} />
+                          {t('Supprimer')}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
-                  !isActive
-                    ? 'bg-red-100 text-red-700 border-red-300'
-                    : 'bg-gray-100 text-gray-500 border-gray-300'
-                }`}>
-                  Inactif
-                </div>
-              </div>
-            </div>
 
-            <div className="mt-2 ml-1">
-              <span className="text-xs text-gray-600">
-                ID #{partner.id}{formData.email ? ` — ${formData.email}` : ''}
-              </span>
-            </div>
-          </div>
-        </div>
+                {canWritePartner && (
+                  <Tooltip text="Enregistrer les modifications">
+                    <button
+                      onClick={() => save(false).then((savedPartner) => {
+                        if (savedPartner && location.state?.returnTo) {
+                          navigateAfterSave(savedPartner);
+                        }
+                      })}
+                      disabled={saving}
+                      className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-700 hover:scale-110 hover:shadow-lg active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-sm"
+                    >
+                      <FiUploadCloud size={16} />
+                    </button>
+                  </Tooltip>
+                )}
 
-        {/* Indicateur modifications */}
-        {hasUnsavedChanges && (
-          <div className="px-4 py-1 bg-blue-50 text-blue-700 text-xs border-b border-blue-200 flex items-center justify-between">
-            <span>Modifications non sauvegardées</span>
-          </div>
-        )}
-
-        {/* Entité / compte utilisateur */}
-        <div className="px-4 py-3 border-b border-gray-300">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center" style={{ height: '26px' }}>
-              <label className="text-xs text-gray-700 min-w-[140px] font-medium">Entité</label>
-              <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center gap-1" style={{ height: '26px' }}>
-                <FiBriefcase className="text-purple-600" size={12} />
-                {activeEntity?.nom || activeEntity?.name || activeEntity?.raison_sociale || '-'}
-              </div>
-            </div>
-            <div className="flex items-center" style={{ height: '26px' }}>
-              <label className="text-xs text-gray-700 min-w-[140px] font-medium">Compte utilisateur</label>
-              <div className="flex-1 ml-2">
-                {partner.user ? (
-                  <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800">Compte créé</span>
-                ) : (
-                  <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800">À créer</span>
+                {canWritePartner && (
+                  <Tooltip text="Annuler les modifications">
+                    <button
+                      onClick={handleDiscardChanges}
+                      className="w-8 h-8 rounded-full bg-black text-white hover:bg-gray-800 hover:scale-110 hover:shadow-lg active:scale-90 transition-all duration-200 flex items-center justify-center"
+                    >
+                      <FiX size={16} />
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Onglets */}
-        <div className="border-b border-gray-300">
-          <div className="px-4 flex">
-            {[
-              ['fiche', t('Fiche partenaire')],
-              ['utilisateur', t('Utilisateur')],
-              ['notes', t('Notes')],
-            ].map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className={`px-4 py-2 text-xs font-medium border-b-2 transition-all duration-200 ${
-                  activeTab === key
-                    ? 'border-purple-600 text-purple-600 hover:text-purple-800'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Contenu onglets */}
-        <div className="p-4">
-          {activeTab === 'fiche' && (
-            <PartnerForm
-              mode="main"
-              formData={formData}
-              setFormData={updateForm}
-              fieldErrors={fieldErrors}
-              setFieldErrors={setFieldErrors}
-              readOnly={!canWritePartner}
-            />
-          )}
-
-          {activeTab === 'utilisateur' && (
-            <div className="border border-gray-300">
-              <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">{t('Compte utilisateur')}</div>
-              {partner.user ? (
-                <div className="p-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <FiUser size={16} className="text-green-600" />
-                    <div>
-                      <div className="font-medium text-gray-900">{partner.user.email || formData.email}</div>
-                      <div className="text-xs text-gray-500">{t('Statut')} : {t(partner.user.is_active ? 'Actif' : 'Inactif')}</div>
-                    </div>
-                  </div>
-                </div>
-              ) : !canCreateUser ? (
-                <div className="p-4 text-sm text-gray-600">
-                  {t('Vous ne disposez pas du droit de création d’un compte utilisateur.')}
-                </div>
-              ) : (
-                <form onSubmit={createUser} className="p-4 space-y-3">
-                  <div className="bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
-                    {t('Email utilisé')} : <span className="font-bold">{formData.email || t('Email manquant')}</span>
-                    {hasUnsavedChanges && <div className="mt-1">{t('La fiche partenaire sera sauvegardée avant la création du compte.')}</div>}
-                  </div>
-                  <div className="grid grid-cols-4 border border-gray-300">
-                    <div className="border-r border-gray-300">
-                      <div className="bg-gray-100 px-2 py-1.5 text-xs font-medium border-b border-gray-300">Prénom *</div>
-                      <div className="p-1"><input required value={userForm.first_name} onChange={(e) => setUserForm(prev => ({ ...prev, first_name: e.target.value }))} className="w-full border border-gray-300 px-2 py-1.5 text-xs" /></div>
-                    </div>
-                    <div className="border-r border-gray-300">
-                      <div className="bg-gray-100 px-2 py-1.5 text-xs font-medium border-b border-gray-300">Nom *</div>
-                      <div className="p-1"><input required value={userForm.last_name} onChange={(e) => setUserForm(prev => ({ ...prev, last_name: e.target.value }))} className="w-full border border-gray-300 px-2 py-1.5 text-xs" /></div>
-                    </div>
-                    <div className="border-r border-gray-300">
-                      <div className="bg-gray-100 px-2 py-1.5 text-xs font-medium border-b border-gray-300">Téléphone</div>
-                      <div className="p-1"><input value={userForm.telephone} onChange={(e) => setUserForm(prev => ({ ...prev, telephone: e.target.value }))} className="w-full border border-gray-300 px-2 py-1.5 text-xs" /></div>
-                    </div>
-                    <div>
-                      <div className="bg-gray-100 px-2 py-1.5 text-xs font-medium border-b border-gray-300">Statut</div>
-                      <div className="p-1">
-                        <select value={userForm.statut} onChange={(e) => setUserForm(prev => ({ ...prev, statut: e.target.value }))} className="w-full border border-gray-300 px-2 py-1.5 text-xs">
-                          <option value="actif">Actif</option>
-                          <option value="inactif">Inactif</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {canReadGroups && <div className="border border-gray-300">
-                    <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">Groupes</div>
-                    <div className="p-2 grid grid-cols-3 gap-2">
-                      {groups.length === 0 ? (
-                    <div className="text-xs text-gray-500">{t('Aucun groupe disponible')}</div>
-                      ) : groups.map(group => (
-                        <label key={group.id} className="text-xs flex items-center gap-2">
-                          <input type="checkbox" checked={userForm.groups.includes(group.id)} onChange={() => toggleGroup(group.id)} />
-                          {group.name}
-                        </label>
-                      ))}
-                    </div>
-                  </div>}
-
-                  <label className="text-xs flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={userForm.send_activation_email}
-                      onChange={(e) => setUserForm(prev => ({ ...prev, send_activation_email: e.target.checked }))}
-                    />
-                    {t('Envoyer email d’activation')}
-                  </label>
-
-                  <Tooltip text="Créer le compte utilisateur lié à ce partenaire">
-                    <button
-                      type="submit"
-                      disabled={saving || !formData.email}
-                      className="h-8 px-3 bg-green-600 text-white text-xs hover:bg-green-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 flex items-center gap-1"
+          {/* En-tête ligne 2 */}
+          <div className="hidden border-b border-gray-300 px-4 py-2">
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {canWritePartner && (
+                    <Tooltip
+                      text={
+                        isActive
+                          ? 'Désactiver ce partenaire'
+                          : 'Activer ce partenaire'
+                      }
                     >
-                      <FiUserPlus size={13} /> {saving ? 'Création...' : 'Créer le compte utilisateur'}
-                    </button>
-                  </Tooltip>
-                </form>
-              )}
+                      <button
+                        type="button"
+                        onClick={handleToggleStatus}
+                        disabled={saving}
+                        className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center justify-center gap-1 ${
+                          isActive
+                            ? 'bg-white text-red-600 border-red-300 hover:bg-red-50 hover:scale-105 hover:shadow-md active:scale-95'
+                            : 'bg-purple-600 text-white border-purple-600 hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        <FiToggleRight size={13} />
+                        {isActive ? t('Désactiver') : t('Activer')}
+                      </button>
+                    </Tooltip>
+                  )}
+
+                  {error ? (
+                    <div className="flex items-center gap-1 text-xs text-red-600">
+                      <FiAlertCircle size={14} />
+                      <span>{t(error)}</span>
+                    </div>
+                  ) : !isReady ? (
+                    <div className="flex items-center gap-1 text-xs text-amber-600">
+                      <FiInfo size={14} />
+                      <span>
+                        {t('Certains champs obligatoires sont incomplets')}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
+                      isActive
+                        ? 'bg-green-100 text-green-700 border-green-300'
+                        : 'bg-gray-100 text-gray-500 border-gray-300'
+                    }`}
+                  >
+                    {t('Actif')}
+                  </div>
+
+                  <div
+                    className={`h-8 px-3 text-xs font-medium border transition-all duration-200 flex items-center ${
+                      !isActive
+                        ? 'bg-red-100 text-red-700 border-red-300'
+                        : 'bg-gray-100 text-gray-500 border-gray-300'
+                    }`}
+                  >
+                    {t('Inactif')}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2 ml-1">
+                <span className="text-xs text-gray-600">
+                  ID #{partner.id}
+                  {formData.email ? ` — ${formData.email}` : ''}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Indicateur modifications */}
+          {hasUnsavedChanges && (
+            <div className="px-4 py-1 bg-blue-50 text-blue-700 text-xs border-b border-blue-200 flex items-center justify-between">
+              <span>{t('Modifications non sauvegardées')}</span>
             </div>
           )}
 
-          {activeTab === 'notes' && (
-            <PartnerForm
-              mode="notes"
-              formData={formData}
-              setFormData={updateForm}
-              fieldErrors={fieldErrors}
-              setFieldErrors={setFieldErrors}
-              readOnly={!canWritePartner}
-            />
+          {/* Entité / compte utilisateur */}
+          <div className="px-4 py-3 border-b border-gray-300">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center" style={{ height: '26px' }}>
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
+                  {t('Entité')}
+                </label>
+
+                <div
+                  className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center gap-1"
+                  style={{ height: '26px' }}
+                >
+                  <FiBriefcase className="text-purple-600" size={12} />
+                  {activeEntity?.nom || activeEntity?.name || activeEntity?.raison_sociale || '-'}
+                </div>
+              </div>
+
+              <div className="flex items-center" style={{ height: '26px' }}>
+                <label className="text-xs text-gray-700 min-w-[140px] font-medium">
+                  {t('Compte utilisateur')}
+                </label>
+
+                <div className="flex-1 ml-2">
+                  {partner.user ? (
+                    <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800">
+                      {t('Compte créé')}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800">
+                      {t('À créer')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Onglets */}
+          <div className="border-b border-gray-300">
+            <div className="px-4 flex">
+              {[
+                ['fiche', t('Fiche partenaire')],
+                ['utilisateur', t('Utilisateur')],
+                ['notes', t('Notes')],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-all duration-200 ${
+                    activeTab === key
+                      ? 'border-purple-600 text-purple-600 hover:text-purple-800'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Contenu onglets */}
+          <div className="p-4">
+            {activeTab === 'fiche' && (
+              <PartnerForm
+                mode="main"
+                formData={formData}
+                setFormData={updateForm}
+                fieldErrors={fieldErrors}
+                setFieldErrors={setFieldErrors}
+                readOnly={!canWritePartner}
+              />
+            )}
+
+            {activeTab === 'utilisateur' && (
+              <div className="border border-gray-300">
+                <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">
+                  {t('Compte utilisateur')}
+                </div>
+
+                {partner.user ? (
+                  <div className="p-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <FiUser size={16} className="text-green-600" />
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {partner.user.email || formData.email}
+                        </div>
+
+                        <div className="text-xs text-gray-500">
+                          {t('Statut')} : {t(partner.user.is_active ? 'Actif' : 'Inactif')}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : !canCreateUser ? (
+                  <div className="p-4 text-sm text-gray-600">
+                    {t('Vous ne disposez pas du droit de création d’un compte utilisateur.')}
+                  </div>
+                ) : (
+                  <form onSubmit={createUser} className="p-4 space-y-3">
+                    <div className="bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
+                      {t('Email utilisé')} :
+                      <span className="font-bold">
+                        {' '}{formData.email || t('Email manquant')}
+                      </span>
+
+                      {hasUnsavedChanges && (
+                        <div className="mt-1">
+                          {t('La fiche partenaire sera sauvegardée avant la création du compte.')}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-4 border border-gray-300">
+                      <div className="border-r border-gray-300">
+                        <div className="bg-gray-100 px-2 py-1.5 text-xs font-medium border-b border-gray-300">
+                          {t('Prénom')} *
+                        </div>
+                        <div className="p-1">
+                          <input
+                            required
+                            value={userForm.first_name}
+                            onChange={(e) => setUserForm((prev) => ({
+                              ...prev,
+                              first_name: e.target.value,
+                            }))}
+                            className="w-full border border-gray-300 px-2 py-1.5 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="border-r border-gray-300">
+                        <div className="bg-gray-100 px-2 py-1.5 text-xs font-medium border-b border-gray-300">
+                          {t('Nom')} *
+                        </div>
+                        <div className="p-1">
+                          <input
+                            required
+                            value={userForm.last_name}
+                            onChange={(e) => setUserForm((prev) => ({
+                              ...prev,
+                              last_name: e.target.value,
+                            }))}
+                            className="w-full border border-gray-300 px-2 py-1.5 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="border-r border-gray-300">
+                        <div className="bg-gray-100 px-2 py-1.5 text-xs font-medium border-b border-gray-300">
+                          {t('Téléphone')}
+                        </div>
+                        <div className="p-1">
+                          <input
+                            value={userForm.telephone}
+                            onChange={(e) => setUserForm((prev) => ({
+                              ...prev,
+                              telephone: e.target.value,
+                            }))}
+                            className="w-full border border-gray-300 px-2 py-1.5 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="bg-gray-100 px-2 py-1.5 text-xs font-medium border-b border-gray-300">
+                          {t('Statut')}
+                        </div>
+                        <div className="p-1">
+                          <SomaneSelect
+                            value={userForm.statut}
+                            onChange={(valueOrEvent) => setUserForm((prev) => ({
+                              ...prev,
+                              statut: valueOrEvent?.target
+                                ? valueOrEvent.target.value
+                                : valueOrEvent,
+                            }))}
+                            className="w-full border border-gray-300 px-2 py-1.5 text-xs"
+                          >
+                            <option value="actif">{t('Actif')}</option>
+                            <option value="inactif">{t('Inactif')}</option>
+                          </SomaneSelect>
+                        </div>
+                      </div>
+                    </div>
+
+                    {canReadGroups && (
+                      <div className="border border-gray-300">
+                        <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">
+                          {t('Groupes')}
+                        </div>
+
+                        <div className="p-2 grid grid-cols-3 gap-2">
+                          {groups.length === 0 ? (
+                            <div className="text-xs text-gray-500">
+                              {t('Aucun groupe disponible')}
+                            </div>
+                          ) : (
+                            groups.map((group) => (
+                              <label
+                                key={group.id}
+                                className="text-xs flex items-center gap-2"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={userForm.groups.includes(group.id)}
+                                  onChange={() => toggleGroup(group.id)}
+                                />
+                                {group.name}
+                              </label>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <label className="text-xs flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={userForm.send_activation_email}
+                        onChange={(e) => setUserForm((prev) => ({
+                          ...prev,
+                          send_activation_email: e.target.checked,
+                        }))}
+                      />
+                      {t('Envoyer email d’activation')}
+                    </label>
+
+                    <Tooltip text="Créer le compte utilisateur lié à ce partenaire">
+                      <button
+                        type="submit"
+                        disabled={saving || !formData.email}
+                        className="h-8 px-3 bg-green-600 text-white text-xs hover:bg-green-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 flex items-center gap-1"
+                      >
+                        <FiUserPlus size={13} />
+                        {saving
+                          ? t('Création...')
+                          : t('Créer le compte utilisateur')}
+                      </button>
+                    </Tooltip>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'notes' && (
+              <PartnerForm
+                mode="notes"
+                formData={formData}
+                setFormData={updateForm}
+                fieldErrors={fieldErrors}
+                setFieldErrors={setFieldErrors}
+                readOnly={!canWritePartner}
+              />
+            )}
+          </div>
+
+          {/* Messages */}
+          {(error || success) && (
+            <div
+              className={`hidden px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
+                error
+                  ? 'bg-red-50 text-red-700'
+                  : 'bg-green-50 text-green-700'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {error ? <FiAlertCircle size={14} /> : <FiCheck size={14} />}
+                <span>{t(error || success)}</span>
+              </div>
+            </div>
           )}
         </div>
 
-        {/* Messages */}
-        {(error || success) && (
-          <div className={`hidden px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
-            error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
-          }`}>
-            <div className="flex items-center gap-2">
-              {error ? <FiAlertCircle size={14} /> : <FiCheck size={14} />}
-              <span>{error || success}</span>
+        {/* Dialogue confirmation */}
+        {showConfirmDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+            <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
+              <h3 className="text-lg font-bold text-gray-900 mb-3">
+                {t('Modifications non sauvegardées')}
+              </h3>
+
+              <p className="text-sm text-gray-600 mb-6">
+                {t('Voulez-vous enregistrer les modifications avant de quitter ?')}
+              </p>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={async () => {
+                    setShowConfirmDialog(false);
+                    const savedPartner = await save(true);
+
+                    if (savedPartner) {
+                      navigateAfterSave(savedPartner);
+                    }
+                  }}
+                  className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 active:scale-95 transition-all duration-200"
+                >
+                  {t('Enregistrer')}
+                </button>
+
+                <button
+                  onClick={confirmDiscardChanges}
+                  className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 hover:scale-105 active:scale-95 transition-all duration-200"
+                >
+                  {t('Ne pas enregistrer')}
+                </button>
+
+                <button
+                  onClick={() => setShowConfirmDialog(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 hover:scale-105 active:scale-95 transition-all duration-200"
+                >
+                  {t('Annuler')}
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* Dialogue confirmation */}
-      {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
-                  <h3 className="text-lg font-bold text-gray-900 mb-3">{t('Modifications non sauvegardées')}</h3>
-            <p className="text-sm text-gray-600 mb-6">
-                  {t('Voulez-vous enregistrer les modifications avant de quitter ?')}
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={async () => {
-                  setShowConfirmDialog(false);
-                  const savedPartner = await save(true);
-                  if (savedPartner) navigateAfterSave(savedPartner);
-                }}
-                className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 active:scale-95 transition-all duration-200"
-              >
-                {t('Enregistrer')}
-              </button>
-              <button
-                onClick={confirmDiscardChanges}
-                className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 hover:scale-105 active:scale-95 transition-all duration-200"
-              >
-                {t('Ne pas enregistrer')}
-              </button>
-              <button
-                onClick={() => setShowConfirmDialog(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 hover:scale-105 active:scale-95 transition-all duration-200"
-              >
-                {t('Annuler')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
     </UnifiedFormPage>
   );
 }

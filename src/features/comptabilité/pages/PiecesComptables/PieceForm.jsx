@@ -11,6 +11,8 @@ import {
 import { useEntity } from '../../../../context/EntityContext';
 import { piecesService } from "../../services";
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
+import ColumnVisibilityMenu from '../../../../components/ColumnVisibilityMenu';
+import StatusTrack from '../../../../components/StatusTrack';
 
 // =============================================================================
 // IMPORT DU HELPER POUR LA LOGIQUE DYNAMIQUE
@@ -20,6 +22,7 @@ import {
   resolveCounterpartAccount,
   suggestJournalByNature
 } from '../../services/accountHelper';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 // =============================================================================
 // CONSTANTES DE FALLBACK
@@ -38,30 +41,9 @@ const normalizeMoveState = (state) => {
 // =============================================================================
 // TOOLTIP
 // =============================================================================
-const Tooltip = ({ children, text, position = 'bottom' }) => {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>{children}</div>
-      {show && (
-        <div className={`absolute z-[35] px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-            'right-full top-1/2 -translate-y-1/2 -mr-1'
-          }`} />
-        </div>
-      )}
-    </div>
-  );
-};
+const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 // =============================================================================
 // AUTOCOMPLETE INPUT
@@ -135,7 +117,7 @@ const AutocompleteInput = ({ value, selectedId, onChange, onSelect, options, get
 
   return (
     <>
-      <input ref={inputRef} type="text" value={!isOpen && displayValue ? displayValue : inputValue} title={title || inputValue || placeholder} onChange={handleInputChange} onKeyDown={handleKeyDown} onFocus={() => { if(!disabled) { setIsOpen(true); updateDropdownPosition(); } }} placeholder={placeholder} disabled={disabled} required={required} className={`w-full px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none ${className} ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`} style={{ height: '26px', border: 'none', backgroundColor: 'transparent' }} autoComplete="off" />
+      <input ref={inputRef} type="text" value={!isOpen && displayValue ? displayValue : inputValue} title={title || inputValue || undefined} data-somane-dropdown-open={isOpen ? 'true' : undefined} onChange={handleInputChange} onKeyDown={handleKeyDown} onFocus={() => { if(!disabled) { setIsOpen(true); updateDropdownPosition(); } }} placeholder={placeholder} disabled={disabled} required={required} className={`w-full px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none ${className} ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`} style={{ height: '26px', border: 'none', backgroundColor: 'transparent' }} autoComplete="off" />
       {isOpen && !disabled && (filteredOptions.length > 0 || canCreate) && (
         <div ref={dropdownRef} className="bg-white border border-gray-300 shadow-lg" style={dropdownStyle}>
           {filteredOptions.map((option, index) => (
@@ -373,6 +355,10 @@ export default function PieceForm({ mode = 'create' }) {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [actionsMenuStyle, setActionsMenuStyle] = useState({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingNavigatorTarget, setPendingNavigatorTarget] = useState(null);
+  const [recordNavigatorRecords, setRecordNavigatorRecords] = useState(() => (
+    Array.isArray(location.state?.recordNavigatorRecords) ? location.state.recordNavigatorRecords : []
+  ));
   const [unsavedPieceAction, setUnsavedPieceAction] = useState(null);
   const [pendingPieceAction, setPendingPieceAction] = useState(null);
   const [treasuryWarningDialog, setTreasuryWarningDialog] = useState(null);
@@ -662,6 +648,45 @@ export default function PieceForm({ mode = 'create' }) {
     optionsEntityRef.current = entityKey;
     void loadOptions();
   }, [activeEntity, optionsLoaded, loadOptions]);
+
+  useEffect(() => {
+    const suppliedRecords = location.state?.recordNavigatorRecords;
+    if (Array.isArray(suppliedRecords) && suppliedRecords.length > 0) {
+      setRecordNavigatorRecords(suppliedRecords);
+      return undefined;
+    }
+    if (!isShowMode || !activeEntity?.id) {
+      setRecordNavigatorRecords([]);
+      return undefined;
+    }
+
+    let isCurrent = true;
+    piecesService.getAll(activeEntity.id, { page: 1, page_size: 250 })
+      .then((response) => {
+        const payload = response?.data ?? response;
+        const items = Array.isArray(payload)
+          ? payload
+          : payload?.results || payload?.data || [];
+        if (!isCurrent || !Array.isArray(items)) return;
+        setRecordNavigatorRecords(items.map((record) => {
+          const date = record.date || record.accounting_date || record.invoice_date || record.registration_date;
+          const journal = record.journal_detail?.name
+            || record.journal?.name
+            || record.journal_name
+            || record.journal_label;
+          return {
+            id: record.id,
+            label: record.name || record.ref || `Pièce #${record.id}`,
+            detail: [journal, date ? new Date(date).toLocaleDateString('fr-FR') : ''].filter(Boolean).join(' · '),
+          };
+        }));
+      })
+      .catch(() => {
+        if (isCurrent) setRecordNavigatorRecords([]);
+      });
+
+    return () => { isCurrent = false; };
+  }, [activeEntity?.id, isShowMode, location.state]);
 
   const loadPieceData = useCallback(async () => {
     if (!isShowMode || !routeId || !activeEntity?.id) return;
@@ -2121,7 +2146,10 @@ export default function PieceForm({ mode = 'create' }) {
 
   const confirmDiscardChanges = () => {
     setFormData(initialFormData); setPieceId(null); setHasUnsavedChanges(false);
-    setAttachmentsList([]); setShowConfirmDialog(false); navigate('/comptabilite/pieces');
+    setAttachmentsList([]); setShowConfirmDialog(false);
+    const target = pendingNavigatorTarget;
+    setPendingNavigatorTarget(null);
+    navigate(target?.path || '/comptabilite/pieces', { state: target?.state });
   };
 
   const confirmTreasuryWarning = () => {
@@ -2317,10 +2345,17 @@ export default function PieceForm({ mode = 'create' }) {
   };
 
   const actionsMenu = (
-    <div className="relative z-[90] pointer-events-auto" ref={actionsMenuRef} onMouseDown={(event) => event.stopPropagation()}>
-      <Tooltip text="Menu des actions">
-        <button ref={actionsMenuButtonRef} type="button" onClick={toggleActionsMenu} className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:bg-gray-50 hover:shadow-md active:scale-95">
-          <FiSettings size={12} /><span>Actions</span>
+    <div className="somane-form-actions-control relative z-[90] pointer-events-auto" ref={actionsMenuRef} onMouseDown={(event) => event.stopPropagation()}>
+      <Tooltip content="Actions">
+        <button
+          ref={actionsMenuButtonRef}
+          type="button"
+          onClick={toggleActionsMenu}
+          title="Actions"
+          aria-label="Actions"
+          className="somane-icon-btn somane-icon-btn--round somane-form-actions-trigger"
+        >
+          <FiSettings size={16} aria-hidden="true" />
         </button>
       </Tooltip>
       {showActionsMenu && (
@@ -2350,22 +2385,23 @@ export default function PieceForm({ mode = 'create' }) {
         <div className="flex min-w-0 items-center gap-3">
           {isDraft ? (
             <Tooltip text={!readyForValidation ? 'Remplissez journal, compte, libellé et montant' : 'Valider la pièce'}>
-              <button type="button" onClick={handleToggleState} disabled={loading} className={`h-8 px-3 text-xs font-medium border transition-all flex items-center ${readyForValidation ? 'bg-purple-600 text-white border-purple-600 hover:bg-purple-700 cursor-pointer' : 'bg-gray-100 text-gray-600 border-gray-300 hover:border-purple-400 hover:bg-purple-50 hover:text-purple-700 cursor-pointer'}`}>
+              <button type="button" onClick={handleToggleState} disabled={loading} className="somane-form-action-button">
                 Comptabiliser
               </button>
             </Tooltip>
           ) : (
             <Tooltip text="Remettre cette pièce en brouillon">
-              <button type="button" onClick={() => requestPieceAction('draft', 'Remettre en brouillon')} disabled={loading} className="h-8 px-3 text-xs font-medium border border-purple-600 bg-white text-purple-700 transition-all hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={() => requestPieceAction('draft', 'Remettre en brouillon')} disabled={loading} className="somane-form-action-button">
                 Remettre en brouillon
               </button>
             </Tooltip>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div className={`h-8 px-3 text-xs font-medium border flex items-center ${isDraft ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>Brouillon</div>
-          <div className={`h-8 px-3 text-xs font-medium border flex items-center ${!isDraft ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>Comptabilisé</div>
-        </div>
+        <StatusTrack
+          steps={[{ id: 'draft', label: 'Brouillon' }, { id: 'posted', label: 'Comptabilisé' }]}
+          currentState={isDraft ? 'draft' : 'posted'}
+          label="États de la pièce comptable"
+        />
       </div>
     </div>
   );
@@ -2511,8 +2547,8 @@ export default function PieceForm({ mode = 'create' }) {
         }
       `}</style>
       {treasuryWarningDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-[10000]">
-          <div className="bg-white border border-gray-300 shadow-xl rounded-sm w-full max-w-md mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-[10000] somane-overlay-backdrop">
+          <div className="bg-white border border-gray-300 shadow-xl rounded-sm w-full max-w-md mx-4 somane-modal-surface">
             <div className="px-4 py-3 border-b border-gray-200 flex items-center gap-2">
               <FiAlertCircle className="text-yellow-600" size={18} />
               <h3 className="text-sm font-semibold text-gray-900">Compte non autorise</h3>
@@ -2536,7 +2572,7 @@ export default function PieceForm({ mode = 'create' }) {
         className="piece-print-root"
         title="Pièces comptables"
         recordLabel={formData.name || (isDraft ? 'Brouillon' : 'Comptabilisée')}
-        pageLabel={isShowMode ? 'Détail de la pièce comptable' : "Création d'une pièce comptable"}
+        pageLabel={isShowMode ? 'Détail' : 'Création'}
         mode={isShowMode ? 'show' : 'create'}
         fallbackPath="/comptabilite/pieces"
         primaryAction={isPrinting ? null : { label: 'Nouveau', icon: <FiPlus size={12} />, path: '/comptabilite/pieces/create', state: { newPiece: Date.now() } }}
@@ -2562,6 +2598,25 @@ export default function PieceForm({ mode = 'create' }) {
         messageDuration={15000}
         process={isPrinting ? null : process}
         traceability={isPrinting ? undefined : { open: showTraceabilityPanel, onOpen: () => setShowTraceabilityPanel(true), onClose: () => setShowTraceabilityPanel(false), title: 'Traçabilité', content: traceabilityContent }}
+        recordNavigator={isShowMode && recordNavigatorRecords.length > 0 ? {
+          label: 'Pièces comptables',
+          placeholder: 'Rechercher une pièce...',
+          records: recordNavigatorRecords,
+          value: pieceId || routeId,
+          onSelect: (record) => {
+            if (!record?.id || String(record.id) === String(pieceId || routeId)) return;
+            const target = {
+              path: `/comptabilite/pieces/${record.id}`,
+              state: { recordNavigatorRecords },
+            };
+            if (hasUnsavedChanges) {
+              setPendingNavigatorTarget(target);
+              setShowConfirmDialog(true);
+            } else {
+              navigate(target.path, { state: target.state });
+            }
+          },
+        } : undefined}
       >
 
         {/* Ancien en-tete conserve uniquement pour compatibilite, le modele commun rend le nouvel en-tete. */}
@@ -2662,17 +2717,38 @@ export default function PieceForm({ mode = 'create' }) {
         </div>
 
         {/* ONGLETS */}
-        <div className="piece-print-hide border-b border-gray-300">
-          <div className="px-4 flex">
+        <div className="piece-print-hide px-4">
+          <div className="somane-tabs" role="tablist" aria-label="Sections de la pièce comptable">
             {['ecritures', 'notes', 'pieces-jointes'].map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-xs font-medium border-b-2 transition-all ${activeTab === tab ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              <button
+                key={tab}
+                id={`piece-tab-${tab}`}
+                type="button"
+                role="tab"
+                data-tab={tab}
+                aria-selected={activeTab === tab}
+                aria-controls="piece-tabpanel"
+                tabIndex={activeTab === tab ? 0 : -1}
+                onKeyDown={(event) => {
+                  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                  event.preventDefault();
+                  const tabs = Array.from(event.currentTarget.parentElement.querySelectorAll('[role="tab"]'));
+                  const currentIndex = tabs.indexOf(event.currentTarget);
+                  const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (currentIndex + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
+                  const nextTab = tabs[nextIndex];
+                  nextTab.focus();
+                  setActiveTab(nextTab.dataset.tab);
+                }}
+                onClick={() => setActiveTab(tab)}
+                className="somane-tab"
+              >
                 {tab === 'ecritures' ? 'Écritures comptables' : tab === 'notes' ? 'Notes' : 'Pièces jointes'}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="p-4">
+        <div id="piece-tabpanel" className="somane-tabpanel p-4" role="tabpanel" aria-labelledby={`piece-tab-${activeTab}`} tabIndex={0}>
 
           {/* ONGLET ÉCRITURES */}
           {activeTab === 'ecritures' && (
@@ -2684,8 +2760,8 @@ export default function PieceForm({ mode = 'create' }) {
                 .piece-lines-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 999px; }
                 .piece-lines-scroll::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
               `}</style>
-              <div className="piece-lines-scroll mb-3 max-h-[52vh] overflow-auto" ref={tableContainerRef}>
-                <table className="table-fixed border-collapse" style={{ minWidth: `${lineTableColumns.reduce((sum, column) => sum + (lineColumnWidths[column.key] || DEFAULT_LINE_COLUMN_WIDTHS[column.key]), 0)}px` }}>
+              <div className="somane-form-table-scroll piece-lines-scroll mb-3 max-h-[52vh] overflow-auto" ref={tableContainerRef}>
+                <table className="somane-form-table table-fixed" style={{ minWidth: `${lineTableColumns.reduce((sum, column) => sum + (lineColumnWidths[column.key] || DEFAULT_LINE_COLUMN_WIDTHS[column.key]), 0)}px` }}>
                   <colgroup>
                     {lineTableColumns.map(column => <col key={column.key} style={lineColumnStyle(column.key)} />)}
                   </colgroup>
@@ -2708,7 +2784,12 @@ export default function PieceForm({ mode = 'create' }) {
                       {lineTableColumns.map(column => (
                         <th key={column.key} ref={column.key === 'actions' ? columnsMenuRef : undefined} className="relative border border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700">
                           {column.key === 'actions' ? (
-                            <button ref={columnsMenuButtonRef} type="button" onClick={toggleColumnsMenu} className="w-full text-left hover:text-purple-600">...</button>
+                            <ColumnVisibilityMenu
+                              columns={OPTIONAL_COLUMNS}
+                              isVisible={(key) => !!visibleColumns[key]}
+                              onToggle={toggleOptionalColumn}
+                              allowEmpty
+                            />
                           ) : column.label}
                           <span
                             role="separator"
@@ -2962,17 +3043,6 @@ export default function PieceForm({ mode = 'create' }) {
                   </tfoot>
                 </table>
               </div>
-              {showColumnsMenu && (
-                <div ref={columnsMenuPopupRef} className="w-44 bg-white border border-gray-300 shadow-lg border-t-0" style={columnsMenuStyle}>
-                  {OPTIONAL_COLUMNS.map(column => (
-                    <label key={column.key} className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 cursor-pointer">
-                      <input type="checkbox" checked={!!visibleColumns[column.key]} onChange={() => toggleOptionalColumn(column.key)} className="h-3 w-3" />
-                      <span>{column.label}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-
               <div className="piece-print-hide mb-3 flex items-center gap-4">
                 <Tooltip text="Ajouter une ligne d'écriture">
                   <button onClick={addLine} disabled={!isDraft} className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1">
@@ -3010,7 +3080,7 @@ export default function PieceForm({ mode = 'create' }) {
                   <AutocompleteInput value={formData.fiscal_position_label} selectedId={formData.fiscal_position_id} onChange={(text) => handleChange('fiscal_position_label', text)} onSelect={(id, label) => { setFormData(prev => ({ ...prev, fiscal_position_id: id, fiscal_position_label: label })); markAsModified(); }} options={fiscalPositions} getOptionLabel={(f) => f.name} placeholder="Position fiscale" disabled={!isDraft} />
                 </div>
                 <div className="border-r border-gray-300 p-1">
-                  <select
+                  <SomaneSelect
                     value={formData.auto_post || 'manual'}
                     onChange={(event) => handleChange('auto_post', event.target.value)}
                     disabled={!isDraft}
@@ -3022,7 +3092,7 @@ export default function PieceForm({ mode = 'create' }) {
                     <option value="monthly">Mensuel</option>
                     <option value="quarterly">Trimestriel</option>
                     <option value="yearly">Annuel</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
                 <div className="p-1">
                   <div className="w-full px-2 py-1 text-xs text-gray-700 flex items-center" style={{ height: '26px' }}>
@@ -3031,13 +3101,13 @@ export default function PieceForm({ mode = 'create' }) {
                   </div>
                 </div>
               </div>
-              <textarea value={formData.notes} onChange={(e) => handleChange('notes', e.target.value)} disabled={!isDraft} className="w-full h-48 px-3 py-2 border-0 text-xs focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" placeholder="Notes complémentaires..." />
+              <textarea value={formData.notes} onChange={(e) => handleChange('notes', e.target.value)} disabled={!isDraft} className="somane-notes-field w-full h-48 px-3 py-2 border-0 text-xs focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" placeholder="Notes complémentaires..." />
             </div>
           )}
 
           {/* ONGLET PIÈCES JOINTES */}
           {activeTab === 'pieces-jointes' && (
-            <div className="border border-gray-300 p-6 rounded">
+            <div className="somane-attachment-panel border border-gray-300 p-6 rounded">
               {isDraft && (
                 <div className="mb-6">
                   <input type="file" id="attachments" className="hidden" multiple onChange={(e) => { void handleAttachmentsChange(e.target.files); e.target.value = ''; }} disabled={uploadingFiles} />
@@ -3048,9 +3118,9 @@ export default function PieceForm({ mode = 'create' }) {
                 </div>
               )}
               {attachmentsList.length > 0 ? (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+                <div className="somane-attachment-list space-y-2 max-h-64 overflow-y-auto">
                   {attachmentsList.map((file, index) => (
-                    <div key={file.id || `${file.name || file.file_name || 'attachment'}-${index}`} className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded">
+                    <div key={file.id || `${file.name || file.file_name || 'attachment'}-${index}`} className="somane-attachment-item flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded">
                       <button type="button" onClick={() => void downloadAttachmentFile(file)} className="group flex min-w-0 flex-1 items-center gap-2 text-left" title="Télécharger la pièce jointe">
                         <FiPaperclip className="text-gray-500 flex-shrink-0" size={14} />
                         <span className="truncate text-xs text-gray-700 group-hover:text-purple-700 group-hover:underline">{file.name || file.file_name || file.filename || 'Pièce jointe'}</span>
@@ -3074,22 +3144,22 @@ export default function PieceForm({ mode = 'create' }) {
 
       {/* DIALOG CONFIRMATION */}
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">Voulez-vous enregistrer les modifications avant de quitter ?</p>
             <div className="flex justify-end gap-3">
-              <button onClick={async () => { setShowConfirmDialog(false); const ok = await handleSave(true); if (ok) navigate('/comptabilite/pieces'); }} className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 transition-all">Enregistrer</button>
+              <button onClick={async () => { setShowConfirmDialog(false); const saved = await handleSave(true); if (saved) { const target = pendingNavigatorTarget; setPendingNavigatorTarget(null); navigate(target?.path || '/comptabilite/pieces', { state: target?.state }); } }} className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 transition-all">Enregistrer</button>
               <button onClick={confirmDiscardChanges} className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 transition-all">Ne pas enregistrer</button>
-              <button onClick={() => setShowConfirmDialog(false)} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 transition-all">Annuler</button>
+              <button onClick={() => { setShowConfirmDialog(false); setPendingNavigatorTarget(null); }} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 transition-all">Annuler</button>
             </div>
           </div>
         </div>
       )}
 
       {unsavedPieceAction && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50">
-          <div className="mx-4 w-full max-w-md border border-gray-300 bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 somane-overlay-backdrop">
+          <div className="mx-4 w-full max-w-md border border-gray-300 bg-white p-6 shadow-lg somane-modal-surface">
             <div className="mb-3 flex items-center gap-2 text-gray-900">
               <FiAlertCircle className="text-amber-600" size={20} />
               <h3 className="text-lg font-bold">Pièce non enregistrée</h3>
@@ -3118,8 +3188,8 @@ export default function PieceForm({ mode = 'create' }) {
       )}
 
       {pendingPieceAction && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black bg-opacity-50">
-          <div className="mx-4 w-full max-w-md border border-gray-300 bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black bg-opacity-50 somane-overlay-backdrop">
+          <div className="mx-4 w-full max-w-md border border-gray-300 bg-white p-6 shadow-lg somane-modal-surface">
             <div className="mb-3 flex items-center gap-2 text-gray-900">
               <FiAlertCircle className={pendingPieceAction.action === 'delete' ? 'text-red-600' : 'text-amber-600'} size={20} />
               <h3 className="text-lg font-bold">Confirmer l'action</h3>

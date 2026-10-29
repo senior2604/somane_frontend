@@ -27,6 +27,7 @@ import {
   FiChevronDown
 } from "react-icons/fi";
 import { TbBuildingSkyscraper, TbChartBar } from "react-icons/tb";
+import SomaneSelect from '../../../components/SomaneSelect';
 
 export default function PlanComptablePage() {
   const [comptes, setComptes] = useState([]);
@@ -676,7 +677,7 @@ export default function PlanComptablePage() {
               <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
                 <FiUpload size={14} />
               </button>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
@@ -688,7 +689,7 @@ export default function PlanComptablePage() {
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
                 <option value={50}>50 lignes</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -987,8 +988,8 @@ export default function PlanComptablePage() {
 // MODAL DE DÉTAILS COMPTE
 function CompteDetailModal({ compte, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-md shadow-xl somane-modal-surface">
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-gray-900">Détails du compte</h3>
@@ -1139,8 +1140,8 @@ function CompteFormModal({ compte, entities, groupes, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-md shadow-xl somane-modal-surface">
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-gray-900">
@@ -1189,7 +1190,7 @@ function CompteFormModal({ compte, entities, groupes, onClose, onSuccess }) {
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Société</label>
-            <select
+            <SomaneSelect
               value={formData.company}
               onChange={(e) => handleChange('company', e.target.value)}
               className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
@@ -1199,12 +1200,12 @@ function CompteFormModal({ compte, entities, groupes, onClose, onSuccess }) {
                   {entity.raison_sociale}
                 </option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Groupe</label>
-            <select
+            <SomaneSelect
               value={formData.group}
               onChange={(e) => handleChange('group', e.target.value)}
               className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
@@ -1215,7 +1216,7 @@ function CompteFormModal({ compte, entities, groupes, onClose, onSuccess }) {
                   {groupe.name}
                 </option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
           
           <div className="grid grid-cols-2 gap-4">

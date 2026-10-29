@@ -9,34 +9,14 @@ import {
 } from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
 import { apiClient } from '../../../../services/apiClient';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 // ==========================================
 // COMPOSANT TOOLTIP
 // ==========================================
-const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>{children}</div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-            'right-full top-1/2 -translate-y-1/2 -mr-1'
-          }`} />
-        </div>
-      )}
-    </div>
-  );
-};
+const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 // ==========================================
 // COMPOSANT AUTOCOMPLETE
@@ -175,12 +155,12 @@ const RepartitionLineRow = ({ line, index, accounts, taxGroups, onChange, onRemo
   return (
     <tr className="hover:bg-gray-50">
       <td className="border border-gray-300 p-1" style={{ width: '130px', minWidth: '130px' }}>
-        <select value={line.repartition_type} onChange={handleTypeChange} disabled={!canDelete}
+        <SomaneSelect value={line.repartition_type} onChange={handleTypeChange} disabled={!canDelete}
           className={`w-full px-1 py-1 border-0 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none bg-transparent ${!canDelete ? 'text-gray-500 cursor-not-allowed' : ''}`} style={{ height: '26px' }}>
           <option value="base">Base</option>
           <option value="tax_main">Taxe</option>
           <option value="tax_split">De la taxe</option>
-        </select>
+        </SomaneSelect>
        </td>
       <td className="border border-gray-300 p-1" style={{ width: '70px', minWidth: '70px' }}>
         {isBase ? (
@@ -994,11 +974,11 @@ export default function TauxFiscauxEdit() {
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Type de valeur *</label>
                 <div className="flex-1 ml-2 relative">
                   <FiDollarSign className="absolute left-2 top-1.5 text-gray-400" size={12} />
-                  <select value={formData.amount_type} onChange={(e) => handleChange('amount_type', e.target.value)} className="w-full pl-7 pr-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none" style={{ height: '26px' }}>
+                  <SomaneSelect value={formData.amount_type} onChange={(e) => handleChange('amount_type', e.target.value)} className="w-full pl-7 pr-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none" style={{ height: '26px' }}>
                     <option value="percent">Pourcentage du prix</option>
                     <option value="fixed">Montant fixe</option>
                     <option value="division">Pourcentage du prix TTC</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
             </div>
@@ -1006,21 +986,21 @@ export default function TauxFiscauxEdit() {
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Taxe appliquée sur *</label>
                 <div className="flex-1 ml-2">
-                  <select value={formData.type_tax_use} onChange={(e) => handleChange('type_tax_use', e.target.value)} className="w-full px-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none" style={{ height: '26px' }}>
+                  <SomaneSelect value={formData.type_tax_use} onChange={(e) => handleChange('type_tax_use', e.target.value)} className="w-full px-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none" style={{ height: '26px' }}>
                     <option value="sale">Ventes</option>
                     <option value="purchase">Achats</option>
                     <option value="none">Aucun</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
               <div className="flex items-center" style={{ height: '26px' }}>
                 <label className="text-xs text-gray-700 min-w-[140px] font-medium">Portée de la taxe</label>
                 <div className="flex-1 ml-2">
-                  <select value={formData.tax_scope} onChange={(e) => handleChange('tax_scope', e.target.value)} className="w-full px-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none" style={{ height: '26px' }}>
+                  <SomaneSelect value={formData.tax_scope} onChange={(e) => handleChange('tax_scope', e.target.value)} className="w-full px-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none" style={{ height: '26px' }}>
                     <option value="">Tous</option>
                     <option value="service">Services</option>
                     <option value="consu">Biens consommables</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
               <div className="flex items-center" style={{ height: '26px' }}>
@@ -1172,10 +1152,10 @@ export default function TauxFiscauxEdit() {
                   <div className="flex items-center" style={{ height: '26px' }}>
                     <label className="text-xs text-gray-700 w-[160px] font-medium">Exigibilité</label>
                     <div className="flex-1 ml-2">
-                      <select value={formData.tax_exigibility} onChange={(e) => handleChange('tax_exigibility', e.target.value)} className="w-full px-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none truncate" style={{ height: '26px' }}>
+                      <SomaneSelect value={formData.tax_exigibility} onChange={(e) => handleChange('tax_exigibility', e.target.value)} className="w-full px-2 py-1 border border-gray-300 text-xs hover:border-purple-400 focus:border-purple-600 transition-colors appearance-none truncate" style={{ height: '26px' }}>
                         <option value="on_invoice">Facturation</option>
                         <option value="on_payment">Paiement</option>
-                      </select>
+                      </SomaneSelect>
                     </div>
                   </div>
                   <div className="flex items-center" style={{ height: '26px' }}>
@@ -1237,8 +1217,8 @@ export default function TauxFiscauxEdit() {
       </div>
 
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">Voulez-vous enregistrer les modifications avant de quitter ?</p>
             <div className="flex justify-end gap-3">

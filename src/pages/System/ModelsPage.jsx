@@ -187,7 +187,7 @@ export default function ModelsPage() {
       </div>
 
       {editOpen && selectedModel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditOpen(false); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4 somane-overlay-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditOpen(false); }}>
           <form onSubmit={saveModel} role="dialog" aria-modal="true" aria-labelledby="model-edit-title" className="w-full max-w-xl rounded-xl bg-white shadow-2xl">
             <header className="flex items-start justify-between border-b border-gray-200 p-5">
               <div><p className="text-xs font-medium uppercase tracking-wide text-violet-700">Catalogue technique</p><h2 id="model-edit-title" className="mt-1 text-lg font-semibold text-gray-900">Modifier le modèle</h2><p className="mt-1 font-mono text-xs text-gray-500">{selectedModel.model}</p></div>

@@ -20,6 +20,7 @@ import {
   FiGlobe,
   FiXCircle
 } from "react-icons/fi";
+import SomaneSelect from '../../../components/SomaneSelect';
 
 export default function PrixFournisseursPage() {
   const { configuration } = useUi();
@@ -202,7 +203,7 @@ export default function PrixFournisseursPage() {
             <div className="flex gap-2">
               <div>
                 <label className="text-sm text-gray-600 mr-2">Fournisseur:</label>
-                <select
+                <SomaneSelect
                   value={selectedFournisseur}
                   onChange={(e) => setSelectedFournisseur(e.target.value)}
                   className="border border-gray-300 rounded-lg px-3 py-2"
@@ -211,12 +212,12 @@ export default function PrixFournisseursPage() {
                   {fournisseurs.map(f => (
                     <option key={f.id} value={f.id}>{f.name}</option>
                   ))}
-                </select>
+                </SomaneSelect>
               </div>
               
               <div>
                 <label className="text-sm text-gray-600 mr-2">Produit:</label>
-                <select
+                <SomaneSelect
                   value={selectedProduit}
                   onChange={(e) => setSelectedProduit(e.target.value)}
                   className="border border-gray-300 rounded-lg px-3 py-2"
@@ -225,11 +226,11 @@ export default function PrixFournisseursPage() {
                   {produits.map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
-                </select>
+                </SomaneSelect>
               </div>
             </div>
             
-            <select
+            <SomaneSelect
               value={itemsPerPage}
               onChange={(e) => setItemsPerPage(Number(e.target.value))}
               className="border border-gray-300 rounded-lg px-3 py-2"
@@ -238,7 +239,7 @@ export default function PrixFournisseursPage() {
               <option value={10}>10 par page</option>
               <option value={25}>25 par page</option>
               <option value={50}>50 par page</option>
-            </select>
+            </SomaneSelect>
           </div>
         </div>
       </div>
@@ -369,8 +370,8 @@ function PrixFournisseurFormModal({ item, fournisseurs, produits, devises, onSub
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
         <div className="flex justify-between items-center bg-violet-600 text-white p-4 rounded-t-lg">
           <h3 className="text-lg font-semibold">
             {item ? 'Modifier' : 'Nouveau'} Prix Fournisseur
@@ -385,7 +386,7 @@ function PrixFournisseurFormModal({ item, fournisseurs, produits, devises, onSub
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Fournisseur *
             </label>
-            <select
+            <SomaneSelect
               value={formData.partner_id}
               onChange={(e) => setFormData({ ...formData, partner_id: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -395,14 +396,14 @@ function PrixFournisseurFormModal({ item, fournisseurs, produits, devises, onSub
               {fournisseurs.map(f => (
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Produit *
             </label>
-            <select
+            <SomaneSelect
               value={formData.product_id}
               onChange={(e) => setFormData({ ...formData, product_id: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -412,7 +413,7 @@ function PrixFournisseurFormModal({ item, fournisseurs, produits, devises, onSub
               {produits.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -434,7 +435,7 @@ function PrixFournisseurFormModal({ item, fournisseurs, produits, devises, onSub
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Devise *
               </label>
-              <select
+              <SomaneSelect
                 value={formData.currency_id}
                 onChange={(e) => setFormData({ ...formData, currency_id: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -444,7 +445,7 @@ function PrixFournisseurFormModal({ item, fournisseurs, produits, devises, onSub
                 {devises.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
           </div>
 
@@ -484,8 +485,8 @@ function PrixFournisseurDetailModal({ item, fournisseurs, produits, devises, onC
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold flex items-center">
             <FiEye className="mr-2 text-violet-600" />

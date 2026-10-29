@@ -22,6 +22,7 @@ import {
 import { useEntity } from '../../../../context/EntityContext';
 import { apiClient } from '../../../../services/apiClient';
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const TAX_CACHE_PREFIX = 'comptabilite:tax:record:';
 const OPTIONS_CACHE_PREFIX = 'comptabilite:tax:options:';
@@ -435,7 +436,7 @@ const RepartitionTable = ({
               return (
                 <tr key={line.key} className={index % 2 ? 'bg-gray-50/60' : 'bg-white'}>
                   <td className="border-r border-t border-gray-200 p-0">
-                    <select
+                    <SomaneSelect
                       value={line.repartition_type}
                       disabled={base}
                       onChange={(event) => onChange(index, 'repartition_type', event.target.value)}
@@ -444,7 +445,7 @@ const RepartitionTable = ({
                       <option value="base">Base</option>
                       <option value="tax">Taxe</option>
                       <option value="delatax">De la taxe</option>
-                    </select>
+                    </SomaneSelect>
                   </td>
                   <td className="border-r border-t border-gray-200 p-0">
                     <div className="relative">
@@ -1025,12 +1026,12 @@ export default function TaxForm({ mode = 'create', taxId: explicitTaxId = null }
               <input value={form.name} onChange={(event) => updateForm('name', event.target.value)} className={inputClass} placeholder="Ex. TVA 18 %" />
             </Field>
             <Field label="Taxe appliquée sur" required>
-              <select value={form.type_tax_use} onChange={(event) => updateForm('type_tax_use', event.target.value)} className={selectBoxClass}>
+              <SomaneSelect value={form.type_tax_use} onChange={(event) => updateForm('type_tax_use', event.target.value)} className={selectBoxClass}>
                 <option value="sale">Ventes</option>
                 <option value="purchase">Achats</option>
                 <option value="none">Aucune / Divers</option>
                 <option value="adjustment">Ajustement</option>
-              </select>
+              </SomaneSelect>
             </Field>
             <Field label="Valeur de la taxe" required>
               <div className="relative">
@@ -1039,18 +1040,18 @@ export default function TaxForm({ mode = 'create', taxId: explicitTaxId = null }
               </div>
             </Field>
             <Field label="Portée de la taxe">
-              <select value={form.tax_scope} onChange={(event) => updateForm('tax_scope', event.target.value)} className={selectBoxClass}>
+              <SomaneSelect value={form.tax_scope} onChange={(event) => updateForm('tax_scope', event.target.value)} className={selectBoxClass}>
                 <option value="">Tous</option>
                 <option value="service">Services</option>
                 <option value="consu">Biens consommables</option>
-              </select>
+              </SomaneSelect>
             </Field>
             <Field label="Type de valeur" required>
-              <select value={form.amount_type} onChange={(event) => updateForm('amount_type', event.target.value)} className={selectBoxClass}>
+              <SomaneSelect value={form.amount_type} onChange={(event) => updateForm('amount_type', event.target.value)} className={selectBoxClass}>
                 <option value="percent">Pourcentage du prix</option>
                 <option value="fixed">Montant fixe</option>
                 <option value="division">Pourcentage du prix TTC</option>
-              </select>
+              </SomaneSelect>
             </Field>
             <Field label="Position fiscale">
               <div className="border border-gray-300 hover:border-purple-400">
@@ -1182,10 +1183,10 @@ export default function TaxForm({ mode = 'create', taxId: explicitTaxId = null }
                 <input type="number" step="0.0001" value={form.real_amount} onChange={(event) => updateForm('real_amount', event.target.value)} className={inputClass} placeholder="Optionnel" />
               </Field>
               <Field label="Exigibilité">
-                <select value={form.tax_exigibility} onChange={(event) => updateForm('tax_exigibility', event.target.value)} className={selectBoxClass}>
+                <SomaneSelect value={form.tax_exigibility} onChange={(event) => updateForm('tax_exigibility', event.target.value)} className={selectBoxClass}>
                   <option value="on_invoice">Sur facture</option>
                   <option value="on_payment">Sur paiement</option>
-                </select>
+                </SomaneSelect>
               </Field>
               {form.tax_exigibility === 'on_payment' && (
                 <Field label="Compte de transition">

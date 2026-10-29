@@ -26,6 +26,7 @@ import {
 } from 'react-icons/fi';
 import { TbBuildingSkyscraper } from "react-icons/tb";
 import { apiClient } from '../services/apiClient';
+import SomaneSelect from './SomaneSelect';
 
 // UTILITAIRES TÉLÉPHONE
 const validatePhoneByCountry = (phone, countryData) => {
@@ -494,8 +495,8 @@ export default function EntityFormModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-200 shadow-xl">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 somane-overlay-backdrop">
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-200 shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -885,14 +886,14 @@ export default function EntityFormModal({
                 <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
                 <h3 className="text-sm font-semibold text-gray-900">Statut</h3>
               </div>
-              <select
+              <SomaneSelect
                 value={formData.statut}
                 onChange={(e) => handleChange('statut', e.target.value === 'true')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500"
               >
                 <option value={true}>Active</option>
                 <option value={false}>Inactive</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
 

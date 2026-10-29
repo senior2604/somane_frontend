@@ -468,8 +468,8 @@ function HeaderCell({ label, value, strong, badge }) {
 
 function ConfirmDialog({ title, message, onCancel, onConfirm }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white border border-gray-300 shadow-xl">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 somane-overlay-backdrop">
+      <div className="w-full max-w-md bg-white border border-gray-300 shadow-xl somane-modal-surface">
         <div className="px-4 py-3 border-b border-gray-300 font-bold text-gray-900">{title}</div>
         <div className="p-4 text-sm text-gray-600">{message}</div>
         <div className="px-4 py-3 border-t border-gray-300 flex justify-end gap-2">

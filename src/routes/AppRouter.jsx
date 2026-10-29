@@ -207,6 +207,7 @@ import BalanceAgee from "../features/comptabilité/pages/BalanceAgee/Index.jsx";
 import EtatsFinanciersComptabilite from "../features/comptabilité/pages/EtatsFinanciers/Index.jsx";
 
 import ProfilePage from '../pages/Profile/ProfilePage';
+import AppearancePreferencesPage from '../pages/Profile/AppearancePreferencesPage';
 import HelpPage from '../pages/Help/HelpPage';
 // ========== COMPOSANTS UTILITAIRES ==========
 const LoadingFallback = () => (
@@ -298,6 +299,7 @@ export default function AppRouter() {
 
         {/* ROUTES PROTEGEES PRINCIPALES */}
         <Route element={<ProtectedLayout />}>
+          <Route path="/preferences" element={<AppearancePreferencesPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/aide" element={<HelpPage />} />
           {/* <Route path="/entities" element={<EntitiesPage />} /> */}

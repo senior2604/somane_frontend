@@ -39,6 +39,7 @@ if (resp.data?.access) {
 
     if (resp.data.user) {
       authService.setUser(resp.data.user);
+      window.dispatchEvent(new Event('somane:auth-changed'));
 
       if (resp.data.user.entite_active) {
         authService.setActiveEntite(resp.data.user.entite_active);

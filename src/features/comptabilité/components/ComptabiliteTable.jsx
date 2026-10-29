@@ -7,6 +7,7 @@ import {
   FiCheckSquare,
   FiSquare
 } from "react-icons/fi";
+import SomaneSelect from '../../../components/SomaneSelect';
 
 export default function ComptabiliteTable({
   // Props de données
@@ -270,7 +271,7 @@ export default function ComptabiliteTable({
             {/* Sélection nombre d'éléments par page */}
             <div className="flex items-center gap-2">
               <label className="text-xs text-gray-600">Lignes par page:</label>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => onItemsPerPageChange && onItemsPerPageChange(Number(e.target.value))}
                 className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
@@ -278,7 +279,7 @@ export default function ComptabiliteTable({
                 <option value={10}>10</option>
                 <option value={20}>20</option>
                 <option value={50}>50</option>
-              </select>
+              </SomaneSelect>
             </div>
 
             {/* Navigation des pages */}

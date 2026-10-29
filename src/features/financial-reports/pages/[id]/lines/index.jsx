@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FiSave, FiPlus, FiEdit2, FiTrash2, FiArrowUp, FiArrowDown } from 'react-icons/fi';
 import { apiClient } from '../../../../../services/apiClient';
+import SomaneSelect from '../../../../../components/SomaneSelect';
 
 export default function ReportLines() {
   const { id } = useParams();
@@ -235,8 +236,8 @@ export default function ReportLines() {
 
       {/* Modal création/édition */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 somane-overlay-backdrop">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl somane-modal-surface">
             <h2 className="text-xl font-bold mb-6">
               {editingLine ? 'Modifier la ligne' : 'Nouvelle ligne'}
             </h2>
@@ -275,7 +276,7 @@ export default function ReportLines() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Type de ligne *
                   </label>
-                  <select
+                  <SomaneSelect
                     value={formData.line_type}
                     onChange={(e) => setFormData({ ...formData, line_type: e.target.value })}
                     required
@@ -285,21 +286,21 @@ export default function ReportLines() {
                     <option value="account">Poste comptable</option>
                     <option value="formula">Formule de calcul</option>
                     <option value="total">Sous-total</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Signe
                   </label>
-                  <select
+                  <SomaneSelect
                     value={formData.sign}
                     onChange={(e) => setFormData({ ...formData, sign: parseInt(e.target.value) })}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   >
                     <option value="1">+ (positif)</option>
                     <option value="-1">- (négatif)</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
 
@@ -322,7 +323,7 @@ export default function ReportLines() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Ligne parent (pour hiérarchie)
                   </label>
-                  <select
+                  <SomaneSelect
                     value={formData.parent}
                     onChange={(e) => setFormData({ ...formData, parent: e.target.value })}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
@@ -335,7 +336,7 @@ export default function ReportLines() {
                           {line.name} ({line.code})
                         </option>
                       ))}
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
 

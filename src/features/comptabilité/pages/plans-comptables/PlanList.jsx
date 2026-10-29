@@ -6,6 +6,7 @@ import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
 import { ENDPOINTS } from '../../../../config/api';
 import axiosInstance from '../../../../config/axiosInstance';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const FRAMEWORK_SESSION_KEY = 'plan_list_selected_framework';
 const MEMORY_KEY = 'comptabilite:plan:index:v3';
@@ -344,13 +345,13 @@ function PlanList() {
     <div className="grid grid-cols-2 gap-4 p-4 text-xs">
       <div className="col-span-2">
         <label className="mb-1 block font-semibold text-gray-700">Référentiel comptable</label>
-        <select value={frameworkId} onChange={(event) => setFrameworkId(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2">
+        <SomaneSelect value={frameworkId} onChange={(event) => setFrameworkId(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2">
           {frameworks.map((framework) => <option key={framework.id} value={framework.id}>{relationLabel(framework)}</option>)}
-        </select>
+        </SomaneSelect>
       </div>
-      <label><span className="mb-1 block font-semibold text-gray-700">Éléments</span><select value={kind} onChange={(event) => setKind(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2"><option value="all">Tout</option><option value="group">Classes</option><option value="account">Comptes</option></select></label>
-      <label><span className="mb-1 block font-semibold text-gray-700">Statut</span><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2"><option value="all">Tous</option><option value="active">Actifs</option><option value="inactive">Inactifs</option></select></label>
-      <label className="col-span-2"><span className="mb-1 block font-semibold text-gray-700">Lettrage</span><select value={lettrable} onChange={(event) => setLettrable(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2"><option value="all">Tous</option><option value="yes">Lettrables</option><option value="no">Non lettrables</option></select></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">Éléments</span><SomaneSelect value={kind} onChange={(event) => setKind(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2"><option value="all">Tout</option><option value="group">Classes</option><option value="account">Comptes</option></SomaneSelect></label>
+      <label><span className="mb-1 block font-semibold text-gray-700">Statut</span><SomaneSelect value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2"><option value="all">Tous</option><option value="active">Actifs</option><option value="inactive">Inactifs</option></SomaneSelect></label>
+      <label className="col-span-2"><span className="mb-1 block font-semibold text-gray-700">Lettrage</span><SomaneSelect value={lettrable} onChange={(event) => setLettrable(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2"><option value="all">Tous</option><option value="yes">Lettrables</option><option value="no">Non lettrables</option></SomaneSelect></label>
     </div>
   ), [frameworkId, frameworks, kind, lettrable, status]);
 

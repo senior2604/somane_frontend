@@ -8,12 +8,14 @@ import React, {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { isCorePage } from '../services/pageModule';
+import { useNotifications } from '../context/NotificationContext';
+import { FormMessage } from './FeedbackPrimitives';
 import {
-  FiAlertCircle,
-  FiCheck,
   FiChevronRight,
+  FiChevronDown,
   FiInfo,
   FiPlus,
+  FiSearch,
   FiUploadCloud,
   FiX,
 } from 'react-icons/fi';
@@ -23,7 +25,6 @@ const CURRENT_PAGE_KEY = 'somane:navigation:current-page';
 const PREVIOUS_PAGE_KEY = 'somane:navigation:previous-page';
 const HISTORY_CHANGED_EVENT = 'somane:navigation-history-changed';
 const FORM_MEMORY_PREFIX = 'somane:unified-form';
-const DEFAULT_MESSAGE_DURATION = 30000;
 const debugUnifiedForm = (message, details) => {
   if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') return;
   if (details === undefined) console.log(`[UnifiedFormPage] ${message}`);
@@ -76,11 +77,23 @@ const getPageLabel = (path = '') => {
     .replace(/^./, letter => letter.toUpperCase());
 };
 
+const normalizeHistoryPage = (page) => {
+  if (!page?.path || !page?.label) return page;
+  const label = String(page.label).trim();
+  if (/^création d['’]une pièce comptable$/i.test(label)) {
+    return { ...page, label: 'Création' };
+  }
+  if (/^détail de la pièce comptable$/i.test(label)) {
+    return { ...page, label: 'Détail' };
+  }
+  return page;
+};
+
 const readHistory = () => {
   if (typeof window === 'undefined') return [];
   const history = safeParse(window.sessionStorage.getItem(HISTORY_KEY), []);
   return Array.isArray(history)
-    ? history.filter(page => page?.path && page?.label)
+    ? history.filter(page => page?.path && page?.label).map(normalizeHistoryPage)
     : [];
 };
 
@@ -113,7 +126,7 @@ const resolvePreviousPages = (currentPath, locationState) => {
     ? history.slice(0, -1)
     : history;
   const statePages = Array.isArray(locationState?.previousPages)
-    ? locationState.previousPages
+    ? locationState.previousPages.map(normalizeHistoryPage)
     : [];
   const returnTo = locationState?.returnTo || locationState?.returnContext?.returnTo || '';
   const candidates = [
@@ -129,19 +142,6 @@ const resolvePreviousPages = (currentPath, locationState) => {
   });
 
   return ordered.slice(-2);
-};
-
-const resolveFeedbackStyle = (type) => {
-  if (type === 'error') return 'border-red-200 bg-red-50 text-red-700';
-  if (type === 'success') return 'border-green-200 bg-green-50 text-green-700';
-  if (type === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700';
-  return 'border-blue-200 bg-blue-50 text-blue-700';
-};
-
-const FeedbackIcon = ({ type }) => {
-  if (type === 'error' || type === 'warning') return <FiAlertCircle size={13} />;
-  if (type === 'success') return <FiCheck size={13} />;
-  return <FiInfo size={13} />;
 };
 
 /**
@@ -160,7 +160,7 @@ export default function UnifiedFormPage({
   primaryAction = { label: 'Nouveau', icon: <FiPlus size={12} /> },
   onTitleClick,
   headerActions = [],
-  headerActionsCentered = false,
+  headerActionsCentered = true,
   actionsMenu,
 
   onSave,
@@ -183,18 +183,21 @@ export default function UnifiedFormPage({
   rememberForm = true,
 
   feedback,
+  fieldMessages = [],
   onDismissFeedback,
-  messageDuration = DEFAULT_MESSAGE_DURATION,
+  messageDuration,
   process,
 
   children,
   traceability,
   traceabilityWidth = 320,
   noContext,
+  recordNavigator,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
+  const { notify } = useNotifications();
   const isAccountingModulePage = location.pathname.startsWith('/comptabilite/');
   const isCoreModulePage = isCorePage(location.pathname);
   const effectivePullToHeader = isCoreModulePage ? 0 : pullToHeader;
@@ -207,15 +210,37 @@ export default function UnifiedFormPage({
   const [previousPages, setPreviousPages] = useState(() => (
     resolvePreviousPages(currentPath, location.state)
   ));
-  const [visibleFeedback, setVisibleFeedback] = useState(feedback || null);
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
   const [pendingTarget, setPendingTarget] = useState(null);
+  const [recordNavigatorOpen, setRecordNavigatorOpen] = useState(false);
+  const [recordNavigatorSearch, setRecordNavigatorSearch] = useState('');
+  const recordNavigatorRef = useRef(null);
   const restoredRef = useRef(false);
   const saveTimerRef = useRef(null);
-  const feedbackTimerRef = useRef(null);
+  const lastFeedbackRef = useRef('');
 
   const traceOpen = Boolean(traceability?.open);
   const hasTraceability = Boolean(traceability);
+  const recordNavigatorRecords = Array.isArray(recordNavigator?.records) ? recordNavigator.records : [];
+  const visibleRecordNavigatorRecords = recordNavigatorRecords.filter((record) => (
+    `${record.label || ''} ${record.detail || ''}`.toLocaleLowerCase('fr').includes(recordNavigatorSearch.trim().toLocaleLowerCase('fr'))
+  ));
+
+  useEffect(() => {
+    if (!recordNavigatorOpen) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (!recordNavigatorRef.current?.contains(event.target)) setRecordNavigatorOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setRecordNavigatorOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [recordNavigatorOpen]);
 
   useEffect(() => {
     writeCurrentPage({ path: currentPath, label: resolvedPageLabel });
@@ -231,17 +256,19 @@ export default function UnifiedFormPage({
   }, [currentPath, location.state]);
 
   useEffect(() => {
-    setVisibleFeedback(feedback || null);
-    window.clearTimeout(feedbackTimerRef.current);
-    if (!feedback || messageDuration <= 0) return undefined;
-
-    feedbackTimerRef.current = window.setTimeout(() => {
-      setVisibleFeedback(null);
-      onDismissFeedback?.();
-    }, messageDuration);
-
-    return () => window.clearTimeout(feedbackTimerRef.current);
-  }, [feedback, messageDuration, onDismissFeedback]);
+    if (!feedback?.message) {
+      lastFeedbackRef.current = '';
+      return;
+    }
+    const signature = `${feedback.type || 'info'}:${feedback.message}`;
+    if (lastFeedbackRef.current === signature) return;
+    lastFeedbackRef.current = signature;
+    notify(feedback.message, {
+      severity: ['error', 'warning', 'success'].includes(feedback.type) ? feedback.type : 'info',
+      duration: messageDuration,
+      onDismiss: onDismissFeedback,
+    });
+  }, [feedback?.message, feedback?.type, messageDuration, notify, onDismissFeedback]);
 
   useEffect(() => {
     if (!rememberForm || !resolvedMemoryKey || restoredRef.current) return;
@@ -431,10 +458,13 @@ export default function UnifiedFormPage({
   if (noContext) {
     return (
       <div
-        className="flex min-h-0 flex-col overflow-hidden bg-gray-50"
-        style={{ height: `calc(100% + ${effectivePullToHeader}px)`, marginTop: `-${effectivePullToHeader}px` }}
+        className={classNames(
+          'somane-page-layout',
+          isAccountingModulePage && 'somane-page-layout--accounting',
+        )}
+        style={{ '--somane-page-pull': `${effectivePullToHeader}px` }}
       >
-        <section className="flex min-h-0 flex-1 flex-col border-x border-b border-gray-300 bg-white">
+        <section className="somane-page-layout__surface">
           <div className="border-b border-gray-300 px-4 py-3 text-lg font-bold text-gray-900">
             {title}
           </div>
@@ -446,14 +476,12 @@ export default function UnifiedFormPage({
 
   return (
     <div
-      className={classNames('unified-form-root relative flex min-h-0 flex-col overflow-visible bg-gray-50', className)}
-      style={{
-        width: isAccountingModulePage ? 'calc(100% + 3rem)' : undefined,
-        marginLeft: isAccountingModulePage ? '-1.5rem' : undefined,
-        marginRight: isAccountingModulePage ? '-1.5rem' : undefined,
-        height: `calc(100% + ${effectivePullToHeader}px)`,
-        marginTop: `-${effectivePullToHeader}px`,
-      }}
+      className={classNames(
+        'somane-page-layout unified-form-root',
+        isAccountingModulePage && 'somane-page-layout--accounting',
+        className,
+      )}
+      style={{ '--somane-page-pull': `${effectivePullToHeader}px` }}
     >
       <style>{`
         .unified-form-scroll { scrollbar-width: none; -ms-overflow-style: none; }
@@ -475,32 +503,30 @@ export default function UnifiedFormPage({
         }
       `}</style>
 
-      <section className="flex min-h-0 flex-1 flex-col overflow-visible border-x border-b border-gray-300 bg-white">
+      <section className="somane-page-layout__surface overflow-visible">
         <header className={classNames(
-          'relative z-20 shrink-0 border-b border-gray-300 py-1 pointer-events-auto',
-          isAccountingModulePage || isCoreModulePage ? 'px-4' : 'px-3',
+          'somane-page-header-band relative z-20 shrink-0 border-b border-gray-300 pointer-events-auto',
         )}>
-          <div className="flex min-h-[40px] items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
+          <div className={classNames('somane-page-header-row relative justify-between', recordNavigator && 'has-record-navigator')}>
+            <div className="flex min-w-0 items-center gap-2">
               {primaryAction && (
                 <button
                   type="button"
                   onClick={() => executeHeaderAction(primaryAction)}
                   disabled={primaryAction.disabled}
-                  title={primaryAction.title || primaryAction.label}
-                  className={classNames(
-                    'flex h-8 shrink-0 items-center gap-2 rounded border border-purple-600 bg-purple-600 px-3 text-xs font-semibold text-white transition-all duration-200 hover:scale-105 hover:border-purple-700 hover:bg-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
-                    primaryAction.className,
-                  )}
+                  title="Nouveau"
+                  className="somane-btn somane-btn--primary somane-btn--new disabled:cursor-not-allowed"
                 >
-                  {primaryAction.icon || <FiPlus size={12} />}
-                  <span>{t(primaryAction.label || 'Nouveau')}</span>
+                  {primaryAction.icon && React.isValidElement(primaryAction.icon)
+                    ? React.cloneElement(primaryAction.icon, { size: 12, 'aria-hidden': true })
+                    : primaryAction.icon || <FiPlus size={12} aria-hidden="true" />}
+                  <span>Nouveau</span>
                 </button>
               )}
 
               <div className="flex min-w-0 flex-col justify-center">
                 {history.length > 0 && (
-                  <div className="mb-0.5 flex h-3 max-w-[440px] items-center gap-1 overflow-hidden text-[10px] leading-none text-gray-500">
+                  <div className="somane-breadcrumb mb-0.5 flex h-3 max-w-[440px] items-center gap-1 overflow-hidden text-[10px] leading-none text-gray-500" aria-label="Fil d’Ariane">
                     {history.map((page, index) => (
                       <React.Fragment key={`${page.path}-${index}`}>
                         {index > 0 && (
@@ -512,8 +538,8 @@ export default function UnifiedFormPage({
                             path: page.path,
                             state: { restoredFromSmartBack: true },
                           })}
-                          className="max-w-44 truncate transition-colors hover:text-purple-700"
-                          title={`${t('Revenir à')} ${t(page.label)}`}
+                          className="somane-breadcrumb__link max-w-44 truncate transition-colors hover:text-purple-700"
+                          title={`Revenir à ${page.label}`}
                         >
                           {t(page.label)}
                         </button>
@@ -543,7 +569,74 @@ export default function UnifiedFormPage({
               </div>
             </div>
 
-            <div className="relative z-30 ml-auto flex shrink-0 items-center gap-2">
+            {recordNavigator && recordNavigatorRecords.length > 0 && (
+              <div className="somane-list-search somane-record-navigator" ref={recordNavigatorRef}>
+                <FiSearch className="somane-list-search__icon" size={17} aria-hidden="true" />
+                <div className="somane-list-search__query">
+                  <input
+                    type="search"
+                    className="somane-list-search__input"
+                    value={recordNavigatorSearch}
+                    onChange={(event) => {
+                      setRecordNavigatorSearch(event.target.value);
+                      setRecordNavigatorOpen(true);
+                    }}
+                    onFocus={() => setRecordNavigatorOpen(true)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        setRecordNavigatorOpen(true);
+                      }
+                    }}
+                    placeholder={recordNavigator.placeholder || `Rechercher dans ${recordNavigator.label || 'la liste'}...`}
+                    aria-label={recordNavigator.placeholder || `Rechercher dans ${recordNavigator.label || 'la liste'}`}
+                    aria-expanded={recordNavigatorOpen}
+                    aria-controls="somane-record-navigator-options"
+                    role="combobox"
+                    aria-autocomplete="list"
+                  />
+                </div>
+                <div className="somane-list-search__controls">
+                  <button
+                    type="button"
+                    className="somane-list-search__filter somane-record-navigator__toggle"
+                    aria-label={recordNavigatorOpen ? 'Fermer la liste' : 'Afficher la liste'}
+                    aria-expanded={recordNavigatorOpen}
+                    onClick={() => setRecordNavigatorOpen((open) => !open)}
+                  >
+                    <FiChevronDown size={14} />
+                  </button>
+                </div>
+                {recordNavigatorOpen && (
+                  <div className="somane-record-navigator__menu" id="somane-record-navigator-options" role="listbox">
+                    {visibleRecordNavigatorRecords.length > 0 ? visibleRecordNavigatorRecords.map((record) => (
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={String(record.id) === String(recordNavigator.value)}
+                        key={record.id}
+                        className={classNames(
+                          'somane-record-navigator__option',
+                          String(record.id) === String(recordNavigator.value) && 'is-current',
+                        )}
+                        onClick={() => {
+                          setRecordNavigatorOpen(false);
+                          setRecordNavigatorSearch('');
+                          recordNavigator.onSelect?.(record);
+                        }}
+                      >
+                        <span className="somane-record-navigator__option-label">{record.label}</span>
+                        {record.detail && <span className="somane-record-navigator__option-detail">{record.detail}</span>}
+                      </button>
+                    )) : (
+                      <p className="somane-record-navigator__empty">Aucun résultat dans cette liste.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="somane-form-base-actions relative z-30">
               {!headerActionsCentered && headerActions.map(action => (
                 <button
                   key={action.id || action.label}
@@ -552,7 +645,7 @@ export default function UnifiedFormPage({
                   disabled={action.disabled}
                   title={action.title || action.label}
                   className={classNames(
-                    'flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+                    'somane-btn somane-btn--secondary disabled:cursor-not-allowed',
                     action.className,
                   )}
                 >
@@ -560,7 +653,11 @@ export default function UnifiedFormPage({
                 </button>
               ))}
 
-              {actionsMenu}
+              {actionsMenu && (
+                <div className="somane-form-actions-menu" title="Actions">
+                  {actionsMenu}
+                </div>
+              )}
 
               {onSave && (
                 <button
@@ -570,9 +667,9 @@ export default function UnifiedFormPage({
                     void save();
                   }}
                   disabled={saving || saveDisabled}
-                  title={t(saveLabel)}
-                  aria-label={t(saveLabel)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-white shadow-sm transition-all duration-200 hover:scale-110 hover:bg-purple-700 hover:shadow-lg active:scale-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={saveLabel}
+                  aria-label={saveLabel}
+                  className="somane-icon-btn somane-icon-btn--primary somane-icon-btn--round disabled:cursor-not-allowed"
                 >
                   {saveIcon}
                 </button>
@@ -581,16 +678,16 @@ export default function UnifiedFormPage({
               <button
                 type="button"
                 onClick={() => requestExit()}
-                title={t('Quitter la page')}
-                aria-label={t('Quitter la page')}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition-all duration-200 hover:scale-110 hover:bg-gray-800 hover:shadow-lg active:scale-90"
+                title="Quitter la page"
+                aria-label="Quitter la page"
+                className="somane-icon-btn somane-icon-btn--dark somane-icon-btn--round"
               >
                 <FiX size={16} />
               </button>
             </div>
 
             {headerActionsCentered && headerActions.length > 0 && (
-              <div className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-2 lg:flex">
+              <div className="somane-form-extra-actions pointer-events-none">
                 {headerActions.map((action) => (
                   <button
                     key={action.id || action.label}
@@ -599,7 +696,7 @@ export default function UnifiedFormPage({
                     disabled={action.disabled}
                     title={action.title || action.label}
                     className={classNames(
-                      'pointer-events-auto flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+                      'pointer-events-auto somane-btn somane-btn--secondary disabled:cursor-not-allowed',
                       action.className,
                     )}
                   >
@@ -621,34 +718,6 @@ export default function UnifiedFormPage({
           }}
         >
           <div className="flex min-h-0 min-w-0 flex-col">
-            {visibleFeedback?.message && (
-              <div className="unified-form-message shrink-0 border-b border-gray-300 px-4 py-2">
-                <div className={classNames(
-                  'flex w-full items-start gap-2 border px-3 py-2 text-xs',
-                  resolveFeedbackStyle(visibleFeedback.type),
-                )}>
-                  <span className="mt-0.5 shrink-0">
-                    <FeedbackIcon type={visibleFeedback.type} />
-                  </span>
-                  <span className="min-w-0 flex-1 whitespace-pre-line leading-4">
-                    {visibleFeedback.message}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVisibleFeedback(null);
-                      onDismissFeedback?.();
-                    }}
-                    className="shrink-0 p-0.5 text-current opacity-70 transition-opacity hover:opacity-100"
-                    title="Fermer"
-                    aria-label="Fermer le message"
-                  >
-                    <FiX size={13} />
-                  </button>
-                </div>
-              </div>
-            )}
-
             {process && (
               <div className="shrink-0 border-b border-gray-300 bg-white">
                 {process}
@@ -670,13 +739,26 @@ export default function UnifiedFormPage({
             )}
 
             <main className="unified-form-scroll relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {Array.isArray(fieldMessages) && fieldMessages.length > 0 && (
+                <div className="somane-form-message-list" aria-label="Erreurs et aides du formulaire">
+                  {fieldMessages.map((item, index) => (
+                    <FormMessage
+                      key={`${item.fieldId || 'form'}-${item.severity || 'error'}-${index}`}
+                      fieldId={item.fieldId}
+                      severity={item.severity || 'error'}
+                    >
+                      {item.message}
+                    </FormMessage>
+                  ))}
+                </div>
+              )}
               {children}
             </main>
           </div>
 
           {hasTraceability && traceOpen && (
-            <aside className="unified-form-scroll relative z-10 min-h-0 overflow-y-auto border-l border-gray-300 bg-gray-50 pointer-events-auto">
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-300 bg-white px-4 py-3">
+            <aside className="somane-side-panel somane-traceability-panel unified-form-scroll relative z-10 min-h-0 overflow-y-auto border-l border-gray-300 bg-gray-50 pointer-events-auto">
+              <div className="somane-traceability-panel__header sticky top-0 z-10 flex items-center justify-between border-b border-gray-300 bg-white px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <FiInfo className="shrink-0 text-purple-600" size={14} />
                   <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-gray-800">
@@ -694,15 +776,15 @@ export default function UnifiedFormPage({
                   <span>{t('Fermer')}</span>
                 </button>
               </div>
-              {traceability.content}
+              <div className="somane-traceability-content">{traceability.content}</div>
             </aside>
           )}
         </div>
       </section>
 
       {exitDialogOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md border border-gray-300 bg-white shadow-xl">
+        <div className="somane-overlay-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4">
+          <div className="somane-modal-surface w-full max-w-md border border-gray-300 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
               <h2 className="text-base font-bold text-gray-900">{exitTitle}</h2>
               <button
