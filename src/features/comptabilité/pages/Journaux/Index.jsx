@@ -140,6 +140,35 @@ const getBankAccountLabel = (journal) => {
   ].filter(Boolean).join(' - ').replace(' - (', ' (');
 };
 
+const readMetric = (journal, keys) => {
+  const metrics = journal?.dashboard_metrics || journal?.metrics || {};
+  for (const key of keys) {
+    const value = journal?.[key] ?? metrics[key];
+    if (value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))) {
+      return Number(value);
+    }
+  }
+  return null;
+};
+
+const formatJournalAmount = (value) => (
+  value === null ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(value)
+);
+
+const formatJournalActivity = (journal) => {
+  const value = journal?.last_activity_at || journal?.last_entry_date || journal?.last_move_date;
+  if (!value) return 'Aucune activité récente';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Activité récente';
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (left, right) => left.toDateString() === right.toDateString();
+  if (sameDay(date, today)) return 'Dernière activité : aujourd’hui';
+  if (sameDay(date, yesterday)) return 'Dernière activité : hier';
+  return `Dernière activité : ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(date)}`;
+};
+
 const StateBadge = ({ active }) => (
   <span
     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -652,7 +681,8 @@ export default function JournauxPage() {
 
   return (
     <UnifiedIndexPage
-      title="Journaux Comptables"
+      title="Journaux"
+      description="Sélectionnez un journal pour inspecter son activité."
       memoryKey={JOURNALS_MEMORY_KEY}
       memoryState={memoryState}
       onRestoreMemoryState={restoreMemoryState}
@@ -675,6 +705,7 @@ export default function JournauxPage() {
       filterChips={filterChips}
       onRemoveFilterChip={(chip) => removeFilter(chip.source)}
       renderFilters={renderFilters}
+      filterPanelCustomContent
       filterPanelWidth={720}
       primaryAction={{
         label: 'Nouveau journal',
@@ -691,6 +722,13 @@ export default function JournauxPage() {
         state: { journalRecord: journal },
       })}
       renderRow={renderJournalRow}
+      kanbanSummaryColumns={[
+        { id: 'summary_entries_count', label: 'Écritures', numeric: true, value: (journal) => readMetric(journal, ['entries_count', 'total_entries', 'move_count', 'posted_count']), render: formatJournalAmount },
+        { id: 'summary_debit', label: 'Débit', numeric: true, align: 'right', value: (journal) => readMetric(journal, ['total_debit', 'debit_total', 'debit_sum', 'debit']), render: formatJournalAmount },
+        { id: 'summary_credit', label: 'Crédit', numeric: true, align: 'right', value: (journal) => readMetric(journal, ['total_credit', 'credit_total', 'credit_sum', 'credit']), render: formatJournalAmount },
+        { id: 'summary_activity', label: 'Dernière activité', value: formatJournalActivity },
+      ]}
+      viewModes={['list', 'kanban']}
       page={currentPage}
       onPageChange={setCurrentPage}
       pageSize={pageSize}

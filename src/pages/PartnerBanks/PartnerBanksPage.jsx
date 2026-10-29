@@ -33,6 +33,7 @@ import {
   FiInfo
 } from "react-icons/fi";
 import { TbBuildingBank } from "react-icons/tb";
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function PartnerBanksPage() {
   const [partnerBanks, setPartnerBanks] = useState([]);
@@ -375,7 +376,7 @@ export default function PartnerBanksPage() {
               <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
                 <FiUpload size={14} />
               </button>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
@@ -387,7 +388,7 @@ export default function PartnerBanksPage() {
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
                 <option value={50}>50 lignes</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -678,8 +679,8 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
   const entite = partnerBank.entite_details || partnerBank.entite;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
@@ -990,8 +991,8 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal avec gradient */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
@@ -1064,7 +1065,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                 </label>
                 <div className="relative">
                   <FiUsers className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
+                  <SomaneSelect
                     required
                     value={formData.partenaire}
                     onChange={(e) => handleChange('partenaire', e.target.value)}
@@ -1076,7 +1077,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                         {partenaire.nom} ({partenaire.type_partenaire})
                       </option>
                     ))}
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
               
@@ -1087,7 +1088,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                 </label>
                 <div className="relative">
                   <FiPocket className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
+                  <SomaneSelect
                     required
                     value={formData.banque}
                     onChange={(e) => handleChange('banque', e.target.value)}
@@ -1099,7 +1100,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                         {banque.nom} {banque.code_bic && `(${banque.code_bic})`}
                       </option>
                     ))}
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
               
@@ -1110,7 +1111,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                 </label>
                 <div className="relative">
                   <TbBuildingBank className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
+                  <SomaneSelect
                     required
                     value={formData.entite}
                     onChange={(e) => handleChange('entite', e.target.value)}
@@ -1122,7 +1123,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
                         {entite.raison_sociale}
                       </option>
                     ))}
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
             </div>

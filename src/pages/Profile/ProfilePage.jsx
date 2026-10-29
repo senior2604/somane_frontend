@@ -16,6 +16,7 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import SomaneSelect from '../../components/SomaneSelect';
 
 const initialForm = {
   first_name: '',
@@ -437,7 +438,7 @@ export default function ProfilePage() {
               <SectionHeader icon={<FiGlobe size={15} />} title="Préférences" />
               <div className="space-y-4 p-5">
                 <Field label="Langue" stacked>
-                  <select
+                  <SomaneSelect
                     value={form.lang}
                     onChange={(e) => setField('lang', e.target.value)}
                     className={inputClass()}
@@ -445,11 +446,11 @@ export default function ProfilePage() {
                     {LANGUAGES.map((item) => (
                       <option key={item.value} value={item.value}>{item.label}</option>
                     ))}
-                  </select>
+                  </SomaneSelect>
                 </Field>
 
                 <Field label="Fuseau horaire" stacked>
-                  <select
+                  <SomaneSelect
                     value={form.tz}
                     onChange={(e) => setField('tz', e.target.value)}
                     className={inputClass()}
@@ -457,7 +458,7 @@ export default function ProfilePage() {
                     {TIMEZONES.map((item) => (
                       <option key={item.value} value={item.value}>{item.label}</option>
                     ))}
-                  </select>
+                  </SomaneSelect>
                 </Field>
               </div>
             </section>
@@ -615,8 +616,8 @@ function PasswordModal({ onClose, onSuccess, onError }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 somane-overlay-backdrop">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl somane-modal-surface">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <FiLock size={15} className="text-violet-600" />

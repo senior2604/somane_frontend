@@ -11,6 +11,7 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import { FiCalendar, FiCopy, FiPlus, FiRotateCcw, FiTrash2 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import StatusBadge from '../../../../components/StatusBadge';
 import { useEntity } from '../../../../context/EntityContext';
 import { piecesService } from '../../services';
 
@@ -171,6 +172,11 @@ const formatAmount = (value) => {
   if (!Number.isFinite(number)) return '0';
   return Math.round(number).toLocaleString('fr-FR');
 };
+
+const formatCompactAmount = (value) => new Intl.NumberFormat('fr-FR', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+}).format(value);
 
 const formatListDate = (value) => {
   if (!value) return '—';
@@ -337,9 +343,9 @@ const getPieceBusinessStatuses = (piece) => {
 };
 
 const businessStatusConfig = {
-  duplicated: { text: 'Dupliquée', className: 'bg-blue-100 text-blue-700' },
-  reversal: { text: 'Extourne', className: 'bg-purple-100 text-purple-700' },
-  reversed: { text: 'Extournée', className: 'bg-indigo-100 text-indigo-700' },
+  duplicated: { text: 'Dupliquée' },
+  reversal: { text: 'Extourne' },
+  reversed: { text: 'Extournée' },
 };
 
 const getJournalCode = (piece) => {
@@ -375,23 +381,19 @@ const getCurrencyCode = (piece) => {
 const StateBadge = ({ piece }) => {
   const state = normalizeMoveState(piece?.state);
   const config = {
-    posted: { text: 'Comptabilisé', className: 'bg-green-100 text-green-700' },
-    draft: { text: 'Brouillon', className: 'bg-amber-100 text-amber-700' },
-    cancel: { text: 'Annulé', className: 'bg-red-100 text-red-700' },
-    deleted: { text: 'Supprimé', className: 'bg-slate-200 text-slate-700' },
-  }[state] || { text: piece?.state || 'Inconnu', className: 'bg-gray-100 text-gray-700' };
+    posted: 'Comptabilisé',
+    draft: 'Brouillon',
+    cancel: 'Annulé',
+    deleted: 'Supprimé',
+  }[state] || piece?.state || 'Inconnu';
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1">
-      <span className={`inline-flex whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-medium ${config.className}`}>
-        {config.text}
-      </span>
+      <StatusBadge status={state} label={config} />
       {(piece?._business_statuses || getPieceBusinessStatuses(piece)).map((status) => {
         const item = businessStatusConfig[status];
         return item ? (
-          <span key={status} className={`inline-flex whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-medium ${item.className}`}>
-            {item.text}
-          </span>
+          <StatusBadge key={status} status={status} label={item.text} />
         ) : null;
       })}
     </div>
@@ -437,6 +439,21 @@ const AmountDisplay = ({ value, currency, tone = 'default' }) => {
 
 const referentialCache = new Map();
 const referentialValueCache = new Map();
+
+const getEntityCurrencyCode = (entity, entityId) => {
+  const entityCurrency = entity?.devise_details
+    || (entity?.devise && typeof entity.devise === 'object' ? entity.devise : null)
+    || (entity?.currency && typeof entity.currency === 'object' ? entity.currency : null);
+  const currencyId = entityCurrency?.id ?? entity?.devise ?? entity?.currency;
+  const cachedCurrency = currencyId
+    ? referentialValueCache.get(String(entityId))?.currenciesMap?.[String(currencyId)]
+    : null;
+  return entityCurrency?.code
+    || entityCurrency?.symbole
+    || cachedCurrency?.code
+    || cachedCurrency?.symbole
+    || 'XOF';
+};
 
 const buildReferentialData = (partnersResponse, journalsResponse, currenciesResponse, taxesResponse) => {
   const partners = normalizeApiList(partnersResponse);
@@ -664,6 +681,40 @@ export default function PiecesComptablesList() {
     });
   }, [activeFilters, deferredSearch, pieces]);
 
+  const pageSummary = useMemo(() => {
+    const systemCurrency = getEntityCurrencyCode(activeEntity, entityId);
+    const totals = {
+      amount_untaxed: 0,
+      amount_tax: 0,
+      amount_total: 0,
+    };
+    filteredPieces.forEach((piece) => {
+      Object.keys(totals).forEach((field) => {
+        totals[field] += Number(piece[field]) || 0;
+      });
+    });
+
+    return [
+      { id: 'pieces-total-ht', label: 'Total HT', amount: totals.amount_untaxed },
+      { id: 'pieces-total-tax', label: 'Taxes', amount: totals.amount_tax },
+      { id: 'pieces-total-ttc', label: 'Total TTC', amount: totals.amount_total },
+    ].map(({ id, label, amount }) => ({
+      id,
+      label,
+      value: `${formatCompactAmount(amount)} ${systemCurrency}`,
+      title: `${formatAmount(amount)} ${systemCurrency}`,
+    }));
+  }, [activeEntity, entityId, filteredPieces]);
+
+  const recordNavigatorRecords = useMemo(() => filteredPieces.map((piece) => ({
+    id: piece.id,
+    label: piece.name || `Pièce #${piece.id}`,
+    detail: [
+      getJournalName(piece),
+      formatListDate(getPieceDateByMode(piece, dateDisplayMode)),
+    ].filter((value) => value && value !== '—').join(' · '),
+  })), [dateDisplayMode, filteredPieces]);
+
   const runAction = useCallback(async (actionId, callback, successMessage) => {
     try {
       setActionLoading(actionId);
@@ -799,7 +850,7 @@ export default function PiecesComptablesList() {
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              navigate(`/comptabilite/pieces/${piece.id}`);
+              navigate(`/comptabilite/pieces/${piece.id}`, { state: { recordNavigatorRecords } });
             }}
             className="block max-w-full truncate text-left text-xs font-semibold text-teal-700 transition-colors hover:text-purple-700 hover:underline"
             title={`Ouvrir la pièce ${piece.name || ''}`}
@@ -886,13 +937,13 @@ export default function PiecesComptablesList() {
       value: (piece) => piece.payment_state || '',
       render: (_, piece) => <PaymentBadge state={piece.payment_state} />,
     },
-  ], [dateDisplayMode, navigate]);
+  ], [dateDisplayMode, navigate, recordNavigatorRecords]);
 
   const renderFilters = useCallback(({ close }) => (
-    <div className="grid grid-cols-1 text-xs text-gray-700 md:grid-cols-[minmax(220px,0.8fr)_minmax(360px,1.4fr)]">
-      <div className="border-b border-gray-200 p-3 md:border-b-0 md:border-r">
-        <p className="mb-2 font-semibold text-gray-800">Ajouter un filtre</p>
-        <div className="space-y-1">
+    <div className="space-y-3 text-xs text-gray-700">
+      <div>
+        <p className="mb-1.5 font-semibold text-gray-800">Ajouter un filtre</p>
+        <div className="somane-search-panel__options">
           {[
             { id: 'state:draft', kind: 'state', value: 'draft', label: 'Brouillon' },
             { id: 'state:posted', kind: 'state', value: 'posted', label: 'Comptabilisé' },
@@ -909,7 +960,7 @@ export default function PiecesComptablesList() {
               key={filter.id}
               type="button"
               onClick={() => toggleFilter(filter)}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-gray-100"
+              className={`somane-search-panel__option ${hasFilter(filter.id) ? 'is-active' : ''}`}
             >
               <span className="w-4 font-semibold text-purple-600">{hasFilter(filter.id) ? '✓' : ''}</span>
               <span>{filter.label}</span>
@@ -918,9 +969,9 @@ export default function PiecesComptablesList() {
         </div>
       </div>
 
-      <div className="p-3">
-        <p className="mb-2 font-semibold text-gray-800">Affichage et référentiels</p>
-        <div className="space-y-1">
+      <div className="border-t border-gray-200 pt-2">
+        <p className="mb-1.5 font-semibold text-gray-800">Date</p>
+        <div className="somane-search-panel__options">
           {[
             { value: 'accounting', label: 'Date comptable' },
             { value: 'registration', label: "Date d'enregistrement" },
@@ -929,7 +980,7 @@ export default function PiecesComptablesList() {
               key={option.value}
               type="button"
               onClick={() => setDateDisplayMode(option.value)}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-gray-100"
+              className={`somane-search-panel__option ${dateDisplayMode === option.value ? 'is-active' : ''}`}
             >
               <span className="w-4 font-semibold text-purple-600">{dateDisplayMode === option.value ? '✓' : ''}</span>
               <span>{option.label}</span>
@@ -938,9 +989,9 @@ export default function PiecesComptablesList() {
         </div>
 
         {journalOptions.length > 0 && (
-          <div className="mt-3 border-t border-gray-200 pt-3">
-            <p className="mb-2 font-semibold text-gray-800">Journal</p>
-            <div className="max-h-36 space-y-1 overflow-y-auto">
+          <div className="mt-2 border-t border-gray-200 pt-2">
+            <p className="mb-1.5 font-semibold text-gray-800">Journal</p>
+            <div className="somane-search-panel__options">
               {journalOptions.map((journal) => {
                 const id = `journal:${journal.id}`;
                 return (
@@ -948,7 +999,7 @@ export default function PiecesComptablesList() {
                     key={id}
                     type="button"
                     onClick={() => toggleFilter({ id, kind: 'journal', value: String(journal.id), label: journal.name || journal.nom || journal.code })}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-gray-100"
+                    className={`somane-search-panel__option ${hasFilter(id) ? 'is-active' : ''}`}
                   >
                     <span className="w-4 shrink-0 font-semibold text-purple-600">{hasFilter(id) ? '✓' : ''}</span>
                     <span className="truncate">{journal.name || journal.nom || journal.code}</span>
@@ -960,9 +1011,9 @@ export default function PiecesComptablesList() {
         )}
 
         {partnerOptions.length > 0 && (
-          <div className="mt-3 border-t border-gray-200 pt-3">
-            <p className="mb-2 font-semibold text-gray-800">Partenaire</p>
-            <div className="max-h-36 space-y-1 overflow-y-auto">
+          <div className="mt-2 border-t border-gray-200 pt-2">
+            <p className="mb-1.5 font-semibold text-gray-800">Partenaire</p>
+            <div className="somane-search-panel__options">
               {partnerOptions.map((partner) => {
                 const id = `partner:${partner.id}`;
                 const label = partner.raison_sociale || partner.nom || partner.name || 'Partenaire';
@@ -971,7 +1022,7 @@ export default function PiecesComptablesList() {
                     key={id}
                     type="button"
                     onClick={() => toggleFilter({ id, kind: 'partner', value: String(partner.id), label })}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-gray-100"
+                    className={`somane-search-panel__option ${hasFilter(id) ? 'is-active' : ''}`}
                   >
                     <span className="w-4 shrink-0 font-semibold text-purple-600">{hasFilter(id) ? '✓' : ''}</span>
                     <span className="truncate">{label}</span>
@@ -984,7 +1035,7 @@ export default function PiecesComptablesList() {
       </div>
 
       {(activeFilters.length > 0 || search.trim()) && (
-        <div className="border-t border-gray-200 p-3 md:col-span-2">
+        <div className="border-t border-gray-200 pt-2">
           <button
             type="button"
             onClick={() => {
@@ -993,7 +1044,7 @@ export default function PiecesComptablesList() {
               setCurrentPage(1);
               close();
             }}
-            className="w-full rounded py-1.5 text-center text-red-600 hover:bg-red-50"
+            className="somane-search-panel__clear m-0"
           >
             Effacer les filtres
           </button>
@@ -1059,12 +1110,13 @@ export default function PiecesComptablesList() {
 
   const handleRowClick = useCallback((piece, context) => {
     if (context?.event?.defaultPrevented) return;
-    navigate(`/comptabilite/pieces/${piece.id}`);
-  }, [navigate]);
+    navigate(`/comptabilite/pieces/${piece.id}`, { state: { recordNavigatorRecords } });
+  }, [navigate, recordNavigatorRecords]);
 
   return (
     <UnifiedIndexPage
       title="Pièces comptables"
+      pageSummary={pageSummary}
       rows={filteredPieces}
       columns={columns}
       rowKey="id"
@@ -1082,9 +1134,16 @@ export default function PiecesComptablesList() {
       }}
       searchPlaceholder="Rechercher une pièce..."
       filterChips={activeFilters.map((filter) => ({ id: filter.id, label: filter.label }))}
-      onRemoveFilterChip={(filterId) => setActiveFilters((previous) => previous.filter((filter) => filter.id !== filterId))}
+      onRemoveFilterChip={(chip) => setActiveFilters((previous) => previous.filter((filter) => filter.id !== chip.id))}
       renderFilters={renderFilters}
-      filterPanelWidth={720}
+      filterPanelWidth={640}
+      groupByOptions={[
+        { id: 'partenaire', label: 'Partenaire' },
+        { id: 'journal_name', label: 'Journal' },
+        { id: 'etat', label: 'Statut' },
+        { id: 'paiement', label: 'Paiement' },
+        { id: 'date', label: 'Date' },
+      ]}
       primaryAction={{
         label: 'Nouvelle pièce',
         icon: <FiPlus size={14} />,

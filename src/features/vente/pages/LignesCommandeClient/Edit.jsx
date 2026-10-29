@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { FiSave, FiArrowLeft } from 'react-icons/fi';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 export default function LignesCommandeClientEdit() {
   const { id } = useParams();
@@ -96,19 +97,19 @@ export default function LignesCommandeClientEdit() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Commande Client <span className="text-red-500">*</span></label>
-          <select name="commande_client_id" value={formData.commande_client_id} onChange={handleChange} className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent ${errors.commande_client_id ? 'border-red-500' : 'border-gray-300'}`} required>
+          <SomaneSelect name="commande_client_id" value={formData.commande_client_id} onChange={handleChange} className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent ${errors.commande_client_id ? 'border-red-500' : 'border-gray-300'}`} required>
             <option value="">Sélectionnez une commande client</option>
             {commandesClient.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
-          </select>
+          </SomaneSelect>
           {errors.commande_client_id && <p className="text-red-500 text-sm mt-1">{errors.commande_client_id}</p>}
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Produit <span className="text-red-500">*</span></label>
-          <select name="product_id" value={formData.product_id} onChange={handleChange} className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent ${errors.product_id ? 'border-red-500' : 'border-gray-300'}`} required>
+          <SomaneSelect name="product_id" value={formData.product_id} onChange={handleChange} className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent ${errors.product_id ? 'border-red-500' : 'border-gray-300'}`} required>
             <option value="">Sélectionnez un produit</option>
             {produits.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
-          </select>
+          </SomaneSelect>
           {errors.product_id && <p className="text-red-500 text-sm mt-1">{errors.product_id}</p>}
         </div>
 

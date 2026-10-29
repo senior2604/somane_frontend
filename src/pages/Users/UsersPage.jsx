@@ -8,6 +8,7 @@ import {
   FiPhone, FiCalendar, FiClock, FiImage, FiLayers, FiBriefcase,
   FiArrowRight, FiArrowLeft, FiFilter, FiCopy, FiSave, FiMapPin
 } from "react-icons/fi";
+import SomaneSelect from '../../components/SomaneSelect';
 
 // Types d'accès
 const TYPES_ACCES = [
@@ -517,7 +518,7 @@ export default function UnifiedPermissionsPage() {
                         <>
                           <div className="space-y-1 mb-3">
                             <p className="text-xs font-medium text-gray-700 mb-1">Type d'accès</p>
-                            <select
+                            <SomaneSelect
                               value={filterTypeAcces}
                               onChange={(e) => {
                                 setFilterTypeAcces(e.target.value);
@@ -529,12 +530,12 @@ export default function UnifiedPermissionsPage() {
                               {TYPES_ACCES.map(type => (
                                 <option key={type.value} value={type.value}>{type.label}</option>
                               ))}
-                            </select>
+                            </SomaneSelect>
                           </div>
                           
                           <div className="space-y-1">
                             <p className="text-xs font-medium text-gray-700 mb-1">Statut</p>
-                            <select
+                            <SomaneSelect
                               value={filterStatut}
                               onChange={(e) => {
                                 setFilterStatut(e.target.value);
@@ -545,7 +546,7 @@ export default function UnifiedPermissionsPage() {
                               <option value="">Tous les statuts</option>
                               <option value="true">Actif</option>
                               <option value="false">Inactif</option>
-                            </select>
+                            </SomaneSelect>
                           </div>
                         </>
                       )}
@@ -749,7 +750,7 @@ export default function UnifiedPermissionsPage() {
               <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
                 <FiUpload size={14} />
               </button>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
@@ -761,7 +762,7 @@ export default function UnifiedPermissionsPage() {
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
                 <option value={50}>50 lignes</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -1520,8 +1521,8 @@ function UserFormModal({ user, groupes, partenaires, entiteContexte, onClose, on
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
@@ -1713,14 +1714,14 @@ function UserFormModal({ user, groupes, partenaires, entiteContexte, onClose, on
             <div className="grid grid-cols-1 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Statut</label>
-                <select
+                <SomaneSelect
                   value={formData.statut}
                   onChange={(e) => handleChange('statut', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
                 >
                   <option value="actif">Actif</option>
                   <option value="inactif">Inactif</option>
-                </select>
+                </SomaneSelect>
               </div>
             </div>
           </div>
@@ -2060,8 +2061,8 @@ function GroupFormModal({ group, users = [], permissions = [], groups: allGroups
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -2666,8 +2667,8 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -2730,7 +2731,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                 </label>
                 <div className="relative">
                   <FiUsers className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
+                  <SomaneSelect
                     required
                     value={formData.groupe}
                     onChange={(e) => handleChange('groupe', e.target.value)}
@@ -2742,7 +2743,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                         {groupe.name}
                       </option>
                     ))}
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
               
@@ -2752,7 +2753,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                 </label>
                 <div className="relative">
                   <FiLayers className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
+                  <SomaneSelect
                     required
                     value={formData.module}
                     onChange={(e) => handleChange('module', e.target.value)}
@@ -2764,7 +2765,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                         {module.nom_affiche || module.name}
                       </option>
                     ))}
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
               
@@ -2772,7 +2773,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                 <label className="block text-xs font-medium text-gray-700 mb-1">Entité</label>
                 <div className="relative">
                   <FiBriefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
+                  <SomaneSelect
                     value={formData.entite}
                     onChange={(e) => handleChange('entite', e.target.value)}
                     className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm appearance-none"
@@ -2783,7 +2784,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                         {entite.raison_sociale || entite.name}
                       </option>
                     ))}
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
               
@@ -2791,7 +2792,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Accès <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SomaneSelect
                   required
                   value={formData.acces}
                   onChange={(e) => handleChange('acces', e.target.value)}
@@ -2803,7 +2804,7 @@ function PermissionFormModal({ permission, groupes, modules, entites, onClose, o
                   <option value="validation">Validation</option>
                   <option value="suppression">Suppression</option>
                   <option value="personnalise">Personnalisé</option>
-                </select>
+                </SomaneSelect>
               </div>
               
               <div className="lg:col-span-2">
@@ -2924,8 +2925,8 @@ function DetailModal({ item, type, userGroups, groupPermissions, groups, users, 
 // UserDetailModal (adapté pour afficher partenaire et entité)
 function UserDetailModal({ item, userGroups, groups, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -3109,8 +3110,8 @@ function GroupDetailModal({ item, userGroups, groupPermissions, permissions, mod
   );
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -3245,8 +3246,8 @@ function PermissionDetailModal({ item, groups, modules, onClose }) {
   const accessType = TYPES_ACCES.find(t => t.value === item.acces);
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -3418,8 +3419,8 @@ function AssociationModal({
   };
   
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

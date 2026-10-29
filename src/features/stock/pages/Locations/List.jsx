@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const LocationsList = () => {
   const [locations, setLocations] = useState([]);
@@ -80,13 +81,13 @@ const LocationsList = () => {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+          <SomaneSelect className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
             <option value="">Tous les types</option>
             <option value="internal">Interne</option>
             <option value="customer">Client</option>
             <option value="supplier">Fournisseur</option>
             <option value="inventory">Inventaire</option>
-          </select>
+          </SomaneSelect>
         </div>
       </div>
 

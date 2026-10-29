@@ -5,6 +5,7 @@ import { FiEdit2, FiEye, FiPlus, FiTrash2 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 import useTypeStore from '../../../../stores/comptabilite/typeStore';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const FRAMEWORK_SESSION_KEY = 'type_list_selected_framework';
 const MEMORY_KEY = 'comptabilite:types:index:v2';
@@ -167,27 +168,27 @@ export default function TypeList() {
     <div className="grid grid-cols-2 gap-4 p-4 text-xs">
       <div className="col-span-2">
         <label className="mb-1 block font-semibold text-gray-700">Référentiel comptable</label>
-        <select value={frameworkId} onChange={(event) => { setFrameworkId(event.target.value); setPage(1); }} className="h-9 w-full rounded border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">
+        <SomaneSelect value={frameworkId} onChange={(event) => { setFrameworkId(event.target.value); setPage(1); }} className="h-9 w-full rounded border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">
           {frameworks.map((framework) => <option key={framework.id} value={framework.id}>{frameworkLabel(framework)}</option>)}
-        </select>
+        </SomaneSelect>
       </div>
       <div>
         <label className="mb-1 block font-semibold text-gray-700">Statut</label>
-        <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="h-9 w-full rounded border border-gray-300 bg-white px-2">
+        <SomaneSelect value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="h-9 w-full rounded border border-gray-300 bg-white px-2">
           <option value="all">Tous</option><option value="active">Actifs</option><option value="inactive">Inactifs</option>
-        </select>
+        </SomaneSelect>
       </div>
       <div>
         <label className="mb-1 block font-semibold text-gray-700">Solde par défaut</label>
-        <select value={balance} onChange={(event) => { setBalance(event.target.value); setPage(1); }} className="h-9 w-full rounded border border-gray-300 bg-white px-2">
+        <SomaneSelect value={balance} onChange={(event) => { setBalance(event.target.value); setPage(1); }} className="h-9 w-full rounded border border-gray-300 bg-white px-2">
           <option value="all">Tous</option><option value="debit">Débit</option><option value="credit">Crédit</option>
-        </select>
+        </SomaneSelect>
       </div>
       <div className="col-span-2">
         <label className="mb-1 block font-semibold text-gray-700">Lettrage</label>
-        <select value={reconciliation} onChange={(event) => { setReconciliation(event.target.value); setPage(1); }} className="h-9 w-full rounded border border-gray-300 bg-white px-2">
+        <SomaneSelect value={reconciliation} onChange={(event) => { setReconciliation(event.target.value); setPage(1); }} className="h-9 w-full rounded border border-gray-300 bg-white px-2">
           <option value="all">Tous</option><option value="yes">Lettrables</option><option value="no">Non lettrables</option>
-        </select>
+        </SomaneSelect>
       </div>
     </div>
   ), [balance, frameworkId, frameworks, reconciliation, status]);

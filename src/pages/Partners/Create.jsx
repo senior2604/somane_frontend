@@ -28,6 +28,7 @@ import {
   validatePartnerForm,
   validateRequiredPartnerCustomFields,
 } from './PartnerShared';
+import SomaneSelect from '../../components/SomaneSelect';
 
 const normalizeSavedPartner = (payload, fallback = {}) => {
   const data = payload?.data ?? payload ?? {};
@@ -473,7 +474,7 @@ export default function PartnerCreate() {
         <div className="px-4 py-3 border-b border-gray-300 bg-blue-50">
           <div className="flex items-center">
             <label className="text-xs text-gray-700 min-w-[140px] font-medium">Utilisateur source</label>
-            <select
+            <SomaneSelect
               value={selectedUserId}
               onChange={(event) => {
                 setSelectedUserId(event.target.value);
@@ -488,7 +489,7 @@ export default function PartnerCreate() {
                   {[user.first_name, user.last_name].filter(Boolean).join(' ') || user.email} — {user.email}
                 </option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
           <p className="ml-[148px] mt-1 text-[11px] text-blue-700">
             Seuls les utilisateurs sans partenaire sont proposés. Si un utilisateur est choisi, ses informations sont reprises automatiquement.
@@ -531,9 +532,9 @@ export default function PartnerCreate() {
                 <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Paramètre du partenaire</div>
                 <div className="flex items-center">
                   <label className="text-xs text-gray-700 min-w-[140px] font-medium">Type de partenaire *</label>
-                  <select value={formData.type_partenaire} onChange={(event) => updateForm((previous) => ({ ...previous, type_partenaire: event.target.value }))} className="flex-1 ml-2 h-8 border border-gray-300 px-2 text-xs">
+                  <SomaneSelect value={formData.type_partenaire} onChange={(event) => updateForm((previous) => ({ ...previous, type_partenaire: event.target.value }))} className="flex-1 ml-2 h-8 border border-gray-300 px-2 text-xs">
                     {PARTNER_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
               <div className="bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
@@ -570,8 +571,8 @@ export default function PartnerCreate() {
 
       {/* Dialogue confirmation */}
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">
               Voulez-vous enregistrer les modifications avant de quitter ?

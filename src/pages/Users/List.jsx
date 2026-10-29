@@ -28,6 +28,7 @@ import {
   getUserName,
   useSecurityData,
 } from './SecurityShared';
+import SomaneSelect from '../../components/SomaneSelect';
 
 const EMPTY_SECURITY_DATA = {
   users: [],
@@ -882,7 +883,7 @@ function SecurityList() {
 
               <td className="border-r border-gray-200 px-2 py-2 text-center">
                 {canWriteCurrent ? (
-                  <select
+                  <SomaneSelect
                     value={permission.acces || 'personnalise'}
                     disabled={isSavingAccess}
                     onChange={(event) => updatePermissionAccess(permission, event.target.value)}
@@ -891,7 +892,7 @@ function SecurityList() {
                     {ACCESS_TYPES.map((access) => (
                       <option key={access.value} value={access.value}>{access.label}</option>
                     ))}
-                  </select>
+                  </SomaneSelect>
                 ) : <span className="text-xs">{ACCESS_TYPES.find((access) => access.value === permission.acces)?.label || permission.acces || '-'}</span>}
               </td>
 

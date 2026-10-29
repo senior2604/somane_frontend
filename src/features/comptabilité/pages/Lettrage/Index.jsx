@@ -10,6 +10,7 @@ import {
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
 import { useEntity } from '../../../../context/EntityContext';
 import { apiClient } from '../../services';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const API = {
   moveLines: 'compta/move-lines/',
@@ -1208,9 +1209,9 @@ function LettrageIndex() {
   }));
 
   const filterChips = [
-    ...groupBy.map((id, index) => ({
+    ...groupBy.map((id) => ({
       id: `group:${id}`,
-      label: `${index > 0 ? '> ' : ''}${GROUP_LABELS[id] || id}`,
+      label: GROUP_LABELS[id] || id,
       kind: 'group',
       value: id,
     })),
@@ -1235,10 +1236,10 @@ function LettrageIndex() {
   };
 
   const renderLettrageFilters = ({ close }) => (
-    <div className="grid grid-cols-1 text-xs text-gray-700 md:grid-cols-[minmax(220px,0.8fr)_minmax(360px,1.4fr)]">
-      <div className="border-b border-gray-200 p-3 md:border-b-0 md:border-r">
-        <p className="mb-2 font-semibold text-gray-800">Ajouter un filtre</p>
-        <div className="space-y-1">
+    <div className="somane-search-panel somane-search-panel--custom">
+      <section className="somane-search-panel__section somane-search-panel__section--filters">
+        <h2>Ajouter un filtre</h2>
+        <div className="somane-search-panel__options">
           {[
             { id: 'unreconciled', label: 'Non lettré' },
             { id: 'partialReconciled', label: 'Lettrages partiels' },
@@ -1252,18 +1253,18 @@ function LettrageIndex() {
               key={filter.id}
               type="button"
               onClick={() => toggleFilter({ ...filter, type: 'filter' })}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-gray-100"
+              className={`somane-search-panel__option ${hasFilter(filter.id) ? 'is-active' : ''}`}
             >
-              <span className="w-4 font-semibold text-purple-600">{hasFilter(filter.id) ? '✓' : ''}</span>
+              <span className="somane-search-panel__check">{hasFilter(filter.id) ? '✓' : ''}</span>
               <span>{filter.label}</span>
             </button>
           ))}
         </div>
-      </div>
+      </section>
 
-      <div className="p-3">
-        <p className="mb-2 font-semibold text-gray-800">Regrouper par</p>
-        <div className="space-y-1">
+      <section className="somane-search-panel__section">
+        <h2>Regrouper par</h2>
+        <div className="somane-search-panel__options">
           {[
             { id: 'move', label: 'Écriture comptable' },
             { id: 'account', label: 'Compte' },
@@ -1274,9 +1275,9 @@ function LettrageIndex() {
               key={group.id}
               type="button"
               onClick={() => toggleGroup(group.id)}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-gray-100"
+              className={`somane-search-panel__option ${groupBy.includes(group.id) ? 'is-active' : ''}`}
             >
-              <span className="w-4 font-semibold text-purple-600">{groupBy.includes(group.id) ? '✓' : ''}</span>
+              <span className="somane-search-panel__check">{groupBy.includes(group.id) ? '✓' : ''}</span>
               <span>{group.label}</span>
             </button>
           ))}
@@ -1285,22 +1286,22 @@ function LettrageIndex() {
             const current = dateFilters[type.id] || createEmptyDateFilter();
             const isOpen = openDateFilters[type.id] ?? false;
             return (
-              <div key={type.id} className="rounded border border-gray-200">
+              <div key={type.id} className="somane-search-panel__date-group">
                 <button
                   type="button"
                   onClick={() => setOpenDateFilters((previous) => ({ ...previous, [type.id]: !isOpen }))}
-                  className="flex w-full items-center justify-between px-2 py-2 text-left hover:bg-gray-50"
+                  className="somane-search-panel__date-toggle"
                 >
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 font-semibold text-purple-600">{current.mode ? '✓' : ''}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="somane-search-panel__check">{current.mode ? '✓' : ''}</span>
                     <span>{type.menuLabel || type.label}</span>
                   </span>
                   {isOpen ? <FiChevronDown size={13} /> : <FiChevronRight size={13} />}
                 </button>
 
                 {isOpen && (
-                  <div className="space-y-2 border-t border-gray-200 p-2">
-                    <div className="border-l border-gray-200 py-1">
+                  <div className="somane-search-panel__date-content">
+                    <div className="somane-search-panel__date-options">
                       {DATE_PERIOD_OPTIONS.map((option) => {
                         const selected = current.mode === option.id;
                         return (
@@ -1309,22 +1310,22 @@ function LettrageIndex() {
                             type="button"
                             onClick={() => updateDateFilter(type.id, { mode: selected ? '' : option.id })}
                             className={classNames(
-                              'flex w-full items-center justify-between px-4 py-1.5 text-left text-sm',
-                              selected ? 'bg-gray-100 font-medium text-purple-700' : 'hover:bg-gray-50',
+                              'somane-search-panel__date-option',
+                              selected && 'is-active',
                             )}
                           >
                             <span>{option.label}</span>
-                            <span className="text-purple-600">{selected ? '✓' : ''}</span>
+                            <span>{selected ? '✓' : ''}</span>
                           </button>
                         );
                       })}
                     </div>
 
                     {current.mode === 'day' && (
-                      <input type="date" value={current.date} onChange={(event) => updateDateFilter(type.id, { date: event.target.value })} className="h-8 w-full rounded border border-gray-300 px-2 outline-none focus:border-purple-500" />
+                      <input type="date" value={current.date} onChange={(event) => updateDateFilter(type.id, { date: event.target.value })} className="somane-search-panel__date-input" />
                     )}
                     {current.mode === 'week' && (
-                      <input type="week" value={current.week} onChange={(event) => updateDateFilter(type.id, { week: event.target.value })} className="h-8 w-full rounded border border-gray-300 px-2 outline-none focus:border-purple-500" />
+                      <input type="week" value={current.week} onChange={(event) => updateDateFilter(type.id, { week: event.target.value })} className="somane-search-panel__date-input" />
                     )}
                     {current.mode === 'month' && (
                       <input
@@ -1334,28 +1335,28 @@ function LettrageIndex() {
                           const [year, month] = event.target.value.split('-');
                           updateDateFilter(type.id, { year, month });
                         }}
-                        className="h-8 w-full rounded border border-gray-300 px-2 outline-none focus:border-purple-500"
+                        className="somane-search-panel__date-input"
                       />
                     )}
                     {current.mode === 'quarter' && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <select value={current.quarter} onChange={(event) => updateDateFilter(type.id, { quarter: event.target.value })} className="h-8 rounded border border-gray-300 px-2 outline-none focus:border-purple-500">
+                        <div className="grid grid-cols-2 gap-2">
+                        <SomaneSelect value={current.quarter} onChange={(event) => updateDateFilter(type.id, { quarter: event.target.value })} className="somane-search-panel__date-input">
                           <option value="1">T1</option><option value="2">T2</option><option value="3">T3</option><option value="4">T4</option>
-                        </select>
-                        <input type="number" value={current.year} onChange={(event) => updateDateFilter(type.id, { year: event.target.value })} placeholder="Année" className="h-8 rounded border border-gray-300 px-2 outline-none focus:border-purple-500" />
+                        </SomaneSelect>
+                        <input type="number" value={current.year} onChange={(event) => updateDateFilter(type.id, { year: event.target.value })} placeholder="Année" className="somane-search-panel__date-input" />
                       </div>
                     )}
                     {current.mode === 'year' && (
-                      <input type="number" value={current.year} onChange={(event) => updateDateFilter(type.id, { year: event.target.value })} placeholder="Année" className="h-8 w-full rounded border border-gray-300 px-2 outline-none focus:border-purple-500" />
+                      <input type="number" value={current.year} onChange={(event) => updateDateFilter(type.id, { year: event.target.value })} placeholder="Année" className="somane-search-panel__date-input" />
                     )}
                     {current.mode === 'custom' && (
                       <div className="grid grid-cols-2 gap-2">
-                        <input type="date" value={current.start} onChange={(event) => updateDateFilter(type.id, { start: event.target.value })} className="h-8 rounded border border-gray-300 px-2 outline-none focus:border-purple-500" />
-                        <input type="date" value={current.end} onChange={(event) => updateDateFilter(type.id, { end: event.target.value })} className="h-8 rounded border border-gray-300 px-2 outline-none focus:border-purple-500" />
+                        <input type="date" value={current.start} onChange={(event) => updateDateFilter(type.id, { start: event.target.value })} className="somane-search-panel__date-input" />
+                        <input type="date" value={current.end} onChange={(event) => updateDateFilter(type.id, { end: event.target.value })} className="somane-search-panel__date-input" />
                       </div>
                     )}
                     {current.mode && (
-                      <button type="button" onClick={() => clearDateFilter(type.id)} className="w-full rounded px-2 py-1 text-left text-red-600 hover:bg-red-50">Effacer ce filtre</button>
+                      <button type="button" onClick={() => clearDateFilter(type.id)} className="somane-search-panel__clear m-0">Effacer ce filtre</button>
                     )}
                   </div>
                 )}
@@ -1363,10 +1364,10 @@ function LettrageIndex() {
             );
           })}
         </div>
-      </div>
+      </section>
 
       {(activeFilters.length > 0 || search.trim() || hasActiveDateFilters(dateFilters) || groupBy.join('|') !== DEFAULT_GROUPS.join('|')) && (
-        <div className="border-t border-gray-200 p-3 md:col-span-2">
+        <div className="somane-search-panel__custom-actions">
           <button
             type="button"
             onClick={() => {
@@ -1377,7 +1378,7 @@ function LettrageIndex() {
               setOpenDateFilters({ accounting: false, invoice: false });
               close();
             }}
-            className="w-full rounded py-1.5 text-center text-red-600 hover:bg-red-50"
+            className="somane-search-panel__clear m-0"
           >
             Effacer les filtres
           </button>
@@ -1445,6 +1446,7 @@ function LettrageIndex() {
         renderFilters={renderLettrageFilters}
         onFiltersOpen={() => setOpenDateFilters({ accounting: false, invoice: false })}
         filterPanelWidth={720}
+        filterPanelCustomContent
         primaryAction={{
           label: autoReconciling ? 'Lettrage automatique...' : 'Lettrage automatique',
           icon: <FiStar size={14} />,
@@ -1492,8 +1494,8 @@ function LettrageIndex() {
       />
 
       {showAutoDialog && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 px-4">
-          <div className="w-full max-w-md rounded border border-gray-300 bg-white shadow-xl">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 px-4 somane-overlay-backdrop">
+          <div className="w-full max-w-md rounded border border-gray-300 bg-white shadow-xl somane-modal-surface">
             <div className="border-b border-gray-200 px-4 py-3">
               <h3 className="text-sm font-semibold text-gray-900">Lettrage automatique</h3>
               <p className="mt-1 text-xs text-gray-500">Choisissez la méthode à utiliser pour rapprocher les écritures ouvertes.</p>

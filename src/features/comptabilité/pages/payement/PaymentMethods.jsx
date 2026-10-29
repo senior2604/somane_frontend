@@ -11,6 +11,7 @@ import {
   normalizeApiList,
   normalizeText,
 } from './paymentShared.jsx';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const API = { methods: 'compta/payment-methods/' };
 const MEMORY_KEY = 'comptabilite:payment-methods:index:v3';
@@ -242,7 +243,7 @@ export default function PaymentMethods() {
     <div className="grid grid-cols-2 gap-4 p-4 text-xs">
       <div>
         <label className="mb-1 block font-semibold text-gray-700">Type de paiement</label>
-        <select
+        <SomaneSelect
           value={typeFilter}
           onChange={(event) => { setTypeFilter(event.target.value); setPage(1); }}
           className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500"
@@ -251,11 +252,11 @@ export default function PaymentMethods() {
           <option value="inbound">Encaissement</option>
           <option value="outbound">Décaissement</option>
           <option value="both">Encaissement et décaissement</option>
-        </select>
+        </SomaneSelect>
       </div>
       <div>
         <label className="mb-1 block font-semibold text-gray-700">Statut</label>
-        <select
+        <SomaneSelect
           value={statusFilter}
           onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}
           className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500"
@@ -263,7 +264,7 @@ export default function PaymentMethods() {
           <option value="all">Tous</option>
           <option value="active">Actives</option>
           <option value="inactive">Inactives</option>
-        </select>
+        </SomaneSelect>
       </div>
     </div>
   ), [statusFilter, typeFilter]);

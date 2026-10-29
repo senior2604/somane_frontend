@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../../services/apiClient';
+import SomaneSelect from '../../../components/SomaneSelect';
 
 const STYLES = `
   * { box-sizing: border-box; }
@@ -334,11 +335,11 @@ export default function FinancialReportsList() {
             />
           </div>
           <FiFilter size={14} style={{ color: '#888', flexShrink: 0 }} />
-          <select className="filter-select" value={filterRef} onChange={e => setFilterRef(e.target.value)}>
+          <SomaneSelect className="filter-select" value={filterRef} onChange={e => setFilterRef(e.target.value)}>
             <option value="all">Toutes les balances</option>
             <option value="normal">Balances principales</option>
             <option value="reference">Balances N-1</option>
-          </select>
+          </SomaneSelect>
         </div>
 
         {/* ── Statistiques ── */}

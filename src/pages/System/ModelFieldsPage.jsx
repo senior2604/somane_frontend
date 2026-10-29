@@ -4,6 +4,7 @@ import { FiCode, FiEdit2, FiPlus, FiRefreshCw, FiSearch, FiX } from 'react-icons
 import { apiClient } from '../../services/apiClient';
 import { readDeveloperMode, subscribeDeveloperMode } from '../../services/developerMode';
 import { useUi } from '../../context/UiContext';
+import SomaneSelect from '../../components/SomaneSelect';
 
 function asRows(payload) {
   if (Array.isArray(payload)) return payload;
@@ -129,10 +130,10 @@ function DefaultValueInput({ type, value, options = [], onChange }) {
   const className = 'mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-normal';
   if (type === 'boolean') {
     const selected = value === true ? 'true' : value === false ? 'false' : '';
-    return <select value={selected} onChange={(event) => onChange(event.target.value === '' ? '' : event.target.value === 'true')} className={className}><option value="">Aucune valeur par défaut</option><option value="true">Oui</option><option value="false">Non</option></select>;
+    return <SomaneSelect value={selected} onChange={(event) => onChange(event.target.value === '' ? '' : event.target.value === 'true')} className={className}><option value="">Aucune valeur par défaut</option><option value="true">Oui</option><option value="false">Non</option></SomaneSelect>;
   }
   if (type === 'selection') {
-    return <select value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={className}><option value="">Aucune valeur par défaut</option>{options.map((option) => <option key={option.value} value={option.value}>{option.name || option.label || option.value}</option>)}</select>;
+    return <SomaneSelect value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={className}><option value="">Aucune valeur par défaut</option>{options.map((option) => <option key={option.value} value={option.value}>{option.name || option.label || option.value}</option>)}</SomaneSelect>;
   }
   const inputType = type === 'date' ? 'date' : type === 'integer' || type === 'float' ? 'number' : 'text';
   return <input type={inputType} step={type === 'float' ? 'any' : undefined} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={className} placeholder="Aucune valeur par défaut" />;
@@ -395,11 +396,11 @@ export default function ModelFieldsPage() {
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="grid gap-3 border-b border-gray-200 p-4 md:grid-cols-[minmax(220px,0.9fr)_minmax(260px,1.1fr)] md:items-end">
             <label className="block text-sm font-medium text-gray-700">Modèle
-              <select value={selectedModelId} onChange={(event) => selectModel(event.target.value)} disabled={loadingModels} className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500">
+              <SomaneSelect value={selectedModelId} onChange={(event) => selectModel(event.target.value)} disabled={loadingModels} className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500">
                 {loadingModels && <option value="">Chargement des modèles…</option>}
                 {!loadingModels && !models.length && <option value="">Aucun modèle trouvé</option>}
                 {models.map((model) => <option key={model.id} value={String(model.id)}>{model.model} — {model.name}</option>)}
-              </select>
+              </SomaneSelect>
             </label>
             <label className="relative block text-sm font-medium text-gray-700">Rechercher un champ
               <FiSearch className="pointer-events-none absolute bottom-2.5 left-3 text-gray-400" />
@@ -436,7 +437,7 @@ export default function ModelFieldsPage() {
       </div>
 
       {selectedField && !editingField && !creating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-3 md:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedField(null); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-3 md:p-6 somane-overlay-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedField(null); }}>
           <section role="dialog" aria-modal="true" aria-labelledby="field-detail-title" className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <header className="flex items-start justify-between border-b border-gray-200 px-5 py-4">
               <div><p className="text-xs font-medium uppercase tracking-wide text-violet-700">Détail du champ</p><h2 id="field-detail-title" className="mt-1 text-lg font-semibold text-gray-900">{selectedField.field_description || selectedField.name}</h2><p className="mt-1 font-mono text-sm text-gray-500">{selectedField.model_name}.{selectedField.name}</p></div>
@@ -454,7 +455,7 @@ export default function ModelFieldsPage() {
       )}
 
       {editingField && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950/40 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingField(null); }}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950/40 p-4 somane-overlay-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingField(null); }}>
           <form onSubmit={saveEdit} role="dialog" aria-modal="true" aria-labelledby="field-edit-title" className="w-full max-w-xl rounded-xl bg-white shadow-2xl">
             <header className="flex items-start justify-between border-b border-gray-200 p-5"><div><p className="text-xs font-medium uppercase tracking-wide text-violet-700">{editingField.state === 'manual' ? 'Champ personnalisé' : 'Champ Django'}</p><h2 id="field-edit-title" className="mt-1 text-lg font-semibold text-gray-900">Modifier le champ</h2><p className="mt-1 font-mono text-xs text-gray-500">{editingField.name} · {typeLabels[editingField.ttype] || editingField.ttype}</p></div><button type="button" onClick={() => setEditingField(null)} aria-label="Fermer" className="rounded-md p-2 text-gray-500 hover:bg-gray-100"><FiX /></button></header>
             <div className="space-y-4 p-5">
@@ -473,14 +474,14 @@ export default function ModelFieldsPage() {
       )}
 
       {creating && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950/40 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreating(false); }}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950/40 p-4 somane-overlay-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreating(false); }}>
           <form onSubmit={createField} role="dialog" aria-modal="true" aria-labelledby="field-create-title" className="w-full max-w-2xl rounded-xl bg-white shadow-2xl">
             <header className="flex items-start justify-between border-b border-gray-200 p-5"><div><p className="text-xs font-medium uppercase tracking-wide text-violet-700">{selectedModel?.name}</p><h2 id="field-create-title" className="mt-1 text-lg font-semibold text-gray-900">Ajouter un champ personnalisé</h2><p className="mt-1 text-xs text-gray-500">Le nouveau champ sera ajouté à une vue formulaire du partenaire.</p></div><button type="button" onClick={() => setCreating(false)} aria-label="Fermer" className="rounded-md p-2 text-gray-500 hover:bg-gray-100"><FiX /></button></header>
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               <label className="block text-sm font-medium text-gray-700">Libellé<input required value={newForm.field_description} onChange={(event) => updateNewForm('field_description', event.target.value)} placeholder="Ex. Code client" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-normal" /></label>
               <label className="block text-sm font-medium text-gray-700">Nom technique<input required pattern="x_[a-z][a-z0-9_]{0,60}" title="Commence par x_ puis utilise des minuscules, chiffres et _" value={newForm.name} onChange={(event) => { setNameTouched(true); updateNewForm('name', event.target.value); }} placeholder="x_code_client" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm font-normal" /></label>
-              <label className="block text-sm font-medium text-gray-700">Type<select value={newForm.ttype} onChange={(event) => updateNewForm('ttype', event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-normal">{editableTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-              <label className="block text-sm font-medium text-gray-700">Vue formulaire<select required value={newForm.view_id} onChange={(event) => updateNewForm('view_id', event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-normal">{formViews.map((view) => <option key={view.id} value={String(view.id)}>{view.name}{view.key === 'somane_ui.clients_form' ? ' — Partenaires' : ''}</option>)}</select></label>
+              <label className="block text-sm font-medium text-gray-700">Type<SomaneSelect value={newForm.ttype} onChange={(event) => updateNewForm('ttype', event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-normal">{editableTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SomaneSelect></label>
+              <label className="block text-sm font-medium text-gray-700">Vue formulaire<SomaneSelect required value={newForm.view_id} onChange={(event) => updateNewForm('view_id', event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-normal">{formViews.map((view) => <option key={view.id} value={String(view.id)}>{view.name}{view.key === 'somane_ui.clients_form' ? ' — Partenaires' : ''}</option>)}</SomaneSelect></label>
               {newForm.ttype === 'char' && <label className="block text-sm font-medium text-gray-700">Longueur maximale<input type="number" min="1" max="255" value={newForm.size} onChange={(event) => updateNewForm('size', event.target.value)} placeholder="Sans limite personnalisée" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-normal" /><span className="mt-1 block text-xs font-normal text-gray-500">De 1 à 255 caractères.</span></label>}
               {newForm.ttype === 'selection' && <FieldOptionsEditor options={newForm.selection_options} onChange={(options) => updateNewForm('selection_options', options)} />}
               <label className="block text-sm font-medium text-gray-700">Valeur par défaut<DefaultValueInput type={newForm.ttype} value={newForm.default_value} options={newForm.selection_options} onChange={(value) => updateNewForm('default_value', value)} /><span className="mt-1 block text-xs font-normal text-gray-500">Cette valeur préremplira le champ sur chaque nouveau partenaire.</span></label>

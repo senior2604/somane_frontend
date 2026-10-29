@@ -7,6 +7,7 @@ import { useEntity } from '../../context/EntityContext';
 import { useUi } from '../../context/UiContext';
 import { can } from '../../services/securityAccess';
 import { PARTNER_TYPES, getPartnerName, parseResponse } from './PartnerShared';
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function PartnersList() {
   const navigate = useNavigate();
@@ -105,17 +106,17 @@ export default function PartnersList() {
           </div>
           <div className="col-span-3 flex items-center gap-1">
             <FiFilter size={13} className="text-gray-400" />
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-full h-8 border border-gray-300 text-xs">
+            <SomaneSelect value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-full h-8 border border-gray-300 text-xs">
               <option value="">Tous les types</option>
               {PARTNER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
+            </SomaneSelect>
           </div>
           <div className="col-span-3">
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full h-8 border border-gray-300 text-xs">
+            <SomaneSelect value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full h-8 border border-gray-300 text-xs">
               <option value="">Tous les statuts</option>
               <option value="true">Actifs</option>
               <option value="false">Inactifs</option>
-            </select>
+            </SomaneSelect>
           </div>
         </div>
 

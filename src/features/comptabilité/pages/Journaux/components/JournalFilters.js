@@ -1,5 +1,6 @@
 import React from 'react';
-import { FiSearch, FiX, FiFilter, FiChevronDown, FiRefreshCw } from "react-icons/fi"; // <-- AJOUTER FiRefreshCw
+import { FiSearch, FiX, FiFilter, FiChevronDown, FiRefreshCw } from "react-icons/fi";
+import SomaneSelect from '../../../../../components/SomaneSelect'; // <-- AJOUTER FiRefreshCw
 
 export default function JournalFilters({ 
   filters, 
@@ -27,7 +28,7 @@ export default function JournalFilters({
         </div>
 
         {/* Filtre entreprise */}
-        <select
+        <SomaneSelect
           value={filters.company}
           onChange={(e) => onFilterChange('company', e.target.value)}
           className="px-3 py-1.5 border border-gray-300 rounded text-sm"
@@ -38,10 +39,10 @@ export default function JournalFilters({
               {c.raison_sociale || c.nom}
             </option>
           ))}
-        </select>
+        </SomaneSelect>
 
         {/* Filtre type */}
-        <select
+        <SomaneSelect
           value={filters.type}
           onChange={(e) => onFilterChange('type', e.target.value)}
           className="px-3 py-1.5 border border-gray-300 rounded text-sm"
@@ -52,10 +53,10 @@ export default function JournalFilters({
               {t.name} ({t.code})
             </option>
           ))}
-        </select>
+        </SomaneSelect>
 
         {/* Filtre statut */}
-        <select
+        <SomaneSelect
           value={filters.active}
           onChange={(e) => onFilterChange('active', e.target.value)}
           className="px-3 py-1.5 border border-gray-300 rounded text-sm"
@@ -63,7 +64,7 @@ export default function JournalFilters({
           <option value="">Tous statuts</option>
           <option value="true">Actifs</option>
           <option value="false">Inactifs</option>
-        </select>
+        </SomaneSelect>
 
         {/* Actions */}
         <div className="flex items-center gap-2 ml-auto">

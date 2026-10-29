@@ -34,22 +34,9 @@ export const PAGE_SIZE_OPTIONS = [
   { id: 100, label: '100' },
 ];
 
-export const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-
-  return (
-    <div className="relative inline-block" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-      {children}
-      {show && (
-        <div className={`absolute z-50 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white ${
-          position === 'bottom' ? 'top-full left-1/2 mt-1 -translate-x-1/2' : 'bottom-full left-1/2 mb-1 -translate-x-1/2'
-        }`}>
-          {text}
-        </div>
-      )}
-    </div>
-  );
-};
+export const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 export const SearchSelect = ({ value, onChange, options, getLabel, placeholder = '', disabled = false, bordered = true }) => {
   const [isOpen, setIsOpen] = useState(false);

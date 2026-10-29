@@ -8,17 +8,19 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useNotifications } from '../context/NotificationContext';
+import { FeedbackState } from './FeedbackPrimitives';
 import {
-  FiAlertCircle,
   FiArrowDown,
   FiArrowUp,
   FiCheck,
   FiChevronLeft,
   FiChevronRight,
-  FiChevronsLeft,
-  FiChevronsRight,
   FiFilter,
+  FiColumns,
+  FiList,
   FiMoreHorizontal,
+  FiPlus,
   FiSearch,
   FiX,
 } from 'react-icons/fi';
@@ -30,9 +32,10 @@ const NAVIGATION_CURRENT_PAGE_KEY = 'somane:navigation:current-page';
 const NAVIGATION_PREVIOUS_PAGE_KEY = 'somane:navigation:previous-page';
 const NAVIGATION_HISTORY_KEY = 'somane:navigation:history';
 const NAVIGATION_CHANGED_EVENT = 'somane:navigation-history-changed';
-const DEFAULT_PAGE_SIZES = [15, 25, 50, 100];
 const DEFAULT_COLUMN_WIDTH = 120;
 const MIN_COLUMN_WIDTH = 56;
+const SELECT_COLUMN_WIDTH = 44;
+const ACTION_COLUMN_WIDTH = 32;
 const DEFAULT_ROW_STRIPES = ['bg-white', 'bg-slate-50/70'];
 
 const PAGE_ROUTE_LABELS = [
@@ -178,12 +181,12 @@ const resolveRowKey = (row, rowKey) => (
 );
 
 const resolveButtonClass = (variant = 'default') => ({
-  primary: 'border-purple-600 bg-purple-600 text-white hover:bg-purple-700',
-  success: 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700',
-  danger: 'border-red-600 bg-red-600 text-white hover:bg-red-700',
-  warning: 'border-amber-500 bg-amber-500 text-white hover:bg-amber-600',
-  default: 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50',
-}[variant] || 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50');
+  primary: 'somane-btn--primary',
+  success: 'somane-btn--success',
+  danger: 'somane-btn--danger',
+  warning: 'somane-btn--warning',
+  default: 'somane-btn--secondary',
+}[variant] || 'somane-btn--secondary');
 
 /**
  * Moule visuel commun des pages index.
@@ -197,11 +200,13 @@ export default function UnifiedIndexPage({
   loading = false,
   error = '',
   success = '',
-  messageDuration = 5000,
+  messageDuration,
   onDismissError,
   onDismissSuccess,
   emptyText = 'Aucune donnee',
   loadingText = 'Chargement...',
+  onRetry,
+  onClearFilters,
 
   memoryKey,
   memoryState = {},
@@ -219,7 +224,10 @@ export default function UnifiedIndexPage({
   onRemoveFilterChip,
   renderFilters,
   onFiltersOpen,
-  filterPanelWidth = 420,
+  filterPanelWidth = 900,
+  filterPanelCustomContent = false,
+  groupByOptions,
+  onGroupByChange,
 
   primaryAction,
   leadingActions = [],
@@ -238,6 +246,8 @@ export default function UnifiedIndexPage({
   renderRow,
   renderBody,
   renderContent,
+  renderCollectionCard,
+  kanbanSummaryColumns = [],
   stripedRows = true,
   rowStripeClassNames = DEFAULT_ROW_STRIPES,
 
@@ -246,12 +256,8 @@ export default function UnifiedIndexPage({
   onPageChange,
   pageSize,
   defaultPageSize = 15,
-  onPageSizeChange,
-  pageSizeOptions = DEFAULT_PAGE_SIZES,
   total,
   serverSide = false,
-  footerText,
-
   visibleColumnIds,
   defaultVisibleColumnIds,
   onVisibleColumnsChange,
@@ -275,7 +281,15 @@ export default function UnifiedIndexPage({
   pullToHeader = 24,
   className = '',
   toolbarClassName = '',
+  viewModes = ['list', 'kanban'],
+  viewModeLabels = {},
+  kanbanGroupBy,
+  kanbanLayout = 'grid',
+  disableGrouping = false,
+  description,
+  pageSummary = [],
 }) {
+  const { notify } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const isAccountingModulePage = location.pathname.startsWith('/comptabilite/');
@@ -308,7 +322,6 @@ export default function UnifiedIndexPage({
   const rootRef = useRef(null);
   const tableScrollRef = useRef(null);
   const fixedHeaderScrollRef = useRef(null);
-  const sizingHeaderRef = useRef(null);
   const bodyTableRef = useRef(null);
   const filterButtonRef = useRef(null);
   const filterPanelRef = useRef(null);
@@ -349,12 +362,13 @@ export default function UnifiedIndexPage({
       : defaultSelectedRowKeys
   ));
   const [internalPage, setInternalPage] = useState(Number(initialMemory.page) || defaultPage);
-  const [internalPageSize, setInternalPageSize] = useState(Number(initialMemory.pageSize) || defaultPageSize);
+  const [internalPageSize] = useState(Number(initialMemory.pageSize) || defaultPageSize);
   const [internalColumnWidths, setInternalColumnWidths] = useState(() => (
     initialMemory.columnWidths && typeof initialMemory.columnWidths === 'object'
       ? initialMemory.columnWidths
       : {}
   ));
+  const [tableViewportWidth, setTableViewportWidth] = useState(0);
   const [internalVisibleIds, setInternalVisibleIds] = useState(() => {
     if (Array.isArray(initialMemory.visibleColumnIds)) return initialMemory.visibleColumnIds;
     if (Array.isArray(defaultVisibleColumnIds)) return defaultVisibleColumnIds;
@@ -366,33 +380,32 @@ export default function UnifiedIndexPage({
   const [internalSortDirection, setInternalSortDirection] = useState(
     initialMemory.sortDirection || defaultSortDirection,
   );
+  const [groupBy, setGroupBy] = useState(() => (
+    Array.isArray(initialMemory.groupBy) ? initialMemory.groupBy : []
+  ));
+  const [viewMode, setViewMode] = useState(
+    viewModes.includes(initialMemory.viewMode) ? initialMemory.viewMode : 'list',
+  );
   const [showFilters, setShowFilters] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
   const [filterPanelPosition, setFilterPanelPosition] = useState({ top: 0, left: 0 });
   const [columnsPanelPosition, setColumnsPanelPosition] = useState({ top: 0, left: 0 });
-  const [headerMetrics, setHeaderMetrics] = useState({ widths: [], tableWidth: 0 });
-  const [visibleError, setVisibleError] = useState(error);
-  const [visibleSuccess, setVisibleSuccess] = useState(success);
+  const lastErrorRef = useRef('');
+  const lastSuccessRef = useRef('');
 
   useEffect(() => {
-    setVisibleError(error);
-    if (!error || messageDuration <= 0) return undefined;
-    const timer = window.setTimeout(() => {
-      setVisibleError('');
-      dismissErrorRef.current?.();
-    }, messageDuration);
-    return () => window.clearTimeout(timer);
-  }, [error, messageDuration]);
+    if (!error) { lastErrorRef.current = ''; return; }
+    if (lastErrorRef.current === error) return;
+    lastErrorRef.current = error;
+    notify(error, { severity: 'error', duration: messageDuration, onDismiss: () => dismissErrorRef.current?.() });
+  }, [error, messageDuration, notify]);
 
   useEffect(() => {
-    setVisibleSuccess(success);
-    if (!success || messageDuration <= 0) return undefined;
-    const timer = window.setTimeout(() => {
-      setVisibleSuccess('');
-      dismissSuccessRef.current?.();
-    }, messageDuration);
-    return () => window.clearTimeout(timer);
-  }, [messageDuration, success]);
+    if (!success) { lastSuccessRef.current = ''; return; }
+    if (lastSuccessRef.current === success) return;
+    lastSuccessRef.current = success;
+    notify(success, { severity: 'success', duration: messageDuration, onDismiss: () => dismissSuccessRef.current?.() });
+  }, [messageDuration, notify, success]);
 
   const currentSearch = searchValue !== undefined ? searchValue : internalSearch;
   const currentSelectedKeys = selectedRowKeys !== undefined ? selectedRowKeys : internalSelectedKeys;
@@ -402,10 +415,45 @@ export default function UnifiedIndexPage({
   const columnWidths = controlledColumnWidths !== undefined ? controlledColumnWidths : internalColumnWidths;
   const currentSortColumn = controlledSortColumn !== undefined ? controlledSortColumn : internalSortColumn;
   const currentSortDirection = controlledSortDirection !== undefined ? controlledSortDirection : internalSortDirection;
+  const groupingOptions = useMemo(() => (
+    groupByOptions || (renderBody ? [] : columns
+      .filter((column) => column.groupable === true)
+      .map((column) => ({ id: column.id, label: column.label || column.title || column.id })))
+  ), [columns, groupByOptions, renderBody]);
+  const activeSearchChips = [
+    ...filterChips,
+    ...(!filterPanelCustomContent && groupBy.length ? [{
+      id: 'groupBy:chain',
+      label: groupBy.map((id) => (
+        groupingOptions.find((option) => (option.id || option.value) === id)?.label || id
+      )).join('  >  '),
+      kind: 'groupBy',
+      value: groupBy,
+    }] : []),
+  ];
+  const searchExtraWidth = Math.min(
+    Math.max(activeSearchChips.length + Math.max(groupBy.length - 1, 0) - 1, 0) * 52,
+    312,
+  );
 
   const activeColumns = useMemo(() => (
     columns.filter((column) => currentVisibleIds.includes(column.id))
   ), [columns, currentVisibleIds]);
+
+  useLayoutEffect(() => {
+    if (viewMode !== 'list') return undefined;
+    const container = tableScrollRef.current;
+    if (!container) return undefined;
+    const measure = () => setTableViewportWidth(container.clientWidth);
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(container);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [activeColumns.length, viewMode]);
 
   const selectedKeySet = useMemo(() => new Set(currentSelectedKeys), [currentSelectedKeys]);
   const selectedRows = useMemo(() => (
@@ -483,14 +531,6 @@ export default function UnifiedIndexPage({
     if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
   }, [onPageChange, page, totalPages]);
 
-  const changePageSize = useCallback((nextPageSize) => {
-    const normalized = Number(nextPageSize) || defaultPageSize;
-    if (pageSize === undefined) setInternalPageSize(normalized);
-    onPageSizeChange?.(normalized);
-    if (page === undefined) setInternalPage(1);
-    onPageChange?.(1);
-  }, [defaultPageSize, onPageChange, onPageSizeChange, page, pageSize]);
-
   const setVisibleIds = useCallback((ids) => {
     if (visibleColumnIds === undefined) setInternalVisibleIds(ids);
     onVisibleColumnsChange?.(ids);
@@ -537,6 +577,8 @@ export default function UnifiedIndexPage({
     columnWidths,
     sortColumn: currentSortColumn,
     sortDirection: currentSortDirection,
+    viewMode,
+    groupBy,
     tableScrollTop: tableScrollRef.current?.scrollTop || 0,
     tableScrollLeft: tableScrollRef.current?.scrollLeft || 0,
     custom: memoryState,
@@ -548,9 +590,11 @@ export default function UnifiedIndexPage({
     currentSortColumn,
     currentSortDirection,
     currentVisibleIds,
+    groupBy,
     memoryState,
     rememberSelection,
     safePage,
+    viewMode,
   ]);
 
   stateSnapshotRef.current = buildMemoryState;
@@ -558,6 +602,49 @@ export default function UnifiedIndexPage({
   const saveNow = useCallback(() => {
     writeMemory(resolvedMemoryKey, stateSnapshotRef.current?.() || {});
   }, [resolvedMemoryKey]);
+
+  const toggleGroupBy = (id) => {
+    const next = groupBy.includes(id)
+      ? groupBy.filter((item) => item !== id)
+      : [...groupBy, id];
+    setGroupBy(next);
+    onGroupByChange?.(next, groupingOptions);
+    if (page === undefined) setInternalPage(1);
+    onPageChange?.(1);
+  };
+
+  const clearGroupBy = () => {
+    setGroupBy([]);
+    onGroupByChange?.([], groupingOptions);
+    if (page === undefined) setInternalPage(1);
+    onPageChange?.(1);
+  };
+
+  const changeViewMode = (nextMode) => {
+    if (!viewModes.includes(nextMode)) return;
+    setViewMode(nextMode);
+    restoreScrollRef.current = { top: 0, left: 0 };
+    writeMemory(resolvedMemoryKey, {
+      ...buildMemoryState(),
+      viewMode: nextMode,
+      tableScrollTop: 0,
+      tableScrollLeft: 0,
+    });
+    window.requestAnimationFrame(() => {
+      if (tableScrollRef.current) {
+        tableScrollRef.current.scrollTop = 0;
+        tableScrollRef.current.scrollLeft = 0;
+      }
+      if (fixedHeaderScrollRef.current) fixedHeaderScrollRef.current.scrollLeft = 0;
+    });
+  };
+
+  useLayoutEffect(() => {
+    const scrollContainer = tableScrollRef.current;
+    if (!scrollContainer || viewMode === 'list') return;
+    scrollContainer.scrollTop = 0;
+    scrollContainer.scrollLeft = 0;
+  }, [viewMode]);
 
   const clearSavedState = useCallback(() => {
     clearMemory(resolvedMemoryKey);
@@ -568,8 +655,8 @@ export default function UnifiedIndexPage({
       onRestoreMemoryState(initialMemory.custom, initialMemory);
     }
     restoreScrollRef.current = {
-      top: Number(initialMemory.tableScrollTop) || 0,
-      left: Number(initialMemory.tableScrollLeft) || 0,
+      top: initialMemory.viewMode === 'list' ? Number(initialMemory.tableScrollTop) || 0 : 0,
+      left: initialMemory.viewMode === 'list' ? Number(initialMemory.tableScrollLeft) || 0 : 0,
     };
     onMemoryReady?.({ saveNow, clearSavedState, restoredState: initialMemory });
     // La restauration externe ne doit s'executer qu'au montage de cette page.
@@ -588,6 +675,7 @@ export default function UnifiedIndexPage({
     currentSortColumn,
     currentSortDirection,
     currentVisibleIds,
+    groupBy,
     memoryState,
     safePage,
     saveNow,
@@ -671,7 +759,8 @@ export default function UnifiedIndexPage({
 
   const openFilterPanel = () => {
     if (!showFilters) {
-      setFilterPanelPosition(measurePanelPosition(filterButtonRef.current, filterPanelWidth));
+      const panelWidth = Math.min(Math.max(filterPanelWidth, 600), window.innerWidth - 16);
+      setFilterPanelPosition(measurePanelPosition(filterButtonRef.current, panelWidth));
       onFiltersOpen?.();
     }
     setShowColumns(false);
@@ -778,10 +867,49 @@ export default function UnifiedIndexPage({
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
-    const startWidth = event.currentTarget.parentElement?.offsetWidth || DEFAULT_COLUMN_WIDTH;
+    const headings = Array.from(fixedHeaderScrollRef.current?.querySelectorAll('.somane-list-table__heading') || []);
+    const startWidths = activeColumns.map((column, index) => (
+      headings[index]?.getBoundingClientRect().width
+      || Number(columnWidths[column.id])
+      || Number(column.width)
+      || Number(column.minWidth)
+      || DEFAULT_COLUMN_WIDTH
+    ));
+    const columnIndex = activeColumns.findIndex((column) => column.id === columnId);
+    const totalWidth = startWidths.reduce((sum, width) => sum + width, 0);
+    const minWidth = Math.min(MIN_COLUMN_WIDTH, totalWidth / Math.max(1, activeColumns.length));
+    const startWidth = startWidths[columnIndex] || minWidth;
     const onMouseMove = (moveEvent) => {
-      const nextWidth = Math.max(MIN_COLUMN_WIDTH, startWidth + moveEvent.clientX - startX);
-      setColumnWidths((previous) => ({ ...previous, [columnId]: nextWidth }));
+      if (columnIndex < 0) return;
+      const maxWidth = Math.max(minWidth, totalWidth - (activeColumns.length - 1) * minWidth);
+      const nextWidth = Math.min(maxWidth, Math.max(minWidth, startWidth + moveEvent.clientX - startX));
+      const remainingIndexes = startWidths.map((_, index) => index).filter((index) => index !== columnIndex);
+      const nextWidths = [...startWidths];
+      nextWidths[columnIndex] = nextWidth;
+      let flexibleIndexes = [...remainingIndexes];
+      let flexibleWidth = totalWidth - nextWidth;
+
+      while (flexibleIndexes.length) {
+        const weightTotal = flexibleIndexes.reduce((sum, index) => sum + startWidths[index], 0) || flexibleIndexes.length;
+        const widthToShare = flexibleWidth;
+        const totalWeight = weightTotal;
+        const constrainedIndexes = flexibleIndexes.filter((index) => (
+          widthToShare * startWidths[index] / totalWeight < minWidth
+        ));
+        if (!constrainedIndexes.length) {
+          flexibleIndexes.forEach((index) => {
+            nextWidths[index] = widthToShare * startWidths[index] / totalWeight;
+          });
+          break;
+        }
+        for (const index of constrainedIndexes) {
+          nextWidths[index] = minWidth;
+          flexibleWidth -= minWidth;
+        }
+        flexibleIndexes = flexibleIndexes.filter((index) => !constrainedIndexes.includes(index));
+      }
+
+      setColumnWidths(Object.fromEntries(activeColumns.map((column, index) => [column.id, nextWidths[index]])));
     };
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
@@ -796,54 +924,23 @@ export default function UnifiedIndexPage({
   };
 
   const columnWidthStyle = useCallback((column) => {
-    const width = columnWidths[column.id] || column.width;
-    if (width) return { width, minWidth: width, maxWidth: width };
-    return column.minWidth ? { minWidth: column.minWidth } : undefined;
-  }, [columnWidths]);
-
-  const visibleColumnKey = activeColumns.map((column) => column.id).join('|');
-  const hasResizedColumns = Object.keys(columnWidths).length > 0;
-  const resizedTableMinWidth = hasResizedColumns
-    ? activeColumns.reduce((sum, column) => sum + (columnWidths[column.id] || column.width || DEFAULT_COLUMN_WIDTH), 88)
-    : undefined;
-
-  useLayoutEffect(() => {
-    if (renderContent) return undefined;
-
-    const measure = () => {
-      const cells = Array.from(sizingHeaderRef.current?.querySelectorAll('th') || []);
-      if (!cells.length || !bodyTableRef.current || !tableScrollRef.current) return;
-      const widths = cells.map((cell) => Math.round(cell.getBoundingClientRect().width));
-      if (widths.some((width) => width <= 0)) return;
-      const tableWidth = Math.max(
-        Math.round(bodyTableRef.current.scrollWidth),
-        Math.round(tableScrollRef.current.clientWidth),
-      );
-      setHeaderMetrics((previous) => {
-        const unchanged = previous.tableWidth === tableWidth
-          && previous.widths.length === widths.length
-          && previous.widths.every((width, index) => width === widths[index]);
-        return unchanged ? previous : { widths, tableWidth };
-      });
-    };
-    const frame = window.requestAnimationFrame(measure);
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-    const observedElement = bodyTableRef.current;
-    if (observer && typeof Element !== 'undefined' && observedElement instanceof Element) {
-      observer.observe(observedElement);
-    }
-    window.addEventListener('resize', measure);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, [columnWidths, displayedRows.length, renderContent, visibleColumnKey]);
+    const widthBasis = activeColumns.map((item) => (
+      Number(columnWidths[item.id]) || Number(item.width) || Number(item.minWidth) || DEFAULT_COLUMN_WIDTH
+    ));
+    const totalBasis = widthBasis.reduce((sum, width) => sum + width, 0) || activeColumns.length;
+    const fixedWidth = (selectable ? SELECT_COLUMN_WIDTH : 0)
+      + (allowColumnVisibility ? ACTION_COLUMN_WIDTH : 0);
+    const tableWidth = tableViewportWidth || tableScrollRef.current?.clientWidth || 1200;
+    const availableWidth = Math.max(activeColumns.length, tableWidth - fixedWidth);
+    const index = activeColumns.findIndex((item) => item.id === column.id);
+    const width = availableWidth * (widthBasis[index] || 1) / totalBasis;
+    return { width, minWidth: 0, maxWidth: width };
+  }, [activeColumns, allowColumnVisibility, columnWidths, selectable, tableViewportWidth]);
 
   const renderHeaderRow = (interactive) => (
-    <tr className="h-11 border-y border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
+    <tr className="somane-list-table__header h-11 border-y border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
       {selectable && (
-        <th className="group w-11 min-w-11 border-r border-gray-200 px-2 text-center transition-colors duration-150 hover:bg-purple-50 hover:text-purple-700">
+        <th style={{ width: SELECT_COLUMN_WIDTH, minWidth: SELECT_COLUMN_WIDTH, maxWidth: SELECT_COLUMN_WIDTH }} className="group w-11 min-w-11 border-r border-gray-200 px-2 text-center transition-colors duration-150 hover:bg-purple-50 hover:text-purple-700">
           {interactive && (
             <input
               type="checkbox"
@@ -859,8 +956,11 @@ export default function UnifiedIndexPage({
         <th
           key={column.id}
           style={columnWidthStyle(column)}
+          aria-sort={currentSortColumn === column.id
+            ? (currentSortDirection === 'desc' ? 'descending' : 'ascending')
+            : undefined}
           className={classNames(
-            'group relative border-r border-gray-200 px-3 text-left transition-colors duration-150 hover:bg-purple-50 hover:text-purple-700',
+            'somane-list-table__heading group relative border-r border-gray-200 px-3 text-left transition-colors duration-150 hover:bg-purple-50 hover:text-purple-700',
             column.numeric && 'text-right',
             column.headerClassName,
           )}
@@ -901,7 +1001,7 @@ export default function UnifiedIndexPage({
         </th>
       ))}
       {allowColumnVisibility && (
-        <th className="group w-10 min-w-10 px-1 text-center transition-colors duration-150 hover:bg-purple-50 hover:text-purple-700">
+        <th style={{ width: ACTION_COLUMN_WIDTH, minWidth: ACTION_COLUMN_WIDTH, maxWidth: ACTION_COLUMN_WIDTH }} className="group w-10 min-w-10 px-1 text-center transition-colors duration-150 hover:bg-purple-50 hover:text-purple-700">
           {interactive && (
             <button
               ref={columnsButtonRef}
@@ -927,14 +1027,14 @@ export default function UnifiedIndexPage({
         key={key ?? rowIndex}
         {...interactionProps}
         className={classNames(
-          'border-b border-gray-200 text-xs text-gray-700',
-          selected ? 'bg-purple-50' : `${getStripeClassName(rowIndex)} hover:bg-purple-50/40`,
+          'somane-list-table__row border-b border-gray-200 text-xs text-gray-700',
+          selected ? 'is-selected bg-purple-50' : `${getStripeClassName(rowIndex)} hover:bg-purple-50/40`,
           (onRowOpen || onRowClick || onRowDoubleClick) && 'cursor-pointer',
           getRowClassName?.(row, rowIndex),
         )}
       >
         {selectable && (
-          <td className="w-11 min-w-11 border-r border-gray-100 px-2 py-1.5 text-center" onClick={(event) => event.stopPropagation()}>
+          <td data-row-select="true" className="w-11 min-w-11 border-r border-gray-100 px-2 py-1.5 text-center" onClick={(event) => event.stopPropagation()}>
             <input
               type="checkbox"
               checked={selected}
@@ -951,19 +1051,24 @@ export default function UnifiedIndexPage({
           return (
             <td
               key={column.id}
+              data-label={column.label}
               style={columnWidthStyle(column)}
               className={classNames(
-                'overflow-hidden border-r border-gray-100 px-2 py-1.5 text-xs',
+                'somane-list-table__cell overflow-hidden border-r border-gray-100 px-2 py-1.5 text-xs',
                 column.numeric ? 'whitespace-nowrap text-right tabular-nums' : 'whitespace-nowrap',
                 column.className,
               )}
               title={column.title ? column.title(value, row) : titleValue}
             >
-              <div className="truncate">{content}</div>
+              <div className={classNames(
+                'truncate',
+                column.numeric && !column.dataType && 'somane-data-number',
+                column.dataType && `somane-data-${column.dataType}`,
+              )}>{content}</div>
             </td>
           );
         })}
-        {allowColumnVisibility && <td className="w-6 min-w-6 px-0.5 py-1.5" />}
+        {allowColumnVisibility && <td style={{ width: ACTION_COLUMN_WIDTH, minWidth: ACTION_COLUMN_WIDTH, maxWidth: ACTION_COLUMN_WIDTH }} className="w-6 min-w-6 px-0.5 py-1.5" />}
       </tr>
     );
   }, [
@@ -982,15 +1087,48 @@ export default function UnifiedIndexPage({
     toggleRow,
   ]);
 
+  const clearViewFilters = () => {
+    if (onClearFilters) {
+      onClearFilters();
+      return;
+    }
+    setSearch('');
+    activeSearchChips.forEach((chip) => {
+      if (chip.kind === 'groupBy') clearGroupBy();
+      else if (onRemoveFilterChip) onRemoveFilterChip(chip);
+      else chip.onRemove?.();
+    });
+  };
+  const canClearViewFilters = Boolean(currentSearch || activeSearchChips.length);
+  const retryLoading = () => (onRetry ? onRetry() : window.location.reload());
+  const errorDescription = typeof error === 'string' ? error : error?.message || 'Vérifiez votre connexion, puis réessayez.';
+
   const renderRows = () => {
     if (loading) {
       return (
-        <tr><td colSpan={activeColumns.length + (selectable ? 1 : 0) + (allowColumnVisibility ? 1 : 0)} className="px-4 py-12 text-center text-sm text-gray-500">{loadingText}</td></tr>
+        <tr><td colSpan={activeColumns.length + (selectable ? 1 : 0) + (allowColumnVisibility ? 1 : 0)} className="p-3">
+          <FeedbackState kind="loading" title={loadingText} layout="table" columns={activeColumns.length + (selectable ? 1 : 0) + (allowColumnVisibility ? 1 : 0)} />
+        </td></tr>
+      );
+    }
+    if (error && !displayedRows.length) {
+      return (
+        <tr><td colSpan={activeColumns.length + (selectable ? 1 : 0) + (allowColumnVisibility ? 1 : 0)} className="p-3">
+          <FeedbackState kind="error" title="Impossible de charger les données" description={errorDescription} actionLabel="Réessayer" onAction={retryLoading} />
+        </td></tr>
       );
     }
     if (!displayedRows.length) {
       return (
-        <tr><td colSpan={activeColumns.length + (selectable ? 1 : 0) + (allowColumnVisibility ? 1 : 0)} className="px-4 py-12 text-center text-sm text-gray-500">{emptyText}</td></tr>
+        <tr><td colSpan={activeColumns.length + (selectable ? 1 : 0) + (allowColumnVisibility ? 1 : 0)} className="p-3">
+          <FeedbackState
+            kind="empty"
+            title="Aucun résultat"
+            description={emptyText}
+            actionLabel={canClearViewFilters ? 'Effacer les filtres' : undefined}
+            onAction={canClearViewFilters ? clearViewFilters : undefined}
+          />
+        </td></tr>
       );
     }
     const context = {
@@ -1004,14 +1142,35 @@ export default function UnifiedIndexPage({
       saveNow,
       columnCount: activeColumns.length + (selectable ? 1 : 0) + (allowColumnVisibility ? 1 : 0),
     };
-    if (renderBody) return renderBody({ ...context, getRowInteractionProps });
+    const addResponsiveLabels = (nodes) => React.Children.map(nodes, (node) => {
+      if (!React.isValidElement(node)) return node;
+      if (node.type === React.Fragment) {
+        return React.cloneElement(node, {}, addResponsiveLabels(node.props.children));
+      }
+      if (node.type !== 'tr') return node;
+      let columnIndex = 0;
+      const children = React.Children.map(node.props.children, (cell) => {
+        if (!React.isValidElement(cell) || cell.type !== 'td' || cell.props.colSpan) return cell;
+        const containsCheckbox = React.Children.toArray(cell.props.children).some((child) => (
+          React.isValidElement(child) && child.type === 'input' && child.props.type === 'checkbox'
+        ));
+        if (containsCheckbox) return React.cloneElement(cell, { 'data-row-select': 'true' });
+        const column = activeColumns[columnIndex];
+        columnIndex += 1;
+        return column ? React.cloneElement(cell, { 'data-label': cell.props['data-label'] || column.label }) : cell;
+      });
+      return React.cloneElement(node, {}, children);
+    });
+    if (renderBody) return addResponsiveLabels(renderBody({ ...context, getRowInteractionProps }));
     if (renderRow) {
       return displayedRows.map((row, index) => {
         const renderedRow = renderRow(row, index, { ...context, getRowInteractionProps });
-        if (!onRowOpen || !React.isValidElement(renderedRow)) return renderedRow;
-        return React.cloneElement(renderedRow, {
+        if (!React.isValidElement(renderedRow)) return renderedRow;
+        const [labeledRow] = addResponsiveLabels([renderedRow]);
+        if (!onRowOpen) return labeledRow;
+        return React.cloneElement(labeledRow, {
           ...getRowInteractionProps(row),
-          className: classNames(renderedRow.props.className, 'cursor-pointer'),
+          className: classNames(labeledRow.props.className, 'cursor-pointer'),
         });
       });
     }
@@ -1038,6 +1197,195 @@ export default function UnifiedIndexPage({
     totalPages,
   });
 
+  const resolveViewColumn = (selector) => columns.find((column) => (
+    column.id === selector || column.dataIndex === selector
+  ));
+  const kanbanColumn = disableGrouping ? null : resolveViewColumn(groupBy[0] || kanbanGroupBy);
+  const columnToken = (column) => [
+    column?.id,
+    column?.dataIndex,
+    typeof column?.label === 'string' ? column.label : '',
+    typeof column?.title === 'string' ? column.title : '',
+  ].filter(Boolean).join(' ').toLocaleLowerCase('fr');
+  const titleColumn = activeColumns
+    .map((column, index) => {
+      const token = columnToken(column);
+      const score = /(^|[ _-])(name|nom|title|titre|display|libelle|label|numero|number|reference|code)([ _-]|$)/i.test(token)
+        ? (/numero|number|reference|code/.test(token) ? 4 : 5)
+        : 0;
+      return { column, index, score };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.column;
+  const displayValue = (row, column) => {
+    if (!column) return row?.name || row?.label || row?.display_name || row?.id || '—';
+    const value = getValue(row, column);
+    if (value === null || value === undefined || value === '') return '—';
+    if (typeof value === 'object') return value.label || value.name || value.display_name || value.code || '—';
+    return value;
+  };
+  const summaryColumns = [...activeColumns, ...kanbanSummaryColumns]
+    .filter((column, index, list) => column !== titleColumn && list.findIndex((item) => item.id === column.id) === index);
+  const statusColumn = summaryColumns.find((column) => /status|state|etat|statut|payment|paiement|active|actif|reconcile|lettrage/i.test(columnToken(column)));
+  const summaryMetricColumns = summaryColumns
+    .map((column, index) => {
+      const token = columnToken(column);
+      const numeric = displayedRows.some((row) => {
+        const value = getValue(row, column);
+        return typeof value === 'number' || (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)));
+      });
+      const semanticScore = /total|ttc|amount|montant|solde|balance|value|valeur/.test(token) ? 5
+        : /debit|credit|prix|price|count|entries|ecritures/.test(token) ? 3
+          : column.numeric || column.align === 'right' ? 2 : 0;
+      return { column, index, score: numeric ? semanticScore : 0 };
+    })
+    .filter((item) => item.score > 0 && item.column !== statusColumn)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, 3)
+    .map(({ column }) => column);
+  const summaryDetailColumns = summaryColumns
+    .filter((column) => column !== statusColumn && !summaryMetricColumns.includes(column))
+    .map((column, index) => {
+      const token = columnToken(column);
+      const score = /date|created|updated|due|echeance|échéance/.test(token) ? 5
+        : /partner|partenaire|client|customer|supplier|fournisseur/.test(token) ? 4
+          : /reference|ref|journal|type|category|categorie|activity|activite/.test(token) ? 3
+            : /compte|bank|banque/.test(token) ? 2
+              : /code|prefix|prefixe/.test(token) ? 1 : 0;
+      return { column, index, score };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map(({ column }) => column)
+    .slice(0, 3);
+  const getGroupLabel = (row) => {
+    if (!kanbanColumn) return 'Tous les éléments';
+    const raw = row?.[kanbanColumn.dataIndex || kanbanColumn.id];
+    const value = raw && typeof raw === 'object'
+      ? raw.label || raw.name || raw.display_name || String(raw.id || '')
+      : raw;
+    return String(value || 'Sans état');
+  };
+  const renderCollectionCards = (grouped, kanbanView = false) => {
+    const shouldGroup = grouped && !disableGrouping;
+    const groups = shouldGroup
+      ? displayedRows.reduce((result, row) => {
+        const label = getGroupLabel(row);
+        if (!result.has(label)) result.set(label, []);
+        result.get(label).push(row);
+        return result;
+      }, new Map())
+      : new Map([['', displayedRows]]);
+
+    if (loading) return <FeedbackState kind="loading" title={loadingText} layout="kanban" />;
+    if (error && !displayedRows.length) return <FeedbackState kind="error" title="Impossible de charger les données" description={errorDescription} actionLabel="Réessayer" onAction={retryLoading} layout="kanban" />;
+    if (!displayedRows.length) return (
+      <FeedbackState
+        kind="empty"
+        title="Aucun résultat"
+        description={emptyText}
+        actionLabel={canClearViewFilters ? 'Effacer les filtres' : undefined}
+        onAction={canClearViewFilters ? clearViewFilters : undefined}
+        layout="kanban"
+      />
+    );
+
+    return (
+      <div className={classNames('somane-kanban', kanbanView && kanbanLayout === 'grid' && 'somane-kanban--grid')}>
+        {[...groups.entries()].map(([group, groupRows]) => (
+          <section className={classNames('somane-kanban__column', kanbanView && kanbanLayout === 'grid' && 'somane-kanban__column--grid')} key={group || 'kanban'}>
+            {shouldGroup && kanbanColumn && (
+              <h2 className="somane-kanban__heading">
+                <span>{group}</span><span className="somane-kanban__count">{groupRows.length}</span>
+              </h2>
+            )}
+            <div className={classNames('somane-kanban__cards', kanbanView && kanbanLayout === 'grid' && 'somane-kanban__cards--grid')}>
+              {groupRows.map((row, rowIndex) => {
+                const key = resolveRowKey(row, rowKey);
+                const interactionProps = getRowInteractionProps(row);
+                const title = String(displayValue(row, titleColumn));
+                const statusText = statusColumn ? String(displayValue(row, statusColumn)) : '';
+                const statusToken = statusText.toLocaleLowerCase('fr');
+                const statusTone = /erreur|annul|refus|impay|retard|inactif/.test(statusToken) ? 'danger'
+                  : /brouillon|attente|partiel|cours|incomplet/.test(statusToken) ? 'warning'
+                    : /comptabilis|pay[eé]|actif|valid|termin|équilibr/.test(statusToken) ? 'success' : 'neutral';
+                return (
+                  <article
+                    key={key}
+                    {...interactionProps}
+                    className={classNames('somane-record-card', 'somane-record-card--collection', onRowOpen && 'somane-record-card--interactive', selectedKeySet.has(key) && 'is-selected')}
+                  >
+                    {renderCollectionCard ? renderCollectionCard(row, {
+                      selected: selectedKeySet.has(key),
+                      toggleSelected: () => toggleRow(key),
+                      openProps: interactionProps,
+                    }) : (
+                      <div className="somane-kanban-card somane-kanban-card--record">
+                        <header className="somane-kanban-card__header">
+                          {selectable && (
+                            <input
+                              type="checkbox"
+                              checked={selectedKeySet.has(key)}
+                              onChange={() => toggleRow(key)}
+                              aria-label={`Sélectionner ${title}`}
+                            />
+                          )}
+                          <span className="somane-kanban-card__avatar" aria-hidden="true">
+                            {title.trim().slice(0, 2).toUpperCase()}
+                          </span>
+                          <h2>{title}</h2>
+                        </header>
+                        {summaryMetricColumns.length > 0 && (
+                          <dl className={classNames(
+                            'somane-kanban-card__metrics',
+                            'somane-kanban-card__metrics--featured',
+                            summaryMetricColumns.length === 2 && 'has-two',
+                            summaryMetricColumns.length >= 3 && 'has-three',
+                          )}>
+                            {summaryMetricColumns.map((column) => (
+                              <div key={column.id}>
+                                <dt>{typeof column.label === 'string' ? column.label : column.id}</dt>
+                                <dd>
+                                  {column.render
+                                    ? column.render(getValue(row, column), row, rowIndex)
+                                    : displayValue(row, column)}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        )}
+                        <dl className="somane-kanban-card__details">
+                          {summaryDetailColumns.map((column) => (
+                            <div className="somane-kanban-card__field" key={column.id}>
+                              <dt>{column.title || column.label || column.id}</dt>
+                              <dd>{displayValue(row, column)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        {statusColumn && (
+                          <footer className="somane-kanban-card__summary-footer">
+                            {statusColumn.render ? statusColumn.render(getValue(row, statusColumn), row, rowIndex) : (
+                              <span className={`somane-kanban-card__status is-${statusTone}`}>
+                                <span aria-hidden="true" />
+                                {statusText}
+                              </span>
+                            )}
+                          </footer>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  };
+
+  const renderViewMode = () => (
+    renderCollectionCards(Boolean(groupBy.length || kanbanGroupBy) && !disableGrouping, true)
+  );
+
   const handlePreviousPage = (page) => {
     saveNow();
     if (onBack) onBack({ navigate, location, page, savedState: buildMemoryState() });
@@ -1058,24 +1406,18 @@ export default function UnifiedIndexPage({
     });
   };
 
-  const tableStyle = hasResizedColumns ? { minWidth: resizedTableMinWidth } : undefined;
-  const headerColumnCount = activeColumns.length + (selectable ? 1 : 0) + (allowColumnVisibility ? 1 : 0);
 
   return (
     <div
       ref={rootRef}
-      className={classNames('unified-index-root flex min-h-0 flex-col overflow-hidden bg-gray-50', className)}
-      style={{
-        width: isAccountingModulePage ? 'calc(100% + 3rem)' : undefined,
-        marginLeft: isAccountingModulePage ? '-1.5rem' : undefined,
-        marginRight: isAccountingModulePage ? '-1.5rem' : undefined,
-        height: `calc(100% + ${pullToHeader}px)`,
-        marginTop: `-${pullToHeader}px`,
-      }}
+      className={classNames(
+        'somane-page-layout unified-index-root',
+        isAccountingModulePage && 'somane-page-layout--accounting',
+        className,
+      )}
+      style={{ '--somane-page-pull': `${pullToHeader}px` }}
     >
       <style>{`
-        .unified-index-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-        .unified-index-scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
         @keyframes unified-index-message-in {
           from { opacity: 0; transform: translateY(-4px); }
           to { opacity: 1; transform: translateY(0); }
@@ -1083,25 +1425,30 @@ export default function UnifiedIndexPage({
         .unified-index-message { animation: unified-index-message-in 180ms ease-out; }
       `}</style>
 
-      <section className="flex min-h-0 flex-1 flex-col border-x border-b border-gray-300 bg-white">
-        <div className={classNames('relative z-30 shrink-0 bg-white', toolbarClassName)}>
-          <div className={classNames(
-            'flex min-h-[46px] items-center gap-2 py-1.5',
-            isAccountingModulePage ? 'px-9' : 'px-3',
-          )}>
+      <section className="somane-page-layout__surface somane-list-shell">
+        <div className={classNames('somane-page-header-band somane-list-toolbar relative z-30 shrink-0', toolbarClassName)}>
+          <div
+            className={classNames(
+              'somane-page-header-row',
+              activeSearchChips.length > 0 && 'has-search-chips',
+              pageSummary.length > 0 && 'has-page-summary',
+            )}
+          >
+            <div className="somane-list-header-left">
             {primaryAction && (
               <button
                 type="button"
                 onClick={() => executeAction(primaryAction)}
                 disabled={primaryAction.disabled}
                 className={classNames(
-                  'inline-flex h-9 shrink-0 items-center gap-2 rounded border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50',
-                  resolveButtonClass(primaryAction.variant || 'primary'),
-                  primaryAction.className,
+                  'somane-btn somane-btn--primary somane-btn--new disabled:cursor-not-allowed',
                 )}
+                title="Nouveau"
               >
-                {primaryAction.icon}
-                {primaryAction.label}
+                {primaryAction.icon && React.isValidElement(primaryAction.icon)
+                  ? React.cloneElement(primaryAction.icon, { size: 12, 'aria-hidden': true })
+                  : primaryAction.icon || <FiPlus size={12} aria-hidden="true" />}
+                <span>Nouveau</span>
               </button>
             )}
 
@@ -1113,7 +1460,7 @@ export default function UnifiedIndexPage({
                 disabled={action.disabled}
                 title={action.title}
                 className={classNames(
-                  'inline-flex h-9 shrink-0 items-center gap-2 rounded border px-3 text-xs font-medium disabled:opacity-50',
+                  'somane-btn font-medium disabled:cursor-not-allowed',
                   resolveButtonClass(action.variant),
                   action.className,
                 )}
@@ -1122,9 +1469,9 @@ export default function UnifiedIndexPage({
               </button>
             ))}
 
-            <div className="flex shrink-0 flex-col justify-center whitespace-nowrap">
+              <div className="flex min-w-0 flex-1 flex-col justify-center">
               {showHistoryNavigation && previousPages.length > 0 && (
-                <div className="mb-0.5 flex h-3 items-center gap-1 text-[10px] leading-none text-gray-500">
+                <div className="somane-breadcrumb mb-0.5 flex h-3 items-center gap-1 text-[10px] leading-none text-gray-500" aria-label="Fil d’Ariane">
                   {previousPages.map((page, index) => (
                     <React.Fragment key={`${page.path || page.label}-${index}`}>
                       {index > 0 && (
@@ -1133,7 +1480,7 @@ export default function UnifiedIndexPage({
                       <button
                         type="button"
                         onClick={() => handlePreviousPage(page)}
-                        className="max-w-36 truncate transition-colors hover:text-purple-700"
+                        className="somane-breadcrumb__link max-w-36 truncate transition-colors hover:text-purple-700"
                         title={`Revenir à ${page.label}`}
                       >
                         {page.label}
@@ -1142,61 +1489,92 @@ export default function UnifiedIndexPage({
                   ))}
                 </div>
               )}
-              <h1 className="text-base font-bold leading-tight text-gray-900">{title}</h1>
+              <h1 className="min-w-0 truncate whitespace-nowrap text-base font-bold leading-tight text-gray-900">{title}</h1>
+              {description && <p className="somane-list-header-description">{description}</p>}
+            </div>
             </div>
 
-            <div className="group flex min-w-[220px] flex-1 items-center rounded border border-gray-300 bg-white transition-all duration-200 hover:border-purple-400 hover:bg-purple-50/30 hover:shadow-sm focus-within:border-purple-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-purple-100">
-              <FiSearch className="ml-3 shrink-0 text-gray-500 transition-all duration-200 group-hover:scale-110 group-hover:text-purple-600 group-focus-within:scale-110 group-focus-within:text-purple-700" size={17} />
-              {currentSelectedKeys.length > 0 && (
-                <span className="ml-2 shrink-0 rounded bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700">
-                  {currentSelectedKeys.length} selectionnee(s)
-                </span>
-              )}
-              {filterChips.map((chip) => (
-                <span key={chip.id} className="ml-1 inline-flex shrink-0 items-center gap-1 rounded bg-teal-100 px-2 py-1 text-xs text-teal-700">
-                  {chip.label}
-                  {onRemoveFilterChip && (
-                    <button type="button" onClick={() => onRemoveFilterChip(chip)} className="hover:text-teal-900"><FiX size={12} /></button>
-                  )}
-                </span>
-              ))}
-              <input
-                value={currentSearch}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={searchPlaceholder}
-                className="h-9 min-w-[90px] flex-1 bg-transparent px-3 text-sm outline-none"
-              />
-              {searchActions.map((action) => (
-                <button
-                  key={action.id || action.label || action.title}
-                  type="button"
-                  onClick={() => executeAction(action)}
-                  disabled={action.disabled}
-                  title={action.title || action.label}
-                  aria-label={action.title || action.label}
-                  className={classNames(
-                    'mr-1 inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                    action.active ? 'bg-purple-50 text-purple-700' : 'text-gray-500 hover:bg-purple-50 hover:text-purple-700',
-                    action.className,
-                  )}
-                >
-                  {action.icon}
-                  {action.showLabel && action.label}
-                </button>
-              ))}
-              {renderFilters && (
-                <button
-                  ref={filterButtonRef}
-                  type="button"
-                  onClick={openFilterPanel}
-                  title="Filtres"
-                  className={classNames('mr-1 inline-flex h-8 w-8 items-center justify-center rounded', showFilters ? 'bg-purple-50 text-purple-700' : 'text-gray-500 hover:bg-purple-50 hover:text-purple-700')}
-                >
-                  <FiFilter size={17} />
-                </button>
-              )}
+            {pageSummary.length > 0 && (
+              <div className="somane-page-summary" role="group" aria-label="Synthèse de la page">
+                {pageSummary.map((item) => (
+                  <div key={item.id || item.label} className="somane-page-summary__item" title={item.title}>
+                    <span className="somane-page-summary__label">{item.label}</span>
+                    <span className="somane-page-summary__value">{item.value}</span>
+                    {item.detail && <span className="somane-page-summary__detail">{item.detail}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div
+              className={classNames('somane-list-search', activeSearchChips.length > 0 && 'somane-list-search--has-chips')}
+              style={{ '--somane-search-extra-width': `${searchExtraWidth}px` }}
+            >
+              <FiSearch className="somane-list-search__icon" size={17} aria-hidden="true" />
+              <div className="somane-list-search__query">
+                {currentSelectedKeys.length > 0 && (
+                  <span className="somane-list-search__selection">
+                    {currentSelectedKeys.length} selectionnee(s)
+                  </span>
+                )}
+                {activeSearchChips.map((chip) => (
+                  <span key={chip.id} title={chip.label} className={classNames('somane-list-search__chip', ['group', 'groupBy'].includes(chip.kind) && 'somane-list-search__group-chip')}>
+                    <span className="somane-list-search__chip-label">{chip.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (chip.kind === 'groupBy') clearGroupBy();
+                        else if (onRemoveFilterChip) onRemoveFilterChip(chip);
+                        else if (chip.onRemove) chip.onRemove();
+                      }}
+                      aria-label={`Retirer ${['group', 'groupBy'].includes(chip.kind) ? 'le regroupement' : 'le filtre'} ${chip.label}`}
+                    ><FiX size={12} aria-hidden="true" /></button>
+                  </span>
+                ))}
+                <input
+                  value={currentSearch}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="somane-list-search__input"
+                />
+              </div>
+              <div className="somane-list-search__controls">
+                {searchActions.map((action) => (
+                  <button
+                    key={action.id || action.label || action.title}
+                    type="button"
+                    onClick={() => executeAction(action)}
+                    disabled={action.disabled}
+                    title={action.title || action.label}
+                    aria-label={action.title || action.label}
+                    className={classNames(
+                      'somane-list-search__action',
+                      action.active && 'is-active',
+                      action.showLabel && 'has-label',
+                      action.className,
+                    )}
+                  >
+                    {action.icon}
+                    {action.showLabel && action.label}
+                  </button>
+                ))}
+                {renderFilters && (
+                  <button
+                    ref={filterButtonRef}
+                    type="button"
+                    onClick={openFilterPanel}
+                    title={showFilters ? 'Fermer les filtres' : 'Ouvrir les filtres'}
+                    className={classNames('somane-list-search__filter', showFilters && 'is-active')}
+                    aria-label={showFilters ? 'Fermer les filtres' : 'Ouvrir les filtres'}
+                    aria-expanded={showFilters}
+                  >
+                    {showFilters ? <FiX size={16} aria-hidden="true" /> : <FiFilter size={17} />}
+                  </button>
+                )}
+              </div>
             </div>
 
+            <div className="somane-list-header-right">
             {trailingActions.map((action) => (
               <button
                 key={action.id || action.label}
@@ -1205,7 +1583,7 @@ export default function UnifiedIndexPage({
                 disabled={action.disabled}
                 title={action.title}
                 className={classNames(
-                  'inline-flex h-9 shrink-0 items-center gap-2 rounded border px-3 text-xs font-medium disabled:opacity-50',
+                  'somane-btn font-medium disabled:cursor-not-allowed',
                   resolveButtonClass(action.variant),
                   action.className,
                 )}
@@ -1214,51 +1592,61 @@ export default function UnifiedIndexPage({
               </button>
             ))}
 
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="text-xs text-gray-500">Afficher</span>
-              <select
-                value={currentPageSize}
-                onChange={(event) => changePageSize(event.target.value)}
-                className="h-9 rounded border border-gray-300 bg-white px-2 text-xs outline-none focus:border-purple-500"
-              >
-                {pageSizeOptions.map((size) => <option key={size} value={size}>{size}</option>)}
-              </select>
-              <span className="text-xs text-gray-500">lignes</span>
+            {!renderContent && viewModes.length > 1 && (
+              <div className="somane-view-switch" role="group" aria-label="Mode d’affichage">
+                {viewModes.map((mode) => {
+                  const options = {
+                    list: { label: 'Tableau', icon: <FiList size={15} /> },
+                    kanban: { label: 'Kanban', icon: <FiColumns size={15} /> },
+                  };
+                  const baseOption = options[mode];
+                  if (!baseOption) return null;
+                  const option = { ...baseOption, ...viewModeLabels[mode] };
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      className="somane-view-switch__button"
+                      aria-label={option.label}
+                      aria-pressed={viewMode === mode}
+                      title={option.label}
+                      onClick={() => changeViewMode(mode)}
+                    >
+                      {option.icon}<span>{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="somane-list-results-control">
+              <div className="somane-list-pagination" role="group" aria-label="Pagination">
+                <span className="somane-list-pagination__label">
+                  {totalItems === 0 ? '0' : `${(safePage - 1) * currentPageSize + 1}–${Math.min(safePage * currentPageSize, totalItems)}`} sur {totalItems}
+                </span>
+                <button type="button" onClick={() => changePage(safePage - 1)} disabled={safePage === 1} className="somane-list-page-button" aria-label="Page précédente"><FiChevronLeft size={14} /></button>
+                <button type="button" onClick={() => changePage(safePage + 1)} disabled={safePage === totalPages} className="somane-list-page-button" aria-label="Page suivante"><FiChevronRight size={14} /></button>
+              </div>
             </div>
+
+            </div>
+
           </div>
 
           {renderToolbarExtension && (
-            <div className="border-t border-gray-200 bg-white px-3 py-1">
+            <div className="somane-list-toolbar__extension">
               {renderToolbarExtension()}
             </div>
           )}
 
-          {visibleError && (
-            <div className="unified-index-message flex items-center gap-2 border-t border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
-              <FiAlertCircle className="shrink-0" size={14} />
-              <span className="min-w-0 flex-1">{visibleError}</span>
-              <button type="button" onClick={() => { setVisibleError(''); dismissErrorRef.current?.(); }} title="Fermer" className="rounded p-0.5 transition-colors hover:bg-red-100 hover:text-red-900">
-                <FiX size={14} />
-              </button>
-            </div>
-          )}
-          {visibleSuccess && (
-            <div className="unified-index-message flex items-center gap-2 border-t border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
-              <FiCheck className="shrink-0" size={14} />
-              <span className="min-w-0 flex-1">{visibleSuccess}</span>
-              <button type="button" onClick={() => { setVisibleSuccess(''); dismissSuccessRef.current?.(); }} title="Fermer" className="rounded p-0.5 transition-colors hover:bg-green-100 hover:text-green-900">
-                <FiX size={14} />
-              </button>
-            </div>
-          )}
           {currentSelectedKeys.length > 0 && (
-            <div className="flex min-h-9 items-center justify-between gap-3 border-y border-gray-300 bg-gray-50 px-3 py-1 text-xs">
-              <div className="min-w-0 flex-1 text-gray-700">
+            <div className="somane-list-selection-bar">
+              <div className="somane-list-selection-bar__summary">
                 {renderSelectionSummary
                   ? renderSelectionSummary(selectedRows, currentSelectedKeys)
                   : `${currentSelectedKeys.length} ligne(s) selectionnee(s)`}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="somane-list-selection-bar__actions">
                 {selectionActions.map((action) => (
                   <button
                     key={action.id || action.label}
@@ -1266,7 +1654,7 @@ export default function UnifiedIndexPage({
                     onClick={() => executeAction(action)}
                     disabled={typeof action.disabled === 'function' ? action.disabled(selectedRows) : action.disabled}
                     className={classNames(
-                      'h-7 rounded border px-2 text-xs font-medium disabled:opacity-50',
+                      'somane-list-selection-bar__action',
                       resolveButtonClass(action.variant),
                       action.className,
                     )}
@@ -1274,7 +1662,7 @@ export default function UnifiedIndexPage({
                     {action.label}
                   </button>
                 ))}
-                <button type="button" onClick={() => setSelected([])} className="h-7 rounded border border-gray-300 bg-white px-2 text-xs text-gray-700 hover:bg-gray-100">
+                <button type="button" onClick={() => setSelected([])} className="somane-list-selection-bar__clear">
                   Annuler
                 </button>
               </div>
@@ -1289,58 +1677,49 @@ export default function UnifiedIndexPage({
               window.clearTimeout(saveTimerRef.current);
               saveTimerRef.current = window.setTimeout(saveNow, 120);
             }}
-            className="unified-index-scroll relative min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            className="unified-index-scroll somane-list-scroll relative min-h-0 flex-1 overflow-y-auto overscroll-contain"
           >
             {renderCustomContent()}
           </div>
-        ) : <>
-        <div ref={fixedHeaderScrollRef} className="shrink-0 overflow-hidden">
-          <table
-            className="w-full table-auto border-collapse text-sm"
-            style={{
-              width: headerMetrics.tableWidth || '100%',
-              minWidth: headerMetrics.tableWidth || resizedTableMinWidth,
-              tableLayout: headerMetrics.widths.length ? 'fixed' : 'auto',
+        ) : viewMode !== 'list' ? (
+          <div
+            ref={tableScrollRef}
+            onScroll={() => {
+              window.clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = window.setTimeout(saveNow, 120);
             }}
-          >
-            {headerMetrics.widths.length === headerColumnCount && (
-              <colgroup>
-                {headerMetrics.widths.map((width, index) => <col key={`${visibleColumnKey}-${index}`} style={{ width }} />)}
-              </colgroup>
+            className={classNames(
+              'unified-index-scroll somane-list-scroll relative min-h-0 flex-1 overflow-auto overscroll-contain',
+              viewMode === 'kanban' && 'somane-kanban-scroll',
+              viewMode === 'kanban' && kanbanLayout === 'grid' && 'somane-kanban-scroll--grid',
             )}
-            <thead>{renderHeaderRow(true)}</thead>
-          </table>
-        </div>
-
-        <div
-          ref={tableScrollRef}
-          onScroll={(event) => {
-            if (fixedHeaderScrollRef.current) fixedHeaderScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
-            window.clearTimeout(saveTimerRef.current);
-            saveTimerRef.current = window.setTimeout(saveNow, 120);
-          }}
-          className="unified-index-scroll relative min-h-0 flex-1 overscroll-contain overflow-auto"
-        >
-          <table ref={bodyTableRef} className="w-full table-auto border-collapse text-sm" style={tableStyle}>
-            <thead ref={sizingHeaderRef} aria-hidden="true" style={{ visibility: 'collapse' }}>
-              {renderHeaderRow(false)}
-            </thead>
-            <tbody>{renderRows()}</tbody>
-          </table>
-        </div>
+          >
+            {renderViewMode()}
+          </div>
+        ) : <>
+          <div ref={fixedHeaderScrollRef} className="shrink-0 overflow-hidden">
+            <table className="somane-list-table w-full table-fixed border-collapse text-sm">
+              <thead>{renderHeaderRow(true)}</thead>
+            </table>
+          </div>
+          <div
+            ref={tableScrollRef}
+            onScroll={(event) => {
+              if (fixedHeaderScrollRef.current) fixedHeaderScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+              window.clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = window.setTimeout(saveNow, 120);
+            }}
+            className="unified-index-scroll somane-list-scroll somane-list-table-scroll relative min-h-0 flex-1 overscroll-contain overflow-auto"
+          >
+            <table ref={bodyTableRef} className="somane-list-table w-full table-fixed border-collapse text-sm">
+              <thead aria-hidden="true" style={{ visibility: 'collapse' }}>
+                {renderHeaderRow(false)}
+              </thead>
+              <tbody>{renderRows()}</tbody>
+            </table>
+          </div>
         </>}
 
-        <footer className="shrink-0 border-t border-gray-300 bg-gray-50 px-4 py-2">
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-gray-600">{footerText || `Page ${safePage} sur ${totalPages}`}</div>
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={() => changePage(1)} disabled={safePage === 1} className="rounded border border-gray-300 p-1 disabled:opacity-40"><FiChevronsLeft size={14} /></button>
-              <button type="button" onClick={() => changePage(safePage - 1)} disabled={safePage === 1} className="rounded border border-gray-300 p-1 disabled:opacity-40"><FiChevronLeft size={14} /></button>
-              <button type="button" onClick={() => changePage(safePage + 1)} disabled={safePage === totalPages} className="rounded border border-gray-300 p-1 disabled:opacity-40"><FiChevronRight size={14} /></button>
-              <button type="button" onClick={() => changePage(totalPages)} disabled={safePage === totalPages} className="rounded border border-gray-300 p-1 disabled:opacity-40"><FiChevronsRight size={14} /></button>
-            </div>
-          </div>
-        </footer>
       </section>
 
       {showFilters && renderFilters && renderPortal(
@@ -1351,12 +1730,51 @@ export default function UnifiedIndexPage({
             position: 'fixed',
             top: filterPanelPosition.top,
             left: filterPanelPosition.left,
-            width: filterPanelWidth,
+            width: Math.min(Math.max(filterPanelWidth, 600), window.innerWidth - 16),
             maxHeight: `calc(100vh - ${filterPanelPosition.top + 10}px)`,
           }}
-          className="z-[1000] max-w-[calc(100vw-16px)] overflow-y-auto rounded border border-gray-300 bg-white shadow-xl"
+          className="somane-list-filter-panel"
         >
-          {renderFilters({ close: () => setShowFilters(false), saveNow, clearSavedState })}
+          {filterPanelCustomContent ? (
+            renderFilters({ close: () => setShowFilters(false), saveNow, clearSavedState })
+          ) : (
+            <div className="somane-search-panel">
+              <section className="somane-search-panel__section somane-search-panel__section--filters">
+                <h2>Ajouter un filtre</h2>
+                <div className="somane-search-panel__content">
+                  {renderFilters({ close: () => setShowFilters(false), saveNow, clearSavedState })}
+                </div>
+              </section>
+
+              <section className="somane-search-panel__section">
+                <h2>Regrouper par</h2>
+                <div className="somane-search-panel__content somane-search-panel__options">
+                  {groupingOptions.length ? groupingOptions.map((option) => {
+                    const id = option.id || option.value;
+                    const checked = groupBy.includes(id);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className={classNames('somane-search-panel__option', checked && 'is-active')}
+                        aria-pressed={checked}
+                        onClick={() => toggleGroupBy(id)}
+                      >
+                        <span className="somane-search-panel__check">{checked ? <FiCheck size={14} /> : null}</span>
+                        <span>{option.label || option.name || id}</span>
+                        {checked && <span className="somane-search-panel__group-order">{groupBy.indexOf(id) + 1}</span>}
+                      </button>
+                    );
+                  }) : <p className="somane-search-panel__empty">Aucun regroupement disponible.</p>}
+                  {groupBy.length > 0 && (
+                    <button type="button" className="somane-search-panel__clear" onClick={() => { setGroupBy([]); onGroupByChange?.([], groupingOptions); }}>
+                      Effacer les regroupements
+                    </button>
+                  )}
+                </div>
+              </section>
+            </div>
+          )}
         </div>
       )}
 

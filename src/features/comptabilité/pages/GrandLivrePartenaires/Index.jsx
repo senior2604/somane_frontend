@@ -15,6 +15,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const getYearStart = () => `${new Date().getFullYear()}-01-01`;
 const getYearEnd = () => `${new Date().getFullYear()}-12-31`;
@@ -251,21 +252,9 @@ const getMoveId = (line) => (
   (typeof line.move === 'number' || typeof line.move === 'string' ? line.move : null)
 );
 
-const Tooltip = ({ children, text }) => {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-        {children}
-      </div>
-      {show && (
-        <div className="absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap bottom-full left-1/2 transform -translate-x-1/2 mb-1">
-          {text}
-        </div>
-      )}
-    </div>
-  );
-};
+const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 export default function GrandLivrePartenaires() {
   const { activeEntity } = useEntity();
@@ -795,7 +784,7 @@ export default function GrandLivrePartenaires() {
                         <div className="p-2 border-b border-gray-200">
                           <p className="text-xs font-medium text-gray-700 mb-2">Periode</p>
                           <div className="grid grid-cols-2 gap-2 mb-2">
-                            <select
+                            <SomaneSelect
                               value={filters.date_field}
                               onChange={(event) => handleFilterChange('date_field', event.target.value)}
                               className="h-8 border border-gray-300 px-2 text-xs"
@@ -805,8 +794,8 @@ export default function GrandLivrePartenaires() {
                                   {dateFilter.label}
                                 </option>
                               ))}
-                            </select>
-                            <select
+                            </SomaneSelect>
+                            <SomaneSelect
                               value={filters.period_mode}
                               onChange={(event) => applyPeriod(event.target.value)}
                               className="h-8 border border-gray-300 px-2 text-xs"
@@ -816,7 +805,7 @@ export default function GrandLivrePartenaires() {
                                   {periodMode.label}
                                 </option>
                               ))}
-                            </select>
+                            </SomaneSelect>
                           </div>
 
                           <div className="flex items-center justify-between mb-2 bg-gray-50 rounded px-1">
@@ -868,7 +857,7 @@ export default function GrandLivrePartenaires() {
                             placeholder="Ex: 411, 401, 42"
                             className="mb-2 h-8 w-full border border-gray-300 px-2 text-xs"
                           />
-                          <select
+                          <SomaneSelect
                             value={filters.account_nature}
                             onChange={(event) => handleFilterChange('account_nature', event.target.value)}
                             className="h-8 w-full border border-gray-300 px-2 text-xs"
@@ -879,12 +868,12 @@ export default function GrandLivrePartenaires() {
                                 {nature.label}
                               </option>
                             ))}
-                          </select>
+                          </SomaneSelect>
                         </div>
 
                         <div className="p-2 border-b border-gray-200">
                           <p className="text-xs font-medium text-gray-700 mb-2">Partenaire</p>
-                          <select
+                          <SomaneSelect
                             value={filters.partner}
                             onChange={(event) => handleFilterChange('partner', event.target.value)}
                             disabled={loadingRefs}
@@ -896,7 +885,7 @@ export default function GrandLivrePartenaires() {
                                 {getPartnerLabel(partner)}
                               </option>
                             ))}
-                          </select>
+                          </SomaneSelect>
                         </div>
 
                         <div className="p-2">

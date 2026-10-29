@@ -31,6 +31,7 @@ import {
   partnerToForm,
   validatePartnerForm,
 } from './PartnerShared';
+import SomaneSelect from '../../components/SomaneSelect';
 
 const normalizeSavedPartner = (payload, fallback = {}) => {
   const data = payload?.data ?? payload ?? {};
@@ -612,10 +613,10 @@ export default function PartnerShow() {
                     <div>
                       <div className="bg-gray-100 px-2 py-1.5 text-xs font-medium border-b border-gray-300">Statut</div>
                       <div className="p-1">
-                        <select value={userForm.statut} onChange={(e) => setUserForm(prev => ({ ...prev, statut: e.target.value }))} className="w-full border border-gray-300 px-2 py-1.5 text-xs">
+                        <SomaneSelect value={userForm.statut} onChange={(e) => setUserForm(prev => ({ ...prev, statut: e.target.value }))} className="w-full border border-gray-300 px-2 py-1.5 text-xs">
                           <option value="actif">Actif</option>
                           <option value="inactif">Inactif</option>
-                        </select>
+                        </SomaneSelect>
                       </div>
                     </div>
                   </div>
@@ -684,8 +685,8 @@ export default function PartnerShow() {
 
       {/* Dialogue confirmation */}
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
             <p className="text-sm text-gray-600 mb-6">
               Voulez-vous enregistrer les modifications avant de quitter ?

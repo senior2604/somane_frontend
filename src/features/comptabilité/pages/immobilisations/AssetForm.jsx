@@ -7,6 +7,8 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
+import ColumnVisibilityMenu from '../../../../components/ColumnVisibilityMenu';
+import StatusTrack from '../../../../components/StatusTrack';
 import axiosInstance from '../../../../config/axiosInstance';
 import { SearchSelect } from '../payement/paymentShared.jsx';
 import {
@@ -769,21 +771,15 @@ export default function AssetForm({ mode = 'create' }) {
   const process = (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
-        {editable && <button type="button" disabled={saving} onClick={calculateDepreciation} className="h-8 border border-purple-500 px-3 text-xs font-semibold text-purple-700 hover:bg-purple-50 disabled:opacity-50">{saving ? 'Calcul en cours…' : hasPreparedPlan ? "Recalculer l'amortissement" : "Calculer l'amortissement"}</button>}
-        <button type="button" disabled={saving} onClick={handleModification} className="h-8 border border-purple-500 px-3 text-xs font-semibold text-purple-700 hover:bg-purple-50 disabled:opacity-50">Modifier l'amortissement</button>
-        {isShow && form.state === 'waiting' && <button type="button" disabled={saving || dirty} onClick={() => runAction('start', 'Reprendre les dotations de cette immobilisation ?')} className="h-8 bg-purple-600 px-3 text-xs font-semibold text-white disabled:opacity-50"><FiPlay className="mr-1 inline" />Reprendre</button>}
+        {editable && <button type="button" disabled={saving} onClick={calculateDepreciation} className="somane-form-action-button">{saving ? 'Calcul en cours…' : hasPreparedPlan ? "Recalculer l'amortissement" : "Calculer l'amortissement"}</button>}
+        <button type="button" disabled={saving} onClick={handleModification} className="somane-form-action-button">Modifier l'amortissement</button>
+        {isShow && form.state === 'waiting' && <button type="button" disabled={saving || dirty} onClick={() => runAction('start', 'Reprendre les dotations de cette immobilisation ?')} className="somane-form-action-button"><FiPlay size={13} /> Reprendre</button>}
       </div>
-      <div className="flex items-center gap-2 overflow-x-auto text-xs font-semibold">
-        {[
-          ['draft', 'Brouillon'],
-          ['running', 'En cours'],
-        ].map(([value, label]) => {
-          const active = value === 'draft'
-            ? form.state === 'draft'
-            : ['running', 'waiting'].includes(form.state);
-          return <span key={value} className={`border px-3 py-2 ${active ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-300 bg-gray-50 text-gray-500'}`}>{label}</span>;
-        })}
-      </div>
+      <StatusTrack
+        steps={[{ id: 'draft', label: 'Brouillon' }, { id: 'running', label: 'En cours' }]}
+        currentState={form.state === 'draft' ? 'draft' : 'running'}
+        label="États de l’immobilisation"
+      />
     </div>
   );
 
@@ -915,7 +911,7 @@ export default function AssetForm({ mode = 'create' }) {
 
   return (
     <>
-      {validationDialog && <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 p-4" role="presentation">
+      {validationDialog && <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 p-4 somane-overlay-backdrop" role="presentation">
         <section role="alertdialog" aria-modal="true" aria-labelledby="asset-calculation-error-title" className="w-full max-w-lg border border-gray-300 bg-white shadow-xl">
           <header className="border-b border-gray-200 px-5 py-4">
             <h2 id="asset-calculation-error-title" className="text-base font-semibold text-gray-900">{validationDialog.title}</h2>
@@ -1100,14 +1096,14 @@ export default function AssetForm({ mode = 'create' }) {
               </div>}
             {(operations.length > 0 || showPlanRevisions) && <div ref={planRevisionsRef} className="mt-4 scroll-mt-12 border-t border-gray-200 pt-3">
               <h3 className="mb-2 text-sm font-semibold text-gray-900">{showPlanRevisions ? 'Révisions du plan d’amortissement' : 'Historique des modifications'}</h3>
-              <div className="overflow-x-auto border border-gray-200"><table className="min-w-full text-xs"><thead><tr className="bg-gray-50 text-left"><th className="border-r border-gray-200 px-3 py-2">Date</th><th className="border-r border-gray-200 px-3 py-2">Type</th><th className="border-r border-gray-200 px-3 py-2">Pièce comptable</th><th className="border-r border-gray-200 px-3 py-2">Valeur actuelle</th><th className="px-3 py-2">Note</th></tr></thead><tbody>{visibleOperations.length ? visibleOperations.map((item) => <tr key={item.id} className="border-t border-gray-200"><td className="border-r border-gray-200 px-3 py-2">{formatDate(item.disposal_date)}</td><td className="border-r border-gray-200 px-3 py-2">{item.modify_type_label || MODIFICATION_TYPES.find((type) => type.id === item.modify_type)?.label || item.modify_type}</td><td className="border-r border-gray-200 px-3 py-2">{item.accounting_move_label || '-'}</td><td className="border-r border-gray-200 px-3 py-2 text-right">{formatMoney(item.current_value ?? item.book_value ?? 0, currency)}</td><td className="px-3 py-2">{item.note || '-'}</td></tr>) : <tr><td colSpan={5} className="px-3 py-5 text-center text-gray-500">Aucune révision du plan d’amortissement enregistrée.</td></tr>}</tbody></table></div>
+            <div className="somane-form-table-scroll overflow-x-auto border border-gray-200"><table className="somane-form-table min-w-full"><thead><tr className="text-left"><th>Date</th><th>Type</th><th>Pièce comptable</th><th>Valeur actuelle</th><th>Note</th></tr></thead><tbody>{visibleOperations.length ? visibleOperations.map((item) => <tr key={item.id}><td>{formatDate(item.disposal_date)}</td><td>{item.modify_type_label || MODIFICATION_TYPES.find((type) => type.id === item.modify_type)?.label || item.modify_type}</td><td>{item.accounting_move_label || '-'}</td><td className="text-right">{formatMoney(item.current_value ?? item.book_value ?? 0, currency)}</td><td>{item.note || '-'}</td></tr>) : <tr><td colSpan={5} className="py-5 text-center text-gray-500">Aucune révision du plan d’amortissement enregistrée.</td></tr>}</tbody></table></div>
             </div>}
           </div>}
 
           {activeTab === 'accounting' && <div className="p-4">
             <div className="mb-2 text-xs text-gray-500">Les comptes obligatoires sont affichés par défaut. Les comptes facultatifs s’ajoutent ligne par ligne.</div>
-            <div className="asset-lines-scroll max-h-[52vh] overflow-auto border border-gray-300">
-              <table className="w-full min-w-[760px] table-fixed border-collapse text-xs">
+            <div className="somane-form-table-scroll asset-lines-scroll max-h-[52vh] overflow-auto border border-gray-300">
+              <table className="somane-form-table w-full min-w-[760px] table-fixed">
                 <colgroup>
                   {visibleAccountingColumnDefinitions.map((column) => <col key={column.id} style={{ width: column.id === 'entryType' ? '30%' : column.id === 'accountType' ? '27%' : column.id === 'account' ? '27%' : '16%' }} />)}
                   <col style={{ width: 38 }} />
@@ -1117,9 +1113,12 @@ export default function AssetForm({ mode = 'create' }) {
                     {visibleAccountingColumnDefinitions.map((column) => <th key={column.id} className="border border-gray-300 px-2 py-1.5 font-medium">{column.label}{column.id === 'journal' && <span className="ml-1 text-red-500">*</span>}</th>)}
                     <th className="border border-gray-300 px-1 text-center">
                       <div className="relative" ref={accountingTypeMenuRef}>
-                        <button ref={accountingTypeButtonRef} type="button" onClick={toggleAccountingTypeMenu} aria-label="Afficher ou masquer les colonnes" title="Afficher ou masquer les colonnes" className="text-gray-600 hover:text-purple-700">
-                          <FiMoreHorizontal size={16} />
-                        </button>
+                        <ColumnVisibilityMenu
+                          columns={ACCOUNTING_COLUMNS.map(({ id, ...column }) => ({ ...column, key: id }))}
+                          isVisible={(key) => visibleAccountingColumns.includes(key)}
+                          onToggle={toggleAccountingColumn}
+                          allowEmpty
+                        />
                       </div>
                     </th>
                   </tr>
@@ -1162,13 +1161,6 @@ export default function AssetForm({ mode = 'create' }) {
               </table>
             </div>
             <button type="button" onClick={addAccountingRow} disabled={!editable} className="mt-2 h-8 bg-purple-600 px-3 text-xs font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"><FiPlus className="mr-1 inline" size={13} />Ajouter une ligne</button>
-            {accountingTypeMenuOpen && createPortal(<div ref={accountingTypePopupRef} className="border border-gray-300 bg-white p-2 text-xs text-gray-700 shadow-xl" style={accountingTypeMenuStyle}>
-              <div className="border-b border-gray-100 px-2 py-1.5 font-semibold text-gray-900">Colonnes à afficher</div>
-              {ACCOUNTING_COLUMNS.map((column) => <label key={column.id} className="flex cursor-pointer items-center gap-2 px-2 py-1.5 hover:bg-purple-50">
-                <input type="checkbox" checked={visibleAccountingColumns.includes(column.id)} onChange={() => toggleAccountingColumn(column.id)} className="h-3.5 w-3.5 accent-purple-600" />
-                <span>{column.label}</span>
-              </label>)}
-            </div>, document.body)}
           </div>}
 
           {activeTab === 'supplierInvoices' && <div className="p-4">
@@ -1198,7 +1190,7 @@ export default function AssetForm({ mode = 'create' }) {
         </div>
       </UnifiedFormPage>
 
-      {operationOpen && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setOperationOpen(false); }}><div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto border border-gray-300 bg-white shadow-xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-300 bg-white px-4 py-3"><div><h3 className="text-sm font-semibold">Modification de l’immobilisation</h3><div className="mt-0.5 text-[11px] text-gray-500">Décomptabilisation et ajustements</div></div><button type="button" onClick={() => setOperationOpen(false)} aria-label="Fermer"><FiX /></button></div><div className="grid grid-cols-1 gap-x-8 gap-y-3 p-4 lg:grid-cols-2">
+      {operationOpen && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-4 somane-overlay-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setOperationOpen(false); }}><div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto border border-gray-300 bg-white shadow-xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-300 bg-white px-4 py-3"><div><h3 className="text-sm font-semibold">Modification de l’immobilisation</h3><div className="mt-0.5 text-[11px] text-gray-500">Décomptabilisation et ajustements</div></div><button type="button" onClick={() => setOperationOpen(false)} aria-label="Fermer"><FiX /></button></div><div className="grid grid-cols-1 gap-x-8 gap-y-3 p-4 lg:grid-cols-2">
         <Field label="Type" required><SearchSelect value={operation.modify_type} onChange={(value) => setOperation((current) => ({ ...current, modify_type: value }))} options={MODIFICATION_TYPES} getLabel={(item) => item.label} /></Field>
         <Field label="Date" required><input type="date" className={inputClass} value={operation.disposal_date} onChange={(event) => setOperation((current) => ({ ...current, disposal_date: event.target.value }))} /></Field>
         <Field label="Immobilisation"><div className="flex h-[26px] items-center border border-gray-300 bg-gray-50 px-2 text-xs">{joinLabel(form.code, form.name)}</div></Field>
@@ -1212,7 +1204,7 @@ export default function AssetForm({ mode = 'create' }) {
         <div className="lg:col-span-2"><label className="mb-1 block text-xs font-medium text-gray-700">Note</label><textarea className="min-h-20 w-full border border-gray-300 px-2 py-1 text-xs outline-none focus:border-purple-600" value={operation.note} onChange={(event) => setOperation((current) => ({ ...current, note: event.target.value }))} /></div>
       </div><div className="flex justify-end gap-2 border-t border-gray-300 px-4 py-3"><button type="button" onClick={() => setOperationOpen(false)} className="h-8 border border-gray-300 px-4 text-xs">Annuler</button><button type="button" onClick={saveOperation} disabled={saving} className="h-8 bg-purple-600 px-4 text-xs font-semibold text-white disabled:opacity-50">Enregistrer l'opération</button></div></div></div>}
 
-      {invoiceDialog.open && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget && !invoiceDialog.saving) setInvoiceDialog(EMPTY_INVOICE_DIALOG); }}>
+      {invoiceDialog.open && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-3 somane-overlay-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !invoiceDialog.saving) setInvoiceDialog(EMPTY_INVOICE_DIALOG); }}>
         <div className="flex max-h-[80vh] w-full max-w-5xl flex-col border border-gray-300 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-300 px-4 py-3">
             <div><h3 className="text-sm font-semibold">Pièces comptables</h3><div className="mt-0.5 text-[11px] text-gray-500">Sélectionnez une pièce à associer comme facture {invoiceDialog.type === 'supplier' ? 'fournisseur' : 'client'}.</div></div>
@@ -1233,7 +1225,7 @@ export default function AssetForm({ mode = 'create' }) {
               </div>}
             </div>
             <div className="max-h-[48vh] overflow-auto border border-gray-300">
-              <table className="min-w-[1120px] w-full border-collapse text-[11px]">
+              <table className="somane-form-table min-w-[1120px] w-full text-[11px]">
                 <thead className="sticky top-0 z-10 bg-gray-100 text-left text-gray-700"><tr>
                   <th className="w-9 border-b border-r border-gray-300 px-2 py-2"></th><th className="border-b border-r border-gray-300 px-2 py-2">Date comptable</th><th className="border-b border-r border-gray-300 px-2 py-2">N° pièce</th><th className="border-b border-r border-gray-300 px-2 py-2">Nom du journal</th><th className="border-b border-r border-gray-300 px-2 py-2">Préfixe</th><th className="border-b border-r border-gray-300 px-2 py-2">Référence</th><th className="border-b border-r border-gray-300 px-2 py-2">Partenaire</th><th className="border-b border-r border-gray-300 px-2 py-2 text-right">HT</th><th className="border-b border-r border-gray-300 px-2 py-2 text-right">Taxes</th><th className="border-b border-r border-gray-300 px-2 py-2 text-right">TTC</th><th className="border-b border-r border-gray-300 px-2 py-2">État</th><th className="border-b border-gray-300 px-2 py-2">Paiement</th>
                 </tr></thead>

@@ -4,6 +4,7 @@ import { FiCheck, FiEye, FiPlus, FiX } from 'react-icons/fi';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import StatusBadge from '../../../../components/StatusBadge';
 import axiosInstance from '../../../../config/axiosInstance';
 import {
   getActionErrorMessage,
@@ -11,6 +12,7 @@ import {
   normalizeApiList,
   normalizeText,
 } from './paymentShared.jsx';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const API = { payments: 'compta/payments/' };
 const MEMORY_KEY = 'comptabilite:payments:index:v3';
@@ -88,16 +90,7 @@ const formatAmount = (payment) => (
 
 const StateBadge = ({ state }) => {
   const normalized = ['cancelled', 'canceled'].includes(state) ? 'cancel' : (state || 'draft');
-  const colors = {
-    posted: 'border-green-200 bg-green-50 text-green-700',
-    cancel: 'border-red-200 bg-red-50 text-red-700',
-    draft: 'border-amber-200 bg-amber-50 text-amber-700',
-  };
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${colors[normalized] || colors.draft}`}>
-      {STATES[normalized] || normalized}
-    </span>
-  );
+  return <StatusBadge status={normalized} label={STATES[normalized] || normalized} />;
 };
 
 export default function PaymentList() {
@@ -256,7 +249,7 @@ export default function PaymentList() {
     <div className="grid grid-cols-2 gap-4 p-4 text-xs">
       <div>
         <label className="mb-1 block font-semibold text-gray-700">Type de paiement</label>
-        <select
+        <SomaneSelect
           value={typeFilter}
           onChange={(event) => { setTypeFilter(event.target.value); setPage(1); }}
           className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500"
@@ -265,11 +258,11 @@ export default function PaymentList() {
           <option value="inbound">Encaissements</option>
           <option value="outbound">Décaissements</option>
           <option value="transfer">Transferts</option>
-        </select>
+        </SomaneSelect>
       </div>
       <div>
         <label className="mb-1 block font-semibold text-gray-700">État</label>
-        <select
+        <SomaneSelect
           value={stateFilter}
           onChange={(event) => { setStateFilter(event.target.value); setPage(1); }}
           className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500"
@@ -278,7 +271,7 @@ export default function PaymentList() {
           <option value="draft">Brouillons</option>
           <option value="posted">Validés</option>
           <option value="cancel">Annulés</option>
-        </select>
+        </SomaneSelect>
       </div>
     </div>
   ), [stateFilter, typeFilter]);

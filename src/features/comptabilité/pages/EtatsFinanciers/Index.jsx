@@ -18,6 +18,7 @@ import {
   fmt,
   fmtSigned,
 } from '../../../financial-reports/pages/statements-syscohada/shared';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const getYearStart = () => `${new Date().getFullYear()}-01-01`;
 const getYearEnd = () => `${new Date().getFullYear()}-12-31`;
@@ -797,11 +798,11 @@ export default function EtatsFinanciersComptabiliteSyscohadaExact() {
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <input className="sysc-filter-input" type="date" value={filters.date_from} onChange={(event) => setFilters((prev) => ({ ...prev, date_from: event.target.value }))} />
           <input className="sysc-filter-input" type="date" value={filters.date_to} onChange={(event) => setFilters((prev) => ({ ...prev, date_to: event.target.value }))} />
-          <select className="sysc-filter-input" value={filters.state} onChange={(event) => setFilters((prev) => ({ ...prev, state: event.target.value }))}>
+          <SomaneSelect className="sysc-filter-input" value={filters.state} onChange={(event) => setFilters((prev) => ({ ...prev, state: event.target.value }))}>
             <option value="posted">Comptabilisées</option>
             <option value="draft">Brouillons</option>
             <option value="all">Toutes</option>
-          </select>
+          </SomaneSelect>
           <button className="sysc-navbar-btn" onClick={loadData} disabled={loading}><FiRefreshCw size={12} /> Actualiser</button>
           <button className="sysc-navbar-btn" onClick={exportCsv}><FiDownload size={12} /> CSV</button>
           <button className="sysc-navbar-btn primary" onClick={() => window.print()}><FiPrinter size={12} /> Imprimer</button>

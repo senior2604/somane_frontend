@@ -14,6 +14,7 @@ import {
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
 import { useEntity } from '../../../../context/EntityContext';
 import { apiClient } from '../../../../services/apiClient';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const MESSAGE_DURATION = 15000;
 const PERCENTAGE_SCOPES = ['percent', 'on_total', 'on_tax'];
@@ -336,7 +337,7 @@ function RepartitionTable({ title, totalLabel, lines, setLines, accounts, taxGro
               return (
                 <tr key={line.key} className={index % 2 ? 'bg-gray-50/60' : 'bg-white'}>
                   <td className="border-r border-t border-gray-200 p-0">
-                    <select
+                    <SomaneSelect
                       value={line.repartition_type}
                       disabled={isBase}
                       onChange={(event) => updateLine(index, {
@@ -348,7 +349,7 @@ function RepartitionTable({ title, totalLabel, lines, setLines, accounts, taxGro
                       <option value="base">Base</option>
                       <option value="tax">Taxe</option>
                       <option value="delatax">De la taxe</option>
-                    </select>
+                    </SomaneSelect>
                   </td>
                   <td className="border-r border-t border-gray-200 p-0">
                     <div className="relative">
@@ -816,13 +817,13 @@ export default function WithholdingTaxForm({ mode = 'create' }) {
               <input value={form.name} onChange={(event) => updateForm('name', event.target.value)} className={inputClass} placeholder="Ex. Retenue TVA 50 %" />
             </Field>
             <Field label="Type" required>
-              <select value={form.withholding_type} onChange={(event) => updateForm('withholding_type', event.target.value)} className={inputClass}>
+              <SomaneSelect value={form.withholding_type} onChange={(event) => updateForm('withholding_type', event.target.value)} className={inputClass}>
                 <option value="partial">Partielle</option>
                 <option value="full">Totale</option>
-              </select>
+              </SomaneSelect>
             </Field>
             <Field label="Base de calcul" required>
-              <select
+              <SomaneSelect
                 value={form.withholding_scope}
                 onChange={(event) => {
                   updateForm('withholding_scope', event.target.value);
@@ -837,13 +838,13 @@ export default function WithholdingTaxForm({ mode = 'create' }) {
                 <option value="on_total">Pourcentage du montant TTC</option>
                 <option value="fixed">Montant fixe (forfaitaire)</option>
                 <option value="on_tax">Précompte de TVA</option>
-              </select>
+              </SomaneSelect>
             </Field>
             <Field label="Exigibilité" required>
-              <select value={form.withholding_eligibility} onChange={(event) => updateForm('withholding_eligibility', event.target.value)} className={inputClass}>
+              <SomaneSelect value={form.withholding_eligibility} onChange={(event) => updateForm('withholding_eligibility', event.target.value)} className={inputClass}>
                 <option value="on_invoice">Sur facture</option>
                 <option value="on_payment">Sur paiement</option>
-              </select>
+              </SomaneSelect>
             </Field>
             <Field label={form.withholding_scope === 'fixed' ? 'Montant fixe' : 'Taux'} required>
               <div className="relative">

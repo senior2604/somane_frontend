@@ -9,6 +9,7 @@ import {
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
 import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const DOCUMENT_SEQUENCE_TYPES = [
   {
@@ -95,19 +96,9 @@ const renderPreview = (sequence, examplePrefix = 'ACH') => {
   return `${prefix}${padNumber(next, sequence.padding)}${sequence.suffix || ''}`;
 };
 
-const Tooltip = ({ children, text }) => {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative inline-block" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-      {children}
-      {show && (
-        <div className="absolute bottom-full left-1/2 z-50 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white">
-          {text}
-        </div>
-      )}
-    </div>
-  );
-};
+const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 const RequiredLabel = ({ children, required = false }) => (
   <label className="w-[150px] flex-shrink-0 text-xs font-medium text-gray-700">
@@ -299,7 +290,7 @@ export default function SequencesCreate() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="flex items-center" style={{ height: '26px' }}>
               <RequiredLabel required>Type de document</RequiredLabel>
-              <select
+              <SomaneSelect
                 value={formData.code}
                 onChange={(event) => handleTypeChange(event.target.value)}
                 className="ml-2 h-[26px] flex-1 border border-gray-300 bg-white px-2 py-1 text-xs transition-colors hover:border-purple-400 focus:border-purple-600 focus:outline-none"
@@ -308,7 +299,7 @@ export default function SequencesCreate() {
                 {DOCUMENT_SEQUENCE_TYPES.map((type) => (
                   <option key={type.code} value={type.code}>{type.label}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
             <div className="flex items-center" style={{ height: '26px' }}>
               <RequiredLabel required>Nom</RequiredLabel>

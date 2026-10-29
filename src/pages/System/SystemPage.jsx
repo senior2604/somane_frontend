@@ -546,8 +546,8 @@ export default function SystemPage() {
 
       {/* Modal de maintenance */}
       {showMaintenanceModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+          <div className="bg-white rounded-lg w-full max-w-md shadow-xl somane-modal-surface">
             <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-t-lg p-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -618,8 +618,8 @@ export default function SystemPage() {
 
       {/* Modal de détail de log */}
       {showLogDetailModal && selectedLog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+          <div className="bg-white rounded-lg w-full max-w-md shadow-xl somane-modal-surface">
             <div className="sticky top-0 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded-t-lg p-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

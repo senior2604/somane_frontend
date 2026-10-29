@@ -9,6 +9,7 @@ import {
   FiLayers, FiCode, FiEye, FiEyeOff, FiCopy,
 } from 'react-icons/fi';
 import { apiClient } from '../../../services/apiClient';
+import SomaneSelect from '../../../components/SomaneSelect';
 
 // ── CONSTANTES (identiques à FinancialReportConfig) ───────────────────────────
 
@@ -598,7 +599,7 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
               {/* Type de ligne */}
               <div>
                 <label style={S.label}>Type de ligne</label>
-                <select
+                <SomaneSelect
                   value={line.line_type}
                   onChange={e => updateLine('line_type', e.target.value)}
                   style={S.select}
@@ -606,13 +607,13 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
                   {Object.entries(LINE_TYPE_CONFIG).map(([v, c]) => (
                     <option key={v} value={v}>{c.label}</option>
                   ))}
-                </select>
+                </SomaneSelect>
               </div>
 
               {/* Classification (signe) */}
               <div>
                 <label style={S.label}>Classification</label>
-                <select
+                <SomaneSelect
                   value={Number(line.sign)}
                   onChange={e => updateLine('sign', Number(e.target.value))}
                   style={{
@@ -625,7 +626,7 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
                   {SIGN_OPTIONS.map(o => (
                     <option key={o.value} value={o.value}>{o.badge} — {o.label}</option>
                   ))}
-                </select>
+                </SomaneSelect>
               </div>
 
               {/* Séquence */}
@@ -893,7 +894,7 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
                             {/* Opérateur */}
                             <td style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9', borderRight: '1px solid #f1f5f9', textAlign: 'center' }}>
                               <Tip text={idx === 0 ? "Opérateur d'initialisation" : "Combine avec les expressions précédentes"}>
-                                <select
+                                <SomaneSelect
                                   value={expr.operator}
                                   onChange={e => updateExpr(expr._uid, 'operator', e.target.value)}
                                   style={{
@@ -908,13 +909,13 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
                                   {OPERATOR_OPTIONS.map(o => (
                                     <option key={o.value} value={o.value}>{o.sym}</option>
                                   ))}
-                                </select>
+                                </SomaneSelect>
                               </Tip>
                             </td>
 
                             {/* Type */}
                             <td style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9', borderRight: '1px solid #f1f5f9' }}>
-                              <select
+                              <SomaneSelect
                                 value={expr.expression_type}
                                 onChange={e => updateExpr(expr._uid, 'expression_type', e.target.value)}
                                 style={{
@@ -927,7 +928,7 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
                                 {EXP_TYPE_OPTIONS.map(o => (
                                   <option key={o.value} value={o.value}>{o.label}</option>
                                 ))}
-                              </select>
+                              </SomaneSelect>
                             </td>
 
                             {/* Formule */}
@@ -950,7 +951,7 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
                             {/* ── NOUVEAU : Colonne cible (column_target) ── */}
                             <td style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9', borderRight: '1px solid #f1f5f9' }}>
                               <Tip text={ctOpt.hint}>
-                                <select
+                                <SomaneSelect
                                   value={expr.column_target || 'net'}
                                   onChange={e => updateExpr(expr._uid, 'column_target', e.target.value)}
                                   style={{
@@ -968,7 +969,7 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
                                       {o.badge} — {o.label}
                                     </option>
                                   ))}
-                                </select>
+                                </SomaneSelect>
                               </Tip>
                             </td>
 
@@ -976,7 +977,7 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
                             <td style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9', borderRight: '1px solid #f1f5f9' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <ScopeBadge value={expr.date_scope} size="xs" />
-                                <select
+                                <SomaneSelect
                                   value={expr.date_scope}
                                   onChange={e => updateExpr(expr._uid, 'date_scope', e.target.value)}
                                   style={{
@@ -989,7 +990,7 @@ export default function LineDetailEditor({ line: initialLine, report, onClose, o
                                   {DATE_SCOPE_OPTIONS.map(o => (
                                     <option key={o.value} value={o.value}>{o.col} — {o.label}</option>
                                   ))}
-                                </select>
+                                </SomaneSelect>
                               </div>
                             </td>
 

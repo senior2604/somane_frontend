@@ -25,6 +25,7 @@ import {
   FiDownload
 } from "react-icons/fi";
 import { FaFileExcel, FaFilePdf } from "react-icons/fa";
+import SomaneSelect from '../../../components/SomaneSelect';
 
 export default function VenteTableContainer({
   data = [],
@@ -593,7 +594,7 @@ export default function VenteTableContainer({
         </div>
 
         {/* Sélection du nombre de lignes */}
-        <select
+        <SomaneSelect
           value={itemsPerPage}
           onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
           className="ml-auto border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
@@ -602,7 +603,7 @@ export default function VenteTableContainer({
           <option value={10}>10 lignes</option>
           <option value={20}>20 lignes</option>
           <option value={50}>50 lignes</option>
-        </select>
+        </SomaneSelect>
       </div>
 
       {/* Message d'erreur */}

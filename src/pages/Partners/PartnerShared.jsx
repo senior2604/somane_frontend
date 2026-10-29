@@ -3,40 +3,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FiAlertCircle, FiCheck, FiChevronDown, FiChevronUp, FiGlobe, FiMap, FiMapPin, FiSearch } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
 import { useUi } from '../../context/UiContext';
+import SomaneSelect from '../../components/SomaneSelect';
 
 // ==========================================
 // COMPOSANT TOOLTIP
 // ==========================================
-export const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-
-  return (
-    <div className="relative inline-block">
-      <div
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-      >
-        {children}
-      </div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-            'right-full top-1/2 -translate-y-1/2 -mr-1'
-          }`} />
-        </div>
-      )}
-    </div>
-  );
-};
+export const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 export const parseResponse = (response) => {
   if (!response) return [];
@@ -402,13 +376,11 @@ function FormField({ label, required, error, help, children }) {
             <details className="group relative flex-shrink-0">
               <summary
                 aria-label={`Aide pour ${label}`}
+                data-tooltip={help}
                 className="list-none cursor-pointer select-none w-4 h-4 rounded-full border border-gray-400 text-gray-500 hover:border-purple-500 hover:text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400 flex items-center justify-center text-[10px] leading-none"
               >
                 ?
               </summary>
-              <span role="tooltip" className="absolute z-50 left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-open:block w-64 rounded-md bg-gray-900 px-3 py-2 text-xs leading-relaxed font-normal text-white shadow-lg">
-                {help}
-              </span>
             </details>
           )}
         </div>
@@ -461,25 +433,25 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
         const options = field.selection.length
           ? field.selection.map((option) => ({ value: option.value, label: option.label || option.name || option.value }))
           : PARTNER_TYPES;
-        control = <select value={formData[name] || ''} onChange={(event) => setField(name, event.target.value)} className={inputClass(name)} disabled={disabled}>
+        control = <SomaneSelect value={formData[name] || ''} onChange={(event) => setField(name, event.target.value)} className={inputClass(name)} disabled={disabled}>
           {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>;
+        </SomaneSelect>;
       } else if (name === 'statut' || name === 'is_company') {
         const trueLabel = name === 'statut' ? 'Actif' : 'Société';
         const falseLabel = name === 'statut' ? 'Inactif' : 'Personne';
-        control = <select value={formData[name] ? 'true' : 'false'} onChange={(event) => setField(name, event.target.value === 'true')} className={inputClass(name)} disabled={disabled}>
+        control = <SomaneSelect value={formData[name] ? 'true' : 'false'} onChange={(event) => setField(name, event.target.value === 'true')} className={inputClass(name)} disabled={disabled}>
           <option value="true">{trueLabel}</option><option value="false">{falseLabel}</option>
-        </select>;
+        </SomaneSelect>;
       } else if (type === 'selection') {
-        control = <select value={formData[name] ?? ''} onChange={(event) => setField(name, event.target.value)} className={inputClass(name)} disabled={disabled}>
+        control = <SomaneSelect value={formData[name] ?? ''} onChange={(event) => setField(name, event.target.value)} className={inputClass(name)} disabled={disabled}>
           <option value="">— Sélectionner —</option>
           {field.selection.map((option) => <option key={option.value} value={option.value}>{option.label || option.name || option.value}</option>)}
-        </select>;
+        </SomaneSelect>;
       } else if (type === 'boolean') {
         const booleanValue = formData[name] === true ? 'true' : formData[name] === false ? 'false' : '';
-        control = <select value={booleanValue} onChange={(event) => setField(name, event.target.value === '' ? '' : event.target.value === 'true')} className={inputClass(name)} disabled={disabled}>
+        control = <SomaneSelect value={booleanValue} onChange={(event) => setField(name, event.target.value === '' ? '' : event.target.value === 'true')} className={inputClass(name)} disabled={disabled}>
           <option value="">— Sélectionner —</option><option value="true">Oui</option><option value="false">Non</option>
-        </select>;
+        </SomaneSelect>;
       } else if (type === 'text' || type === 'html') {
         control = <textarea {...commonProps} value={formData[name] ?? ''} rows={3} readOnly={disabled} />;
       } else {
@@ -514,23 +486,23 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
                 <input value={formData.nom} onChange={(e) => setField('nom', e.target.value)} className={inputClass('nom')} style={{ height: 26 }} />
               </FormField>
               <FormField label="Nature" help={PARTNER_FIELD_HELP.is_company}>
-                <select value={formData.is_company ? 'company' : 'person'} onChange={(e) => setField('is_company', e.target.value === 'company')} className={inputClass('is_company')} style={{ height: 26 }}>
+                <SomaneSelect value={formData.is_company ? 'company' : 'person'} onChange={(e) => setField('is_company', e.target.value === 'company')} className={inputClass('is_company')} style={{ height: 26 }}>
                   <option value="company">Société</option>
                   <option value="person">Personne</option>
-                </select>
+                </SomaneSelect>
               </FormField>
             </div>
             <div className="space-y-2">
               <FormField label="Type" required error={fieldErrors?.type_partenaire} help={PARTNER_FIELD_HELP.type_partenaire}>
-                <select value={formData.type_partenaire} onChange={(e) => setField('type_partenaire', e.target.value)} className={inputClass('type_partenaire')} style={{ height: 26 }}>
+                <SomaneSelect value={formData.type_partenaire} onChange={(e) => setField('type_partenaire', e.target.value)} className={inputClass('type_partenaire')} style={{ height: 26 }}>
                   {PARTNER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
+                </SomaneSelect>
               </FormField>
               <FormField label="Statut" help={PARTNER_FIELD_HELP.statut}>
-                <select value={formData.statut ? 'actif' : 'inactif'} onChange={(e) => setField('statut', e.target.value === 'actif')} className={inputClass('statut')} style={{ height: 26 }}>
+                <SomaneSelect value={formData.statut ? 'actif' : 'inactif'} onChange={(e) => setField('statut', e.target.value === 'actif')} className={inputClass('statut')} style={{ height: 26 }}>
                   <option value="actif">Actif</option>
                   <option value="inactif">Inactif</option>
-                </select>
+                </SomaneSelect>
               </FormField>
             </div>
           </div>

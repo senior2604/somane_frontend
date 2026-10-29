@@ -1,5 +1,6 @@
 import React from 'react';
-import JournalRow from './JournalRow'; // IMPORT CORRECT
+import JournalRow from './JournalRow';
+import SomaneSelect from '../../../../../components/SomaneSelect'; // IMPORT CORRECT
 
 export default function JournalTable({ 
   journaux, 
@@ -47,7 +48,7 @@ export default function JournalTable({
             </span>
           </div>
           
-          <select
+          <SomaneSelect
             value={itemsPerPage}
             onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
             className="text-sm border border-gray-300 rounded px-2 py-1"
@@ -55,7 +56,7 @@ export default function JournalTable({
             <option value={10}>10 par page</option>
             <option value={25}>25 par page</option>
             <option value={50}>50 par page</option>
-          </select>
+          </SomaneSelect>
         </div>
       </div>
 

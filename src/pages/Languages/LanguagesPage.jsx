@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../services/apiClient';
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function LanguesPage() {
   const [langues, setLangues] = useState([]);
@@ -194,7 +195,7 @@ export default function LanguesPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Sens d'écriture</label>
-            <select
+            <SomaneSelect
               value={filterSens}
               onChange={(e) => setFilterSens(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -202,7 +203,7 @@ export default function LanguesPage() {
               <option value="">Tous les sens</option>
               <option value="LTR">Gauche → Droite</option>
               <option value="RTL">Droite → Gauche</option>
-            </select>
+            </SomaneSelect>
           </div>
           <div className="flex items-end">
             <button
@@ -336,7 +337,7 @@ export default function LanguesPage() {
                 <span className="text-sm text-gray-700">
                   Lignes par page:
                 </span>
-                <select
+                <SomaneSelect
                   value={itemsPerPage}
                   onChange={(e) => {
                     setItemsPerPage(Number(e.target.value));
@@ -348,7 +349,7 @@ export default function LanguesPage() {
                   <option value={10}>10</option>
                   <option value={20}>20</option>
                   <option value={50}>50</option>
-                </select>
+                </SomaneSelect>
                 <span className="text-sm text-gray-700">
                   {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredLangues.length)} sur {filteredLangues.length}
                 </span>
@@ -490,8 +491,8 @@ function LangueFormModal({ langue, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
             {langue ? 'Modifier la langue' : 'Créer une nouvelle langue'}

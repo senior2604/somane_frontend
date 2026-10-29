@@ -6,6 +6,7 @@ import {
   FiEye, FiCheckCircle, FiXCircle, FiUserCheck, FiShield, FiFolder,
   FiKey, FiLock, FiUnlock, FiMoreVertical
 } from "react-icons/fi";
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function GroupsPage() {
   const [groupes, setGroupes] = useState([]);
@@ -342,7 +343,7 @@ export default function GroupsPage() {
               <button className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600">
                 <FiUpload size={16} />
               </button>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
@@ -354,7 +355,7 @@ export default function GroupsPage() {
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
                 <option value={50}>50 lignes</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -626,8 +627,8 @@ function GroupDetailModal({ group, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
@@ -809,8 +810,8 @@ function GroupFormModal({ group, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal avec gradient - COMPACT */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">

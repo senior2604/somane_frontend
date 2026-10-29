@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { FiArrowLeft, FiSave } from 'react-icons/fi';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 export default function LignesDemandeAchatEdit() {
   const { id } = useParams();
@@ -114,7 +115,7 @@ export default function LignesDemandeAchatEdit() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Demande d'Achat <span className="text-red-500">*</span>
             </label>
-            <select
+            <SomaneSelect
               name="demande_achat_id"
               value={formData.demande_achat_id}
               onChange={handleChange}
@@ -127,7 +128,7 @@ export default function LignesDemandeAchatEdit() {
               {demandesAchat.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
             {errors.demande_achat_id && <p className="text-red-500 text-sm mt-1">{errors.demande_achat_id}</p>}
           </div>
 
@@ -136,7 +137,7 @@ export default function LignesDemandeAchatEdit() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Produit <span className="text-red-500">*</span>
             </label>
-            <select
+            <SomaneSelect
               name="product_id"
               value={formData.product_id}
               onChange={handleChange}
@@ -149,7 +150,7 @@ export default function LignesDemandeAchatEdit() {
               {produits.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
             {errors.product_id && <p className="text-red-500 text-sm mt-1">{errors.product_id}</p>}
           </div>
 

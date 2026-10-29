@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { FiSave, FiPlus, FiChevronDown, FiCopy, FiTrash2, FiRotateCcw } from 'react-icons/fi';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 export default function LignesBonCommandeCreate() {
   const navigate = useNavigate();
@@ -222,17 +223,17 @@ export default function LignesBonCommandeCreate() {
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">Bon Commande *</p>
-            <select name="bon_commande_id" value={formData.bon_commande_id} onChange={handleChange} className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500" required>
+            <SomaneSelect name="bon_commande_id" value={formData.bon_commande_id} onChange={handleChange} className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500" required>
               <option value="">Sélectionner</option>
               {bonsCommande.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}
-            </select>
+            </SomaneSelect>
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">Produit *</p>
-            <select name="product_id" value={formData.product_id} onChange={handleChange} className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500" required>
+            <SomaneSelect name="product_id" value={formData.product_id} onChange={handleChange} className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500" required>
               <option value="">Sélectionner</option>
               {produits.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
-            </select>
+            </SomaneSelect>
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">Quantité *</p>
@@ -261,16 +262,16 @@ export default function LignesBonCommandeCreate() {
                 {lignes.map((ligne, index) => (
                   <tr key={ligne.id}>
                     <td className="px-2 py-1.5 border border-gray-300 w-40">
-                      <select value={ligne.bon_commande} onChange={(e) => handleLigneChange(index, 'bon_commande', e.target.value)} className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent">
+                      <SomaneSelect value={ligne.bon_commande} onChange={(e) => handleLigneChange(index, 'bon_commande', e.target.value)} className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent">
                         <option value="">Sélectionner</option>
                         {bonsCommande.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}
-                      </select>
+                      </SomaneSelect>
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300 w-40">
-                      <select value={ligne.produit} onChange={(e) => handleLigneChange(index, 'produit', e.target.value)} className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent">
+                      <SomaneSelect value={ligne.produit} onChange={(e) => handleLigneChange(index, 'produit', e.target.value)} className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent">
                         <option value="">Sélectionner</option>
                         {produits.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
-                      </select>
+                      </SomaneSelect>
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300 w-20">
                       <input type="text" value={ligne.quantite} onChange={(e) => handleLigneChange(index, 'quantite', e.target.value)} className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs text-right bg-transparent" />

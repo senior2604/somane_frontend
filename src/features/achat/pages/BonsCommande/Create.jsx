@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiPlus, FiTrash2, FiCheck, FiPaperclip, FiUpload, FiCopy, FiRotateCcw, FiMoreVertical, FiSave, FiX } from 'react-icons/fi';
 import { apiClient } from '../../../../services/apiClient';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 // ==========================================
 // COMPOSANT AUTOCOMPLETE RÉUTILISABLE
@@ -1043,7 +1044,7 @@ export default function BonsCommandeCreate() {
                         </td>
                         
                         <td className="border border-gray-300 p-1">
-                          <select
+                          <SomaneSelect
                             value={line.taxes}
                             onChange={(e) => handleLineChange(lineIndex, 'taxes', e.target.value)}
                             className="w-full px-2 py-1 border-0 text-xs focus:ring-1 focus:ring-blue-500 bg-transparent"
@@ -1052,7 +1053,7 @@ export default function BonsCommandeCreate() {
                             <option value="0">0%</option>
                             <option value="18">18%</option>
                             <option value="20">20%</option>
-                          </select>
+                          </SomaneSelect>
                         </td>
                         
                         <td className="border border-gray-300 p-1">
@@ -1165,8 +1166,8 @@ export default function BonsCommandeCreate() {
 
       {/* Dialogue de confirmation pour ignorer les modifications */}
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+          <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4 somane-modal-surface">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Ignorer les modifications ?</h3>
             <p className="text-sm text-gray-600 mb-6">
               Êtes-vous sûr de vouloir annuler toutes les modifications ? Cette action ne peut pas être annulée.

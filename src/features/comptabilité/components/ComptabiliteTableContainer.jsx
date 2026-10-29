@@ -18,6 +18,7 @@ import {
 } from "react-icons/fi";
 import { FaFileExcel, FaFilePdf } from "react-icons/fa";
 import { TbBuildingSkyscraper } from "react-icons/tb";
+import SomaneSelect from '../../../components/SomaneSelect';
 
 export default function ComptabiliteTableContainer({
   data = [],
@@ -512,7 +513,7 @@ export default function ComptabiliteTableContainer({
         </div>
 
         {/* ✅ SELECT "10 LIGNES" — ISOLÉ À DROITE */}
-        <select
+        <SomaneSelect
           value={itemsPerPage}
           onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
           className="ml-auto border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
@@ -521,7 +522,7 @@ export default function ComptabiliteTableContainer({
           <option value={10}>10 lignes</option>
           <option value={20}>20 lignes</option>
           <option value={50}>50 lignes</option>
-        </select>
+        </SomaneSelect>
       </div>
 
       {error && (

@@ -4,6 +4,7 @@ import { FiAlertCircle, FiCheck, FiEye, FiPlus, FiRefreshCw, FiTrash2, FiX } fro
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import StatusBadge from '../../../../components/StatusBadge';
 import axiosInstance from '../../../../config/axiosInstance';
 import {
   getActionErrorMessage,
@@ -11,6 +12,7 @@ import {
   normalizeApiList,
   normalizeText,
 } from '../payement/paymentShared.jsx';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const API = { loans: 'compta/loans/' };
 const MEMORY_KEY = 'comptabilite:loans:index:v1';
@@ -82,17 +84,7 @@ const partnerLabel = (loan) => (
 
 const StateBadge = ({ state }) => {
   const normalizedState = normalizeLoanState(state);
-  const styles = {
-    draft: 'border-amber-200 bg-amber-50 text-amber-700',
-    in_progress: 'border-green-200 bg-green-50 text-green-700',
-    closed: 'border-blue-200 bg-blue-50 text-blue-700',
-    cancelled: 'border-red-200 bg-red-50 text-red-700',
-  };
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${styles[normalizedState]}`}>
-      {STATES[normalizedState]}
-    </span>
-  );
+  return <StatusBadge status={normalizedState} label={STATES[normalizedState]} />;
 };
 
 export default function LoanList() {
@@ -368,17 +360,17 @@ export default function LoanList() {
     <div className="grid grid-cols-1 gap-4 p-4 text-xs sm:grid-cols-2">
       <div>
         <label className="mb-1 block font-semibold text-gray-700">État</label>
-        <select value={stateFilter} onChange={(event) => { setStateFilter(event.target.value); setPage(1); }} className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">
+        <SomaneSelect value={stateFilter} onChange={(event) => { setStateFilter(event.target.value); setPage(1); }} className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">
           <option value="all">Tous les états</option>
           {Object.entries(STATES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
+        </SomaneSelect>
       </div>
       <div>
         <label className="mb-1 block font-semibold text-gray-700">Prêteur</label>
-        <select value={partnerFilter} onChange={(event) => { setPartnerFilter(event.target.value); setPage(1); }} className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">
+        <SomaneSelect value={partnerFilter} onChange={(event) => { setPartnerFilter(event.target.value); setPage(1); }} className="h-9 w-full border border-gray-300 bg-white px-2 outline-none focus:border-purple-500">
           <option value="all">Tous les prêteurs</option>
           {partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.label}</option>)}
-        </select>
+        </SomaneSelect>
       </div>
     </div>
   ), [partnerFilter, partners, stateFilter]);
@@ -438,7 +430,7 @@ export default function LoanList() {
       />
 
       {pendingAction && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/35 p-4" role="presentation">
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/35 p-4 somane-overlay-backdrop" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="loan-list-action-title" className="w-full max-w-md border border-gray-300 bg-white shadow-2xl">
             <div className="flex items-start gap-3 border-b border-gray-200 px-5 py-4">
               <FiAlertCircle className={pendingAction.danger ? 'mt-0.5 shrink-0 text-red-600' : 'mt-0.5 shrink-0 text-purple-600'} size={18} />

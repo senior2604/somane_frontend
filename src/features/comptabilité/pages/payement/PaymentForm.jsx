@@ -18,6 +18,8 @@ import {
 } from 'react-icons/fi';
 import axiosInstance from '../../../../config/axiosInstance';
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
+import ColumnVisibilityMenu from '../../../../components/ColumnVisibilityMenu';
+import StatusTrack from '../../../../components/StatusTrack';
 
 const API = {
   payments: 'compta/payments/',
@@ -450,29 +452,7 @@ const Field = ({ label, required, children }) => (
 );
 
 const PaymentProcess = ({ state }) => {
-  return (
-    <div className="flex shrink-0 items-center gap-2">
-      {PAYMENT_PROCESS_STEPS.map((step) => {
-        const isActive = step.id === state;
-        const colorClass = !isActive
-          ? 'border-gray-300 bg-gray-100 text-gray-500'
-          : step.id === 'draft'
-            ? 'border-yellow-300 bg-yellow-100 text-yellow-700'
-            : step.id === 'processing'
-              ? 'border-purple-300 bg-purple-100 text-purple-700'
-              : 'border-green-300 bg-green-100 text-green-700';
-
-        return (
-          <div
-            key={step.id}
-            className={`flex h-8 items-center border px-3 text-xs font-medium ${colorClass}`}
-          >
-            {step.label}
-          </div>
-        );
-      })}
-    </div>
-  );
+  return <StatusTrack steps={PAYMENT_PROCESS_STEPS} currentState={state} label="États du paiement" />;
 };
 
 const loadPaymentOptions = async (entityId) => {
@@ -1688,22 +1668,22 @@ export default function PaymentForm({ mode = 'create' }) {
   );
 
   const traceabilityContent = (
-    <div className="px-4 py-3">
-      <div className="mb-3 flex items-center justify-between text-xs">
+    <div className="somane-traceability-feed px-4 py-3">
+      <div className="somane-traceability-feed__summary mb-3 flex items-center justify-between text-xs">
         <span className="font-medium text-gray-700">Activité liée au paiement</span>
         <span className="text-gray-500">{displayedTraceability.length} événement(s)</span>
       </div>
-      <div className="space-y-2">
+      <div className="somane-traceability-feed__events space-y-2">
         {displayedTraceability.length === 0 ? (
-          <div className="border border-gray-200 bg-white p-3 text-xs text-gray-500">Aucune activité enregistrée.</div>
+          <div className="somane-traceability-feed__empty border border-gray-200 bg-white p-3 text-xs text-gray-500">Aucune activité enregistrée.</div>
         ) : displayedTraceability.map((event) => (
-          <div key={event.id} className="border border-gray-200 bg-white p-3">
+          <div key={event.id} className="somane-traceability-event border border-gray-200 bg-white p-3">
             <div className="flex items-start gap-2">
               <FiClock className="mt-0.5 shrink-0 text-purple-600" size={14} />
               <div className="min-w-0">
-                <div className="text-xs font-semibold text-gray-900">{event.action || 'Action'}</div>
-                <div className="text-xs text-gray-600">{event.description || event.object_label || '-'}</div>
-                <div className="mt-1 text-[11px] text-gray-400">Par {event.user_label || event.create_uid_label || event.user_name || 'Utilisateur'} - {formatDateTime(event.created_at || event.create_date)}</div>
+                <div className="somane-traceability-event__title text-xs font-semibold text-gray-900">{event.action || 'Action'}</div>
+                <div className="somane-traceability-event__description text-xs text-gray-600">{event.description || event.object_label || '-'}</div>
+                <div className="somane-traceability-event__meta mt-1 text-[11px] text-gray-400">Par {event.user_label || event.create_uid_label || event.user_name || 'Utilisateur'} - {formatDateTime(event.created_at || event.create_date)}</div>
               </div>
             </div>
           </div>
@@ -1713,7 +1693,7 @@ export default function PaymentForm({ mode = 'create' }) {
   );
 
   const actionDialog = pendingAction && (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/35 p-4" role="presentation">
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/35 p-4 somane-overlay-backdrop" role="presentation">
       <div role="dialog" aria-modal="true" aria-labelledby="payment-action-title" className="w-full max-w-md border border-gray-300 bg-white shadow-2xl">
         <div className="flex items-start gap-3 border-b border-gray-200 px-5 py-4">
           <FiInfo className={pendingAction.danger ? 'mt-0.5 text-red-600' : 'mt-0.5 text-purple-600'} size={18} />
@@ -1867,9 +1847,9 @@ export default function PaymentForm({ mode = 'create' }) {
 
         {activeTab === 'accounting' ? (
           <div className="px-4 py-4">
-            <div className="payment-accounting-scroll mb-3 max-h-[52vh] overflow-auto">
+            <div className="somane-form-table-scroll payment-accounting-scroll mb-3 max-h-[52vh] overflow-auto">
               <table
-                className="table-fixed border-collapse text-xs"
+                className="somane-form-table table-fixed"
                 style={{ minWidth: `${paymentTableColumns.reduce((sum, column) => sum + (paymentColumnWidths[column.key] || DEFAULT_PAYMENT_COLUMN_WIDTHS[column.key] || 120), 0)}px` }}
               >
                 <colgroup>
@@ -1884,16 +1864,12 @@ export default function PaymentForm({ mode = 'create' }) {
                         className={`relative border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 ${column.numeric ? 'text-right' : 'text-left'}`}
                       >
                         {column.key === 'actions' ? (
-                          <button
-                            ref={paymentColumnsButtonRef}
-                            type="button"
-                            onClick={togglePaymentColumnsMenu}
-                            className="w-full text-left hover:text-purple-600"
-                            aria-label="Afficher ou masquer les colonnes"
-                            title="Afficher ou masquer les colonnes"
-                          >
-                            ...
-                          </button>
+                          <ColumnVisibilityMenu
+                            columns={PAYMENT_OPTIONAL_COLUMNS}
+                            isVisible={(key) => paymentColumnVisibility[key] !== false}
+                            onToggle={togglePaymentColumn}
+                            allowEmpty
+                          />
                         ) : column.label}
                         <span
                           role="separator"
@@ -1980,25 +1956,6 @@ export default function PaymentForm({ mode = 'create' }) {
                   </tfoot>
                 </table>
               </div>
-              {showPaymentColumnsMenu && (
-                <div
-                  ref={paymentColumnsPopupRef}
-                  className="w-44 border border-t-0 border-gray-300 bg-white shadow-lg"
-                  style={paymentColumnsMenuStyle}
-                >
-                  {PAYMENT_OPTIONAL_COLUMNS.map((column) => (
-                    <label key={column.key} className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
-                      <input
-                        type="checkbox"
-                        checked={paymentColumnVisibility[column.key] !== false}
-                        onChange={() => togglePaymentColumn(column.key)}
-                        className="h-3 w-3"
-                      />
-                      <span>{column.label}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
             <div className="mt-2 flex items-center justify-between gap-4 text-[11px] text-gray-500">
               <span>{formData.account_move ? 'Lignes comptables enregistrées' : 'Prévisualisation avant validation'}</span>
               {electronicPayment && <span>Les frais sont intégrés au mouvement de trésorerie.</span>}

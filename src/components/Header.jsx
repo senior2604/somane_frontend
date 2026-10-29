@@ -6,13 +6,14 @@ import {
   FiChevronDown,
   FiUser,
   FiPower,
-  FiGrid,
   FiPlus,
   FiBriefcase,
   FiHelpCircle,
   FiSettings,
   FiWifi,
-  FiCode
+  FiCode,
+  FiMenu,
+  FiX,
 } from "react-icons/fi";
 import { useEntity } from '../context/EntityContext';
 import { useOptionalUi } from '../context/UiContext';
@@ -385,6 +386,7 @@ export default function UnifiedHeader() {
   const isAccountingModulePage = location.pathname.startsWith('/comptabilite/');
   const [showModules, setShowModules] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState(null);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [showEntityMenu, setShowEntityMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [userEntities, setUserEntities] = useState([]);
@@ -395,6 +397,24 @@ export default function UnifiedHeader() {
   const navMenuRef = useRef(null);
   const entityMenuRef = useRef(null);
   const userMenuRef = useRef(null);
+
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+    setHoveredCategory(null);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const closeMenusOnEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      setIsMobileNavOpen(false);
+      setHoveredCategory(null);
+      setShowModules(false);
+      setShowEntityMenu(false);
+      setShowUserMenu(false);
+    };
+    document.addEventListener('keydown', closeMenusOnEscape);
+    return () => document.removeEventListener('keydown', closeMenusOnEscape);
+  }, []);
 
   const { activeEntity, selectEntity } = useEntity();
   const ui = useOptionalUi();
@@ -561,16 +581,20 @@ export default function UnifiedHeader() {
   ));
 
   return (
-    <header className={isAccountingModulePage ? "sticky top-0 z-40 bg-white" : "sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm"}>
-      <div className="px-6 py-3">
-        <div className="flex items-center justify-between">
+    <header className={isAccountingModulePage ? "somane-global-header somane-global-header--accounting sticky top-0 z-40" : "somane-global-header sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm"}>
+      <div className="somane-global-header__inner px-6">
+        <div className="somane-global-header__row flex items-center justify-between">
           {/* GAUCHE - SIMPLIFIEE : Seulement icone menu */}
-          <div className="flex items-center">
+          <div className="somane-global-header__module-picker flex items-center">
             {/* Menu des modules */}
             <div className="relative" ref={modulesMenuRef}>
               <button
+                type="button"
                 onClick={() => !isOnEntitySelectionPage && setShowModules(!showModules)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                aria-haspopup="true"
+                aria-expanded={showModules}
+                aria-controls="somane-module-menu"
+                className={`somane-global-header__module-trigger flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                   isOnEntitySelectionPage
                     ? "text-gray-400 opacity-50 cursor-not-allowed"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
@@ -578,15 +602,20 @@ export default function UnifiedHeader() {
                 title={isOnEntitySelectionPage ? "Navigation desactivee sur cette page" : "Changer de module"}
                 disabled={isOnEntitySelectionPage}
               >
-                <FiGrid size={18} />
-                <span className="text-sm font-medium">{currentModule.name}</span>
+                <img
+                  src="/somane-mark.png"
+                  alt=""
+                  aria-hidden="true"
+                  className="somane-global-header__brand-mark"
+                />
+                <span className="somane-global-header__module-name text-sm font-medium">{currentModule.name}</span>
                 <FiChevronDown size={14} className={`transition-transform ${showModules ? "rotate-180" : ""}`} />
               </button>
 
               {showModules && !isOnEntitySelectionPage && (
                   <div
-                    onMouseLeave={() => setShowModules(false)}
-                    className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-300 shadow-lg rounded z-50"
+                    id="somane-module-menu"
+                    className="somane-nav-menu absolute top-full left-0 mt-1 w-44 bg-white border border-gray-300 shadow-lg rounded z-50"
                   >
                     <div className="px-4 py-2 border-b border-gray-200">
                       <p className="text-xs text-gray-500 font-medium">Modules ERP</p>
@@ -599,8 +628,8 @@ export default function UnifiedHeader() {
                             navigate(module.path + (module.path === "/dashboard" ? "" : "/dashboard"));
                             setShowModules(false);
                           }}
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-gray-50 ${
-                            module.id === currentModule.id ? `${getColorClasses(module.color, "text")} font-medium` : "text-gray-700"
+                          className={`somane-nav-menu__item w-full text-left px-4 py-2 text-sm transition-colors hover:bg-gray-50 ${
+                            module.id === currentModule.id ? `${getColorClasses(module.color, "text")} font-medium is-active` : "text-gray-700"
                           }`}
                         >
                           {module.name}
@@ -614,18 +643,24 @@ export default function UnifiedHeader() {
 
           {/* CENTRE : Navigation specifique au module - UNIQUEMENT SI ELLE EXISTE */}
           {!isOnEntitySelectionPage && navigation.length > 0 && (
-            <nav className="flex items-center gap-6" ref={navMenuRef}>
-              {visibleNavigation.map((item) => {
+            <nav id="somane-primary-navigation" className={`somane-primary-nav flex items-center gap-6${isMobileNavOpen ? ' is-open' : ''}`} ref={navMenuRef} aria-label="Navigation principale">
+              {visibleNavigation.map((item, index) => {
                 const hasItems = item.items?.length > 0;
                 const hasActiveItem = isActive(item.path) || item.items?.some((sub) => isActive(sub.path)) || false;
+                const menuId = `somane-primary-menu-${index}`;
 
                 return (
                   <div
                     key={item.name}
-                    className="relative"
+                    className="somane-primary-nav__item relative"
                   >
                     <div className="py-2 px-1 -mx-1">
                       <button
+                        aria-haspopup={hasItems ? 'true' : undefined}
+                        aria-expanded={hasItems ? hoveredCategory === item.name : undefined}
+                        aria-controls={hasItems ? menuId : undefined}
+                        aria-current={!hasItems && isActive(item.path) ? 'page' : undefined}
+                        type="button"
                         onClick={() => {
                           if (hasItems) {
                             setHoveredCategory((current) => current === item.name ? null : item.name);
@@ -634,8 +669,8 @@ export default function UnifiedHeader() {
                             navigate(item.path);
                           }
                         }}
-                        className={`flex items-center gap-1 text-sm font-medium transition-colors ${
-                          hasActiveItem ? textClass : "text-gray-700 hover:text-gray-900"
+                        className={`somane-primary-nav__trigger flex items-center gap-1 text-sm font-medium transition-colors ${
+                          hasActiveItem ? `${textClass} is-active` : "text-gray-700 hover:text-gray-900"
                         }`}
                       >
                         {item.name}
@@ -649,19 +684,21 @@ export default function UnifiedHeader() {
 
                     {hasItems && hoveredCategory === item.name && (
                       <div
-                        className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded py-2 z-50 max-h-[400px] overflow-y-auto"
-                        onMouseLeave={() => setHoveredCategory(null)}
+                        id={menuId}
+                        className="somane-nav-menu absolute top-full left-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg rounded py-2 z-50 max-h-[400px] overflow-y-auto"
                       >
                         {item.items.map((subItem) => (
                           <button
                             key={subItem.path}
+                            type="button"
+                            aria-current={location.pathname === subItem.path ? 'page' : undefined}
                             onClick={() => {
                               setHoveredCategory(null);
                               navigate(subItem.path);
                             }}
-                            className={`w-full px-4 py-2.5 text-sm text-left transition-colors flex items-center ${
+                            className={`somane-nav-menu__item w-full px-4 py-2.5 text-sm text-left transition-colors flex items-center ${
                               location.pathname === subItem.path
-                                ? `${bgClass} ${textClass} font-medium`
+                                ? `${bgClass} ${textClass} font-medium is-active`
                                 : "text-gray-700 hover:bg-gray-50"
                             }`}
                           >
@@ -678,11 +715,33 @@ export default function UnifiedHeader() {
           )}
 
           {/* DROITE : Actions utilisateur */}
-          <div className="flex items-center gap-3">
+            {!isOnEntitySelectionPage && navigation.length > 0 && (
+              <button
+                type="button"
+                className="somane-global-header__mobile-toggle"
+                aria-controls="somane-primary-navigation"
+                aria-expanded={isMobileNavOpen}
+                aria-label={isMobileNavOpen ? 'Fermer la navigation' : 'Ouvrir la navigation'}
+                onClick={() => {
+                  setIsMobileNavOpen((open) => !open);
+                  setHoveredCategory(null);
+                }}
+              >
+                {isMobileNavOpen ? <FiX size={19} aria-hidden="true" /> : <FiMenu size={19} aria-hidden="true" />}
+                <span>{isMobileNavOpen ? 'Fermer' : 'Navigation'}</span>
+              </button>
+            )}
+
+            <div className="somane-global-header__user-actions flex items-center gap-3">
             {/* Menu des entites */}
             <div className="relative" ref={entityMenuRef}>
               <button
+                type="button"
                 onClick={() => setShowEntityMenu(!showEntityMenu)}
+                aria-haspopup="true"
+                aria-expanded={showEntityMenu}
+                aria-controls="somane-entity-menu"
+                aria-label={activeEntity ? `Entité active : ${activeEntity.raison_sociale}` : 'Sélectionner une entité'}
                 className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                   activeEntity
                     ? "text-gray-700 bg-gray-100 hover:bg-gray-200"
@@ -698,8 +757,8 @@ export default function UnifiedHeader() {
 
               {showEntityMenu && (
                   <div
-                    onMouseLeave={() => setShowEntityMenu(false)}
-                    className="absolute top-full right-0 mt-1 w-60 bg-white border border-gray-300 shadow-lg rounded z-50"
+                    id="somane-entity-menu"
+                    className="somane-nav-menu absolute top-full right-0 mt-1 w-60 bg-white border border-gray-300 shadow-lg rounded z-50"
                   >
                     <div className="px-4 py-2 border-b border-gray-200">
                       <p className="text-xs text-gray-500 font-medium">
@@ -714,9 +773,9 @@ export default function UnifiedHeader() {
                           <button
                             key={entity.id}
                             onClick={() => handleSelectEntity(entity)}
-                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+                            className={`somane-nav-menu__item w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
                               activeEntity?.id === entity.id
-                                ? `${lightBgClass} ${lightTextClass} font-medium`
+                                ? `${lightBgClass} ${lightTextClass} font-medium is-active`
                                 : "text-gray-700 hover:bg-gray-50"
                             }`}
                           >
@@ -748,14 +807,19 @@ export default function UnifiedHeader() {
             </div>
 
             {/* Icones actions */}
-            <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors relative">
+            <button type="button" className="somane-global-header__icon-action p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors relative" aria-label="Notifications" title="Notifications">
               <FiBell size={18} />
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
             <div className="relative" ref={userMenuRef}>
               <button
+                type="button"
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-haspopup="true"
+                aria-expanded={showUserMenu}
+                aria-controls="somane-user-menu"
+                aria-label="Ouvrir le menu utilisateur"
+                className="somane-global-header__icon-action p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Menu utilisateur"
               >
                 <FiUser size={20} />
@@ -764,8 +828,8 @@ export default function UnifiedHeader() {
 
               {showUserMenu && (
                   <div
-                    onMouseLeave={() => setShowUserMenu(false)}
-                    className="absolute top-full right-0 mt-1 w-72 bg-white border border-gray-300 shadow-lg rounded z-50"
+                    id="somane-user-menu"
+                    className="somane-nav-menu absolute top-full right-0 mt-1 w-72 bg-white border border-gray-300 shadow-lg rounded z-50"
                   >
                     <div className="px-4 py-2 border-b border-gray-200">
                       <p className="truncate text-sm font-semibold text-gray-800">{currentUserName}</p>
@@ -785,7 +849,7 @@ export default function UnifiedHeader() {
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
-                          navigate('/profile');
+                          navigate('/preferences');
                         }}
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50"
                         title="Langue, fuseau horaire, etc"

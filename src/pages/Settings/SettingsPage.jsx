@@ -46,6 +46,8 @@ import {
   FiFolder
 } from "react-icons/fi";
 import { TbSettings, TbBuildingSkyscraper } from "react-icons/tb";
+import CompanyAppearanceDefaults from '../../components/CompanyAppearanceDefaults';
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function ParametresPage() {
   const { security } = useUi();
@@ -68,6 +70,7 @@ export default function ParametresPage() {
   const [filterModifiable, setFilterModifiable] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [activeSettingsView, setActiveSettingsView] = useState('parameters');
 
   useEffect(() => {
     fetchParametres();
@@ -271,6 +274,8 @@ export default function ParametresPage() {
     <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
       {/* HEADER COMPACT AVEC RECHERCHE AU CENTRE */}
       <div className="mb-6">
+        {activeSettingsView === 'parameters' && (
+          <>
         {/* Barre de recherche au centre */}
         <div className="flex items-center justify-center gap-3 mb-4">
           <div className="relative flex items-center">
@@ -456,22 +461,41 @@ export default function ParametresPage() {
             </div>
           </div>
         </div>
+          </>
+        )}
 
         {/* Onglets */}
-        <div className="flex border-b border-gray-200 mb-3">
+        <div className="flex border-b border-gray-200 mb-4" role="tablist" aria-label="Vues des paramètres">
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeSettingsView === 'parameters'}
             onClick={() => {
+              setActiveSettingsView('parameters');
               setCurrentPage(1);
               setSelectedRows([]);
               resetFilters();
             }}
-            className="px-4 py-1.5 text-xs font-medium border-b-2 border-violet-600 text-violet-600 transition-colors"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeSettingsView === 'parameters' ? 'border-violet-600 text-violet-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
           >
             Tous les paramètres
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeSettingsView === 'appearance'}
+            onClick={() => setActiveSettingsView('appearance')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeSettingsView === 'appearance' ? 'border-violet-600 text-violet-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+          >
+            Valeurs par défaut de l’entreprise
           </button>
         </div>
       </div>
 
+      {activeSettingsView === 'appearance' ? (
+        <CompanyAppearanceDefaults />
+      ) : (
+        <>
       {/* Message d'erreur compact */}
       {error && (
         <div className="mb-4">
@@ -540,7 +564,7 @@ export default function ParametresPage() {
               <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
                 <FiUpload size={14} />
               </button>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
@@ -552,7 +576,7 @@ export default function ParametresPage() {
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
                 <option value={50}>50 lignes</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -870,6 +894,8 @@ export default function ParametresPage() {
           }}
         />
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -892,8 +918,8 @@ function ParametreDetailModal({ parametre, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
@@ -1390,14 +1416,14 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
     switch (valeurType) {
       case 'boolean':
         return (
-          <select
+          <SomaneSelect
             value={formData.valeur}
             onChange={(e) => handleChange('valeur', e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm"
           >
             <option value="true">True</option>
             <option value="false">False</option>
-          </select>
+          </SomaneSelect>
         );
       
       case 'nombre':
@@ -1446,8 +1472,8 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header du modal avec gradient - COMPACT */}
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-t-lg p-3">
           <div className="flex items-center justify-between">
@@ -1523,7 +1549,7 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
                 </label>
                 <div className="relative">
                   <FiList className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
+                  <SomaneSelect
                     value={valeurType}
                     onChange={(e) => setValeurType(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm appearance-none"
@@ -1532,7 +1558,7 @@ function ParametreFormModal({ parametre, entites, onClose, onSuccess }) {
                     <option value="nombre">Nombre</option>
                     <option value="boolean">Booléen</option>
                     <option value="json">JSON</option>
-                  </select>
+                  </SomaneSelect>
                 </div>
               </div>
               

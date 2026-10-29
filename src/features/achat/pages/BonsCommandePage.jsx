@@ -17,6 +17,7 @@ import {
   FiCheckCircle,
   FiXCircle
 } from "react-icons/fi";
+import SomaneSelect from '../../../components/SomaneSelect';
 
 export default function BonsCommandePage() {
   const [bonsCommande, setBonsCommande] = useState([]);
@@ -193,7 +194,7 @@ export default function BonsCommandePage() {
             />
           </div>
           <div className="flex items-center gap-4">
-            <select
+            <SomaneSelect
               value={itemsPerPage}
               onChange={(e) => setItemsPerPage(Number(e.target.value))}
               className="border border-gray-300 rounded-lg px-3 py-2"
@@ -202,7 +203,7 @@ export default function BonsCommandePage() {
               <option value={10}>10 par page</option>
               <option value={25}>25 par page</option>
               <option value={50}>50 par page</option>
-            </select>
+            </SomaneSelect>
             <button className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 flex items-center">
               <FiFilter className="mr-2" />
               Filtres
@@ -391,8 +392,8 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
         <div className="flex justify-between items-center bg-violet-600 text-white p-4 rounded-t-lg">
           <h3 className="text-lg font-semibold">
             {item ? 'Modifier' : 'Nouveau'} Bon de Commande
@@ -421,7 +422,7 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fournisseur *
               </label>
-              <select
+              <SomaneSelect
                 value={formData.partner_id}
                 onChange={(e) => setFormData({ ...formData, partner_id: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -431,7 +432,7 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
                 {fournisseurs.map(f => (
                   <option key={f.id} value={f.id}>{f.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
           </div>
 
@@ -453,7 +454,7 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Devise *
               </label>
-              <select
+              <SomaneSelect
                 value={formData.currency_id}
                 onChange={(e) => setFormData({ ...formData, currency_id: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -463,7 +464,7 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
                 {devises.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
           </div>
 
@@ -472,7 +473,7 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Société *
               </label>
-              <select
+              <SomaneSelect
                 value={formData.company_id}
                 onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -482,14 +483,14 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
                 {societes.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Statut *
               </label>
-              <select
+              <SomaneSelect
                 value={formData.state}
                 onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -499,7 +500,7 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
                 <option value="envoyer">Envoyé</option>
                 <option value="confirmer">Confirmé</option>
                 <option value="brouillon">Brouillon</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
 
@@ -548,7 +549,7 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Acheteur *
             </label>
-            <select
+            <SomaneSelect
               value={formData.user_id}
               onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500"
@@ -558,7 +559,7 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
               {utilisateurs.map(u => (
                 <option key={u.id} value={u.id}>{u.name}</option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
 
           <div className="flex justify-end space-x-3 pt-6">
@@ -602,8 +603,8 @@ function BonCommandeDetailModal({ item, fournisseurs, devises, societes, utilisa
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 somane-overlay-backdrop">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto somane-modal-surface">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold flex items-center">
             <FiEye className="mr-2 text-violet-600" />

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../../../services/apiClient';
 import { FiSave, FiPlus, FiChevronDown, FiCopy, FiTrash2, FiRotateCcw } from 'react-icons/fi';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 export default function DemandesAchatCreate() {
   const navigate = useNavigate();
@@ -242,7 +243,7 @@ export default function DemandesAchatCreate() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div>
               <p className="text-xs font-medium text-gray-700 mb-1">Utilisateur *</p>
-              <select
+              <SomaneSelect
                 name="user_id"
                 value={formData.user_id}
                 onChange={handleChange}
@@ -253,12 +254,12 @@ export default function DemandesAchatCreate() {
                 {utilisateurs.map(u => (
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
             
             <div>
               <p className="text-xs font-medium text-gray-700 mb-1">Département *</p>
-              <select
+              <SomaneSelect
                 name="department_id"
                 value={formData.department_id}
                 onChange={handleChange}
@@ -269,12 +270,12 @@ export default function DemandesAchatCreate() {
                 {departements.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
             
             <div>
               <p className="text-xs font-medium text-gray-700 mb-1">Société *</p>
-              <select
+              <SomaneSelect
                 name="company_id"
                 value={formData.company_id}
                 onChange={handleChange}
@@ -285,7 +286,7 @@ export default function DemandesAchatCreate() {
                 {societes.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
-              </select>
+              </SomaneSelect>
             </div>
             
             <div>
@@ -302,7 +303,7 @@ export default function DemandesAchatCreate() {
             
             <div>
               <p className="text-xs font-medium text-gray-700 mb-1">État</p>
-              <select
+              <SomaneSelect
                 name="state"
                 value={formData.state}
                 onChange={handleChange}
@@ -313,7 +314,7 @@ export default function DemandesAchatCreate() {
                 <option value="envoyer">Envoyé</option>
                 <option value="confirmer">Confirmé</option>
                 <option value="annule">Annulé</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -410,7 +411,7 @@ export default function DemandesAchatCreate() {
                           />
                         </td>
                         <td className="px-2 py-1.5 border border-gray-300">
-                          <select
+                          <SomaneSelect
                             value={ligne.urgence}
                             onChange={(e) => handleLigneChange(index, 'urgence', e.target.value)}
                             className="w-full px-1 py-0.5 border-0 focus:ring-0 text-xs bg-transparent"
@@ -419,7 +420,7 @@ export default function DemandesAchatCreate() {
                             <option value="normal">Normal</option>
                             <option value="urgent">Urgent</option>
                             <option value="tres_urgent">Très urgent</option>
-                          </select>
+                          </SomaneSelect>
                         </td>
                         <td className="px-2 py-1.5 border border-gray-300">
                           <input

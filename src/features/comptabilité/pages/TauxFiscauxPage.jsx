@@ -31,6 +31,7 @@ import {
   FiDollarSign,
   FiBriefcase
 } from "react-icons/fi";
+import SomaneSelect from '../../../components/SomaneSelect';
 
 export default function TauxFiscauxPage() {
   const [taxes, setTaxes] = useState([]);
@@ -836,7 +837,7 @@ function MainTable({
             <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
               <FiUpload size={14} />
             </button>
-            <select
+            <SomaneSelect
               value={itemsPerPage}
               onChange={(e) => {
                 setItemsPerPage(Number(e.target.value));
@@ -848,7 +849,7 @@ function MainTable({
               <option value={10}>10 lignes</option>
               <option value={20}>20 lignes</option>
               <option value={50}>50 lignes</option>
-            </select>
+            </SomaneSelect>
           </div>
         </div>
       </div>
@@ -1235,8 +1236,8 @@ function TaxDetailModal({ tax, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header */}
         <div className={`sticky top-0 bg-gradient-to-r ${getTaxTypeColor(tax.type_tax_use)} text-white rounded-t-lg p-3`}>
           <div className="flex items-center justify-between">
@@ -1502,8 +1503,8 @@ function TaxFormModal({ tax, accounts, companies, pays, authStatus, onClose, onS
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
+      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl somane-modal-surface">
         {/* Header */}
         <div className={`sticky top-0 bg-gradient-to-r ${getHeaderColor(formData.type_tax_use)} text-white rounded-t-lg p-3`}>
           <div className="flex items-center justify-between">
@@ -1598,14 +1599,14 @@ function TaxFormModal({ tax, accounts, companies, pays, authStatus, onClose, onS
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Type de Montant <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SomaneSelect
                   value={formData.amount_type}
                   onChange={(e) => handleChange('amount_type', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
                 >
                   <option value="percent">Pourcentage (%)</option>
                   <option value="fixed">Montant fixe (FCFA)</option>
-                </select>
+                </SomaneSelect>
               </div>
               
               {/* Valeur */}
@@ -1644,7 +1645,7 @@ function TaxFormModal({ tax, accounts, companies, pays, authStatus, onClose, onS
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Type d'utilisation <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SomaneSelect
                   value={formData.type_tax_use}
                   onChange={(e) => handleChange('type_tax_use', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
@@ -1652,7 +1653,7 @@ function TaxFormModal({ tax, accounts, companies, pays, authStatus, onClose, onS
                   <option value="sale">Vente</option>
                   <option value="purchase">Achat</option>
                   <option value="none">Aucune</option>
-                </select>
+                </SomaneSelect>
               </div>
               
               {/* Entreprise - Select ou saisie manuelle */}

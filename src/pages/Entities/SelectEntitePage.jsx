@@ -16,6 +16,7 @@ import { TbBuildingSkyscraper } from 'react-icons/tb';
 import Header from '../../components/Header';
 import EntityFormModal from '../../components/EntityFormModal';
 import { useEntity } from '../../context/EntityContext';
+import SomaneSelect from '../../components/SomaneSelect';
 
 
 // ─────────────────────────────────────────────
@@ -307,7 +308,7 @@ function Toolbar({ searchTerm, onSearch, itemsPerPage, onItemsPerPageChange, onC
         )}
       </div>
 
-      <select
+      <SomaneSelect
         value={itemsPerPage}
         onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
         className="ml-auto border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent"
@@ -315,7 +316,7 @@ function Toolbar({ searchTerm, onSearch, itemsPerPage, onItemsPerPageChange, onC
         {ITEMS_PER_PAGE_OPTIONS.map((n) => (
           <option key={n} value={n}>{n} lignes</option>
         ))}
-      </select>
+      </SomaneSelect>
     </div>
   );
 }

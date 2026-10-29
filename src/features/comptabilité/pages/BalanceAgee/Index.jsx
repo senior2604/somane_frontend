@@ -15,6 +15,7 @@ import {
 } from 'react-icons/fi';
 import { apiClient } from '../../../../services/apiClient';
 import { useEntity } from '../../../../context/EntityContext';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const getYearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -536,19 +537,19 @@ export default function BalanceAgee() {
                     </div>
                     <div className="border-b border-gray-200 p-2">
                       <p className="mb-2 text-xs font-medium text-gray-700">Type / Partenaire</p>
-                      <select value={filters.type} onChange={(event) => handleFilterChange('type', event.target.value)} className="mb-2 h-8 w-full border border-gray-300 px-2 text-xs">
+                      <SomaneSelect value={filters.type} onChange={(event) => handleFilterChange('type', event.target.value)} className="mb-2 h-8 w-full border border-gray-300 px-2 text-xs">
                         <option value="customers">Clients</option><option value="suppliers">Fournisseurs</option><option value="all">Tous</option>
-                      </select>
-                      <select value={filters.partner} onChange={(event) => handleFilterChange('partner', event.target.value)} disabled={loadingRefs} className="h-8 w-full border border-gray-300 px-2 text-xs">
+                      </SomaneSelect>
+                      <SomaneSelect value={filters.partner} onChange={(event) => handleFilterChange('partner', event.target.value)} disabled={loadingRefs} className="h-8 w-full border border-gray-300 px-2 text-xs">
                         <option value="">Tous les partenaires</option>
                         {partnerOptions.map((partner) => <option key={partner.id} value={partner.id}>{partner.raison_sociale || partner.display_name || partner.name || partner.nom || `Partenaire ${partner.id}`}</option>)}
-                      </select>
+                      </SomaneSelect>
                     </div>
                     <div className="border-b border-gray-200 p-2">
                       <p className="mb-2 text-xs font-medium text-gray-700">État</p>
-                      <select value={filters.state} onChange={(event) => handleFilterChange('state', event.target.value)} className="h-8 w-full border border-gray-300 px-2 text-xs">
+                      <SomaneSelect value={filters.state} onChange={(event) => handleFilterChange('state', event.target.value)} className="h-8 w-full border border-gray-300 px-2 text-xs">
                         <option value="all">Toutes les écritures</option><option value="posted">Validées</option><option value="draft">Brouillons</option>
-                      </select>
+                      </SomaneSelect>
                     </div>
                     <div className="border-b border-gray-200 p-2 text-xs text-gray-700">
                       <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-gray-50"><input type="checkbox" checked={filters.hide_zero} onChange={(event) => handleFilterChange('hide_zero', event.target.checked)} /> Masquer les zéros</label>

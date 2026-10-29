@@ -38,7 +38,6 @@ import { can } from "../services/securityAccess";
 const TruncatedTextWithTooltip = ({ text, className = "", maxWidth = "none" }) => {
   const textRef = useRef(null);
   const [isTruncated, setIsTruncated] = useState(false);
-  const [showTooltip, setShowTooltip] = useState(false);
 
   // Vérifier si le texte est tronqué
   useEffect(() => {
@@ -61,20 +60,11 @@ const TruncatedTextWithTooltip = ({ text, className = "", maxWidth = "none" }) =
         ref={textRef}
         className={`truncate ${className}`}
         style={{ maxWidth }}
-        onMouseEnter={() => isTruncated && setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
+        data-tooltip={isTruncated ? text : undefined}
+        tabIndex={isTruncated ? 0 : undefined}
       >
         {text}
       </div>
-      
-      {isTruncated && showTooltip && (
-        <div className="absolute z-50 left-1/2 transform -translate-x-1/2 bottom-full mb-2">
-          <div className="bg-gray-900 text-white text-xs font-medium py-1.5 px-2.5 rounded-md shadow-lg whitespace-nowrap">
-            {text}
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 w-2 h-2 bg-gray-900 rotate-45" />
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -235,7 +225,7 @@ export default function Sidebar() {
   // - Normal : 220px (au lieu de 256px)
   // - Réduit : 56px (au lieu de 80px)
   const sidebarWidth = isCollapsed && !isMobile ? "w-14" : "w-56";
-  const sidebarClasses = `
+  const sidebarClasses = `somane-sidebar ${isCollapsed && !isMobile ? 'somane-sidebar--collapsed' : ''}
     ${isMobile ? (isMobileOpen ? "translate-x-0" : "-translate-x-full") : ""}
     ${isMobile ? "fixed inset-y-0 left-0 z-50" : "relative"}
     ${sidebarWidth}
@@ -297,16 +287,16 @@ export default function Sidebar() {
         </div>
 
         {/* Menu principal */}
-        <nav className="flex-1 px-1.5 py-2 overflow-y-auto">
+        <nav className="somane-sidebar__nav flex-1 px-1.5 py-2 overflow-y-auto">
           {menuCategories.map((category) => (
             <div key={category.id} className="mb-0.5">
               {category.isSimpleLink ? (
                 /* Lien simple : Tableau de Bord */
                 <Link
                   to={category.path}
-                  className={`flex items-center px-2.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                  className={`somane-sidebar__link flex items-center px-2.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
                     isActive(category.path)
-                      ? "bg-violet-50 text-violet-700"
+                      ? "is-active bg-violet-50 text-violet-700"
                       : "text-gray-700 hover:bg-gray-50 hover:text-violet-600"
                   } ${isCollapsed && !isMobile ? "justify-center" : ""}`}
                 >
@@ -327,7 +317,7 @@ export default function Sidebar() {
                   {/* En-tête de catégorie */}
                   <button
                     onClick={() => toggleCategory(category.id)}
-                    className={`w-full flex items-center ${isCollapsed && !isMobile ? "justify-center" : "justify-between"} px-2.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                    className={`somane-sidebar__category w-full flex items-center ${isCollapsed && !isMobile ? "justify-center" : "justify-between"} px-2.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
                       openCategories[category.id]
                         ? "text-violet-700"
                         : "text-gray-700 hover:text-violet-600 hover:bg-gray-50"
@@ -361,9 +351,9 @@ export default function Sidebar() {
                         <Link
                           key={item.path}
                           to={item.path}
-                          className={`flex items-center px-2.5 py-1.5 rounded-lg text-sm transition-all duration-200 group ${
+                          className={`somane-sidebar__link somane-sidebar__link--nested flex items-center px-2.5 py-1.5 rounded-lg text-sm transition-all duration-200 group ${
                             isActive(item.path)
-                              ? "bg-violet-50 text-violet-700 font-medium"
+                              ? "is-active bg-violet-50 text-violet-700 font-medium"
                               : "text-gray-600 hover:bg-gray-50 hover:text-violet-600"
                           }`}
                         >

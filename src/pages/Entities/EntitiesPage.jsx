@@ -43,6 +43,7 @@ import { TbBuildingSkyscraper } from "react-icons/tb";
 
 // 🔽 IMPORT DU COMPOSANT PARTAGÉ
 import EntityFormModal from '../../components/EntityFormModal';
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function EntitiesPage() {
   const [entities, setEntities] = useState([]);
@@ -450,7 +451,7 @@ export default function EntitiesPage() {
               <button className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600">
                 <FiUpload size={14} />
               </button>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
@@ -462,7 +463,7 @@ export default function EntitiesPage() {
                 <option value={10}>10 lignes</option>
                 <option value={20}>20 lignes</option>
                 <option value={50}>50 lignes</option>
-              </select>
+              </SomaneSelect>
             </div>
           </div>
         </div>
@@ -755,7 +756,7 @@ function EntityDetailModal({ entity, onClose }) {
   // ... (gardez tout le code existant de EntityDetailModal)
   // Il n'a pas été modifié car il ne contient pas de formulaire
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 z-50 backdrop-blur-sm somane-overlay-backdrop">
       {/* Contenu inchangé */}
     </div>
   );

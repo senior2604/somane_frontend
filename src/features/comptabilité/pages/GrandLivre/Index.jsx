@@ -20,6 +20,7 @@ import {
 } from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
 import { piecesService } from '../../services';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 const getYearStart = () => `${new Date().getFullYear()}-01-01`;
 const getYearEnd = () => `${new Date().getFullYear()}-12-31`;
@@ -108,27 +109,9 @@ const getLineDebit = (line) => line.debit ?? line.debit_amount ?? 0;
 const getLineCredit = (line) => line.credit ?? line.credit_amount ?? 0;
 const getLineBalance = (line) => line.balance ?? line.solde ?? line.running_balance;
 
-const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-        {children}
-      </div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-        </div>
-      )}
-    </div>
-  );
-};
+const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 const StateChip = ({ value }) => {
   const config = {
@@ -702,7 +685,7 @@ export default function GrandLivre() {
                               </option>
                             ))}
                           </datalist>
-                          <select
+                          <SomaneSelect
                             value={filters.journal}
                             onChange={(event) => setFilters((prev) => ({ ...prev, journal: event.target.value }))}
                             disabled={loadingRefs}
@@ -714,12 +697,12 @@ export default function GrandLivre() {
                                 {journal.code ? `${journal.code} - ` : ''}{journal.name}
                               </option>
                             ))}
-                          </select>
+                          </SomaneSelect>
                         </div>
 
                         <div className="p-2 border-b border-gray-200">
                           <p className="text-xs font-medium text-gray-700 mb-2">Partenaire</p>
-                          <select
+                          <SomaneSelect
                             value={filters.partner}
                             onChange={(event) => setFilters((prev) => ({ ...prev, partner: event.target.value }))}
                             disabled={loadingRefs}
@@ -731,7 +714,7 @@ export default function GrandLivre() {
                                 {getPartnerLabel(partner)}
                               </option>
                             ))}
-                          </select>
+                          </SomaneSelect>
                         </div>
 
                         {activeFilterChips.length > 0 && (
@@ -750,7 +733,7 @@ export default function GrandLivre() {
 
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-xs text-gray-500">Afficher</span>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(event) => {
                   setItemsPerPage(Number(event.target.value));
@@ -763,7 +746,7 @@ export default function GrandLivre() {
                 <option value={25}>25</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
-              </select>
+              </SomaneSelect>
               <span className="text-xs text-gray-500">lignes</span>
             </div>
           </div>

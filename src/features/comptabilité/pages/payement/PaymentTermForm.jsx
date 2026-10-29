@@ -471,8 +471,8 @@ export default function PaymentTermForm({ mode = 'create' }) {
       </div>
 
       {showConfirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="mx-4 w-full max-w-md rounded-sm bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 somane-overlay-backdrop">
+          <div className="mx-4 w-full max-w-md rounded-sm bg-white p-6 shadow-lg somane-modal-surface">
             <h3 className="mb-3 text-lg font-bold text-gray-900">Modifications non sauvegardées</h3>
             <p className="mb-6 text-sm text-gray-600">Voulez-vous enregistrer les modifications avant de quitter ?</p>
             <div className="flex justify-end gap-3">

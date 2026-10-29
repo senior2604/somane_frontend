@@ -9,6 +9,7 @@ import {
   FiSearch,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import SomaneSelect from '../../components/SomaneSelect';
 
 export const parseResponse = (response) => {
   if (!response) return [];
@@ -422,7 +423,7 @@ export function EntityForm({
           </div>
           <div className="space-y-2">
           <FormField label="Statut">
-            <select
+            <SomaneSelect
               value={String(formData.statut)}
               onChange={(event) => updateField('statut', event.target.value === 'true')}
               className={inputClass()}
@@ -430,7 +431,7 @@ export function EntityForm({
               {STATUT_OPTIONS.map((option) => (
                 <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
               ))}
-            </select>
+            </SomaneSelect>
           </FormField>
           <FormField label="Entite parente">
             <SearchableDropdown

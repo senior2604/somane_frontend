@@ -15,6 +15,7 @@ import { apiClient } from '../../services/apiClient';
 import { useUi } from '../../context/UiContext';
 import { can } from '../../services/securityAccess';
 import { getEntityName, getVilleName, parseResponse } from './EntityShared';
+import SomaneSelect from '../../components/SomaneSelect';
 
 export default function EntitiesList() {
   const navigate = useNavigate();
@@ -137,7 +138,7 @@ export default function EntitiesList() {
           </div>
           <div className="col-span-6 md:col-span-3 flex items-center gap-1">
             <FiFilter size={13} className="text-gray-400" />
-            <select
+            <SomaneSelect
               value={filterCountry}
               onChange={(event) => setFilterCountry(event.target.value)}
               className="w-full h-8 border border-gray-300 text-xs"
@@ -148,10 +149,10 @@ export default function EntitiesList() {
                   {country.emoji ? `${country.emoji} ` : ''}{country.nom || country.name}
                 </option>
               ))}
-            </select>
+            </SomaneSelect>
           </div>
           <div className="col-span-6 md:col-span-3">
-            <select
+            <SomaneSelect
               value={filterStatus}
               onChange={(event) => setFilterStatus(event.target.value)}
               className="w-full h-8 border border-gray-300 text-xs"
@@ -159,7 +160,7 @@ export default function EntitiesList() {
               <option value="">Tous les statuts</option>
               <option value="true">Actives</option>
               <option value="false">Inactives</option>
-            </select>
+            </SomaneSelect>
           </div>
         </div>
 

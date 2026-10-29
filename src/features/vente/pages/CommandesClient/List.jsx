@@ -8,36 +8,14 @@ import {
 } from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
 import { commandesService, referentielsService, formatAmount } from '../../services';
+import SomaneSelect from '../../../../components/SomaneSelect';
 
 // ==========================================
 // COMPOSANT TOOLTIP (identique à Comptabilité)
 // ==========================================
-const Tooltip = ({ children, text, position = 'top' }) => {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-        {children}
-      </div>
-      {show && (
-        <div className={`absolute z-50 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap ${
-          position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-1' :
-          position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-1' :
-          position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-1' :
-          'left-full top-1/2 transform -translate-y-1/2 ml-1'
-        }`}>
-          {text}
-          <div className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
-            position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-            'right-full top-1/2 -translate-y-1/2 -mr-1'
-          }`} />
-        </div>
-      )}
-    </div>
-  );
-};
+const Tooltip = ({ children, text }) => (
+  <span className="somane-tooltip" data-tooltip={text}>{children}</span>
+);
 
 // ==========================================
 // COMPOSANT POUR LE TRI
@@ -639,7 +617,7 @@ export default function CommandesClientList() {
             
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-xs text-gray-500">Afficher</span>
-              <select
+              <SomaneSelect
                 value={itemsPerPage}
                 onChange={(e) => setItemsPerPage(Number(e.target.value))}
                 className="h-8 px-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
@@ -648,7 +626,7 @@ export default function CommandesClientList() {
                 <option value={15}>15</option>
                 <option value={25}>25</option>
                 <option value={50}>50</option>
-              </select>
+              </SomaneSelect>
               <span className="text-xs text-gray-500">lignes</span>
             </div>
           </div>

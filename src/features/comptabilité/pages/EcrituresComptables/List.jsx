@@ -331,7 +331,12 @@ export default function EcrituresComptablesList() {
       label: `Pièce : ${filteredMoveName || moveIdFilter}`,
       className: 'bg-purple-100 text-purple-700',
     }] : []),
-    ...activeFilters.map((filter) => ({ id: filter.id, label: filter.label })),
+    ...activeFilters.map((filter) => ({
+      id: filter.id,
+      label: filter.label,
+      field: filter.field,
+      value: filter.value,
+    })),
   ], [activeFilters, filteredMoveName, moveIdFilter]);
 
   const renderFilters = useCallback(({ close }) => (
@@ -362,7 +367,12 @@ export default function EcrituresComptablesList() {
     filterChips={filterChips}
     onRemoveFilterChip={removeFilter}
     renderFilters={renderFilters}
-    filterPanelWidth={360}
+    groupByOptions={[
+      { id: 'partner', label: 'Partenaire' },
+      { id: 'journal', label: 'Journal' },
+      { id: 'state', label: 'Statut' },
+      { id: 'date', label: 'Date' },
+    ]}
     primaryAction={{ label: 'Nouvelle pièce', icon: <FiPlus size={14} />, onClick: () => navigate('/comptabilite/pieces/create') }}
     trailingActions={[{ id: 'refresh', label: '', title: 'Actualiser la liste', icon: <FiRefreshCw size={15} className={loading ? 'animate-spin' : ''} />, onClick: loadLines, disabled: loading, className: 'w-9 justify-center px-0' }]}
     selectedRowKeys={selectedIds}
