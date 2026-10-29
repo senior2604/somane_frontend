@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { apiClient } from '../../services/apiClient';
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
 import { 
   FiRefreshCw, FiPlus, FiEdit2, FiTrash2, FiSearch, FiX, FiChevronDown,
   FiCheck, FiUsers, FiChevronLeft, FiChevronRight, FiDownload, FiUpload,
@@ -985,12 +986,15 @@ function PermissionDetailModal({ item, groupes, modules, entites, onClose }) {
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors"
-            >
-              <FiX size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <RecordTraceabilityPanel model="permission" recordId={item.id} />
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
           </div>
         </div>
         
@@ -1098,12 +1102,15 @@ function GroupDetailModal({ item, permissions, modules, onClose }) {
                 <p className="text-violet-100 text-xs mt-0.5">{item.name}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors"
-            >
-              <FiX size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <RecordTraceabilityPanel model="groupe" recordId={item.id} />
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
           </div>
         </div>
         

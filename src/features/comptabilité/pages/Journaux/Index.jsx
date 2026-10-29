@@ -8,8 +8,11 @@ import {
   FiXCircle,
 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import MetadataFieldDisplay from '../../../../components/MetadataFieldDisplay';
 import { useEntity } from '../../../../context/EntityContext';
+import { useUi } from '../../../../context/UiContext';
 import { apiClient } from '../../../../services/apiClient';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 
 const JOURNALS_MEMORY_KEY = 'comptabilite:journaux:index:v3';
 const DEFAULT_VISIBLE_COLUMN_IDS = [
@@ -228,6 +231,13 @@ const getCachedJournalsIndex = entityId => {
 export default function JournauxPage() {
   const navigate = useNavigate();
   const { activeEntity, entities = [] } = useEntity();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.AccountJournal', 'list', {
+      preferredViewKey: 'somane_ui.accounting_accountjournal_tree',
+    }),
+    [configuration],
+  );
 
   const initialCache = getCachedJournalsIndex(activeEntity?.id);
 
@@ -463,6 +473,19 @@ export default function JournauxPage() {
     },
   ], [navigate]);
 
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => ({
+    name: 'nom', default_account: 'compte', bank_account: 'banque', active: 'statut',
+  }[field.name] || field.name)).filter((id) => columns.some((column) => column.id === id)), [columns, configuredList]);
+  const displayColumns = useMemo(() => applyConfiguredListColumns(
+    columns,
+    configuredList?.fields,
+    { name: 'nom', default_account: 'compte', bank_account: 'banque', active: 'statut' },
+  ), [columns, configuredList]);
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumnIds(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
+
   const filterChips = useMemo(() => activeFilters.map((filter) => ({
     id: filter.id,
     label: filter.label,
@@ -627,9 +650,9 @@ export default function JournauxPage() {
           const value = typeof column.value === 'function'
             ? column.value(journal)
             : journal[column.dataIndex || column.id];
-          const content = column.render
-            ? column.render(value, journal, rowIndex)
-            : (value ?? '-');
+          const content = column.metadataField?.widget
+            ? <MetadataFieldDisplay value={value} field={column.metadataField} entity={activeEntity} />
+            : column.render ? column.render(value, journal, rowIndex) : (value ?? '-');
           const title = typeof value === 'string' || typeof value === 'number'
             ? String(value)
             : '';
@@ -648,7 +671,7 @@ export default function JournauxPage() {
         <td className="w-6 border-r border-gray-100 px-0.5 py-1.5" />
       </tr>
     );
-  }, []);
+  }, [activeEntity]);
 
   return (
     <UnifiedIndexPage
@@ -658,7 +681,7 @@ export default function JournauxPage() {
       onRestoreMemoryState={restoreMemoryState}
       rows={filteredJournals}
       rowKey="id"
-      columns={columns}
+      columns={displayColumns}
       loading={loading}
       error={error}
       success={success}
@@ -696,8 +719,8 @@ export default function JournauxPage() {
       pageSize={pageSize}
       onPageSizeChange={setPageSize}
       pageSizeOptions={[25, 50, 100, 200]}
-      visibleColumnIds={visibleColumnIds}
-      defaultVisibleColumnIds={DEFAULT_VISIBLE_COLUMN_IDS}
+      visibleColumnIds={configuredColumnIds?.length ? visibleColumnIds.filter((id) => configuredColumnIds.includes(id)) : visibleColumnIds}
+      defaultVisibleColumnIds={configuredColumnIds?.length ? configuredColumnIds : DEFAULT_VISIBLE_COLUMN_IDS}
       onVisibleColumnsChange={setVisibleColumnIds}
       defaultSortColumn="code"
       defaultSortDirection="asc"

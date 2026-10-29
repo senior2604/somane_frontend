@@ -1,6 +1,10 @@
 // features/achats/pages/BonsCommandePage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { apiClient } from '../../../services/apiClient';
+import { useUi } from '../../../context/UiContext';
+import MetadataFieldDisplay from '../../../components/MetadataFieldDisplay';
+import MetadataFieldInput from '../../../components/MetadataFieldInput';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../services/metadataViews';
 import {
   FiPlus,
   FiEdit2,
@@ -10,15 +14,14 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiRefreshCw,
-  FiDownload,
   FiFilter,
   FiUser,
   FiCalendar,
-  FiCheckCircle,
   FiXCircle
 } from "react-icons/fi";
 
 export default function BonsCommandePage() {
+  const { configuration } = useUi();
   const [bonsCommande, setBonsCommande] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [devises, setDevises] = useState([]);
@@ -35,6 +38,19 @@ export default function BonsCommandePage() {
   const [editingItem, setEditingItem] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'achats.PurchaseOrder', 'list', {
+      preferredViewKey: 'somane_ui.achats_purchase_order_tree',
+    }),
+    [configuration],
+  );
+  const configuredForm = useMemo(
+    () => getConfiguredModelView(configuration, 'achats.PurchaseOrder', 'form', {
+      preferredViewKey: 'somane_ui.achats_purchase_order_form',
+    }),
+    [configuration],
+  );
 
   useEffect(() => {
     fetchData();
@@ -86,11 +102,11 @@ export default function BonsCommandePage() {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      'demande_prix': { label: 'Demande Prix', color: 'bg-yellow-100 text-yellow-800' },
-      'envoyer': { label: 'Envoyé', color: 'bg-blue-100 text-blue-800' },
-      'confirmer': { label: 'Confirmé', color: 'bg-green-100 text-green-800' },
-      'brouillon': { label: 'Brouillon', color: 'bg-gray-100 text-gray-800' },
-      'annule': { label: 'Annulé', color: 'bg-red-100 text-red-800' }
+      draft: { label: 'Demande de prix', color: 'bg-yellow-100 text-yellow-800' },
+      sent: { label: 'Envoyé', color: 'bg-blue-100 text-blue-800' },
+      confirmed: { label: 'Confirmé', color: 'bg-green-100 text-green-800' },
+      done: { label: 'Terminé', color: 'bg-gray-100 text-gray-800' },
+      cancel: { label: 'Annulé', color: 'bg-red-100 text-red-800' },
     };
     const config = statusConfig[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
     return (
@@ -100,12 +116,34 @@ export default function BonsCommandePage() {
     );
   };
 
+  const baseColumns = [
+    { id: 'name', label: 'N° Commande', value: (row) => row.name, render: (row) => <span className="font-medium text-gray-900">{row.name || 'N/A'}</span> },
+    { id: 'partner', label: 'Fournisseur', value: (row) => row.partner || getReferenceName(fournisseurs, row.partner_id), render: (row) => <div className="flex items-center"><FiUser className="mr-2 text-gray-400" size={16} /><span>{row.partner?.name || row.partner?.nom || getReferenceName(fournisseurs, row.partner_id)}</span></div> },
+    { id: 'date_order', label: 'Date Commande', value: (row) => row.date_order, render: (row) => <div className="flex items-center"><FiCalendar className="mr-2 text-gray-400" size={16} /><span>{formatDate(row.date_order)}</span></div> },
+    { id: 'currency', label: 'Devise', value: (row) => row.currency || getReferenceName(devises, row.currency_id), render: (row) => row.currency?.name || row.currency?.code || getReferenceName(devises, row.currency_id) },
+    { id: 'company', label: 'Société', value: (row) => row.company || getReferenceName(societes, row.company_id), render: (row) => row.company?.name || row.company?.raison_sociale || getReferenceName(societes, row.company_id) },
+    { id: 'state', label: 'Statut', value: (row) => row.state, render: (row) => getStatusBadge(row.state) },
+    { id: 'amount_untaxed', label: 'Montant HT', value: (row) => row.amount_untaxed, render: (row) => formatCurrency(row.amount_untaxed) },
+    { id: 'amount_tax', label: 'Taxes', value: (row) => row.amount_tax, render: (row) => formatCurrency(row.amount_tax) },
+    { id: 'amount_total', label: 'Montant TTC', value: (row) => row.amount_total, render: (row) => <span className="font-semibold">{formatCurrency(row.amount_total)}</span> },
+    { id: 'user', label: 'Responsable', value: (row) => row.user || getReferenceName(utilisateurs, row.user_id), render: (row) => row.user?.username || row.user?.name || getReferenceName(utilisateurs, row.user_id) },
+    { id: 'notes', label: 'Notes', value: (row) => row.notes, render: (row) => row.notes || '—' },
+  ];
+  const columns = applyConfiguredListColumns(baseColumns, configuredList?.fields);
+
+  const renderConfiguredCell = (column, row) => {
+    const value = column.value ? column.value(row) : row[column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} record={row} />
+      : column.render ? column.render(row) : (value ?? '—');
+  };
+
   // Filtrage et pagination
   const filteredData = bonsCommande.filter(bon => {
     const searchString = searchTerm.toLowerCase();
     return (
       (bon.name && bon.name.toLowerCase().includes(searchString)) ||
-      (getReferenceName(fournisseurs, bon.partner_id)?.toLowerCase().includes(searchString)) ||
+      ((bon.partner?.name || getReferenceName(fournisseurs, bon.partner_id))?.toLowerCase().includes(searchString)) ||
       (bon.state && bon.state.toLowerCase().includes(searchString))
     );
   });
@@ -217,27 +255,11 @@ export default function BonsCommandePage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  N° Commande
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fournisseur
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date Commande
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Devise
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Société
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Statut
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Montant TTC
-                </th>
+                {columns.map((column) => (
+                  <th key={column.id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {column.label}
+                  </th>
+                ))}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -246,33 +268,11 @@ export default function BonsCommandePage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {currentItems.map((bon) => (
                 <tr key={bon.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-medium text-gray-900">{bon.name || 'N/A'}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiUser className="text-gray-400 mr-2" size={16} />
-                      <span>{getReferenceName(fournisseurs, bon.partner_id)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiCalendar className="text-gray-400 mr-2" size={16} />
-                      <span>{formatDate(bon.date_order)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getReferenceName(devises, bon.currency_id)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getReferenceName(societes, bon.company_id)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(bon.state)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap font-semibold">
-                    {formatCurrency(bon.amount_total)}
-                  </td>
+                  {columns.map((column) => (
+                    <td key={column.id} className="px-6 py-4 whitespace-nowrap">
+                      {renderConfiguredCell(column, bon)}
+                    </td>
+                  ))}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <button
@@ -343,6 +343,7 @@ export default function BonsCommandePage() {
       {showForm && (
         <BonCommandeFormModal
           item={editingItem}
+          configuredForm={configuredForm}
           fournisseurs={fournisseurs}
           devises={devises}
           societes={societes}
@@ -371,23 +372,85 @@ export default function BonsCommandePage() {
 }
 
 // Modal de formulaire pour Bon de Commande
-function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisateurs, onSubmit, onClose }) {
+function BonCommandeFormModal({ item, configuredForm, fournisseurs, devises, societes, utilisateurs, onSubmit, onClose }) {
   const [formData, setFormData] = useState(() => ({
     name: item?.name || '',
-    partner_id: item?.partner_id || '',
-    date_order: item?.date_order || new Date().toISOString().split('T')[0],
-    currency_id: item?.currency_id || '',
-    company_id: item?.company_id || '',
-    state: item?.state || 'demande_prix',
+    partner_id: item?.partner?.id || item?.partner_id || '',
+    date_order: item?.date_order || '',
+    currency_id: item?.currency?.id || item?.currency_id || '',
+    company_id: item?.company?.id || item?.company_id || '',
+    state: item?.state || 'draft',
     amount_total: item?.amount_total || 0,
     amount_untaxed: item?.amount_untaxed || 0,
     amount_tax: item?.amount_tax || 0,
-    user_id: item?.user_id || ''
+    user_id: item?.user?.id || item?.user || item?.user_id || '',
+    notes: item?.notes || '',
   }));
+
+  const setValue = (name, value) => setFormData((current) => ({ ...current, [name]: value }));
+
+  const renderConfiguredField = (field) => {
+    const keyByModelField = { partner: 'partner_id', currency: 'currency_id', company: 'company_id', user: 'user_id' };
+    const valueKey = keyByModelField[field.name] || field.name;
+    const value = formData[valueKey] ?? '';
+    const controlClass = 'w-full rounded border border-gray-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500';
+    let control;
+
+    if (field.name === 'partner' || field.name === 'currency' || field.name === 'company' || field.name === 'user') {
+      const options = field.name === 'partner' ? fournisseurs
+        : field.name === 'currency' ? devises
+          : field.name === 'company' ? societes : utilisateurs;
+      control = <select value={value} required={field.required} disabled={field.readonly} onChange={(event) => setValue(valueKey, event.target.value)} className={controlClass}>
+        <option value="">Sélectionner…</option>
+        {options.map((option) => <option key={option.id} value={option.id}>{option.name || option.nom || option.raison_sociale || option.username}</option>)}
+      </select>;
+    } else if (field.name === 'state') {
+      control = <select value={value} required={field.required} disabled={field.readonly} onChange={(event) => setValue(valueKey, event.target.value)} className={controlClass}>
+        <option value="draft">Demande de prix</option>
+        <option value="sent">Envoyé</option>
+        <option value="confirmed">Confirmé</option>
+        <option value="done">Terminé</option>
+        <option value="cancel">Annulé</option>
+      </select>;
+    } else if (field.name === 'date_order') {
+      control = <input type="date" value={String(value).slice(0, 10)} readOnly disabled className={`${controlClass} bg-gray-50`} />;
+    } else {
+      const isComputedAmount = ['amount_total', 'amount_untaxed', 'amount_tax'].includes(field.name);
+      control = <MetadataFieldInput
+        field={field}
+        value={value}
+        onChange={(event) => setValue(valueKey, event.target.value)}
+        disabled={field.readonly || isComputedAmount}
+        className={`${controlClass} ${field.readonly || isComputedAmount ? 'bg-gray-50' : ''}`}
+      />;
+    }
+
+    if (!control) return null;
+    return <label key={field.name} className="block min-w-0 text-sm text-gray-700">
+      <span className="mb-1 block font-medium">{field.label}{field.required ? ' *' : ''}</span>
+      {control}
+      {field.help && <span className="mt-1 block text-xs text-gray-500">{field.help}</span>}
+    </label>;
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    const payload = {
+      name: formData.name,
+      state: formData.state,
+      notes: formData.notes,
+      user: formData.user_id,
+      ...(item ? {
+        partner_id: formData.partner_id,
+        currency_id: formData.currency_id,
+        company_id: formData.company_id,
+      } : {
+        partner: formData.partner_id,
+        currency: formData.currency_id,
+        company: formData.company_id,
+      }),
+    };
+    onSubmit(payload);
   };
 
   return (
@@ -403,6 +466,14 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {configuredForm?.groups?.length ? configuredForm.groups.map((group) => (
+            <section key={group.title} className="rounded border border-gray-200 p-4">
+              <h4 className="mb-3 text-sm font-semibold text-gray-800">{group.title}</h4>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {group.fields.map(renderConfiguredField)}
+              </div>
+            </section>
+          )) : <>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -560,6 +631,7 @@ function BonCommandeFormModal({ item, fournisseurs, devises, societes, utilisate
               ))}
             </select>
           </div>
+          </>}
 
           <div className="flex justify-end space-x-3 pt-6">
             <button

@@ -3,8 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiDownload, FiEye, FiPlus, FiTrash2, FiUpload } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import MetadataFieldDisplay from '../../../../components/MetadataFieldDisplay';
+import { useEntity } from '../../../../context/EntityContext';
+import { useUi } from '../../../../context/UiContext';
 import { ENDPOINTS } from '../../../../config/api';
 import axiosInstance from '../../../../config/axiosInstance';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import useAccountStore from '../../../../stores/comptabilite/accountStore';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 
@@ -37,6 +41,14 @@ const Badge = ({ children, color = 'slate' }) => {
 
 export default function AccountList() {
   const navigate = useNavigate();
+  const { activeEntity } = useEntity();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.AccountAccount', 'list', {
+      preferredViewKey: 'somane_ui.accounting_accountaccount_tree',
+    }),
+    [configuration],
+  );
   const { frameworks = [], fetchFrameworks } = useFrameworkStore();
   const {
     accounts = [], loading, pagination = {}, fetchAccounts, deleteAccount, setPagination,
@@ -146,7 +158,7 @@ export default function AccountList() {
     }
   }, [deleteAccount, fetchAccounts, frameworkId, page, pageSize, selectedRows]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'number', label: 'Numéro de compte', minWidth: 145, value: (row) => row.code || '',
       render: (_, row) => <span className="font-mono font-semibold text-purple-700">{row.code || '-'}</span>,
@@ -166,11 +178,24 @@ export default function AccountList() {
       id: 'reconcile', label: 'Lettrable', width: 90, value: (row) => row.reconcile ? 'Oui' : 'Non',
       render: (_, row) => <Badge color={row.reconcile ? 'green' : 'slate'}>{row.reconcile ? 'Oui' : 'Non'}</Badge>,
     },
+    { id: 'current_balance', label: 'Solde actuel', minWidth: 120, numeric: true, value: (row) => row.current_balance ?? '' },
     {
       id: 'status', label: 'Statut', width: 90, value: (row) => row.active === false ? 'Inactif' : 'Actif',
       render: (_, row) => <Badge color={row.active === false ? 'slate' : 'green'}>{row.active === false ? 'Inactif' : 'Actif'}</Badge>,
     },
   ], []);
+  const columns = useMemo(() => applyConfiguredListColumns(
+    baseColumns,
+    configuredList?.fields,
+    { code: 'number', type: 'nature', group: 'class', active: 'status' },
+  ), [baseColumns, configuredList]);
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => ({
+    code: 'number', type: 'nature', group: 'class', active: 'status',
+  }[field.name] || field.name)).filter((id) => baseColumns.some((column) => column.id === id)), [baseColumns, configuredList]);
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumns(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
 
   const filterChips = useMemo(() => {
     const chips = [];
@@ -219,12 +244,18 @@ export default function AccountList() {
         <td className="border-r border-gray-100 px-2 py-1.5 text-center"><input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={() => context.toggleRow(row.id)} className="h-3.5 w-3.5 accent-teal-700" aria-label="Sélectionner ce compte" /></td>
         {context.columns.map((column) => {
           const value = column.value ? column.value(row) : row[column.id];
-          return <td key={`${row.id}-${column.id}`} title={String(value ?? '')} className="max-w-0 border-r border-gray-100 px-2 py-1.5 text-xs text-gray-700"><div className="truncate">{column.render ? column.render(value, row, rowIndex) : (value ?? '-')}</div></td>;
+          const content = column.metadataField?.widget
+            ? <MetadataFieldDisplay value={value} field={column.metadataField} entity={activeEntity} />
+            : column.render ? column.render(value, row, rowIndex)
+              : column.metadataField
+              ? <MetadataFieldDisplay value={value} field={column.metadataField} entity={activeEntity} />
+              : (value ?? '-');
+          return <td key={`${row.id}-${column.id}`} title={String(value ?? '')} className="max-w-0 border-r border-gray-100 px-2 py-1.5 text-xs text-gray-700"><div className="truncate">{content}</div></td>;
         })}
         <td className="w-6 border-r border-gray-100 px-0.5 py-1.5" />
       </tr>
     );
-  }, []);
+  }, [activeEntity]);
 
   return (
     <UnifiedIndexPage
@@ -264,7 +295,7 @@ export default function AccountList() {
       pageSizeOptions={[25, 50, 100, 200]}
       total={total}
       visibleColumnIds={visibleColumns}
-      defaultVisibleColumnIds={DEFAULT_COLUMNS}
+      defaultVisibleColumnIds={configuredColumnIds?.length ? configuredColumnIds : DEFAULT_COLUMNS}
       onVisibleColumnsChange={setVisibleColumns}
       defaultSortColumn="number"
       defaultSortDirection="asc"

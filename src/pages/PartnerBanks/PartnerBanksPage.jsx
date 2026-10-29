@@ -1,20 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
-import { 
-  FiRefreshCw, 
-  FiPlus, 
-  FiEdit2, 
-  FiTrash2, 
-  FiSearch, 
-  FiX, 
-  FiCheck, 
-  FiGlobe, 
-  FiPhone, 
-  FiMail, 
-  FiDollarSign, 
-  FiCalendar, 
-  FiUser, 
-  FiChevronLeft, 
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
+import MetadataFieldInput from '../../components/MetadataFieldInput';
+import { useUi } from '../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
+import {
+  FiRefreshCw,
+  FiPlus,
+  FiEdit2,
+  FiTrash2,
+  FiSearch,
+  FiX,
+  FiCheck,
+  FiGlobe,
+  FiPhone,
+  FiMail,
+  FiDollarSign,
+  FiCalendar,
+  FiUser,
+  FiChevronLeft,
   FiChevronRight,
   FiBriefcase,
   FiHome,
@@ -35,6 +40,9 @@ import {
 import { TbBuildingBank } from "react-icons/tb";
 
 export default function PartnerBanksPage() {
+  const { configuration } = useUi();
+  const configuredList = getConfiguredModelView(configuration, 'core.BanquePartenaire', 'list', { preferredViewKey: 'somane_ui.core_banquepartenaire_tree' });
+  const configuredForm = getConfiguredModelView(configuration, 'core.BanquePartenaire', 'form', { preferredViewKey: 'somane_ui.core_banquepartenaire_form' });
   const [partnerBanks, setPartnerBanks] = useState([]);
   const [partenaires, setPartenaires] = useState([]);
   const [banques, setBanques] = useState([]);
@@ -45,7 +53,7 @@ export default function PartnerBanksPage() {
   const [editingPartnerBank, setEditingPartnerBank] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedPartnerBank, setSelectedPartnerBank] = useState(null);
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -62,26 +70,26 @@ export default function PartnerBanksPage() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const [partnerBanksRes, partenairesRes, banquesRes, entitesRes] = await Promise.all([
         apiClient.get('/banques-partenaires/'),
         apiClient.get('/partenaires/'),
         apiClient.get('/banques/'),
         apiClient.get('/entites/')
       ]);
-      
+
       const extractData = (response) => {
         if (Array.isArray(response)) return response;
         if (response && Array.isArray(response.results)) return response.results;
         if (response && Array.isArray(response.data)) return response.data;
         return [];
       };
-      
+
       setPartnerBanks(extractData(partnerBanksRes));
       setPartenaires(extractData(partenairesRes));
       setBanques(extractData(banquesRes));
       setEntites(extractData(entitesRes));
-      
+
     } catch (err) {
       console.error('Erreur lors du chargement des données:', err);
       setError('Erreur lors du chargement des données');
@@ -96,17 +104,17 @@ export default function PartnerBanksPage() {
 
   // Filtrage et recherche
   const filteredPartnerBanks = partnerBanks.filter(partnerBank => {
-    const matchesSearch = 
+    const matchesSearch =
       (partnerBank.numero_compte || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (partnerBank.partenaire_details?.nom || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (partnerBank.banque_details?.nom || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesPartenaire = !filterPartenaire || 
+
+    const matchesPartenaire = !filterPartenaire ||
       (partnerBank.partenaire && partnerBank.partenaire.toString() === filterPartenaire);
-    
-    const matchesBanque = !filterBanque || 
+
+    const matchesBanque = !filterBanque ||
       (partnerBank.banque && partnerBank.banque.toString() === filterBanque);
-    
+
     return matchesSearch && matchesPartenaire && matchesBanque;
   });
 
@@ -123,8 +131,8 @@ export default function PartnerBanksPage() {
 
   // Gestion des sélections
   const toggleRowSelection = (id) => {
-    setSelectedRows(prev => 
-      prev.includes(id) 
+    setSelectedRows(prev =>
+      prev.includes(id)
         ? prev.filter(rowId => rowId !== id)
         : [...prev, id]
     );
@@ -174,6 +182,19 @@ export default function PartnerBanksPage() {
 
   const handleRetry = () => {
     fetchAllData();
+  };
+
+  const columns = applyConfiguredListColumns([
+    { id: 'partenaire', label: 'Partenaire', value: (row) => row.partenaire_details || row.partenaire, render: (row) => <div><div className="text-xs font-semibold text-gray-900">{row.partenaire_details?.nom || row.partenaire || '—'}</div><div className="text-xs text-gray-500">{row.partenaire_details?.type_partenaire || ''}</div></div> },
+    { id: 'banque', label: 'Banque', value: (row) => row.banque_details || row.banque, render: (row) => <div><div className="text-xs font-medium text-gray-900">{row.banque_details?.nom || row.banque?.nom || '—'}</div><div className="text-xs text-gray-500">{row.banque_details?.code_bic || ''}</div></div> },
+    { id: 'numero_compte', label: 'Numéro de compte', value: (row) => row.numero_compte, render: (row) => <span className="font-mono text-xs">{row.numero_compte || '—'}</span> },
+    { id: 'entite', label: 'Entité', value: (row) => row.entite_details || row.entite, render: (row) => row.entite_details?.raison_sociale || row.entite?.raison_sociale || '—' },
+  ], configuredList?.fields);
+  const renderConfiguredCell = (column, row) => {
+    const value = column.value ? column.value(row) : row[column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} record={row} />
+      : column.render ? column.render(row) : (value ?? '—');
   };
 
   const resetFilters = () => {
@@ -232,7 +253,7 @@ export default function PartnerBanksPage() {
                   <FiX size={14} />
                 </button>
               )}
-              
+
               {/* Bouton de filtre avec dropdown */}
               <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
                 <button
@@ -244,16 +265,16 @@ export default function PartnerBanksPage() {
                 </button>
               </div>
             </div>
-            
-            <button 
+
+            <button
               onClick={handleRetry}
               className="ml-3 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center gap-1.5 text-sm"
             >
               <FiRefreshCw className={`${loading ? 'animate-spin' : ''}`} size={14} />
               <span>Actualiser</span>
             </button>
-            
-            <button 
+
+            <button
               onClick={handleNewPartnerBank}
               className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
             >
@@ -408,28 +429,17 @@ export default function PartnerBanksPage() {
                     ID
                   </div>
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Partenaire
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Banque
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Numéro Compte
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Entité
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                {columns.map((column) => <th key={column.id} scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">{column.label}</th>)}
+<th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            
+
             <tbody className="divide-y divide-gray-200">
               {currentPartnerBanks.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-4 text-center">
+                  <td colSpan={columns.length + 2} className="px-3 py-4 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
                         <TbBuildingBank className="w-6 h-6 text-gray-400" />
@@ -438,12 +448,12 @@ export default function PartnerBanksPage() {
                         {partnerBanks.length === 0 ? 'Aucun compte trouvé' : 'Aucun résultat'}
                       </h3>
                       <p className="text-gray-600 text-xs mb-3 max-w-md">
-                        {partnerBanks.length === 0 
-                          ? 'Commencez par créer votre premier compte bancaire partenaire' 
+                        {partnerBanks.length === 0
+                          ? 'Commencez par créer votre premier compte bancaire partenaire'
                           : 'Essayez de modifier vos critères de recherche'}
                       </p>
                       {partnerBanks.length === 0 && (
-                        <button 
+                        <button
                           onClick={handleNewPartnerBank}
                           className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
                         >
@@ -456,7 +466,7 @@ export default function PartnerBanksPage() {
                 </tr>
               ) : (
                 currentPartnerBanks.map((partnerBank) => (
-                  <tr 
+                  <tr
                     key={partnerBank.id}
                     className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
                       selectedRows.includes(partnerBank.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
@@ -476,62 +486,13 @@ export default function PartnerBanksPage() {
                         </span>
                       </div>
                     </td>
-                    
-                    {/* Partenaire */}
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-full flex items-center justify-center border border-emerald-200">
-                          <FiUsers className="w-4 h-4 text-emerald-600" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-semibold text-gray-900 truncate max-w-[120px]">
-                            {partnerBank.partenaire_details?.nom || partnerBank.partenaire || '-'}
-                          </div>
-                          <div className="text-xs text-gray-500 capitalize">
-                            {partnerBank.partenaire_details?.type_partenaire || ''}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    
-                    {/* Banque */}
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-purple-50 to-purple-100 rounded-full flex items-center justify-center border border-purple-200">
-                          <FiPocket className="w-4 h-4 text-purple-600" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-medium text-gray-900 truncate max-w-[100px]">
-                            {partnerBank.banque_details?.nom || partnerBank.banque?.nom || '-'}
-                          </div>
-                          {partnerBank.banque_details?.code_bic && (
-                            <div className="text-xs text-gray-500 font-mono truncate max-w-[90px]">
-                              {partnerBank.banque_details.code_bic}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    
-                    {/* Numéro de compte */}
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <span className="font-mono text-xs bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 px-2 py-1 rounded border border-violet-200">
-                        {partnerBank.numero_compte}
-                      </span>
-                    </td>
-                    
-                    {/* Entité */}
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-amber-50 to-amber-100 rounded-full flex items-center justify-center border border-amber-200">
-                          <FiBriefcase className="w-4 h-4 text-amber-600" />
-                        </div>
-                        <div className="text-xs text-gray-900 truncate max-w-[100px]">
-                          {partnerBank.entite_details?.raison_sociale || partnerBank.entite?.raison_sociale || '-'}
-                        </div>
-                      </div>
-                    </td>
-                    
+
+                    {columns.map((column) => (
+                      <td key={column.id} className="px-3 py-2 border-r border-gray-200">
+                        {renderConfiguredCell(column, partnerBank)}
+                      </td>
+                    ))}
+
                     {/* Actions */}
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center gap-1">
@@ -650,6 +611,7 @@ export default function PartnerBanksPage() {
           partenaires={partenaires}
           banques={banques}
           entites={entites}
+          configuredView={configuredForm}
           onClose={() => {
             setShowForm(false);
             setEditingPartnerBank(null);
@@ -692,15 +654,18 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
                 <p className="text-violet-100 text-xs mt-0.5">{partnerBank.numero_compte}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors"
-            >
-              <FiX size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <RecordTraceabilityPanel model="banquepartenaire" recordId={partnerBank.id} />
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
           </div>
         </div>
-        
+
         <div className="p-4 space-y-4">
           {/* En-tête avec informations principales */}
           <div className="flex flex-col md:flex-row items-center md:items-start gap-4 mb-6">
@@ -902,7 +867,7 @@ function PartnerBankDetailModal({ partnerBank, onClose }) {
 }
 
 // COMPOSANT MODAL POUR FORMULAIRE
-function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onClose, onSuccess }) {
+function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, configuredView, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     partenaire: partnerBank?.partenaire?.id || partnerBank?.partenaire || '',
     banque: partnerBank?.banque?.id || partnerBank?.banque || '',
@@ -912,42 +877,41 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const defaultFields = [
+    { name: 'partenaire', label: 'Partenaire', type: 'many2one', required: true },
+    { name: 'banque', label: 'Banque', type: 'many2one', required: true },
+    { name: 'numero_compte', label: 'Numéro de compte', type: 'char', required: true },
+    { name: 'entite', label: 'Entité', type: 'many2one', required: true },
+  ];
+  const configuredGroups = configuredView?.groups?.map((group) => ({
+    title: group.title,
+    fields: group.fields.filter((field) => !field.invisible),
+  })).filter((group) => group.fields.length) || [];
+  const formGroups = configuredView?.groups?.length ? configuredGroups : [{ title: 'Informations du compte', fields: defaultFields }];
+  const formFields = formGroups.flatMap((group) => group.fields);
+  const partenaireArray = Array.isArray(partenaires) ? partenaires : [];
+  const banquesArray = Array.isArray(banques) ? banques : [];
+  const entitesArray = Array.isArray(entites) ? entites : [];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // Validation
-    if (!formData.partenaire) {
-      setError('Le partenaire est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.banque) {
-      setError('La banque est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.numero_compte) {
-      setError('Le numéro de compte est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.entite) {
-      setError('L\'entité est obligatoire');
+    const missingField = formFields.find((field) => (
+      field.required && !String(formData[field.name] ?? '').trim()
+    ));
+    if (missingField) {
+      setError(`Le champ « ${missingField.label || missingField.field_description || missingField.name} » est obligatoire`);
       setLoading(false);
       return;
     }
 
     try {
-      const url = partnerBank 
+      const url = partnerBank
         ? `/banques-partenaires/${partnerBank.id}/`
         : `/banques-partenaires/`;
-      
+
       const method = partnerBank ? 'PUT' : 'POST';
 
       await apiClient.request(url, {
@@ -957,11 +921,11 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
           'Content-Type': 'application/json'
         }
       });
-      
+
       onSuccess();
     } catch (err) {
       console.error('❌ Erreur sauvegarde compte:', err);
-      
+
       let errorMessage = 'Erreur lors de la sauvegarde';
       if (err.response?.data) {
         const errorData = err.response.data;
@@ -975,7 +939,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -1018,7 +982,7 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
             </button>
           </div>
         </div>
-        
+
         {error && (
           <div className="mx-4 mt-3 bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3">
             <div className="flex items-center gap-2">
@@ -1029,104 +993,55 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
             </div>
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Section 1: Informations du Compte */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+          {formGroups.map((group, groupIndex) => <section key={`${group.title}-${groupIndex}`} className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Informations du Compte</h3>
+              <h3 className="text-sm font-semibold text-gray-900">{group.title}</h3>
             </div>
-            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {/* Numéro de compte */}
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Numéro de compte <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <FiCreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    type="text"
-                    required
-                    value={formData.numero_compte}
-                    onChange={(e) => handleChange('numero_compte', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm font-mono"
-                    placeholder="IBAN, numéro de compte..."
-                  />
-                </div>
-              </div>
-              
-              {/* Partenaire */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Partenaire <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <FiUsers className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
-                    required
-                    value={formData.partenaire}
-                    onChange={(e) => handleChange('partenaire', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
-                  >
-                    <option value="">Sélectionnez un partenaire</option>
-                    {partenaires.map(partenaire => (
-                      <option key={partenaire.id} value={partenaire.id}>
-                        {partenaire.nom} ({partenaire.type_partenaire})
-                      </option>
-                    ))}
+              {group.fields.map((field) => {
+                const name = field.name;
+                const label = field.label || field.field_description || name;
+                const required = Boolean(field.required);
+                const disabled = Boolean(field.readonly);
+                const controlClass = "w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm disabled:bg-gray-100 disabled:text-gray-500";
+                const renderSelect = (options, getLabel) => <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {label}{required && <span className="ml-1 text-red-500">*</span>}
+                  </label>
+                  <select required={required} disabled={disabled} value={formData[name] ?? ''} onChange={(event) => handleChange(name, event.target.value)} className={controlClass}>
+                    <option value="">Sélectionnez {label.toLowerCase()}</option>
+                    {options.map((option) => <option key={option.id} value={option.id}>{getLabel(option)}</option>)}
                   </select>
-                </div>
-              </div>
-              
-              {/* Banque */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Banque <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <FiPocket className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
-                    required
-                    value={formData.banque}
-                    onChange={(e) => handleChange('banque', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
-                  >
-                    <option value="">Sélectionnez une banque</option>
-                    {banques.map(banque => (
-                      <option key={banque.id} value={banque.id}>
-                        {banque.nom} {banque.code_bic && `(${banque.code_bic})`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              
-              {/* Entité */}
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Entité <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <TbBuildingBank className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <select
-                    required
-                    value={formData.entite}
-                    onChange={(e) => handleChange('entite', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white appearance-none text-sm"
-                  >
-                    <option value="">Sélectionnez une entité</option>
-                    {entites.map(entite => (
-                      <option key={entite.id} value={entite.id}>
-                        {entite.raison_sociale}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                  {field.help && <p className="mt-1 text-xs text-gray-500">{field.help}</p>}
+                </div>;
+
+                if (name === 'partenaire') return <div key={name}>{renderSelect(partenaireArray, (partner) => `${partner.nom} (${partner.type_partenaire})`)}</div>;
+                if (name === 'banque') return <div key={name}>{renderSelect(banquesArray, (bank) => `${bank.nom}${bank.code_bic ? ` (${bank.code_bic})` : ''}`)}</div>;
+                if (name === 'entite') return <div key={name} className="lg:col-span-2">{renderSelect(entitesArray, (entity) => entity.raison_sociale)}</div>;
+
+                return <div key={name} className={name === 'numero_compte' ? 'lg:col-span-2' : ''}>
+                  <label className="block text-xs font-medium text-gray-700 mb-1" htmlFor={`partner-bank-${name}`}>
+                    {label}{required && <span className="ml-1 text-red-500">*</span>}
+                  </label>
+                  <div className="relative">
+                    {name === 'numero_compte' && <FiCreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />}
+                    <MetadataFieldInput
+                      field={field}
+                      value={formData[name] ?? ''}
+                      onChange={(event) => handleChange(name, event.target.value)}
+                      disabled={disabled}
+                      className={`${controlClass} ${name === 'numero_compte' ? 'pl-9 font-mono' : ''}`}
+                    />
+                  </div>
+                  {field.help && <p className="mt-1 text-xs text-gray-500">{field.help}</p>}
+                  {name === 'numero_compte' && <p className="mt-1 text-xs text-gray-500">IBAN ou numéro du compte bancaire.</p>}
+                </div>;
+              })}
             </div>
-          </div>
+          </section>)}
 
           {/* Section 2: Aperçu */}
           <div className="bg-gradient-to-br from-violet-50 to-white rounded-lg p-3 border border-violet-100">
@@ -1138,34 +1053,34 @@ function PartnerBankFormModal({ partnerBank, partenaires, banques, entites, onCl
               <div>
                 <p className="text-xs font-medium text-gray-500 mb-1">Partenaire</p>
                 <p className="text-sm text-gray-900 font-medium">
-                  {partenaires.find(p => p.id == formData.partenaire)?.nom || 
+                  {partenaires.find(p => p.id == formData.partenaire)?.nom ||
                    <span className="text-red-500 text-xs">Sélection requis</span>}
                 </p>
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-500 mb-1">Banque</p>
                 <p className="text-sm text-gray-900">
-                  {banques.find(b => b.id == formData.banque)?.nom || 
+                  {banques.find(b => b.id == formData.banque)?.nom ||
                    <span className="text-red-500 text-xs">Sélection requis</span>}
                 </p>
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-500 mb-1">Numéro de compte</p>
                 <p className="text-sm font-semibold text-violet-700 font-mono">
-                  {formData.numero_compte || 
+                  {formData.numero_compte ||
                    <span className="text-red-500 text-xs">Saisie requis</span>}
                 </p>
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-500 mb-1">Entité</p>
                 <p className="text-sm text-gray-900">
-                  {entites.find(e => e.id == formData.entite)?.raison_sociale || 
+                  {entites.find(e => e.id == formData.entite)?.raison_sociale ||
                    <span className="text-red-500 text-xs">Sélection requis</span>}
                 </p>
               </div>
             </div>
           </div>
-          
+
           {/* Boutons d'action */}
           <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button

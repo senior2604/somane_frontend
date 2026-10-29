@@ -1,15 +1,20 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { apiClient } from '../../services/apiClient';
-import { 
-  FiRefreshCw, 
-  FiPlus, 
-  FiEdit2, 
-  FiTrash2, 
-  FiSearch, 
-  FiFilter, 
-  FiX, 
-  FiCheck, 
-  FiChevronLeft, 
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
+import MetadataFieldInput from '../../components/MetadataFieldInput';
+import { useUi } from '../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
+import {
+  FiRefreshCw,
+  FiPlus,
+  FiEdit2,
+  FiTrash2,
+  FiSearch,
+  FiFilter,
+  FiX,
+  FiCheck,
+  FiChevronLeft,
   FiChevronRight,
   FiChevronDown,
   FiDownload,
@@ -21,13 +26,15 @@ import {
   FiGlobe,
   FiCalendar,
   FiTrendingUp,
-  FiTrendingDown,
   FiExternalLink,
   FiInfo,
   FiActivity
 } from "react-icons/fi";
 
 export default function TauxChangePage() {
+  const { configuration } = useUi();
+  const configuredList = getConfiguredModelView(configuration, 'core.HistoriqueTauxChange', 'list', { preferredViewKey: 'somane_ui.core_historiquetauxchange_tree' });
+  const configuredForm = getConfiguredModelView(configuration, 'core.HistoriqueTauxChange', 'form', { preferredViewKey: 'somane_ui.core_historiquetauxchange_form' });
   const [tauxChange, setTauxChange] = useState([]);
   const [devises, setDevises] = useState([]);
   const [entites, setEntites] = useState([]);
@@ -37,7 +44,7 @@ export default function TauxChangePage() {
   const [editingTaux, setEditingTaux] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTaux, setSelectedTaux] = useState(null);
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,25 +61,25 @@ export default function TauxChangePage() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const [tauxRes, devisesRes, entitesRes] = await Promise.all([
         apiClient.get('/taux-change/'),
         apiClient.get('/devises/'),
         apiClient.get('/entites/')
       ]);
-      
+
       const extractData = (response) => {
         if (Array.isArray(response)) return response;
         if (response && Array.isArray(response.results)) return response.results;
         if (response && Array.isArray(response.data)) return response.data;
         return [];
       };
-      
+
       console.log('📊 Données taux de change reçues:', tauxRes);
       setTauxChange(extractData(tauxRes));
       setDevises(extractData(devisesRes));
       setEntites(extractData(entitesRes));
-      
+
     } catch (err) {
       console.error('Erreur lors du chargement des données:', err);
       setError('Erreur lors du chargement des données');
@@ -93,13 +100,6 @@ export default function TauxChangePage() {
     };
   };
 
-  // Fonction pour obtenir les détails d'une entité
-  const getEntiteDetails = (tauxItem) => {
-    return {
-      raison_sociale: tauxItem.entite_nom
-    };
-  };
-
   // Formater le taux pour l'affichage
   const formatTaux = (taux) => {
     if (!taux) return '0';
@@ -115,18 +115,31 @@ export default function TauxChangePage() {
     return new Date(dateString).toLocaleDateString('fr-FR');
   };
 
+  const columns = applyConfiguredListColumns([
+    { id: 'devise', label: 'Devise', value: (row) => ({ code: row.devise_code, nom: row.devise_nom, symbole: row.devise_symbole }), render: (row) => <div className="flex flex-col"><span className="font-semibold">{row.devise_code || '—'} · {row.devise_nom || 'Devise inconnue'}</span><span className="text-xs text-gray-500">{row.devise_symbole || '—'}</span></div> },
+    { id: 'date_taux', label: 'Date', value: (row) => row.date_taux, render: (row) => formatDate(row.date_taux) || '—' },
+    { id: 'taux', label: 'Taux', value: (row) => row.taux, render: (row) => formatTaux(row.taux) },
+    { id: 'entite', label: 'Entité', value: (row) => ({ raison_sociale: row.entite_nom }), render: (row) => row.entite_nom || '—' },
+  ], configuredList?.fields);
+  const renderConfiguredCell = (column, row) => {
+    const value = column.value ? column.value(row) : row[column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} record={row} />
+      : column.render ? column.render(row) : (value ?? '—');
+  };
+
   // Filtrage et recherche - COMME DANS BANQUES
   const filteredTauxChange = useMemo(() => {
     return tauxChange.filter(taux => {
       const deviseDetails = getDeviseDetails(taux);
-      const matchesSearch = 
+      const matchesSearch =
         (deviseDetails?.code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (deviseDetails?.nom || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (taux.date_taux || '').includes(searchTerm);
-      
+
       const matchesDevise = !filterDevise || taux.devise == filterDevise;
       const matchesDate = !filterDate || taux.date_taux === filterDate;
-      
+
       return matchesSearch && matchesDevise && matchesDate;
     });
   }, [tauxChange, searchTerm, filterDevise, filterDate]);
@@ -144,8 +157,8 @@ export default function TauxChangePage() {
 
   // Gestion des sélections - COMME DANS BANQUES
   const toggleRowSelection = (id) => {
-    setSelectedRows(prev => 
-      prev.includes(id) 
+    setSelectedRows(prev =>
+      prev.includes(id)
         ? prev.filter(rowId => rowId !== id)
         : [...prev, id]
     );
@@ -173,7 +186,7 @@ export default function TauxChangePage() {
   const handleDelete = async (taux) => {
     const deviseDetails = getDeviseDetails(taux);
     const deviseNom = deviseDetails ? `${deviseDetails.code} - ${deviseDetails.nom}` : 'cette devise';
-    
+
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer le taux de change du ${formatDate(taux.date_taux)} pour ${deviseNom} ? Cette action est irréversible.`)) {
       try {
         await apiClient.delete(`/taux-change/${taux.id}/`);
@@ -215,19 +228,6 @@ export default function TauxChangePage() {
     uniqueEntites: new Set(tauxChange.map(t => t.entite)).size
   }), [tauxChange]);
 
-  // Trouver le taux maximum et minimum
-  const tauxExtremes = useMemo(() => {
-    if (tauxChange.length === 0) return { max: 0, min: 0 };
-    
-    const tauxList = tauxChange.map(t => parseFloat(t.taux)).filter(t => !isNaN(t));
-    if (tauxList.length === 0) return { max: 0, min: 0 };
-    
-    return {
-      max: Math.max(...tauxList),
-      min: Math.min(...tauxList)
-    };
-  }, [tauxChange]);
-
   if (loading) {
     return (
       <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
@@ -250,7 +250,7 @@ export default function TauxChangePage() {
       {/* HEADER COMPACT COMME DANS BANQUES */}
       <div className="mb-6">
         {/* Ligne supérieure avec titre */}
-        
+
 
         {/* Barre de recherche au centre COMME DANS BANQUES */}
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -272,7 +272,7 @@ export default function TauxChangePage() {
                   <FiX size={14} />
                 </button>
               )}
-              
+
               {/* Bouton de filtre avec dropdown */}
               <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
                 <button
@@ -284,16 +284,16 @@ export default function TauxChangePage() {
                 </button>
               </div>
             </div>
-            
-            <button 
+
+            <button
               onClick={handleRetry}
               className="ml-3 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center gap-1.5 text-sm"
             >
               <FiRefreshCw className={`${loading ? 'animate-spin' : ''}`} size={14} />
               <span>Actualiser</span>
             </button>
-            
-            <button 
+
+            <button
               onClick={handleNewTaux}
               className="ml-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 flex items-center gap-1.5 text-sm shadow"
             >
@@ -449,28 +449,17 @@ export default function TauxChangePage() {
                     ID
                   </div>
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Devise
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Date
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Taux
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Entité
-                </th>
+                {columns.map((column) => <th key={column.id} scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">{column.label}</th>)}
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            
+
             <tbody className="divide-y divide-gray-200">
               {currentTauxChange.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-4 text-center">
+                  <td colSpan={columns.length + 2} className="px-3 py-4 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
                         <FiActivity className="w-6 h-6 text-gray-400" />
@@ -479,12 +468,12 @@ export default function TauxChangePage() {
                         {tauxChange.length === 0 ? 'Aucun taux de change trouvé' : 'Aucun résultat'}
                       </h3>
                       <p className="text-gray-600 text-xs mb-3 max-w-md">
-                        {tauxChange.length === 0 
-                          ? 'Commencez par créer votre premier taux de change' 
+                        {tauxChange.length === 0
+                          ? 'Commencez par créer votre premier taux de change'
                           : 'Essayez de modifier vos critères de recherche'}
                       </p>
                       {tauxChange.length === 0 && (
-                        <button 
+                        <button
                           onClick={handleNewTaux}
                           className="px-3 py-1 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1 text-xs"
                         >
@@ -497,11 +486,9 @@ export default function TauxChangePage() {
                 </tr>
               ) : (
                 currentTauxChange.map((taux) => {
-                  const deviseDetails = getDeviseDetails(taux);
-                  const entiteDetails = getEntiteDetails(taux);
-                  
+
                   return (
-                    <tr 
+                    <tr
                       key={taux.id}
                       className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
                         selectedRows.includes(taux.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
@@ -521,56 +508,14 @@ export default function TauxChangePage() {
                           </span>
                         </div>
                       </td>
-                      
-                      {/* Devise */}
-                      <td className="px-3 py-2 border-r border-gray-200">
-                        <div className="flex flex-col">
-                          <div className="text-xs font-semibold text-gray-900 flex items-center gap-1.5">
-                            <span className="px-1.5 py-0.5 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded border border-violet-200 text-xs font-medium font-mono">
-                              {deviseDetails?.code || 'N/A'}
-                            </span>
-                            <span className="truncate max-w-[100px]">{deviseDetails?.nom || 'Devise inconnue'}</span>
-                          </div>
-                          <div className="text-xs text-gray-500 mt-0.5">
-                            {deviseDetails?.symbole || '-'}
-                          </div>
-                        </div>
-                      </td>
-                      
-                      {/* Date */}
-                      <td className="px-3 py-2 border-r border-gray-200">
-                        <div className="text-xs text-gray-900">
-                          <span className="px-1.5 py-0.5 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 rounded border border-emerald-200 text-xs font-medium">
-                            {formatDate(taux.date_taux)}
-                          </span>
-                        </div>
-                      </td>
-                      
-                      {/* Taux */}
-                      <td className="px-3 py-2 border-r border-gray-200">
-                        <div className="flex flex-col">
-                          <div className="text-xs font-bold text-gray-900 font-mono">
-                            {formatTaux(taux.taux)}
-                          </div>
-                          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                            {parseFloat(taux.taux) >= tauxExtremes.max ? (
-                              <FiTrendingUp className="w-3 h-3 text-emerald-500" />
-                            ) : parseFloat(taux.taux) <= tauxExtremes.min ? (
-                              <FiTrendingDown className="w-3 h-3 text-red-500" />
-                            ) : null}
-                            <span className="truncate max-w-[80px]">1 {deviseDetails?.code || 'DEV'} =</span>
-                          </div>
-                        </div>
-                      </td>
-                      
-                      {/* Entité */}
-                      <td className="px-3 py-2 border-r border-gray-200">
-                        <div className="text-xs text-gray-900 truncate max-w-[120px]">
-                          {entiteDetails?.raison_sociale || '-'}
-                        </div>
-                      </td>
-                      
-                      {/* Actions */}
+
+                      {columns.map((column) => (
+                         <td key={column.id} className="px-3 py-2 border-r border-gray-200">
+                           {renderConfiguredCell(column, taux)}
+                         </td>
+                       ))}
+
+                       {/* Actions */}
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="flex items-center gap-1">
                           <button
@@ -688,6 +633,7 @@ export default function TauxChangePage() {
           taux={editingTaux}
           devises={devises}
           entites={entites}
+          configuredView={configuredForm}
           onClose={() => {
             setShowForm(false);
             setEditingTaux(null);
@@ -733,15 +679,18 @@ function TauxChangeDetailModal({ taux, devises, entites, onClose }) {
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors"
-            >
-              <FiX size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <RecordTraceabilityPanel model="historiquetauxchange" recordId={taux.id} />
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
           </div>
         </div>
-        
+
         <div className="p-4 space-y-4">
           {/* En-tête avec badges */}
           <div className="flex flex-col md:flex-row items-center md:items-start gap-4 mb-6">
@@ -901,11 +850,11 @@ function TauxChangeDetailModal({ taux, devises, entites, onClose }) {
 
 // Composant pour la flèche (non disponible dans react-icons/fi)
 const FiArrowRight = (props) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    className="h-6 w-6" 
-    fill="none" 
-    viewBox="0 0 24 24" 
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className="h-6 w-6"
+    fill="none"
+    viewBox="0 0 24 24"
     stroke="currentColor"
     {...props}
   >
@@ -914,7 +863,7 @@ const FiArrowRight = (props) => (
 );
 
 // COMPOSANT MODAL AVEC DROPDOWNS AVEC RECHERCHE INTÉGRÉE - FORMULAIRE COMPLET COMME BANQUES
-function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
+function TauxChangeFormModal({ taux, devises, entites, configuredView, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     devise: taux?.devise || '',
     date_taux: taux?.date_taux || '',
@@ -924,10 +873,24 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // États pour recherche dans les dropdowns
   const [searchDevise, setSearchDevise] = useState('');
   const [searchEntite, setSearchEntite] = useState('');
+
+  const defaultFields = [
+    { name: 'devise', label: 'Devise', type: 'many2one', required: true },
+    { name: 'date_taux', label: 'Date du taux', type: 'date', required: true },
+    { name: 'taux', label: 'Taux', type: 'float', required: true },
+    { name: 'entite', label: 'Entité', type: 'many2one', required: true },
+  ];
+  const configuredGroups = configuredView?.groups?.map((group) => ({
+    title: group.title,
+    fields: group.fields.filter((field) => !field.invisible),
+  })).filter((group) => group.fields.length) || [];
+  const formGroups = configuredView?.groups?.length ? configuredGroups : [{ title: 'Informations de base', fields: defaultFields }];
+  const formFields = formGroups.flatMap((group) => group.fields);
+
 
   // S'assurer que les tableaux sont toujours des tableaux
   const devisesArray = Array.isArray(devises) ? devises : [];
@@ -949,36 +912,26 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
     setLoading(true);
     setError(null);
 
-    // Validation
-    if (!formData.devise) {
-      setError('La devise est obligatoire');
+    const missingField = formFields.find((field) => (
+      field.required && !String(formData[field.name] ?? '').trim()
+    ));
+    if (missingField) {
+      setError(`Le champ « ${missingField.label || missingField.field_description || missingField.name} » est obligatoire`);
       setLoading(false);
       return;
     }
 
-    if (!formData.date_taux) {
-      setError('La date du taux est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.taux || parseFloat(formData.taux) <= 0) {
+    if (Number(formData.taux) <= 0) {
       setError('Le taux doit être un nombre positif');
       setLoading(false);
       return;
     }
 
-    if (!formData.entite) {
-      setError('L\'entité est obligatoire');
-      setLoading(false);
-      return;
-    }
-
     try {
-      const url = taux 
+      const url = taux
         ? `/taux-change/${taux.id}/`
         : `/taux-change/`;
-      
+
       const method = taux ? 'PUT' : 'POST';
 
       // Préparer les données finales
@@ -995,12 +948,12 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
           'Content-Type': 'application/json'
         }
       });
-      
+
       console.log('✅ Taux de change sauvegardé:', response);
       onSuccess();
     } catch (err) {
       console.error('❌ Erreur sauvegarde taux de change:', err);
-      
+
       let errorMessage = 'Erreur lors de la sauvegarde';
       if (err.response?.data) {
         const errorData = err.response.data;
@@ -1014,7 +967,7 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -1029,11 +982,11 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
   };
 
   // Composant réutilisable pour les dropdowns avec recherche - COMME DANS BANQUES
-  const SearchableDropdown = ({ 
-    label, 
-    value, 
-    onChange, 
-    options, 
+  const SearchableDropdown = ({
+    label,
+    value,
+    onChange,
+    options,
     searchValue,
     onSearchChange,
     placeholder,
@@ -1063,7 +1016,7 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
       };
 
       document.addEventListener('mousedown', handleMouseDown, true);
-      
+
       return () => {
         document.removeEventListener('mousedown', handleMouseDown, true);
       };
@@ -1107,7 +1060,7 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
             {label} {required && <span className="text-red-500">*</span>}
           </label>
         )}
-        
+
         {/* Bouton d'ouverture du dropdown */}
         <button
           type="button"
@@ -1115,8 +1068,8 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
           onMouseDown={(e) => e.preventDefault()}
           disabled={disabled}
           className={`w-full text-left border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent transition-all text-sm ${
-            disabled 
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+            disabled
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
               : 'bg-white hover:border-gray-400'
           } ${isOpen ? 'ring-1 ring-violet-500 border-violet-500' : ''}`}
         >
@@ -1138,7 +1091,7 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
 
         {/* Dropdown avec recherche */}
         {isOpen && (
-          <div 
+          <div
             className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-56 overflow-hidden"
             onMouseDown={handleInputMouseDown}
           >
@@ -1163,7 +1116,7 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
                 {filteredOptions.length} résultat(s) trouvé(s)
               </p>
             </div>
-            
+
             {/* Liste des options */}
             <div className="max-h-44 overflow-y-auto">
               {filteredOptions.length === 0 ? (
@@ -1238,7 +1191,7 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
             </button>
           </div>
         </div>
-        
+
         {error && (
           <div className="mx-4 mt-3 bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3">
             <div className="flex items-center gap-2">
@@ -1249,88 +1202,69 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
             </div>
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Section 1: Informations de Base */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
+          {formGroups.map((group, groupIndex) => <section key={`${group.title}-${groupIndex}`} className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
-              <h3 className="text-sm font-semibold text-gray-900">Informations de Base</h3>
+              <h3 className="text-sm font-semibold text-gray-900">{group.title}</h3>
             </div>
-            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {/* 1. Devise avec recherche */}
-              <div>
-                <SearchableDropdown
-                  label="Devise *"
-                  value={formData.devise}
-                  onChange={(value) => handleChange('devise', value)}
-                  options={devisesArray}
-                  searchValue={searchDevise}
-                  onSearchChange={setSearchDevise}
-                  placeholder="Sélectionnez une devise"
-                  required={true}
-                  icon={FiGlobe}
-                  getOptionLabel={(devise) => `${devise.code} - ${devise.nom} (${devise.symbole})`}
-                  getOptionValue={(devise) => devise.id}
-                />
-              </div>
-              
-              {/* 2. Date du taux */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Date du taux *
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.date_taux}
-                  onChange={(e) => handleChange('date_taux', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm"
-                />
-              </div>
-              
-              {/* 3. Taux */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Taux *
-                </label>
-                <div className="relative">
-                  <FiDollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    type="number"
-                    required
-                    step="0.000001"
-                    min="0.000001"
-                    value={formData.taux}
-                    onChange={(e) => handleChange('taux', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent text-sm font-mono"
-                    placeholder="1.000000"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Valeur du taux de change avec 6 décimales
-                </p>
-              </div>
-              
-              {/* 4. Entité avec recherche */}
-              <div>
-                <SearchableDropdown
-                  label="Entité *"
-                  value={formData.entite}
-                  onChange={(value) => handleChange('entite', value)}
-                  options={entitesArray}
-                  searchValue={searchEntite}
-                  onSearchChange={setSearchEntite}
-                  placeholder="Sélectionnez une entité"
-                  required={true}
-                  icon={FiTrendingUp}
-                  getOptionLabel={(entite) => entite.raison_sociale}
-                  getOptionValue={(entite) => entite.id}
-                />
-              </div>
+              {group.fields.map((field) => {
+                const name = field.name;
+                const label = field.label || field.field_description || name;
+                const required = Boolean(field.required);
+                const disabled = Boolean(field.readonly);
+                const fieldType = field.type || field.ttype || 'char';
+                let control;
+
+                if (name === 'devise') {
+                  control = <SearchableDropdown
+                    label={label} value={formData.devise}
+                    onChange={(value) => handleChange(name, value)}
+                    options={devisesArray} searchValue={searchDevise}
+                    onSearchChange={setSearchDevise} placeholder="Sélectionnez une devise"
+                    required={required} disabled={disabled} icon={FiGlobe}
+                    getOptionLabel={(currency) => `${currency.code} - ${currency.nom} (${currency.symbole})`}
+                    getOptionValue={(currency) => currency.id}
+                  />;
+                } else if (name === 'entite') {
+                  control = <SearchableDropdown
+                    label={label} value={formData.entite}
+                    onChange={(value) => handleChange(name, value)}
+                    options={entitesArray} searchValue={searchEntite}
+                    onSearchChange={setSearchEntite} placeholder="Sélectionnez une entité"
+                    required={required} disabled={disabled} icon={FiTrendingUp}
+                    getOptionLabel={(entity) => entity.raison_sociale}
+                    getOptionValue={(entity) => entity.id}
+                  />;
+                } else {
+                  control = <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1" htmlFor={`rate-${name}`}>
+                      {label}{required && <span className="ml-1 text-red-500">*</span>}
+                    </label>
+                    <div className={name === 'taux' ? 'relative' : ''}>
+                      {name === 'taux' && <FiDollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />}
+                      <MetadataFieldInput
+                        field={{ ...field, type: fieldType }}
+                        value={formData[name] ?? ''}
+                        onChange={(event) => handleChange(name, event.target.value)}
+                        disabled={disabled}
+                        className={`w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent bg-white text-sm ${name === 'taux' ? 'pl-9 font-mono' : ''}`}
+                      />
+                    </div>
+                    {field.help && <p className="text-xs text-gray-500 mt-1">{field.help}</p>}
+                    {name === 'taux' && <p className="text-xs text-gray-500 mt-1">Valeur du taux de change avec 6 décimales</p>}
+                  </div>;
+                }
+
+                return <div key={name}>
+                  {control}
+                  {field.help && (name === 'devise' || name === 'entite') && <p className="text-xs text-gray-500 mt-1">{field.help}</p>}
+                </div>;
+              })}
             </div>
-          </div>
+          </section>)}
 
           {/* Aperçu */}
           <div className="bg-gradient-to-br from-emerald-50 to-white rounded-lg p-3 border border-emerald-200">
@@ -1338,7 +1272,7 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
               <div className="w-1 h-4 bg-gradient-to-b from-emerald-600 to-emerald-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Aperçu</h3>
             </div>
-            
+
             <div className="bg-white rounded-lg p-4 border border-gray-300">
               <div className="flex items-center justify-center space-x-4">
                 <div className="text-center">
@@ -1375,7 +1309,7 @@ function TauxChangeFormModal({ taux, devises, entites, onClose, onSuccess }) {
               </div>
             </div>
           </div>
-          
+
           {/* Boutons d'action - COMME DANS BANQUES */}
           <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button

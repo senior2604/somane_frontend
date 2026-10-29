@@ -1,6 +1,9 @@
 // features/achats/pages/DemandesAchatPage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { apiClient } from '../../../services/apiClient';
+import { useUi } from '../../../context/UiContext';
+import MetadataFieldDisplay from '../../../components/MetadataFieldDisplay';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../services/metadataViews';
 import {
   FiPlus,
   FiEdit2,
@@ -19,6 +22,10 @@ import {
 } from "react-icons/fi";
 
 export default function DemandesAchatPage() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(() => getConfiguredModelView(configuration, 'achats.PurchaseRequisition', 'list', {
+    preferredViewKey: 'somane_ui.achats_purchase_requisition_tree',
+  }), [configuration]);
   const [demandes, setDemandes] = useState([]);
   const [utilisateurs, setUtilisateurs] = useState([]);
   const [departements, setDepartements] = useState([]);
@@ -86,6 +93,25 @@ export default function DemandesAchatPage() {
         {config.label}
       </span>
     );
+  };
+
+  const baseColumns = [
+    { id: 'name', label: 'N° Demande', value: (row) => row.name, render: (row) => <span className="font-medium text-gray-900">{row.name || 'N/A'}</span> },
+    { id: 'user', label: 'Demandeur', value: (row) => row.user || row.user_id, render: (row) => <div className="flex items-center"><FiUser className="mr-2 text-gray-400" size={16} /><span>{row.user?.username || row.user?.name || getReferenceName(utilisateurs, row.user_id)}</span></div> },
+    { id: 'department', label: 'Département', value: (row) => row.department || row.department_id, render: (row) => <div className="flex items-center"><FiBriefcase className="mr-2 text-gray-400" size={16} /><span>{row.department?.name || getReferenceName(departements, row.department_id)}</span></div> },
+    { id: 'company', label: 'Société', value: (row) => row.company || row.company_id, render: (row) => row.company?.name || row.company?.raison_sociale || getReferenceName(societes, row.company_id) },
+    { id: 'date_start', label: 'Date Début', value: (row) => row.date_start, render: (row) => <div className="flex items-center"><FiCalendar className="mr-2 text-gray-400" size={16} /><span>{formatDate(row.date_start)}</span></div> },
+    { id: 'state', label: 'Statut', value: (row) => row.state, render: (row) => getStatusBadge(row.state) },
+    { id: 'notes', label: 'Notes', value: (row) => row.notes, render: (row) => row.notes || '—' },
+  ];
+  const columns = applyConfiguredListColumns(baseColumns, configuredList?.fields, {
+    user: 'user', department: 'department', company: 'company',
+  });
+  const renderConfiguredCell = (column, row) => {
+    const value = column.value ? column.value(row) : row[column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} record={row} />
+      : column.render ? column.render(row) : (value ?? '—');
   };
 
   // Filtrage et pagination
@@ -205,24 +231,7 @@ export default function DemandesAchatPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  N° Demande
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Demandeur
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Département
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Société
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date Début
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Statut
-                </th>
+                {columns.map((column) => <th key={column.id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{column.label}</th>)}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -231,33 +240,7 @@ export default function DemandesAchatPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {currentItems.map((demande) => (
                 <tr key={demande.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-medium text-gray-900">{demande.name || 'N/A'}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiUser className="text-gray-400 mr-2" size={16} />
-                      <span>{getReferenceName(utilisateurs, demande.user_id)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiBriefcase className="text-gray-400 mr-2" size={16} />
-                      <span>{getReferenceName(departements, demande.department_id)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getReferenceName(societes, demande.company_id)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiCalendar className="text-gray-400 mr-2" size={16} />
-                      <span>{formatDate(demande.date_start)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(demande.state)}
-                  </td>
+                  {columns.map((column) => <td key={column.id} className="px-6 py-4 whitespace-nowrap">{renderConfiguredCell(column, demande)}</td>)}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <button

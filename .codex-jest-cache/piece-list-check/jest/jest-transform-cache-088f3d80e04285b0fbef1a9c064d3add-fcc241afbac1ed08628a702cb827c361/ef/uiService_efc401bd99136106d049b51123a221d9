@@ -1,0 +1,14 @@
+2bec9fb3a22f7462432d8d1a5f779207
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.uiService = void 0;
+var _apiClient = require("./apiClient");
+const uiService = exports.uiService = {
+  loadBootstrap() {
+    return _apiClient.apiClient.get('ui/bootstrap/');
+  }
+};
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfYXBpQ2xpZW50IiwicmVxdWlyZSIsInVpU2VydmljZSIsImV4cG9ydHMiLCJsb2FkQm9vdHN0cmFwIiwiYXBpQ2xpZW50IiwiZ2V0Il0sInNvdXJjZXMiOlsidWlTZXJ2aWNlLmpzIl0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IGFwaUNsaWVudCB9IGZyb20gJy4vYXBpQ2xpZW50JztcclxuXHJcbmV4cG9ydCBjb25zdCB1aVNlcnZpY2UgPSB7XHJcbiAgbG9hZEJvb3RzdHJhcCgpIHtcclxuICAgIHJldHVybiBhcGlDbGllbnQuZ2V0KCd1aS9ib290c3RyYXAvJyk7XHJcbiAgfSxcclxufTtcclxuIl0sIm1hcHBpbmdzIjoiOzs7Ozs7QUFBQSxJQUFBQSxVQUFBLEdBQUFDLE9BQUE7QUFFTyxNQUFNQyxTQUFTLEdBQUFDLE9BQUEsQ0FBQUQsU0FBQSxHQUFHO0VBQ3ZCRSxhQUFhQSxDQUFBLEVBQUc7SUFDZCxPQUFPQyxvQkFBUyxDQUFDQyxHQUFHLENBQUMsZUFBZSxDQUFDO0VBQ3ZDO0FBQ0YsQ0FBQyIsImlnbm9yZUxpc3QiOltdfQ==

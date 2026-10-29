@@ -1,6 +1,9 @@
 // features/achats/pages/LignesDemandeAchatPage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { apiClient } from '../../../services/apiClient';
+import { useUi } from '../../../context/UiContext';
+import MetadataFieldDisplay from '../../../components/MetadataFieldDisplay';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../services/metadataViews';
 import {
   FiPlus,
   FiEdit2,
@@ -18,6 +21,10 @@ import {
 } from "react-icons/fi";
 
 export default function LignesDemandeAchatPage() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(() => getConfiguredModelView(configuration, 'achats.PurchaseRequisitionLine', 'list', {
+    preferredViewKey: 'somane_ui.achats_purchase_requisition_line_tree',
+  }), [configuration]);
   const [lignes, setLignes] = useState([]);
   const [demandes, setDemandes] = useState([]);
   const [produits, setProduits] = useState([]);
@@ -68,6 +75,20 @@ export default function LignesDemandeAchatPage() {
   const getDemandeAchatName = (id) => {
     const demande = demandes.find(d => d.id === id);
     return demande ? demande.name : 'N/A';
+  };
+
+  const baseColumns = [
+    { id: 'requisition', label: 'Demande', value: (row) => row.requisition || row.requisition_id, render: (row) => <span className="font-medium text-gray-900">{row.requisition?.name || getDemandeAchatName(row.requisition_id)}</span> },
+    { id: 'product', label: 'Article demandé', value: (row) => row.product || row.product_id, render: (row) => <div className="flex items-center"><FiPackage className="mr-2 text-gray-400" size={16} /><span>{row.product?.name || getReferenceName(produits, row.product_id)}</span></div> },
+    { id: 'product_qty', label: 'Quantité', value: (row) => row.product_qty, render: (row) => <span className="font-medium text-lg">{row.product_qty || 0}</span> },
+    { id: 'description', label: 'Description', value: (row) => row.description, render: (row) => <span className="text-sm text-gray-600">{row.description || 'N/A'}</span> },
+  ];
+  const columns = applyConfiguredListColumns(baseColumns, configuredList?.fields);
+  const renderConfiguredCell = (column, row) => {
+    const value = column.value ? column.value(row) : row[column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} record={row} />
+      : column.render ? column.render(row) : (value ?? '—');
   };
 
   // Filtrage et pagination
@@ -201,18 +222,7 @@ export default function LignesDemandeAchatPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Demande
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Article demandé
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Quantité
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Description
-                </th>
+                {columns.map((column) => <th key={column.id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{column.label}</th>)}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -221,21 +231,7 @@ export default function LignesDemandeAchatPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {currentItems.map((ligne) => (
                 <tr key={ligne.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-medium text-gray-900">{getDemandeAchatName(ligne.requisition_id)}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiPackage className="text-gray-400 mr-2" size={16} />
-                      <span>{getReferenceName(produits, ligne.product_id)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-medium text-lg">{ligne.product_qty || 0}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-gray-600">{ligne.description || 'N/A'}</span>
-                  </td>
+                  {columns.map((column) => <td key={column.id} className="px-6 py-4 whitespace-nowrap">{renderConfiguredCell(column, ligne)}</td>)}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <button

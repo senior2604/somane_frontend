@@ -1,14 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '../../services/apiClient';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
+import { useUi } from '../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
 
 export default function SubdivisionsPage() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(() => getConfiguredModelView(configuration, 'core.Subdivision', 'list', { preferredViewKey: 'somane_ui.core_subdivision_tree' }), [configuration]);
   const [subdivisions, setSubdivisions] = useState([]);
   const [pays, setPays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingSubdivision, setEditingSubdivision] = useState(null);
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,7 +31,7 @@ export default function SubdivisionsPage() {
       setError(null);
 
       const response = await apiClient.get('/subdivisions/');
-      
+
       let subdivisionsData = [];
       if (Array.isArray(response)) {
         subdivisionsData = response;
@@ -58,14 +63,14 @@ export default function SubdivisionsPage() {
 
   // Filtrage et recherche
   const filteredSubdivisions = subdivisions.filter(subdivision => {
-    const matchesSearch = 
+    const matchesSearch =
       subdivision.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       subdivision.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       subdivision.pays?.nom?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesPays = filterPays === '' || subdivision.pays?.id?.toString() === filterPays;
     const matchesType = filterType === '' || subdivision.type_subdivision === filterType;
-    
+
     return matchesSearch && matchesPays && matchesType;
   });
 
@@ -140,6 +145,19 @@ export default function SubdivisionsPage() {
     return badgeClasses[type] || 'bg-gray-100 text-gray-800 border-gray-300';
   };
 
+  const columns = applyConfiguredListColumns([
+    { id: 'code', label: 'Code', value: (row) => row.code, render: (row) => <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">{row.code || '—'}</span> },
+    { id: 'nom', label: 'Nom', value: (row) => row.nom, render: (row) => row.nom || '—' },
+    { id: 'type_subdivision', label: 'Type', value: (row) => row.type_subdivision, render: (row) => <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${getTypeSubdivisionBadge(row.type_subdivision)}`}>{getTypeSubdivisionLabel(row.type_subdivision)}</span> },
+    { id: 'pays', label: 'Pays', value: (row) => row.pays, render: (row) => <div className="flex items-center gap-2"><span>{row.pays?.emoji}</span><span>{row.pays?.nom_fr || row.pays?.nom || '—'}</span></div> },
+  ], configuredList?.fields);
+  const renderConfiguredCell = (column, row) => {
+    const value = column.value ? column.value(row) : row[column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} record={row} />
+      : column.render ? column.render(row) : (value ?? '—');
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -162,7 +180,7 @@ export default function SubdivisionsPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <button 
+          <button
             onClick={handleRetry}
             className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
           >
@@ -171,7 +189,7 @@ export default function SubdivisionsPage() {
             </svg>
             Actualiser
           </button>
-          <button 
+          <button
             onClick={handleNewSubdivision}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
@@ -299,18 +317,7 @@ export default function SubdivisionsPage() {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
                   ID
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Code
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Type
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Pays
-                </th>
+                                {columns.map((column) => <th key={column.id} className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">{column.label}</th>)}
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                   Actions
                 </th>
@@ -319,14 +326,14 @@ export default function SubdivisionsPage() {
             <tbody>
               {currentSubdivisions.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                  <td colSpan={columns.length + 2} className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
                     {subdivisions.length === 0 ? 'Aucune subdivision trouvée' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
               ) : (
                 currentSubdivisions.map((subdivision, index) => (
-                  <tr 
-                    key={subdivision.id} 
+                  <tr
+                    key={subdivision.id}
                     className={`${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     } hover:bg-gray-100 transition-colors border-b border-gray-300`}
@@ -334,28 +341,14 @@ export default function SubdivisionsPage() {
                     <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
                       {subdivision.id}
                     </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                        {subdivision.code}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {subdivision.nom}
-                    </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${getTypeSubdivisionBadge(subdivision.type_subdivision)}`}>
-                        {getTypeSubdivisionLabel(subdivision.type_subdivision)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      <div className="flex items-center gap-2">
-                        <span>{subdivision.pays?.emoji}</span>
-                        <span>{subdivision.pays?.nom_fr || subdivision.pays?.nom}</span>
-                      </div>
-                    </td>
+                    {columns.map((column) => (
+                      <td key={column.id} className="px-6 py-4 text-sm text-gray-700 border-r border-gray-300">
+                        {renderConfiguredCell(column, subdivision)}
+                      </td>
+                    ))}
                     <td className="px-6 py-4">
                       <div className="flex space-x-3">
-                        <button 
+                        <button
                           onClick={() => handleEdit(subdivision)}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
@@ -364,7 +357,7 @@ export default function SubdivisionsPage() {
                           </svg>
                           Éditer
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleDelete(subdivision)}
                           className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors flex items-center gap-1"
                         >
@@ -523,10 +516,10 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
     }
 
     try {
-      const url = subdivision 
+      const url = subdivision
         ? `/subdivisions/${subdivision.id}/`
         : `/subdivisions/`;
-      
+
       const method = subdivision ? 'PUT' : 'POST';
 
       await apiClient.request(url, {
@@ -536,7 +529,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
           'Content-Type': 'application/json'
         }
       });
-      
+
       onSuccess();
     } catch (err) {
       const errorMessage = err.message || 'Erreur lors de la sauvegarde';
@@ -561,7 +554,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
             {subdivision ? 'Modifier la subdivision' : 'Créer une nouvelle subdivision'}
           </h2>
         </div>
-        
+
         {error && (
           <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex items-center">
@@ -572,7 +565,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
             </div>
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Code de la subdivision */}
@@ -592,7 +585,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
                 Format: CodePays-CodeRégion (ex: TG-M pour Maritime, US-CA pour Californie)
               </p>
             </div>
-            
+
             {/* Nom de la subdivision */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -607,7 +600,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
                 placeholder="Maritime, Californie, Île-de-France..."
               />
             </div>
-            
+
             {/* Type de subdivision */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -707,7 +700,7 @@ function SubdivisionFormModal({ subdivision, pays, onClose, onSuccess }) {
               </div>
             )}
           </div>
-          
+
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
             <button
               type="button"

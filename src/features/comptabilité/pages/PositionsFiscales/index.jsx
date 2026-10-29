@@ -11,8 +11,10 @@ import {
   FiX,
 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import { useUi } from '../../../../context/UiContext';
 import { useEntity } from '../../../../context/EntityContext';
 import { apiClient } from '../../../../services/apiClient';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 
 const MEMORY_KEY = 'comptabilite:positions-fiscales:index';
 const CACHE_PREFIX = 'comptabilite:positions-fiscales:cache:';
@@ -100,6 +102,13 @@ function ChoiceBadge({ value, positive, negative, tone = 'purple' }) {
 
 export default function PositionsFiscalesIndex() {
   const navigate = useNavigate();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.AccountFiscalPosition', 'list', {
+      preferredViewKey: 'somane_ui.accounting_accountfiscalposition_tree',
+    }),
+    [configuration],
+  );
   const { activeEntity } = useEntity();
   const companyId = activeEntity?.id;
   const cacheKey = `${CACHE_PREFIX}${companyId || 'none'}`;
@@ -283,7 +292,7 @@ export default function PositionsFiscalesIndex() {
     }
   }, [companyId, loadPositions, positions, selectedIds]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'nom',
       label: 'Position',
@@ -350,6 +359,22 @@ export default function PositionsFiscalesIndex() {
       render: (_, position) => <StatusBadge active={position.active} />,
     },
   ], [getCompany, getCountry, navigate]);
+  const columns = useMemo(() => applyConfiguredListColumns(
+    baseColumns,
+    configuredList?.fields,
+    {
+      name: 'nom', country: 'pays', company: 'entreprise', auto_apply: 'application',
+      vat_required: 'tva', sequence: 'priorite', active: 'statut',
+    },
+  ), [baseColumns, configuredList]);
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => ({
+    name: 'nom', country: 'pays', company: 'entreprise', auto_apply: 'application',
+    vat_required: 'tva', sequence: 'priorite', active: 'statut',
+  }[field.name] || field.name)).filter((id) => baseColumns.some((column) => column.id === id)), [baseColumns, configuredList]);
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumns(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
 
   const filterChips = useMemo(() => filters.map((filter) => ({
     id: filter.id,

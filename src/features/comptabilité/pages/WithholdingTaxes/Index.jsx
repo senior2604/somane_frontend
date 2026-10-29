@@ -4,8 +4,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { FiCheck, FiCopy, FiPlus, FiTrash2, FiX } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import { useUi } from '../../../../context/UiContext';
 import { useEntity } from '../../../../context/EntityContext';
 import { apiClient } from '../../../../services/apiClient';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 
 const MEMORY_KEY = 'comptabilite:retenues-source:index';
 const CACHE_PREFIX = 'comptabilite:retenues-source:cache:';
@@ -108,6 +110,13 @@ function BooleanBadge({ value, yes, no, color = 'purple' }) {
 
 export default function WithholdingTaxesIndex() {
   const navigate = useNavigate();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.AccountWithholdingTax', 'list', {
+      preferredViewKey: 'somane_ui.accounting_accountwithholdingtax_tree',
+    }),
+    [configuration],
+  );
   const { activeEntity } = useEntity();
   const companyId = activeEntity?.id;
   const cacheKey = `${CACHE_PREFIX}${companyId || 'none'}`;
@@ -275,7 +284,7 @@ export default function WithholdingTaxesIndex() {
     }
   }, [companyId, loadTaxes, selectedIds, taxes]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'nom',
       label: 'Nom',
@@ -371,6 +380,26 @@ export default function WithholdingTaxesIndex() {
       render: (_, tax) => <StatusBadge active={tax.active} />,
     },
   ], [companyName, navigate]);
+  const columns = useMemo(() => applyConfiguredListColumns(
+    baseColumns,
+    configuredList?.fields,
+    {
+      name: 'nom', amount: 'taux', withholding_type: 'type',
+      withholding_scope: 'base', withholding_eligibility: 'exigibilite',
+      account_id: 'compte', tax_id: 'taxe', tax_group: 'groupe',
+      company_id: 'entreprise', sequence: 'sequence', is_default: 'defaut', active: 'statut',
+    },
+  ), [baseColumns, configuredList]);
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => ({
+    name: 'nom', amount: 'taux', withholding_type: 'type',
+    withholding_scope: 'base', withholding_eligibility: 'exigibilite',
+    account_id: 'compte', tax_id: 'taxe', tax_group: 'groupe',
+    company_id: 'entreprise', sequence: 'sequence', is_default: 'defaut', active: 'statut',
+  }[field.name] || field.name)).filter((id) => baseColumns.some((column) => column.id === id)), [baseColumns, configuredList]);
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumns(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
 
   const filterChips = useMemo(() => filters.map((filter) => ({
     id: filter.id,

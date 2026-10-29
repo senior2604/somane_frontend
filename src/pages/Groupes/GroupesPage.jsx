@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { apiClient } from '../../services/apiClient';
-import { 
-  FiRefreshCw, FiPlus, FiEdit2, FiTrash2, FiSearch, FiFilter, FiX, 
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
+import { useUi } from '../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
+import {
+  FiRefreshCw, FiPlus, FiEdit2, FiTrash2, FiSearch, FiFilter, FiX,
   FiCheck, FiUsers, FiChevronLeft, FiChevronRight, FiDownload, FiUpload,
   FiEye, FiCheckCircle, FiXCircle, FiUserCheck, FiShield, FiFolder,
   FiKey, FiLock, FiUnlock, FiMoreVertical
 } from "react-icons/fi";
 
 export default function GroupsPage() {
+  const { configuration } = useUi();
+  const configuredList = getConfiguredModelView(configuration, 'core.Groupe', 'list', { preferredViewKey: 'somane_ui.core_groupe_tree' });
   const [groupes, setGroupes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15,7 +21,7 @@ export default function GroupsPage() {
   const [editingGroup, setEditingGroup] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState(null);
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -31,7 +37,7 @@ export default function GroupsPage() {
       setError(null);
 
       const response = await apiClient.get('/groupes/');
-      
+
       let groupesData = [];
       if (Array.isArray(response)) {
         groupesData = response;
@@ -55,7 +61,7 @@ export default function GroupsPage() {
 
   // Filtrage et recherche
   const filteredGroupes = useMemo(() => {
-    return groupes.filter(group => 
+    return groupes.filter(group =>
       group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (group.description && group.description.toLowerCase().includes(searchTerm.toLowerCase()))
     );
@@ -64,10 +70,10 @@ export default function GroupsPage() {
   // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentGroupes = useMemo(() => 
+  const currentGroupes = useMemo(() =>
     filteredGroupes.slice(indexOfFirstItem, indexOfLastItem)
   , [filteredGroupes, indexOfFirstItem, indexOfLastItem]);
-  
+
   const totalPages = Math.ceil(filteredGroupes.length / itemsPerPage);
 
   // Changement de page
@@ -77,8 +83,8 @@ export default function GroupsPage() {
 
   // Gestion des sélections
   const toggleRowSelection = (id) => {
-    setSelectedRows(prev => 
-      prev.includes(id) 
+    setSelectedRows(prev =>
+      prev.includes(id)
         ? prev.filter(rowId => rowId !== id)
         : [...prev, id]
     );
@@ -142,6 +148,19 @@ export default function GroupsPage() {
     totalUsers: groupes.reduce((total, group) => total + (group.user_count || 0), 0),
   }), [groupes]);
 
+  const columns = applyConfiguredListColumns([
+    { id: 'name', label: 'Nom du groupe', value: (row) => row.name, render: (row) => <span className="font-semibold text-gray-900">{row.name}</span> },
+    { id: 'description', label: 'Description', value: (row) => row.description, render: (row) => <span className="text-sm text-gray-600">{row.description || 'Aucune description'}</span> },
+    { id: 'category_id', label: 'Catégorie', value: (row) => row.category?.name || row.category_id?.name || row.category_id || '', render: (row) => row.category?.name || row.category_id?.name || row.category_id || '—' },
+    { id: 'entite', label: 'Entité', value: (row) => row.entite?.raison_sociale || row.entite || '', render: (row) => row.entite?.raison_sociale || row.entite || '—' },
+  ], configuredList?.fields);
+  const renderConfiguredCell = (column, row) => {
+    const value = column.value ? column.value(row) : row[column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} record={row} />
+      : column.render ? column.render(row) : (value ?? '—');
+  };
+
   if (loading) {
     return (
       <div className="p-4 bg-gradient-to-br from-gray-50 to-white min-h-screen">
@@ -176,14 +195,14 @@ export default function GroupsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={handleRetry}
               className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group"
             >
               <FiRefreshCw className={`${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500 text-sm'}`} />
               <span className="font-medium">Actualiser</span>
             </button>
-            <button 
+            <button
               onClick={handleNewGroup}
               className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-700 hover:to-violet-600 transition-all duration-300 hover:shadow flex items-center gap-1.5 text-sm group shadow"
             >
@@ -276,7 +295,7 @@ export default function GroupsPage() {
               )}
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
@@ -375,27 +394,15 @@ export default function GroupsPage() {
                     ID
                   </div>
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Nom du Groupe
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Description
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Modules
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Utilisateurs
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
+                {columns.map((column) => <th key={column.id} scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">{column.label}</th>)}
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">Modules</th>
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">Utilisateurs</th>
+</tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {currentGroupes.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-3 py-6 text-center">
+                  <td colSpan={columns.length + 4} className="px-3 py-6 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-3">
                         <FiUsers className="w-8 h-8 text-gray-400" />
@@ -404,12 +411,12 @@ export default function GroupsPage() {
                         {groupes.length === 0 ? 'Aucun groupe trouvé' : 'Aucun résultat pour votre recherche'}
                       </h3>
                       <p className="text-gray-600 mb-4 max-w-md text-sm">
-                        {groupes.length === 0 
-                          ? 'Commencez par créer votre premier groupe' 
+                        {groupes.length === 0
+                          ? 'Commencez par créer votre premier groupe'
                           : 'Essayez de modifier vos critères de recherche'}
                       </p>
                       {groupes.length === 0 && (
-                        <button 
+                        <button
                           onClick={handleNewGroup}
                           className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 transition-all duration-300 font-medium flex items-center gap-1.5 text-sm"
                         >
@@ -422,7 +429,7 @@ export default function GroupsPage() {
                 </tr>
               ) : (
                 currentGroupes.map((group) => (
-                  <tr 
+                  <tr
                     key={group.id}
                     className={`hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200 ${
                       selectedRows.includes(group.id) ? 'bg-gradient-to-r from-violet-50 to-violet-25' : 'bg-white'
@@ -441,22 +448,12 @@ export default function GroupsPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1 bg-violet-100 rounded">
-                          <FiFolder className="w-3 h-3 text-violet-700" />
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold text-gray-900">{group.name}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="text-sm text-gray-600 truncate max-w-[200px]">
-                        {group.description || 'Aucune description'}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 border-r border-gray-200">
+                    {columns.map((column) => (
+                      <td key={column.id} className="px-3 py-2 border-r border-gray-200">
+                        {renderConfiguredCell(column, group)}
+                      </td>
+                    ))}
+<td className="px-3 py-2 border-r border-gray-200">
                       <div className="flex flex-wrap gap-1">
                         {group.modules_autorises && group.modules_autorises.length > 0 ? (
                           <>
@@ -615,7 +612,7 @@ function GroupDetailModal({ group, onClose }) {
   const availableModules = [
     'Core/Noyau',
     'Achat',
-    'Vente', 
+    'Vente',
     'Comptabilité',
     'RH/Paie',
     'Stock',
@@ -640,15 +637,18 @@ function GroupDetailModal({ group, onClose }) {
                 <p className="text-violet-100 text-xs mt-0.5">{group.name}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors"
-            >
-              <FiX size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <RecordTraceabilityPanel model="groupe" recordId={group.id} />
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
           </div>
         </div>
-        
+
         <div className="p-4 space-y-4">
           {/* Informations Générales */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
@@ -746,7 +746,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
   const availableModules = [
     'Core/Noyau',
     'Achat',
-    'Vente', 
+    'Vente',
     'Comptabilité',
     'RH/Paie',
     'Stock',
@@ -768,10 +768,10 @@ function GroupFormModal({ group, onClose, onSuccess }) {
     }
 
     try {
-      const url = group 
+      const url = group
         ? `/groupes/${group.id}/`
         : `/groupes/`;
-      
+
       const method = group ? 'PUT' : 'POST';
 
       await apiClient.request(url, {
@@ -781,7 +781,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
           'Content-Type': 'application/json'
         }
       });
-      
+
       onSuccess();
     } catch (err) {
       console.error('Erreur sauvegarde groupe:', err);
@@ -804,7 +804,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
     const newModules = currentModules.includes(module)
       ? currentModules.filter(m => m !== module)
       : [...currentModules, module];
-    
+
     handleChange('modules_autorises', newModules);
   };
 
@@ -837,7 +837,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
             </button>
           </div>
         </div>
-        
+
         {error && (
           <div className="mx-4 mt-3 bg-gradient-to-r from-red-50 to-red-100 border-l-3 border-red-500 rounded-r-lg p-3">
             <div className="flex items-center gap-2">
@@ -848,7 +848,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
             </div>
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {/* Section 1: Informations Générales - COMPACT */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg p-3 border border-gray-200">
@@ -856,7 +856,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
               <div className="w-1 h-4 bg-gradient-to-b from-violet-600 to-violet-400 rounded"></div>
               <h3 className="text-sm font-semibold text-gray-900">Informations Générales</h3>
             </div>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -874,7 +874,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
                   />
                 </div>
               </div>
-              
+
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
                 <textarea
@@ -897,11 +897,11 @@ function GroupFormModal({ group, onClose, onSuccess }) {
             <p className="text-xs text-gray-600 mb-3">
               Sélectionnez les modules auxquels ce groupe aura accès
             </p>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {availableModules.map(module => (
-                <label 
-                  key={module} 
+                <label
+                  key={module}
                   className={`flex items-center gap-2 p-3 rounded-lg border transition-all duration-200 cursor-pointer text-sm ${
                     formData.modules_autorises.includes(module)
                       ? 'bg-white border-violet-400'
@@ -925,7 +925,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
                 </label>
               ))}
             </div>
-            
+
             <div className="mt-3 text-xs text-gray-600">
               <div className="flex items-center gap-1.5">
                 <FiCheckCircle className="w-3 h-3 text-green-600" />
@@ -948,8 +948,8 @@ function GroupFormModal({ group, onClose, onSuccess }) {
               <div className="bg-white rounded-lg p-2 border border-gray-200">
                 <div className="text-xs font-medium text-gray-500 mb-1">Modules</div>
                 <div className="text-sm font-medium text-gray-900">
-                  {formData.modules_autorises.length > 0 
-                    ? `${formData.modules_autorises.length} module(s)` 
+                  {formData.modules_autorises.length > 0
+                    ? `${formData.modules_autorises.length} module(s)`
                     : 'Aucun module'}
                 </div>
               </div>
@@ -972,7 +972,7 @@ function GroupFormModal({ group, onClose, onSuccess }) {
               )}
             </div>
           </div>
-          
+
           {/* Boutons d'action - COMPACT */}
           <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button

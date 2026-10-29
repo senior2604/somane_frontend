@@ -4,6 +4,8 @@ import { FiCheck, FiEye, FiPlus, FiX } from 'react-icons/fi';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import { useUi } from '../../../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import axiosInstance from '../../../../config/axiosInstance';
 import {
   getActionErrorMessage,
@@ -103,6 +105,13 @@ const StateBadge = ({ state }) => {
 export default function PaymentList() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.AccountPayment', 'list', {
+      preferredViewKey: 'somane_ui.accounting_accountpayment_tree',
+    }),
+    [configuration],
+  );
   const entityId = getActiveEntityId();
   const [payments, setPayments] = useState(readCache);
   const [search, setSearch] = useState('');
@@ -211,7 +220,7 @@ export default function PaymentList() {
     }
   }, [actionLoading, loadPayments, selectedRows]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'date', label: 'Date', width: 105,
       value: (row) => row.payment_date,
@@ -244,6 +253,24 @@ export default function PaymentList() {
       render: (_, row) => <StateBadge state={row.state} />,
     },
   ], []);
+  const columns = useMemo(() => applyConfiguredListColumns(
+    baseColumns,
+    configuredList?.fields,
+    {
+      payment_date: 'date', name: 'number', payment_type: 'type',
+      partner: 'partner', journal: 'journal', payment_method_id: 'method',
+      reference: 'reference', amount: 'amount', state: 'state',
+    },
+  ), [baseColumns, configuredList]);
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => ({
+    payment_date: 'date', name: 'number', payment_type: 'type',
+    partner: 'partner', journal: 'journal', payment_method_id: 'method',
+    reference: 'reference', amount: 'amount', state: 'state',
+  }[field.name] || field.name)).filter((id) => baseColumns.some((column) => column.id === id)), [baseColumns, configuredList]);
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumns(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
 
   const filterChips = useMemo(() => {
     const chips = [];

@@ -1,24 +1,40 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  FiAlertCircle,
-  FiEdit2,
-  FiEye,
-  FiFilter,
-  FiPlus,
-  FiRefreshCw,
-  FiSearch,
-  FiTrash2,
-} from 'react-icons/fi';
+import { FiEdit2, FiEye, FiFilter, FiTrash2 } from 'react-icons/fi';
 import { TbBuildingSkyscraper } from 'react-icons/tb';
 import { apiClient } from '../../services/apiClient';
 import { useUi } from '../../context/UiContext';
 import { can } from '../../services/securityAccess';
+import { getConfiguredModelView } from '../../services/metadataViews';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
+import UnifiedIndexPage from '../../components/UnifiedIndexPage';
 import { getEntityName, getVilleName, parseResponse } from './EntityShared';
+
+const FALLBACK_LIST_FIELDS = [
+  { name: 'raison_sociale', label: 'Raison sociale', type: 'char' },
+  { name: 'activite', label: 'Activité', type: 'char' },
+  { name: 'telephone', label: 'Téléphone', type: 'char' },
+  { name: 'email', label: 'E-mail', type: 'char' },
+  { name: 'statut', label: 'Active', type: 'boolean' },
+];
+
+function getEntityFieldValue(entity, fieldName) {
+  if (fieldName === 'raison_sociale') return getEntityName(entity);
+  if (fieldName === 'ville') return entity.ville_details || getVilleName(entity);
+  if (fieldName === 'pays') return entity.pays_details || entity.pays;
+  if (fieldName === 'subdivision' || fieldName === 'region') return entity.subdivision_details || entity.region_details || entity.subdivision || entity.region;
+  if (fieldName === 'parent_id') return entity.parent_details || entity.parent_id;
+  return entity[fieldName];
+}
 
 export default function EntitiesList() {
   const navigate = useNavigate();
-  const { security } = useUi();
+  const { security, configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'core.Entite', 'list'),
+    [configuration],
+  );
+  const listFields = configuredList?.fields?.length ? configuredList.fields : FALLBACK_LIST_FIELDS;
   const canCreate = can(security, 'core.Entite', 'create');
   const canWrite = can(security, 'core.Entite', 'write');
   const canDelete = can(security, 'core.Entite', 'delete');
@@ -78,212 +94,61 @@ export default function EntitiesList() {
     });
   }, [entities, search, filterCountry, filterStatus]);
 
-  const deleteEntity = async (entity) => {
-    if (!canDelete) return;
-    if (!window.confirm(`Supprimer "${getEntityName(entity)}" ?`)) return;
+  const deleteEntity = useCallback(async (entity) => {
+    if (!canDelete || !window.confirm(`Supprimer "${getEntityName(entity)}" ?`)) return;
     try {
       await apiClient.delete(`/entites/${entity.id}/`);
       await fetchEntities();
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Suppression impossible');
     }
-  };
+  }, [canDelete, fetchEntities]);
 
-  const stats = {
-    total: entities.length,
-    actifs: entities.filter((entity) => entity.statut).length,
-    parents: entities.filter((entity) => entity.parent_id).length,
-  };
+  const columns = useMemo(() => [
+    ...listFields.map((field) => ({
+      id: field.name,
+      label: field.label,
+      value: (entity) => getEntityFieldValue(entity, field.name),
+      render: (value, entity) => field.name === 'raison_sociale' ? (
+        <div className="flex min-w-0 items-center gap-2">
+          {entity.logo ? <img src={entity.logo} alt={`Logo ${getEntityName(entity)}`} className="h-7 w-7 shrink-0 rounded-full border border-gray-300 object-cover" /> : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-violet-50"><TbBuildingSkyscraper size={15} className="text-violet-700" /></span>}
+          <span className="min-w-0"><span className="block max-w-[220px] truncate font-medium text-gray-900"><MetadataFieldDisplay value={value} field={field} record={entity} /></span><span className="block text-[10px] text-gray-500">ID : {entity.id}{entity.sigle ? ` · ${entity.sigle}` : ''}</span></span>
+        </div>
+      ) : <MetadataFieldDisplay value={value} field={field} record={entity} />,
+    })),
+    {
+      id: 'actions', label: 'Actions', sortable: false,
+      render: (_, entity) => <div className="flex items-center justify-center gap-1">
+        <button type="button" onClick={(event) => { event.stopPropagation(); navigate(`/entities/${entity.id}`); }} className="rounded p-1 text-blue-600 hover:bg-blue-50" title="Afficher" aria-label="Afficher"><FiEye size={14} /></button>
+        {canWrite && <button type="button" onClick={(event) => { event.stopPropagation(); navigate(`/entities/${entity.id}?edit=1`); }} className="rounded p-1 text-violet-700 hover:bg-violet-50" title="Modifier" aria-label="Modifier"><FiEdit2 size={14} /></button>}
+        {canDelete && <button type="button" onClick={(event) => { event.stopPropagation(); void deleteEntity(entity); }} className="rounded p-1 text-red-600 hover:bg-red-50" title="Supprimer" aria-label="Supprimer"><FiTrash2 size={14} /></button>}
+      </div>,
+    },
+  ], [listFields, canWrite, canDelete, deleteEntity, navigate]);
 
   return (
-    <div className="p-4">
-      <div className="bg-white border border-gray-300">
-        <div className="px-4 py-3 border-b border-gray-300 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Entites</h1>
-            <p className="text-xs text-gray-500">
-              {stats.total} entite(s), {stats.actifs} active(s), {stats.parents} avec entite parente
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={fetchEntities}
-              className="h-8 px-3 border border-gray-300 text-xs hover:bg-gray-50 flex items-center gap-1"
-            >
-              <FiRefreshCw size={13} />
-              Actualiser
-            </button>
-            {canCreate && (
-              <button
-                onClick={() => navigate('/entities/create')}
-                className="h-8 px-3 bg-purple-600 text-white text-xs hover:bg-purple-700 flex items-center gap-1"
-              >
-                <FiPlus size={13} />
-                Nouvelle entite
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="px-4 py-3 border-b border-gray-300 bg-gray-50 grid grid-cols-12 gap-2">
-          <div className="col-span-12 md:col-span-6 relative">
-            <FiSearch size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="w-full h-8 pl-7 pr-2 border border-gray-300 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none"
-              placeholder="Rechercher raison sociale, email, telephone, numero fiscal..."
-            />
-          </div>
-          <div className="col-span-6 md:col-span-3 flex items-center gap-1">
-            <FiFilter size={13} className="text-gray-400" />
-            <select
-              value={filterCountry}
-              onChange={(event) => setFilterCountry(event.target.value)}
-              className="w-full h-8 border border-gray-300 text-xs"
-            >
-              <option value="">Tous les pays</option>
-              {pays.map((country) => (
-                <option key={country.id} value={country.id}>
-                  {country.emoji ? `${country.emoji} ` : ''}{country.nom || country.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="col-span-6 md:col-span-3">
-            <select
-              value={filterStatus}
-              onChange={(event) => setFilterStatus(event.target.value)}
-              className="w-full h-8 border border-gray-300 text-xs"
-            >
-              <option value="">Tous les statuts</option>
-              <option value="true">Actives</option>
-              <option value="false">Inactives</option>
-            </select>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mx-4 mt-3 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 flex items-center gap-2">
-            <FiAlertCircle size={14} />
-            {error}
-          </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border border-gray-300 px-2 py-1.5 text-xs text-left">Entite</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-xs text-left">Activite</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-xs text-left">Contact</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-xs text-left">Localisation</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-xs text-left">Fiscal</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-xs text-center">Statut</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-xs text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="border border-gray-300 px-3 py-8 text-center text-sm text-gray-500">
-                    Chargement...
-                  </td>
-                </tr>
-              ) : filteredEntities.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="border border-gray-300 px-3 py-8 text-center text-sm text-gray-500">
-                    Aucune entite trouvee
-                  </td>
-                </tr>
-              ) : filteredEntities.map((entity) => (
-                <tr key={entity.id} className="hover:bg-gray-50">
-                  <td className="border border-gray-300 px-2 py-1.5">
-                    <div className="flex items-center gap-2">
-                      {entity.logo ? (
-                        <img
-                          src={entity.logo}
-                          alt={getEntityName(entity)}
-                          className="w-7 h-7 rounded-full object-cover border border-gray-300"
-                        />
-                      ) : (
-                        <div className="w-7 h-7 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center">
-                          <TbBuildingSkyscraper size={15} className="text-purple-700" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium text-gray-900 truncate max-w-[220px]">
-                          {getEntityName(entity)}
-                        </div>
-                        <div className="text-[11px] text-gray-500">
-                          ID: {entity.id}{entity.sigle ? ` - ${entity.sigle}` : ''}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="border border-gray-300 px-2 py-1.5 text-xs">
-                    <div>{entity.activite || '-'}</div>
-                    <div className="text-gray-500">{entity.forme_juridique || '-'}</div>
-                  </td>
-                  <td className="border border-gray-300 px-2 py-1.5 text-xs">
-                    <div>{entity.email || '-'}</div>
-                    <div className="text-gray-500">{entity.telephone || '-'}</div>
-                  </td>
-                  <td className="border border-gray-300 px-2 py-1.5 text-xs">
-                    <div>{getVilleName(entity) || '-'}</div>
-                    <div className="text-gray-500">
-                      {entity.pays_details?.emoji ? `${entity.pays_details.emoji} ` : ''}
-                      {entity.pays_details?.nom || entity.pays_details?.name || ''}
-                    </div>
-                  </td>
-                  <td className="border border-gray-300 px-2 py-1.5 text-xs">
-                    <div>{entity.numero_fiscal || '-'}</div>
-                    <div className="text-gray-500">{entity.registre_commerce || '-'}</div>
-                  </td>
-                  <td className="border border-gray-300 px-2 py-1.5 text-center text-xs">
-                    <span className={`px-2 py-1 ${entity.statut ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {entity.statut ? 'Actif' : 'Inactif'}
-                    </span>
-                  </td>
-                  <td className="border border-gray-300 px-2 py-1.5">
-                    <div className="flex items-center justify-center gap-1">
-                      <button
-                        onClick={() => navigate(`/entities/${entity.id}`)}
-                        className="p-1 text-blue-600 hover:bg-blue-50"
-                        title="Afficher"
-                      >
-                        <FiEye size={14} />
-                      </button>
-                      {canWrite && (
-                        <button
-                          onClick={() => navigate(`/entities/${entity.id}?edit=1`)}
-                          className="p-1 text-purple-600 hover:bg-purple-50"
-                          title="Modifier"
-                        >
-                          <FiEdit2 size={14} />
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          onClick={() => deleteEntity(entity)}
-                          className="p-1 text-red-600 hover:bg-red-50"
-                          title="Supprimer"
-                        >
-                          <FiTrash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="px-4 py-2 border-t border-gray-300 bg-gray-50 text-xs text-gray-500">
-          {filteredEntities.length} resultat(s)
-        </div>
-      </div>
-    </div>
+    <UnifiedIndexPage
+      title="Entités"
+      rows={filteredEntities}
+      columns={columns}
+      rowKey="id"
+      loading={loading}
+      error={error || ''}
+      onDismissError={() => setError(null)}
+      emptyText="Aucune entité trouvée"
+      searchValue={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Rechercher une entité…"
+      renderFilters={() => <div className="grid gap-3 p-4 sm:grid-cols-2">
+        <label className="text-xs font-medium text-gray-700"><span className="mb-1 flex items-center gap-1"><FiFilter /> Pays</span><select value={filterCountry} onChange={(event) => setFilterCountry(event.target.value)} className="h-9 w-full rounded border border-gray-300 bg-white px-2 text-sm"><option value="">Tous les pays</option>{pays.map((country) => <option key={country.id} value={country.id}>{country.emoji ? `${country.emoji} ` : ''}{country.nom || country.name}</option>)}</select></label>
+        <label className="text-xs font-medium text-gray-700">Statut<select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)} className="mt-1 h-9 w-full rounded border border-gray-300 bg-white px-2 text-sm"><option value="">Tous les statuts</option><option value="true">Actives</option><option value="false">Inactives</option></select></label>
+      </div>}
+      primaryAction={canCreate ? { label: 'Nouvelle entité', onClick: () => navigate('/entities/create') } : null}
+      trailingActions={[{ id: 'refresh', label: 'Actualiser', variant: 'default', onClick: fetchEntities }]}
+      onRowOpen={(entity) => navigate(`/entities/${entity.id}`)}
+      pageSizeOptions={[15, 25, 50, 100]}
+      defaultVisibleColumnIds={columns.map((column) => column.id)}
+      showHistoryNavigation={false}
+    />
   );
 }

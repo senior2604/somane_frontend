@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FiAlertCircle,
   FiChevronDown,
@@ -9,6 +9,9 @@ import {
   FiSearch,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import { useUi } from '../../context/UiContext';
+import { getConfiguredModelView } from '../../services/metadataViews';
+import MetadataFieldInput from '../../components/MetadataFieldInput';
 
 export const parseResponse = (response) => {
   if (!response) return [];
@@ -23,6 +26,8 @@ export const INITIAL_ENTITY_FORM = {
   raison_sociale: '',
   sigle: '',
   forme_juridique: '',
+  capital_social: '',
+  date_creation: '',
   activite: '',
   email: '',
   telephone: '',
@@ -30,12 +35,14 @@ export const INITIAL_ENTITY_FORM = {
   adresse: '',
   complement_adresse: '',
   pays: '',
+  subdivision: '',
   region: '',
   ville: '',
   ville_legacy: '',
   code_postal: '',
   numero_fiscal: '',
   registre_commerce: '',
+  securite_sociale: '',
   devise: '',
   langue: '',
   parent_id: '',
@@ -56,6 +63,8 @@ export function validateEntityForm(formData) {
   if (!formData.email?.trim()) errors.email = "L'email est obligatoire";
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) errors.email = "L'adresse email n'est pas valide";
   if (!formData.telephone?.trim()) errors.telephone = 'Le telephone est obligatoire';
+  if (!formData.adresse?.trim()) errors.adresse = "L'adresse est obligatoire";
+  if (!formData.pays) errors.pays = 'Le pays est obligatoire';
   return errors;
 }
 
@@ -65,6 +74,8 @@ export function entityToForm(entity) {
     raison_sociale: entity.raison_sociale || '',
     sigle: entity.sigle || '',
     forme_juridique: entity.forme_juridique || '',
+    capital_social: entity.capital_social ?? '',
+    date_creation: entity.date_creation || '',
     activite: entity.activite || '',
     email: entity.email || '',
     telephone: entity.telephone || '',
@@ -72,12 +83,14 @@ export function entityToForm(entity) {
     adresse: entity.adresse || '',
     complement_adresse: entity.complement_adresse || '',
     pays: entity.pays_details?.id ?? entity.pays ?? '',
-    region: entity.region_details?.id ?? entity.region ?? '',
+    subdivision: entity.subdivision_details?.id ?? entity.subdivision ?? '',
+    region: entity.subdivision_details?.id ?? entity.subdivision ?? entity.region_details?.id ?? entity.region ?? '',
     ville: entity.ville_details?.id ?? entity.ville ?? '',
     ville_legacy: entity.ville_legacy || '',
     code_postal: entity.code_postal || '',
     numero_fiscal: entity.numero_fiscal || '',
     registre_commerce: entity.registre_commerce || '',
+    securite_sociale: entity.securite_sociale || '',
     devise: entity.devise_details?.id ?? entity.devise ?? '',
     langue: entity.langue_details?.id ?? entity.langue ?? '',
     parent_id: entity.parent_details?.id ?? entity.parent_id ?? '',
@@ -92,8 +105,9 @@ const intOrNull = (value) => (value ? parseInt(value, 10) : null);
 export function buildEntityPayload(formData) {
   return {
     raison_sociale: formData.raison_sociale?.trim() || '',
-    sigle: formData.sigle?.trim() || '',
     forme_juridique: formData.forme_juridique?.trim() || '',
+    capital_social: formData.capital_social === '' ? null : formData.capital_social,
+    date_creation: formData.date_creation || null,
     activite: formData.activite?.trim() || '',
     email: formData.email?.trim() || '',
     telephone: formData.telephone?.trim() || '',
@@ -101,19 +115,58 @@ export function buildEntityPayload(formData) {
     adresse: formData.adresse?.trim() || '',
     complement_adresse: formData.complement_adresse?.trim() || '',
     pays: intOrNull(formData.pays),
-    region: intOrNull(formData.region),
+    subdivision: intOrNull(formData.subdivision || formData.region),
     ville: intOrNull(formData.ville),
-    ville_legacy: formData.ville_legacy?.trim() || '',
     code_postal: formData.code_postal?.trim() || '',
     numero_fiscal: formData.numero_fiscal?.trim() || '',
     registre_commerce: formData.registre_commerce?.trim() || '',
+    securite_sociale: formData.securite_sociale?.trim() || '',
     devise: intOrNull(formData.devise),
     langue: intOrNull(formData.langue),
     parent_id: intOrNull(formData.parent_id),
     statut: !!formData.statut,
-    logo: formData.logo?.trim() || '',
     notes: formData.notes?.trim() || '',
   };
+}
+
+/**
+ * Keep the normal entity payload as JSON. Django's ImageField only accepts an
+ * uploaded file, so send multipart data only when the user selected a new logo.
+ */
+export function buildEntityRequestPayload(formData) {
+  const payload = buildEntityPayload(formData);
+  const logoDataUrl = typeof formData.logo === 'string' ? formData.logo : '';
+  const match = logoDataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/);
+  if (!match) return payload;
+
+  const binary = window.atob(match[2]);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  const blob = new Blob([bytes], { type: match[1] });
+  const extension = match[1].split('/')[1].replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'png';
+  const body = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    body.append(key, value === null || value === undefined ? '' : String(value));
+  });
+  body.append('logo', blob, `logo.${extension}`);
+  return body;
+}
+
+export function entityApiErrorMessage(error, fallback = 'La sauvegarde a échoué.') {
+  const data = error?.data || error?.response?.data;
+  const detail = data?.detail || data?.message;
+  if (detail) return String(detail);
+
+  if (data && typeof data === 'object') {
+    const labels = { logo: 'Logo', site_web: 'Site web', pays: 'Pays', email: 'Email' };
+    const messages = Object.entries(data).flatMap(([field, value]) => {
+      const items = Array.isArray(value) ? value : [value];
+      return items.filter(Boolean).map((item) => `${labels[field] || field} : ${typeof item === 'string' ? item : JSON.stringify(item)}`);
+    });
+    if (messages.length) return messages.join(' · ');
+  }
+
+  return error?.message || fallback;
 }
 
 export function getEntityName(entity) {
@@ -251,11 +304,11 @@ function FieldError({ message }) {
   );
 }
 
-function FormField({ label, required, error, children }) {
+function FormField({ label, required, error, help, children }) {
   return (
     <div>
       <div className="flex items-center" style={{ minHeight: 26 }}>
-        <label className="text-xs text-gray-700 min-w-[140px] flex-shrink-0 font-medium">
+        <label title={help || undefined} className="text-xs text-gray-700 min-w-[140px] flex-shrink-0 font-medium">
           {label} {required && <span className="text-red-500">*</span>}
         </label>
         <div className="flex-1 ml-2 min-w-0">
@@ -283,6 +336,11 @@ export function EntityForm({
   entities = [],
   onDirty,
 }) {
+  const { configuration } = useUi();
+  const configuredForm = useMemo(
+    () => getConfiguredModelView(configuration, 'core.Entite', 'form'),
+    [configuration],
+  );
   const [pays, setPays] = useState([]);
   const [regions, setRegions] = useState([]);
   const [villes, setVilles] = useState([]);
@@ -296,6 +354,7 @@ export function EntityForm({
     langue: '',
     parent: '',
   });
+  const selectedSubdivision = formData.subdivision || formData.region;
 
   useEffect(() => {
     let active = true;
@@ -340,12 +399,12 @@ export function EntityForm({
   }, [formData.pays]);
 
   useEffect(() => {
-    if (!formData.region) {
+    if (!selectedSubdivision) {
       setVilles([]);
       return;
     }
     let active = true;
-    apiClient.get(`/villes/?subdivision=${formData.region}`)
+    apiClient.get(`/villes/?subdivision=${selectedSubdivision}`)
       .then((res) => {
         if (active) setVilles(parseResponse(res));
       })
@@ -355,11 +414,147 @@ export function EntityForm({
     return () => {
       active = false;
     };
-  }, [formData.region]);
+  }, [selectedSubdivision]);
 
   const updateField = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     onDirty?.();
+  };
+
+  const renderConfiguredField = (field) => {
+    const name = field.name;
+    const stateName = name === 'subdivision' && formData.subdivision === undefined ? 'region' : name;
+    const value = formData[stateName] ?? '';
+    const error = fieldErrors[name] || fieldErrors[stateName];
+    const required = field.required || ['raison_sociale', 'activite', 'email', 'telephone'].includes(name);
+    const commonProps = {
+      disabled: Boolean(field.readonly),
+      required,
+      title: field.help || undefined,
+      className: inputClass(error),
+    };
+    let control;
+
+    if (name === 'pays' || name === 'subdivision' || name === 'region' || name === 'ville'
+      || name === 'devise' || name === 'langue' || name === 'parent_id') {
+      const optionsByName = {
+        pays,
+        subdivision: regions,
+        region: regions,
+        ville: villes,
+        devise: devises,
+        langue: langues,
+        parent_id: entities,
+      };
+      const searchKey = name === 'parent_id' ? 'parent' : name === 'subdivision' ? 'region' : name;
+      const optionLabels = {
+        pays: (option) => `${option?.emoji ? `${option.emoji} ` : ''}${getLabel(option)}`,
+        devise: (option) => option?.code ? `${option.code} - ${getLabel(option)}` : getLabel(option),
+        parent_id: getEntityName,
+      };
+      control = (
+        <SearchableDropdown
+          value={value}
+          onChange={(nextValue) => {
+            updateField(stateName, nextValue);
+            if (name === 'pays') {
+              updateField('subdivision', '');
+              updateField('region', '');
+              updateField('ville', '');
+            }
+            if (name === 'region' || name === 'subdivision') {
+              updateField('subdivision', nextValue);
+              updateField('region', nextValue);
+              updateField('ville', '');
+            }
+          }}
+          options={optionsByName[name] || []}
+          searchValue={search[searchKey]}
+          onSearchChange={(nextValue) => setSearch((prev) => ({ ...prev, [searchKey]: nextValue }))}
+          placeholder={name === 'parent_id' ? 'Aucune' : 'Choisir…'}
+          disabled={field.readonly || ((name === 'region' || name === 'subdivision') && !formData.pays) || (name === 'ville' && !selectedSubdivision)}
+          icon={name === 'pays' ? FiGlobe : (name === 'region' || name === 'subdivision') ? FiMap : name === 'ville' ? FiMapPin : undefined}
+          getOptionLabel={optionLabels[name] || getLabel}
+          getOptionValue={getId}
+        />
+      );
+    } else if (field.type === 'selection' && ['radio', 'statusbar', 'priority'].includes(field.widget || field.display_widget)) {
+      control = (
+        <MetadataFieldInput
+          field={field}
+          value={value ?? ''}
+          onChange={(event) => updateField(name, event.target.value)}
+          className={inputClass(error)}
+          disabled={field.readonly}
+          record={formData}
+        />
+      );
+    } else if (field.type === 'boolean' && ['boolean_toggle', 'boolean_favorite', 'boolean_checkbox'].includes(field.widget || field.display_widget)) {
+      control = (
+        <MetadataFieldInput
+          field={field}
+          value={value}
+          onChange={(event) => updateField(name, event.target.value)}
+          className={inputClass(error)}
+          disabled={field.readonly}
+          record={formData}
+        />
+      );
+    } else if (field.type === 'boolean') {
+      control = (
+        <select {...commonProps} value={String(Boolean(value))} onChange={(event) => updateField(name, event.target.value === 'true')}>
+          {STATUT_OPTIONS.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}
+        </select>
+      );
+    } else if (field.selection?.length) {
+      control = (
+        <select {...commonProps} value={value} onChange={(event) => updateField(name, event.target.value)}>
+          <option value="">— Sélectionner —</option>
+          {field.selection.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      );
+    } else if (['date', 'datetime', 'monetary'].includes(field.type)) {
+      control = (
+        <MetadataFieldInput
+          field={field}
+          value={value}
+          onChange={(event) => updateField(name, event.target.value)}
+          className={inputClass(error)}
+          disabled={field.readonly}
+          record={formData}
+        />
+      );
+    } else if (['text', 'html', 'json'].includes(field.type)) {
+      control = (
+        <textarea
+          {...commonProps}
+          value={value}
+          rows={field.type === 'text' ? 3 : 2}
+          onChange={(event) => updateField(name, event.target.value)}
+          className={`${inputClass(error)} min-h-12 h-auto py-1`}
+        />
+      );
+    } else {
+      const inputType = name === 'email' ? 'email'
+        : name === 'site_web' ? 'url'
+          : name === 'telephone' ? 'tel'
+            : ['integer', 'float', 'decimal'].includes(field.type) ? 'number' : 'text';
+      control = (
+        <input
+          {...commonProps}
+          type={inputType}
+          value={value}
+          maxLength={field.size || undefined}
+          onChange={(event) => updateField(name, event.target.value)}
+        />
+      );
+    }
+
+    return (
+      <FormField key={name} label={field.label} required={required} error={error} help={field.help}>
+        {control}
+      </FormField>
+    );
   };
 
   if (mode === 'users') {
@@ -387,6 +582,23 @@ export function EntityForm({
           className="w-full min-h-[160px] p-3 text-sm border-0 focus:outline-none focus:ring-1 focus:ring-purple-500"
           placeholder="Ajouter une note..."
         />
+      </div>
+    );
+  }
+
+  if (configuredForm?.groups?.length) {
+    return (
+      <div className="space-y-4">
+        {configuredForm.groups.map((group) => (
+          <section key={group.title} className="border border-gray-300 p-3">
+            <h2 className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">
+              {group.title}
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {group.fields.map(renderConfiguredField)}
+            </div>
+          </section>
+        ))}
       </div>
     );
   }
@@ -444,8 +656,11 @@ export function EntityForm({
               getOptionValue={getId}
             />
           </FormField>
-          <FormField label="Logo URL">
-            <input value={formData.logo} onChange={(event) => updateField('logo', event.target.value)} className={inputClass()} />
+          <FormField label="Logo">
+            <div className="flex min-h-7 items-center gap-2 text-xs text-gray-600">
+              <span>{formData.logo ? 'Logo sélectionné' : 'Aucun logo'}</span>
+              <span className="text-gray-400">Utilisez le bouton de téléversement en haut de la fiche pour le modifier.</span>
+            </div>
           </FormField>
           </div>
         </div>

@@ -764,6 +764,17 @@ function UserPhotoField({ formData, setField }) {
 
 export function SecurityForm({ type, formData, setField, errors, data, editing = false }) {
   if (type === 'users') {
+    const languageOptions = [
+      { value: 'fr_FR', label: 'Français' },
+      { value: 'en_US', label: 'English' },
+      ...(data?.languages || []).map((item) => ({
+        value: item.code,
+        label: `${item.nom} (${item.code})`,
+      })),
+    ].filter((item, index, rows) => rows.findIndex((candidate) => candidate.value === item.value) === index);
+    if (formData.lang && !languageOptions.some((item) => item.value === formData.lang)) {
+      languageOptions.push({ value: formData.lang, label: `${formData.lang} — pack désactivé` });
+    }
     return (
       <div className="space-y-4">
         <Section title="Informations utilisateur">
@@ -815,8 +826,7 @@ export function SecurityForm({ type, formData, setField, errors, data, editing =
 
               <FormField label="Langue">
                 <select value={formData.lang || 'fr_FR'} onChange={(e) => setField('lang', e.target.value)} className={inputClass()} style={{ height: 26 }}>
-                  <option value="fr_FR">Français</option>
-                  <option value="en_US">English</option>
+                  {languageOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                 </select>
               </FormField>
 

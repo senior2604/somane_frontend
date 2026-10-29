@@ -1,7 +1,8 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
+import { isCorePage } from '../services/pageModule';
 
 
 export default function MainLayout({ children }) {
@@ -25,7 +26,7 @@ export default function MainLayout({ children }) {
         <Header onLogout={handleLogout} />
         
         {/* Page content */}
-        <main className="flex-1 overflow-auto">
+        <main className={`flex-1 overflow-auto${isCorePage(location.pathname) ? ' core-module-main' : ''}`}>
           {children}
         </main>
       </div>

@@ -1,0 +1,19 @@
+c426985c4216e1e0b447fa8a3bef3c0d
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.getActiveEntity = void 0;
+// src/services/entityUtils.js
+const getActiveEntity = () => {
+  try {
+    const saved = localStorage.getItem('currentEntite');
+    return saved ? JSON.parse(saved) : null;
+  } catch (e) {
+    console.error('Erreur récupération entité active:', e);
+    return null;
+  }
+};
+exports.getActiveEntity = getActiveEntity;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJnZXRBY3RpdmVFbnRpdHkiLCJzYXZlZCIsImxvY2FsU3RvcmFnZSIsImdldEl0ZW0iLCJKU09OIiwicGFyc2UiLCJlIiwiY29uc29sZSIsImVycm9yIiwiZXhwb3J0cyJdLCJzb3VyY2VzIjpbImVudGl0eVV0aWxzLmpzIl0sInNvdXJjZXNDb250ZW50IjpbIi8vIHNyYy9zZXJ2aWNlcy9lbnRpdHlVdGlscy5qc1xyXG5leHBvcnQgY29uc3QgZ2V0QWN0aXZlRW50aXR5ID0gKCkgPT4ge1xyXG4gIHRyeSB7XHJcbiAgICBjb25zdCBzYXZlZCA9IGxvY2FsU3RvcmFnZS5nZXRJdGVtKCdjdXJyZW50RW50aXRlJyk7XHJcbiAgICByZXR1cm4gc2F2ZWQgPyBKU09OLnBhcnNlKHNhdmVkKSA6IG51bGw7XHJcbiAgfSBjYXRjaCAoZSkge1xyXG4gICAgY29uc29sZS5lcnJvcignRXJyZXVyIHLDqWN1cMOpcmF0aW9uIGVudGl0w6kgYWN0aXZlOicsIGUpO1xyXG4gICAgcmV0dXJuIG51bGw7XHJcbiAgfVxyXG59OyJdLCJtYXBwaW5ncyI6Ijs7Ozs7O0FBQUE7QUFDTyxNQUFNQSxlQUFlLEdBQUdBLENBQUEsS0FBTTtFQUNuQyxJQUFJO0lBQ0YsTUFBTUMsS0FBSyxHQUFHQyxZQUFZLENBQUNDLE9BQU8sQ0FBQyxlQUFlLENBQUM7SUFDbkQsT0FBT0YsS0FBSyxHQUFHRyxJQUFJLENBQUNDLEtBQUssQ0FBQ0osS0FBSyxDQUFDLEdBQUcsSUFBSTtFQUN6QyxDQUFDLENBQUMsT0FBT0ssQ0FBQyxFQUFFO0lBQ1ZDLE9BQU8sQ0FBQ0MsS0FBSyxDQUFDLG9DQUFvQyxFQUFFRixDQUFDLENBQUM7SUFDdEQsT0FBTyxJQUFJO0VBQ2I7QUFDRixDQUFDO0FBQUNHLE9BQUEsQ0FBQVQsZUFBQSxHQUFBQSxlQUFBIiwiaWdub3JlTGlzdCI6W119

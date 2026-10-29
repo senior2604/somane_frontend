@@ -330,6 +330,7 @@ export function useSecurityData({ includePartners = true } = {}) {
     models: [],
     entites: [],
     partenaires: [],
+    languages: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -356,12 +357,14 @@ export function useSecurityData({ includePartners = true } = {}) {
         ...(includePartners ? [['partenaires', 'core.Partenaire', '/partenaires/']] : []),
       ];
       const readableResources = resources.filter(([, model]) => can(security, model, 'read'));
-      const results = await Promise.allSettled(
-        readableResources.map(([, , endpoint]) => apiClient.get(endpoint))
-      );
+      const [results, installedLanguagesResult] = await Promise.all([
+        Promise.allSettled(readableResources.map(([, , endpoint]) => apiClient.get(endpoint))),
+        apiClient.get('/langues/installed/').catch(() => null),
+      ]);
       const nextData = {
-        users: [], groups: [], permissions: [], modules: [], models: [], entites: [], partenaires: [],
+        users: [], groups: [], permissions: [], modules: [], models: [], entites: [], partenaires: [], languages: [],
       };
+      if (installedLanguagesResult) nextData.languages = parseResponse(installedLanguagesResult);
       const failedResources = [];
 
       results.forEach((result, index) => {

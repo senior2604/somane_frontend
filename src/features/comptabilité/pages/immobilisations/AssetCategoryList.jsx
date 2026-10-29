@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
 import axiosInstance from '../../../../config/axiosInstance';
+import { useUi } from '../../../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import {
   API,
   METHODS,
@@ -26,6 +28,11 @@ const readCache = () => {
 const writeCache = (rows) => { try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ rows, savedAt: Date.now() })); } catch {} };
 
 export default function AssetCategoryList() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(() => getConfiguredModelView(configuration, 'comptabilite.AccountAssetCategory', 'list', {
+    preferredViewKey: 'somane_ui.accounting_accountassetcategory_tree',
+  }), [configuration]);
+
   const navigate = useNavigate();
   const location = useLocation();
   const entityId = getActiveEntityId();
@@ -99,7 +106,7 @@ export default function AssetCategoryList() {
     }
   }, [selectedRows]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     { id: 'code', label: 'Code', width: 120, value: (row) => row.code, render: (value) => <span className="font-semibold text-teal-700">{value}</span> },
     { id: 'name', label: 'Catégorie', minWidth: 230, value: (row) => row.name },
     { id: 'method', label: 'Méthode', minWidth: 190, value: (row) => METHODS.find((item) => item.id === row.method)?.label || row.method },
@@ -110,6 +117,8 @@ export default function AssetCategoryList() {
     { id: 'assets_count', label: 'Immobilisations', width: 125, numeric: true, value: (row) => Number(row.assets_count || 0) },
     { id: 'active', label: 'État', width: 100, value: (row) => row.active ? 'Actif' : 'Inactif', render: (_, row) => <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{row.active ? 'Actif' : 'Inactif'}</span> },
   ], []);
+
+  const columns = useMemo(() => applyConfiguredListColumns(baseColumns, configuredList?.fields, { 'method_number': 'duration', 'salvage_value_percent': 'salvage', 'account_asset_id': 'asset_account', 'journal_id': 'journal' }), [baseColumns, configuredList]);
 
   const filterChips = useMemo(() => {
     const chips = [];

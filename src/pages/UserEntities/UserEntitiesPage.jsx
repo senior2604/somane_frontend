@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { apiClient } from '../../services/apiClient';
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
 import { useUi } from '../../context/UiContext';
 import { can } from '../../services/securityAccess';
 import { 
@@ -778,12 +779,15 @@ function UtilisateurEntiteDetailModal({ affiliation, onClose }) {
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors"
-            >
-              <FiX size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <RecordTraceabilityPanel model="utilisateurentite" recordId={affiliation.id} />
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
           </div>
         </div>
         

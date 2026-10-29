@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef  } from 'react';
 import { apiClient } from '../../services/apiClient';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
+import { useUi } from '../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
 import { 
   FiRefreshCw, 
   FiPlus, 
@@ -28,6 +32,13 @@ import {
 } from "react-icons/fi";
 
 export default function BanksPage() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'core.Banque', 'list', {
+      preferredViewKey: 'somane_ui.core_banque_tree',
+    }),
+    [configuration],
+  );
   const [banques, setBanques] = useState([]);
   const [pays, setPays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -158,6 +169,33 @@ export default function BanksPage() {
   const handleRetry = () => {
     fetchAllData();
   };
+
+  const columns = useMemo(() => applyConfiguredListColumns([
+    {
+      id: 'nom', label: 'Banque', value: (row) => row.nom || '',
+      render: (row) => (
+        <div>
+          <div className="text-xs font-semibold text-gray-900 truncate max-w-[170px]">{row.nom || '-'}</div>
+          <div className="text-xs text-gray-500 truncate max-w-[170px]">{row.adresse || 'Aucune adresse'}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'code_bic', label: 'BIC/SWIFT', value: (row) => row.code_bic || '-',
+      render: (row) => row.code_bic
+        ? <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-medium font-mono">{row.code_bic}</span>
+        : '-',
+    },
+    {
+      id: 'pays', label: 'Pays', value: (row) => row.pays?.nom_fr || row.pays?.nom || '',
+      render: (row) => <span className="text-xs">{row.pays?.emoji || '🌍'} {row.pays?.nom_fr || row.pays?.nom || '-'}</span>,
+    },
+    {
+      id: 'entite', label: 'Entité', value: (row) => row.entite?.raison_sociale || row.entite?.nom || '',
+      render: (row) => row.entite?.raison_sociale || row.entite?.nom || '-',
+    },
+    { id: 'adresse', label: 'Adresse', value: (row) => row.adresse || '-', render: (row) => row.adresse || '-' },
+  ], configuredList?.fields), [configuredList]);
 
   const resetFilters = () => {
     setSearchTerm('');
@@ -394,18 +432,11 @@ export default function BanksPage() {
                     ID
                   </div>
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Banque
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  BIC/SWIFT
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Localisation
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                  Contact
-                </th>
+                {columns.map((column) => (
+                  <th key={column.id} scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                    {column.label}
+                  </th>
+                ))}
                 <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
@@ -415,7 +446,7 @@ export default function BanksPage() {
             <tbody className="divide-y divide-gray-200">
               {currentBanques.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-4 text-center">
+                  <td colSpan={columns.length + 2} className="px-3 py-4 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
                         <FiCreditCard className="w-6 h-6 text-gray-400" />
@@ -463,47 +494,16 @@ export default function BanksPage() {
                       </div>
                     </td>
                     
-                    {/* Banque */}
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div>
-                        <div className="text-xs font-semibold text-gray-900 truncate max-w-[150px]">{banque.nom}</div>
-                        <div className="text-xs text-gray-500 truncate max-w-[150px]">
-                          {banque.adresse || 'Aucune adresse'}
-                        </div>
-                      </div>
-                    </td>
-                    
-                    {/* BIC/SWIFT */}
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="text-xs text-gray-900">
-                        {banque.code_bic ? (
-                          <span className="px-1.5 py-0.5 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded border border-blue-200 text-xs font-medium font-mono">
-                            {banque.code_bic}
-                          </span>
-                        ) : '-'}
-                      </div>
-                    </td>
-                    
-                    {/* Localisation */}
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="flex flex-col">
-                        <div className="text-xs text-gray-900">
-                          {banque.adresse ? banque.adresse.substring(0, 50) + (banque.adresse.length > 50 ? '...' : '') : '-'}
-                        </div>
-                        <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                          {banque.pays?.emoji || '🌍'}
-                          <span className="truncate max-w-[80px]">{banque.pays?.nom_fr || banque.pays?.nom || '-'}</span>
-                        </div>
-                      </div>
-                    </td>
-                    
-                    {/* Contact */}
-                    <td className="px-3 py-2 border-r border-gray-200">
-                      <div className="flex flex-col">
-                        <div className="text-xs text-gray-900 truncate max-w-[100px]">{banque.telephone || '-'}</div>
-                        <div className="text-xs text-gray-500 truncate max-w-[100px]">{banque.email || '-'}</div>
-                      </div>
-                    </td>
+                    {columns.map((column) => {
+                      const value = column.value(banque);
+                      return (
+                        <td key={`${banque.id}-${column.id}`} className="px-3 py-2 border-r border-gray-200">
+                          {column.metadataField?.widget
+                            ? <MetadataFieldDisplay value={value} field={column.metadataField} record={banque} />
+                            : column.render ? column.render(banque) : value}
+                        </td>
+                      );
+                    })}
                     
                     {/* Actions */}
                     <td className="px-3 py-2 whitespace-nowrap">
@@ -659,12 +659,15 @@ function BanqueDetailModal({ banque, onClose }) {
                 <p className="text-violet-100 text-xs mt-0.5">{banque.nom}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors"
-            >
-              <FiX size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <RecordTraceabilityPanel model="banque" recordId={banque.id} />
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
           </div>
         </div>
         

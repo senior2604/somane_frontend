@@ -1,6 +1,9 @@
 // features/achats/pages/LignesBonCommandePage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { apiClient } from '../../../services/apiClient';
+import { useUi } from '../../../context/UiContext';
+import MetadataFieldDisplay from '../../../components/MetadataFieldDisplay';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../services/metadataViews';
 import {
   FiPlus,
   FiEdit2,
@@ -18,6 +21,10 @@ import {
 } from "react-icons/fi";
 
 export default function LignesBonCommandePage() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(() => getConfiguredModelView(configuration, 'achats.PurchaseOrderLine', 'list', {
+    preferredViewKey: 'somane_ui.achats_purchase_order_line_tree',
+  }), [configuration]);
   const [lignes, setLignes] = useState([]);
   const [bonsCommande, setBonsCommande] = useState([]);
   const [produits, setProduits] = useState([]);
@@ -83,6 +90,24 @@ export default function LignesBonCommandePage() {
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('fr-FR');
+  };
+
+  const baseColumns = [
+    { id: 'order', label: 'Bon Commande', value: (row) => row.order || row.order_id, render: (row) => <span className="font-medium text-gray-900">{row.order?.name || getBonCommandeName(row.order_id)}</span> },
+    { id: 'product', label: 'Article', value: (row) => row.product || row.product_id, render: (row) => <div className="flex items-center"><FiPackage className="mr-2 text-gray-400" size={16} /><span>{row.product?.name || getReferenceName(produits, row.product_id)}</span></div> },
+    { id: 'name', label: 'Description', value: (row) => row.name, render: (row) => <span className="text-sm text-gray-600">{row.name || 'N/A'}</span> },
+    { id: 'product_qty', label: 'Quantité', value: (row) => row.product_qty, render: (row) => <span className="font-medium">{row.product_qty || 0}</span> },
+    { id: 'price_unit', label: 'Prix Unit.', value: (row) => row.price_unit, render: (row) => formatCurrency(row.price_unit) },
+    { id: 'taxes', label: 'Taxes', value: (row) => row.taxes || row.taxes_id, render: (row) => Array.isArray(row.taxes) ? row.taxes.map((tax) => tax.name).join(', ') : Array.isArray(row.taxes_id) ? row.taxes_id.map((id) => getReferenceName(taxes, id)).join(', ') : 'N/A' },
+    { id: 'date_planned', label: 'Date Prévue', value: (row) => row.date_planned, render: (row) => <div className="flex items-center"><FiCalendar className="mr-2 text-gray-400" size={16} /><span>{formatDate(row.date_planned)}</span></div> },
+    { id: 'price_subtotal', label: 'Sous-total', value: (row) => row.price_subtotal, render: (row) => <span className="font-semibold">{formatCurrency(row.price_subtotal)}</span> },
+  ];
+  const columns = applyConfiguredListColumns(baseColumns, configuredList?.fields);
+  const renderConfiguredCell = (column, row) => {
+    const value = column.value ? column.value(row) : row[column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} record={row} />
+      : column.render ? column.render(row) : (value ?? '—');
   };
 
   // Filtrage et pagination
@@ -216,30 +241,7 @@ export default function LignesBonCommandePage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bon Commande
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Article
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Description
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Quantité
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Prix Unit.
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Taxes
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date Prévue
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sous-total
-                </th>
+                {columns.map((column) => <th key={column.id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{column.label}</th>)}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -248,40 +250,7 @@ export default function LignesBonCommandePage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {currentItems.map((ligne) => (
                 <tr key={ligne.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-medium text-gray-900">{getBonCommandeName(ligne.order_id)}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiPackage className="text-gray-400 mr-2" size={16} />
-                      <span>{getReferenceName(produits, ligne.product_id)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-gray-600">{ligne.name || 'N/A'}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-medium">{ligne.product_qty || 0}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {formatCurrency(ligne.price_unit)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-600">
-                      {ligne.taxes_id && Array.isArray(ligne.taxes_id) 
-                        ? ligne.taxes_id.map(id => getReferenceName(taxes, id)).join(', ')
-                        : 'N/A'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiCalendar className="text-gray-400 mr-2" size={16} />
-                      <span>{formatDate(ligne.date_planned)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap font-semibold">
-                    {formatCurrency(ligne.price_subtotal)}
-                  </td>
+                  {columns.map((column) => <td key={column.id} className="px-6 py-4 whitespace-nowrap">{renderConfiguredCell(column, ligne)}</td>)}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <button

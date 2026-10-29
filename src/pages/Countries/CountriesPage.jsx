@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { apiClient } from '../../services/apiClient';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
+import { useUi } from '../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
 import { 
   FiRefreshCw, FiPlus, FiEdit2, FiTrash2, FiSearch, FiX, FiChevronDown,
   FiCheck, FiGlobe, FiChevronLeft, FiChevronRight, FiDownload, FiUpload,
@@ -9,6 +13,19 @@ import {
 } from "react-icons/fi";
 
 export default function PaysSubdivisionAssociationPage() {
+  const { configuration } = useUi();
+  const configuredCountries = useMemo(
+    () => getConfiguredModelView(configuration, 'core.Pays', 'list', {
+      preferredViewKey: 'somane_ui.core_pays_tree',
+    }),
+    [configuration],
+  );
+  const configuredSubdivisions = useMemo(
+    () => getConfiguredModelView(configuration, 'core.Subdivision', 'list', {
+      preferredViewKey: 'somane_ui.core_subdivision_tree',
+    }),
+    [configuration],
+  );
   // États pour les données
   const [pays, setPays] = useState([]);
   const [subdivisions, setSubdivisions] = useState([]);
@@ -147,11 +164,11 @@ export default function PaysSubdivisionAssociationPage() {
   };
 
   // Fonction pour obtenir les détails d'une devise
-  const getDeviseDetails = (deviseId) => {
+  const getDeviseDetails = useCallback((deviseId) => {
     if (!deviseId && deviseId !== 0) return null;
     const idRecherche = typeof deviseId === 'object' ? deviseId.id : deviseId;
     return devises.find(d => d.id === idRecherche) || null;
-  };
+  }, [devises]);
 
   // Formater le type de subdivision pour l'affichage
   const getTypeSubdivisionLabel = (type) => {
@@ -179,6 +196,52 @@ export default function PaysSubdivisionAssociationPage() {
     };
     return badgeClasses[type] || 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border border-gray-200';
   };
+
+  const countryColumns = useMemo(() => applyConfiguredListColumns([
+    {
+      id: 'nom_fr', label: 'Nom', value: (item) => item.nom_fr || item.nom || '',
+      render: (item) => (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1.5">
+            <span className="text-lg">{item.emoji}</span>
+            <div className="text-xs font-semibold text-gray-900 truncate max-w-[150px]">{item.nom_fr || item.nom}</div>
+          </div>
+          {item.nom_fr && item.nom !== item.nom_fr && <div className="text-xs text-gray-500">{item.nom}</div>}
+        </div>
+      ),
+    },
+    {
+      id: 'code_iso', label: 'Code ISO', value: (item) => item.code_iso || '',
+      render: (item) => <span className="inline-flex px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200">{item.code_iso || '—'}</span>,
+    },
+    {
+      id: 'indicatif_tel', label: 'Indicatif', value: (item) => item.indicatif_tel || item.code_tel || '',
+      render: (item) => <span className="inline-flex px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">{item.indicatif_tel || item.code_tel || '—'}</span>,
+    },
+    {
+      id: 'devise_par_defaut', label: 'Devise', value: (item) => {
+        const currency = getDeviseDetails(item.devise_par_defaut);
+        return currency ? `${currency.code || ''} ${currency.symbole || currency.nom || ''}`.trim() : '';
+      },
+      render: (item) => {
+        const currency = getDeviseDetails(item.devise_par_defaut);
+        return currency ? (
+          <div className="flex items-center gap-1">
+            <div className="p-1 bg-purple-50 rounded"><FiDollarSign className="w-2.5 h-2.5 text-purple-700" /></div>
+            <div className="text-xs"><div className="font-medium text-gray-900">{currency.code}</div><div className="text-gray-500">{currency.nom}</div></div>
+          </div>
+        ) : '—';
+      },
+    },
+  ], configuredCountries?.fields), [configuredCountries, getDeviseDetails]);
+
+  const subdivisionColumns = useMemo(() => applyConfiguredListColumns([
+    { id: 'code', label: 'Code', value: (item) => item.code || '', render: (item) => <span className="text-xs font-medium">{item.code || '—'}</span> },
+    { id: 'nom', label: 'Nom', value: (item) => item.nom || '', render: (item) => <span className="text-xs font-semibold text-gray-900">{item.nom || '—'}</span> },
+    { id: 'type_subdivision', label: 'Type', value: (item) => getTypeSubdivisionLabel(item.type_subdivision), render: (item) => <span className={`inline-flex px-1.5 py-0.5 rounded text-xs ${getTypeSubdivisionBadge(item.type_subdivision)}`}>{getTypeSubdivisionLabel(item.type_subdivision)}</span> },
+    { id: 'pays', label: 'Pays', value: (item) => item.pays?.nom_fr || item.pays?.nom || '', render: (item) => <span className="text-xs">{item.pays?.emoji || '🌍'} {item.pays?.nom_fr || item.pays?.nom || '—'}</span> },
+  ], configuredSubdivisions?.fields), [configuredSubdivisions]);
+  const activeColumns = activeTab === 'pays' ? countryColumns : subdivisionColumns;
 
   // Filtrage et recherche
   const filteredPays = useMemo(() => {
@@ -596,50 +659,21 @@ export default function PaysSubdivisionAssociationPage() {
                   </div>
                 </th>
                 
-                {activeTab === 'pays' ? (
-                  <>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                      Nom
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                      Code ISO
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                      Indicatif
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                      Devise
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Actes
-                    </th>
-                  </>
-                ) : (
-                  <>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                      Code
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                      Nom
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                      Type
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
-                      Pays
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Actes
-                    </th>
-                  </>
-                )}
+                {activeColumns.map((column) => (
+                  <th key={column.id} scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-300">
+                    {column.label}
+                  </th>
+                ))}
+                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Actes
+                </th>
               </tr>
             </thead>
             
             <tbody className="divide-y divide-gray-200">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === 'pays' ? 6 : 7} className="px-3 py-4 text-center">
+                  <td colSpan={activeColumns.length + 2} className="px-3 py-4 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-2">
                         {activeTab === 'pays' ? (
@@ -699,154 +733,41 @@ export default function PaysSubdivisionAssociationPage() {
                       </div>
                     </td>
                     
-                    {activeTab === 'pays' ? (
-                      <>
-                        {/* Nom du pays */}
-                        <td className="px-3 py-2 border-r border-gray-200">
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-lg">{item.emoji}</span>
-                              <div className="text-xs font-semibold text-gray-900 truncate max-w-[150px]">
-                                {item.nom_fr || item.nom}
-                              </div>
-                            </div>
-                            {item.nom_fr && item.nom !== item.nom_fr && (
-                              <div className="text-xs text-gray-500">{item.nom}</div>
-                            )}
-                          </div>
+                    {activeColumns.map((column) => {
+                      const value = column.value(item);
+                      return (
+                        <td key={`${item.id}-${column.id}`} className="px-3 py-2 border-r border-gray-200">
+                          {column.metadataField?.widget
+                            ? <MetadataFieldDisplay value={value} field={column.metadataField} />
+                            : column.render ? column.render(item) : value}
                         </td>
-                        
-                        {/* Code ISO */}
-                        <td className="px-3 py-2 border-r border-gray-200">
-                          <div className="text-xs font-medium text-gray-900">
-                            <span className="inline-flex px-1.5 py-0.5 rounded bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 border border-violet-200">
-                              {item.code_iso}
-                            </span>
-                          </div>
-                        </td>
-                        
-                        {/* Indicatif téléphonique */}
-                        <td className="px-3 py-2 border-r border-gray-200">
-                          <div className="text-xs text-gray-900">
-                            <span className="inline-flex px-1.5 py-0.5 rounded bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 border border-emerald-200">
-                              {item.code_tel}
-                            </span>
-                          </div>
-                        </td>
-                        
-                        {/* Devise */}
-                        <td className="px-3 py-2 border-r border-gray-200">
-                          {getDeviseDetails(item.devise_par_defaut) ? (
-                            <div className="flex items-center gap-1">
-                              <div className="p-1 bg-gradient-to-r from-purple-50 to-purple-100 rounded">
-                                <FiDollarSign className="w-2.5 h-2.5 text-purple-700" />
-                              </div>
-                              <div className="text-xs">
-                                <div className="font-medium text-gray-900">
-                                  {getDeviseDetails(item.devise_par_defaut).code}
-                                </div>
-                                <div className="text-gray-500 text-xs">
-                                  {getDeviseDetails(item.devise_par_defaut).symbole}
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-xs text-orange-500">
-                              {item.devise_par_defaut ? `ID: ${item.devise_par_defaut}` : 'Non définie'}
-                            </div>
-                          )}
-                        </td>
-                        
-                        {/* Actions pour pays */}
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleViewDetails(item)}
-                              className="p-1 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow focus:outline-none focus:ring-1 focus:ring-violet-500"
-                              title="Voir détails"
-                            >
-                              <FiEye size={12} />
-                            </button>
-                            <button
-                              onClick={() => handleEditPays(item)}
-                              className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow focus:outline-none focus:ring-1 focus:ring-violet-500"
-                              title="Modifier"
-                            >
-                              <FiEdit2 size={12} />
-                            </button>
-                            <button
-                              onClick={() => handleDeletePays(item)}
-                              className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow focus:outline-none focus:ring-1 focus:ring-red-500"
-                              title="Supprimer"
-                            >
-                              <FiTrash2 size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        {/* Code de la subdivision */}
-                        <td className="px-3 py-2 border-r border-gray-200">
-                          <div className="text-xs font-medium text-gray-900">
-                            <span className="inline-flex px-1.5 py-0.5 rounded bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 border border-violet-200 font-mono">
-                              {item.code}
-                            </span>
-                          </div>
-                        </td>
-                        
-                        {/* Nom de la subdivision */}
-                        <td className="px-3 py-2 border-r border-gray-200">
-                          <div className="text-xs font-semibold text-gray-900">
-                            {item.nom}
-                          </div>
-                        </td>
-                        
-                        {/* Type de subdivision */}
-                        <td className="px-3 py-2 border-r border-gray-200">
-                          <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${getTypeSubdivisionBadge(item.type_subdivision)}`}>
-                            {getTypeSubdivisionLabel(item.type_subdivision)}
-                          </span>
-                        </td>
-                        
-                        {/* Pays */}
-                        <td className="px-3 py-2 border-r border-gray-200">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm">{item.pays?.emoji}</span>
-                            <div className="text-xs text-gray-900">
-                              {item.pays?.nom_fr || item.pays?.nom}
-                            </div>
-                          </div>
-                        </td>
-                        
-                        {/* Actions pour subdivisions */}
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleViewDetails(item)}
-                              className="p-1 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 rounded hover:from-gray-100 hover:to-gray-200 transition-all duration-200 shadow-sm hover:shadow focus:outline-none focus:ring-1 focus:ring-violet-500"
-                              title="Voir détails"
-                            >
-                              <FiEye size={12} />
-                            </button>
-                            <button
-                              onClick={() => handleEditSubdivision(item)}
-                              className="p-1 bg-gradient-to-r from-violet-50 to-violet-100 text-violet-700 rounded hover:from-violet-100 hover:to-violet-200 transition-all duration-200 shadow-sm hover:shadow focus:outline-none focus:ring-1 focus:ring-violet-500"
-                              title="Modifier"
-                            >
-                              <FiEdit2 size={12} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteSubdivision(item)}
-                              className="p-1 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded hover:from-red-100 hover:to-red-200 transition-all duration-200 shadow-sm hover:shadow focus:outline-none focus:ring-1 focus:ring-red-500"
-                              title="Supprimer"
-                            >
-                              <FiTrash2 size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    )}
+                      );
+                    })}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleViewDetails(item)}
+                          className="p-1 bg-gray-50 text-gray-700 rounded hover:bg-gray-100 transition-colors"
+                          title="Voir détails"
+                        >
+                          <FiEye size={12} />
+                        </button>
+                        <button
+                          onClick={() => activeTab === 'pays' ? handleEditPays(item) : handleEditSubdivision(item)}
+                          className="p-1 bg-violet-50 text-violet-700 rounded hover:bg-violet-100 transition-colors"
+                          title="Modifier"
+                        >
+                          <FiEdit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => activeTab === 'pays' ? handleDeletePays(item) : handleDeleteSubdivision(item)}
+                          className="p-1 bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors"
+                          title="Supprimer"
+                        >
+                          <FiTrash2 size={12} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -998,12 +919,15 @@ function PaysDetailModal({ item, paysSubdivisions, subdivisions, devises, getDev
                 <p className="text-violet-100 text-xs mt-0.5">{item.nom_fr || item.nom}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
-            >
-              <FiX size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <RecordTraceabilityPanel model="pays" recordId={item.id} />
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-white/20 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
           </div>
         </div>
         
@@ -1146,12 +1070,15 @@ function SubdivisionDetailModal({ item, getTypeSubdivisionLabel, getTypeSubdivis
                 <p className="text-violet-100 text-xs mt-0.5">{item.nom}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
-            >
-              <FiX size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <RecordTraceabilityPanel model="subdivision" recordId={item.id} />
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-white/20 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
           </div>
         </div>
         

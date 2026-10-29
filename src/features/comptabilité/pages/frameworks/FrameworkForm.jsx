@@ -7,6 +7,8 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import UnifiedFormPage from '../../../../components/UnifiedFormPage';
 import { ENDPOINTS } from '../../../../config/api';
 import axiosInstance from '../../../../config/axiosInstance';
+import { useUi } from '../../../../context/UiContext';
+import { getConfiguredModelView } from '../../../../services/metadataViews';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 
 const { TextArea } = Input;
@@ -69,10 +71,11 @@ const cachedRequest = (key, loader) => {
   return requestCache.get(key);
 };
 
-const FieldLine = ({ label, required = false, children }) => (
+const FieldLine = ({ label, required = false, help = '', children }) => (
   <div className="flex min-w-0 items-center" style={{ height: 28 }}>
     <label className="w-40 shrink-0 text-xs font-medium text-gray-700">
       {label}{required && <span className="ml-0.5 text-red-500">*</span>}
+      {help && <span className="ml-1 cursor-help text-gray-400" title={help}><FiInfo size={11} className="inline" /></span>}
     </label>
     <div className="ml-2 min-w-0 flex-1">{children}</div>
   </div>
@@ -120,6 +123,21 @@ const hydrateForm = (form, framework) => {
 
 export default function FrameworkForm({ mode = 'create' }) {
   const [form] = Form.useForm();
+  const { configuration } = useUi();
+  const configuredForm = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.FinanceAccountFramework', 'form', {
+      preferredViewKey: 'somane_ui.accounting_financeaccountframework_form',
+    }),
+    [configuration],
+  );
+  const configuredFields = useMemo(
+    () => new Map((configuredForm?.groups || []).flatMap((group) => group.fields).map((field) => [field.name, field])),
+    [configuredForm],
+  );
+  const fieldLabel = (name, fallback) => configuredFields.get(name)?.label || fallback;
+  const fieldRequired = (name, fallback = false) => configuredFields.get(name)?.required ?? fallback;
+  const fieldReadonly = (name) => Boolean(configuredFields.get(name)?.readonly);
+  const fieldHelp = (name) => configuredFields.get(name)?.help || '';
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
@@ -419,21 +437,21 @@ export default function FrameworkForm({ mode = 'create' }) {
 
         <div className="border-b border-gray-300 px-4 py-3">
           <div className="grid grid-cols-2 gap-x-8 gap-y-2">
-            <FieldLine label="Code" required>
-              <Form.Item name="code" rules={[{ required: true, message: 'Code obligatoire' }, { max: 64, message: 'Maximum 64 caractères' }]}>
-                <Input placeholder="SYSCOHADA" className="font-mono" />
+            <FieldLine label={fieldLabel('code', 'Code')} required={fieldRequired('code', true)} help={fieldHelp('code')}>
+              <Form.Item name="code" rules={[{ required: fieldRequired('code', true), message: 'Code obligatoire' }, { max: 64, message: 'Maximum 64 caractères' }]}>
+                <Input disabled={fieldReadonly('code')} placeholder="SYSCOHADA" className="font-mono" />
               </Form.Item>
             </FieldLine>
-            <FieldLine label="Nom complet" required>
-              <Form.Item name="name" rules={[{ required: true, message: 'Nom obligatoire' }, { max: 255, message: 'Maximum 255 caractères' }]}>
-                <Input placeholder="SYSCOHADA révisé" />
+            <FieldLine label={fieldLabel('name', 'Nom complet')} required={fieldRequired('name', true)} help={fieldHelp('name')}>
+              <Form.Item name="name" rules={[{ required: fieldRequired('name', true), message: 'Nom obligatoire' }, { max: 255, message: 'Maximum 255 caractères' }]}>
+                <Input disabled={fieldReadonly('name')} placeholder="SYSCOHADA révisé" />
               </Form.Item>
             </FieldLine>
-            <FieldLine label="Version">
-              <Form.Item name="version"><Input placeholder="2018" /></Form.Item>
+            <FieldLine label={fieldLabel('version', 'Version')} help={fieldHelp('version')}>
+              <Form.Item name="version"><Input disabled={fieldReadonly('version')} placeholder="2018" /></Form.Item>
             </FieldLine>
-            <FieldLine label="Pays principal">
-              <Form.Item name="country"><CompactSelect options={countryOptions} placeholder="Sélectionner un pays" /></Form.Item>
+            <FieldLine label={fieldLabel('country', 'Pays principal')} help={fieldHelp('country')}>
+              <Form.Item name="country"><CompactSelect disabled={fieldReadonly('country')} options={countryOptions} placeholder="Sélectionner un pays" /></Form.Item>
             </FieldLine>
           </div>
         </div>
@@ -457,11 +475,11 @@ export default function FrameworkForm({ mode = 'create' }) {
           {activeTab === 'parameters' && (
             <div className="overflow-x-auto">
               <table className="framework-form-table w-full table-fixed border-collapse">
-                <thead><tr><TableHeader>Groupe de pays</TableHeader><TableHeader>Longueur des comptes</TableHeader><TableHeader>Plan actif</TableHeader><TableHeader>Type de portée</TableHeader></tr></thead>
+                <thead><tr><TableHeader>{fieldLabel('country_group', 'Groupe de pays')}</TableHeader><TableHeader>{fieldLabel('account_code_length', 'Longueur des comptes')}</TableHeader><TableHeader>{fieldLabel('active', 'Plan actif')}</TableHeader><TableHeader>Type de portée</TableHeader></tr></thead>
                 <tbody><tr>
-                  <TableCell><Form.Item name="country_group"><Input placeholder="UEMOA" /></Form.Item></TableCell>
-                  <TableCell><Form.Item name="account_code_length"><Input type="number" min={1} max={20} placeholder="10" /></Form.Item></TableCell>
-                  <TableCell><div className="flex h-8 items-center gap-2 px-2 text-xs"><Form.Item name="active" valuePropName="checked"><Switch size="small" /></Form.Item><span>{watchedActive !== false ? 'Oui' : 'Non'}</span></div></TableCell>
+                  <TableCell><Form.Item name="country_group"><Input disabled={fieldReadonly('country_group')} placeholder="UEMOA" /></Form.Item></TableCell>
+                  <TableCell><Form.Item name="account_code_length"><Input disabled={fieldReadonly('account_code_length')} type="number" min={1} max={20} placeholder="10" /></Form.Item></TableCell>
+                  <TableCell><div className="flex h-8 items-center gap-2 px-2 text-xs"><Form.Item name="active" valuePropName="checked"><Switch disabled={fieldReadonly('active')} size="small" /></Form.Item><span>{watchedActive !== false ? 'Oui' : 'Non'}</span></div></TableCell>
                   <TableCell><div className="flex h-8 items-center gap-2 px-2 text-xs"><Form.Item name="shared" valuePropName="checked"><Switch size="small" onChange={(checked) => { if (checked) form.setFieldValue('company', []); }} /></Form.Item><span>{watchedShared !== false ? 'Partagé' : 'Spécifique'}</span></div></TableCell>
                 </tr></tbody>
               </table>
@@ -474,7 +492,7 @@ export default function FrameworkForm({ mode = 'create' }) {
                 <thead><tr><TableHeader>Plan partagé</TableHeader><TableHeader>Sociétés concernées</TableHeader></tr></thead>
                 <tbody><tr>
                   <TableCell><div className="flex h-8 items-center gap-2 px-2 text-xs"><Form.Item name="shared" valuePropName="checked"><Switch size="small" onChange={(checked) => { if (checked) form.setFieldValue('company', []); }} /></Form.Item><span>{watchedShared !== false ? 'Toutes les sociétés' : 'Sociétés spécifiques'}</span></div></TableCell>
-                  <TableCell><Form.Item name="company" rules={[{ validator: (_, value) => watchedShared !== false || (value?.length ? Promise.resolve() : Promise.reject(new Error('Sélectionnez au moins une société'))) }]}><CompactSelect mode="multiple" disabled={watchedShared !== false} options={entityOptions} placeholder={watchedShared !== false ? 'Toutes les sociétés' : 'Sélectionner les sociétés'} /></Form.Item></TableCell>
+                  <TableCell><Form.Item name="company" rules={[{ validator: (_, value) => watchedShared !== false || (value?.length ? Promise.resolve() : Promise.reject(new Error('Sélectionnez au moins une société'))) }]}><CompactSelect mode="multiple" disabled={watchedShared !== false || fieldReadonly('company')} options={entityOptions} placeholder={watchedShared !== false ? 'Toutes les sociétés' : 'Sélectionner les sociétés'} /></Form.Item></TableCell>
                 </tr></tbody>
               </table>
               {isShowMode && companyNames.length > 0 && <div className="mt-2 text-xs text-gray-500">{companyNames.join(', ')}</div>}

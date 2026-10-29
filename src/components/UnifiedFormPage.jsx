@@ -6,6 +6,8 @@ import React, {
   useState,
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
+import { isCorePage } from '../services/pageModule';
 import {
   FiAlertCircle,
   FiCheck,
@@ -192,7 +194,10 @@ export default function UnifiedFormPage({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   const isAccountingModulePage = location.pathname.startsWith('/comptabilite/');
+  const isCoreModulePage = isCorePage(location.pathname);
+  const effectivePullToHeader = isCoreModulePage ? 0 : pullToHeader;
   const currentPath = `${location.pathname}${location.search || ''}`;
   const resolvedPageLabel = pageLabel || (mode === 'show' ? `Détail ${title}` : `Création ${title}`);
   const resolvedMemoryKey = memoryKey
@@ -368,6 +373,7 @@ export default function UnifiedFormPage({
     return savedRecord;
   }, [
     autoReturnAfterSave,
+    currentPath,
     getReturnTarget,
     onAfterSave,
     onSave,
@@ -426,7 +432,7 @@ export default function UnifiedFormPage({
     return (
       <div
         className="flex min-h-0 flex-col overflow-hidden bg-gray-50"
-        style={{ height: `calc(100% + ${pullToHeader}px)`, marginTop: `-${pullToHeader}px` }}
+        style={{ height: `calc(100% + ${effectivePullToHeader}px)`, marginTop: `-${effectivePullToHeader}px` }}
       >
         <section className="flex min-h-0 flex-1 flex-col border-x border-b border-gray-300 bg-white">
           <div className="border-b border-gray-300 px-4 py-3 text-lg font-bold text-gray-900">
@@ -445,8 +451,8 @@ export default function UnifiedFormPage({
         width: isAccountingModulePage ? 'calc(100% + 3rem)' : undefined,
         marginLeft: isAccountingModulePage ? '-1.5rem' : undefined,
         marginRight: isAccountingModulePage ? '-1.5rem' : undefined,
-        height: `calc(100% + ${pullToHeader}px)`,
-        marginTop: `-${pullToHeader}px`,
+        height: `calc(100% + ${effectivePullToHeader}px)`,
+        marginTop: `-${effectivePullToHeader}px`,
       }}
     >
       <style>{`
@@ -457,14 +463,24 @@ export default function UnifiedFormPage({
           to { opacity: 1; transform: translateY(0); }
         }
         .unified-form-message { animation: unified-form-message-in 180ms ease-out; }
+        @media (max-width: 1159px) {
+          .unified-form-grid[data-trace-open="true"] {
+            grid-template-columns: minmax(0, 1fr) !important;
+            grid-template-rows: minmax(0, 1fr) minmax(180px, 32vh);
+          }
+          .unified-form-grid[data-trace-open="true"] > aside {
+            border-left: 0;
+            border-top: 1px solid rgb(209 213 219);
+          }
+        }
       `}</style>
 
       <section className="flex min-h-0 flex-1 flex-col overflow-visible border-x border-b border-gray-300 bg-white">
         <header className={classNames(
-          'relative z-20 shrink-0 border-b border-gray-300 py-1.5 pointer-events-auto',
-          isAccountingModulePage ? 'px-4' : 'px-3',
+          'relative z-20 shrink-0 border-b border-gray-300 py-1 pointer-events-auto',
+          isAccountingModulePage || isCoreModulePage ? 'px-4' : 'px-3',
         )}>
-          <div className="flex min-h-[46px] items-center justify-between gap-3">
+          <div className="flex min-h-[40px] items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               {primaryAction && (
                 <button
@@ -473,12 +489,12 @@ export default function UnifiedFormPage({
                   disabled={primaryAction.disabled}
                   title={primaryAction.title || primaryAction.label}
                   className={classNames(
-                    'flex h-9 shrink-0 items-center gap-2 rounded border border-purple-600 bg-purple-600 px-3 text-xs font-semibold text-white transition-all duration-200 hover:scale-105 hover:border-purple-700 hover:bg-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+                    'flex h-8 shrink-0 items-center gap-2 rounded border border-purple-600 bg-purple-600 px-3 text-xs font-semibold text-white transition-all duration-200 hover:scale-105 hover:border-purple-700 hover:bg-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
                     primaryAction.className,
                   )}
                 >
                   {primaryAction.icon || <FiPlus size={12} />}
-                  <span>{primaryAction.label || 'Nouveau'}</span>
+                  <span>{t(primaryAction.label || 'Nouveau')}</span>
                 </button>
               )}
 
@@ -497,9 +513,9 @@ export default function UnifiedFormPage({
                             state: { restoredFromSmartBack: true },
                           })}
                           className="max-w-44 truncate transition-colors hover:text-purple-700"
-                          title={`Revenir à ${page.label}`}
+                          title={`${t('Revenir à')} ${t(page.label)}`}
                         >
-                          {page.label}
+                          {t(page.label)}
                         </button>
                       </React.Fragment>
                     ))}
@@ -516,7 +532,7 @@ export default function UnifiedFormPage({
                   >
                     {recordLabelIsCurrentItem && title !== 'Pièces comptables'
                       ? recordLabel
-                      : title === 'Pièces comptables' ? 'Écriture' : title}
+                    : title === 'Pièces comptables' ? t('Écriture') : t(title)}
                   </button>
                   {recordLabel && (!recordLabelIsCurrentItem || title === 'Pièces comptables') && (
                     <span className="max-w-48 truncate text-xs font-medium text-gray-700">
@@ -536,11 +552,11 @@ export default function UnifiedFormPage({
                   disabled={action.disabled}
                   title={action.title || action.label}
                   className={classNames(
-                    'flex h-9 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+                    'flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
                     action.className,
                   )}
                 >
-                  {action.icon}{action.label && <span>{action.label}</span>}
+                  {action.icon}{action.label && <span>{t(action.label)}</span>}
                 </button>
               ))}
 
@@ -554,9 +570,9 @@ export default function UnifiedFormPage({
                     void save();
                   }}
                   disabled={saving || saveDisabled}
-                  title={saveLabel}
-                  aria-label={saveLabel}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-600 text-white shadow-sm transition-all duration-200 hover:scale-110 hover:bg-purple-700 hover:shadow-lg active:scale-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={t(saveLabel)}
+                  aria-label={t(saveLabel)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-white shadow-sm transition-all duration-200 hover:scale-110 hover:bg-purple-700 hover:shadow-lg active:scale-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saveIcon}
                 </button>
@@ -565,9 +581,9 @@ export default function UnifiedFormPage({
               <button
                 type="button"
                 onClick={() => requestExit()}
-                title="Quitter la page"
-                aria-label="Quitter la page"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white transition-all duration-200 hover:scale-110 hover:bg-gray-800 hover:shadow-lg active:scale-90"
+                title={t('Quitter la page')}
+                aria-label={t('Quitter la page')}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition-all duration-200 hover:scale-110 hover:bg-gray-800 hover:shadow-lg active:scale-90"
               >
                 <FiX size={16} />
               </button>
@@ -583,7 +599,7 @@ export default function UnifiedFormPage({
                     disabled={action.disabled}
                     title={action.title || action.label}
                     className={classNames(
-                      'pointer-events-auto flex h-9 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+                      'pointer-events-auto flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 transition-all duration-200 hover:scale-105 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
                       action.className,
                     )}
                   >
@@ -596,7 +612,8 @@ export default function UnifiedFormPage({
         </header>
 
         <div
-          className="grid min-h-0 flex-1 gap-0"
+          className="unified-form-grid grid min-h-0 flex-1 gap-0"
+          data-trace-open={traceOpen ? 'true' : 'false'}
           style={{
             gridTemplateColumns: traceOpen
               ? `minmax(0, 1fr) ${traceabilityWidth}px`
@@ -638,7 +655,7 @@ export default function UnifiedFormPage({
               </div>
             )}
 
-            {hasTraceability && !traceOpen && (
+            {hasTraceability && !traceOpen && !traceability.headerToggle && (
               <div className="relative z-20 h-0 shrink-0 overflow-visible">
                 <button
                   type="button"
@@ -663,18 +680,18 @@ export default function UnifiedFormPage({
                 <div className="flex min-w-0 items-center gap-2">
                   <FiInfo className="shrink-0 text-purple-600" size={14} />
                   <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-gray-800">
-                    {traceability.title || 'Traçabilité'}
+                    {t(traceability.title || 'Traçabilité')}
                   </h2>
                 </div>
                 <button
                   type="button"
                   onClick={traceability.onClose}
                   className="flex h-7 items-center gap-1 border border-gray-300 px-2 text-xs text-gray-600 transition-all hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700"
-                  title="Fermer la traçabilité"
-                  aria-label="Fermer la traçabilité"
+                  title={t('Fermer la traçabilité')}
+                  aria-label={t('Fermer la traçabilité')}
                 >
                   <FiX size={12} />
-                  <span>Fermer</span>
+                  <span>{t('Fermer')}</span>
                 </button>
               </div>
               {traceability.content}

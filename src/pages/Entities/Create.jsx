@@ -15,7 +15,8 @@ import { apiClient } from '../../services/apiClient';
 import {
   EntityForm,
   INITIAL_ENTITY_FORM,
-  buildEntityPayload,
+  buildEntityRequestPayload,
+  entityApiErrorMessage,
   parseResponse,
   validateEntityForm,
 } from './EntityShared';
@@ -85,7 +86,7 @@ export default function EntityCreate() {
     const errors = validateEntityForm(formData);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
-      setError('Champs obligatoires manquants : raison sociale, activite, email et telephone sont requis.');
+      setError('Champs obligatoires manquants : raison sociale, activité, email, téléphone, adresse et pays sont requis.');
       return;
     }
 
@@ -94,12 +95,12 @@ export default function EntityCreate() {
     setSuccess(null);
 
     try {
-      const response = await apiClient.post('/entites/', buildEntityPayload(formData));
+      const response = await apiClient.post('/entites/', buildEntityRequestPayload(formData));
       setHasUnsavedChanges(false);
       setSuccess('Entite creee avec succes.');
       navigate(response?.id ? `/entities/${response.id}` : '/entities');
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || "Erreur lors de la creation de l'entite.");
+      setError(entityApiErrorMessage(err, "Erreur lors de la creation de l'entite."));
     } finally {
       setLoading(false);
     }
@@ -134,7 +135,7 @@ export default function EntityCreate() {
   const ready = Object.keys(validateEntityForm(formData)).length === 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gray-50 p-2 md:p-3">
       <input
         ref={logoInputRef}
         type="file"
@@ -145,15 +146,15 @@ export default function EntityCreate() {
           event.target.value = '';
         }}
       />
-      <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-        <div className="border-b border-gray-300 px-5 py-4 flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
+      <div className="mx-auto w-full bg-white border border-gray-300">
+        <div className="border-b border-gray-300 px-4 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => {
                 if (hasUnsavedChanges) setShowConfirmDialog(true);
                 else resetForm();
               }}
-              className="h-12 px-5 bg-purple-600 text-white font-semibold flex items-center gap-2 hover:bg-purple-700"
+              className="h-9 px-4 bg-purple-600 text-sm text-white font-semibold flex items-center gap-2 hover:bg-purple-700"
             >
               <FiPlus size={18} />
               Nouveau
@@ -167,7 +168,7 @@ export default function EntityCreate() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleGoBack}
-              className="h-10 px-4 border border-gray-300 bg-white text-sm hover:bg-gray-50 flex items-center gap-2"
+              className="h-8 px-3 border border-gray-300 bg-white text-xs hover:bg-gray-50 flex items-center gap-2"
             >
               <FiX size={16} />
               Annuler
@@ -175,7 +176,7 @@ export default function EntityCreate() {
             <div className="relative" ref={actionsMenuRef}>
               <button
                 onClick={() => setShowActionsMenu((current) => !current)}
-                className="h-10 px-4 border border-gray-300 bg-white text-sm hover:bg-gray-50 flex items-center gap-2"
+                className="h-8 px-3 border border-gray-300 bg-white text-xs hover:bg-gray-50 flex items-center gap-2"
               >
                 <FiSettings size={16} />
                 Actions
@@ -199,7 +200,7 @@ export default function EntityCreate() {
             <button
               onClick={submit}
               disabled={loading}
-              className="h-10 px-5 bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 disabled:opacity-60 flex items-center gap-2"
+              className="h-8 px-4 bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700 disabled:opacity-60 flex items-center gap-2"
             >
               <FiCheck size={16} />
               {loading ? 'Creation...' : 'Creer'}
@@ -214,7 +215,7 @@ export default function EntityCreate() {
           <HeaderCell label="Statut" value={formData.statut ? 'Actif' : 'Inactif'} badge={formData.statut} />
         </div>
 
-        <div className="px-5 py-3 border-b border-gray-300 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-4 py-2 border-b border-gray-300 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm">
             <span className={`inline-flex items-center gap-1 px-2 py-1 border ${ready ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>
               {ready ? <FiCheck size={14} /> : <FiAlertCircle size={14} />}
@@ -234,13 +235,13 @@ export default function EntityCreate() {
           </div>
         )}
 
-        <div className="border-b border-gray-300 px-5">
+        <div className="border-b border-gray-300 px-4">
           <div className="flex gap-1">
             {TABS.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-5 py-3 text-sm border-b-2 ${
+                className={`px-4 py-2 text-sm border-b-2 ${
                   activeTab === tab.key
                     ? 'border-purple-600 text-purple-700 font-semibold'
                     : 'border-transparent text-gray-600 hover:text-gray-900'

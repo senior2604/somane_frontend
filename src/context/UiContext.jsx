@@ -2,11 +2,13 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { useEntity } from './EntityContext';
 import { uiService } from '../services/uiService';
 import { securityService } from '../services/securityAccess';
+import { useLanguage } from './LanguageContext';
 
 const UiContext = createContext(null);
 
 export function UiProvider({ children }) {
   const { activeEntity } = useEntity();
+  const { setLanguage, setTranslations } = useLanguage();
   const [configuration, setConfiguration] = useState(null);
   const [security, setSecurity] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,6 +27,11 @@ export function UiProvider({ children }) {
       if (bootstrapResult.status === 'rejected') throw bootstrapResult.reason;
 
       setConfiguration(bootstrapResult.value);
+      setLanguage(
+        bootstrapResult.value?.user?.lang || 'fr_FR',
+        bootstrapResult.value?.user?.language_direction,
+      );
+      setTranslations(bootstrapResult.value?.translations || {});
       if (securityResult.status === 'fulfilled') {
         setSecurity(securityResult.value);
       } else {
@@ -38,10 +45,16 @@ export function UiProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [activeEntity?.id]);
+  }, [activeEntity?.id, setLanguage, setTranslations]);
 
   useEffect(() => {
     reload();
+  }, [reload]);
+
+  useEffect(() => {
+    const handleLanguageChange = () => reload();
+    window.addEventListener('somane:language-changed', handleLanguageChange);
+    return () => window.removeEventListener('somane:language-changed', handleLanguageChange);
   }, [reload]);
 
   return (

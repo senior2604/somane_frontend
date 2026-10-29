@@ -5,7 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { FiCopy, FiPlus, FiTrash2 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
 import { useEntity } from '../../../../context/EntityContext';
+import { useUi } from '../../../../context/UiContext';
 import { apiClient } from '../../../../services/apiClient';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 
 const MEMORY_KEY = 'comptabilite:groupes-taxes:index';
 const CACHE_PREFIX = 'comptabilite:groupes-taxes:cache:';
@@ -73,6 +75,13 @@ const writeCache = (key, rows) => {
 export default function TaxGroupsIndex() {
   const navigate = useNavigate();
   const { activeEntity } = useEntity();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.AccountTaxGroup', 'list', {
+      preferredViewKey: 'somane_ui.accounting_accounttaxgroup_tree',
+    }),
+    [configuration],
+  );
   const companyId = activeEntity?.id;
   const cacheKey = `${CACHE_PREFIX}${companyId || 'global'}`;
   const requestRef = useRef(0);
@@ -215,7 +224,7 @@ export default function TaxGroupsIndex() {
     }
   }, [groups, loadGroups, selectedIds]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'nom',
       label: 'Nom',
@@ -273,6 +282,31 @@ export default function TaxGroupsIndex() {
       value: (group) => group.preceding_subtotal || '',
     },
   ], [getCountry, navigate]);
+
+  const columns = useMemo(() => applyConfiguredListColumns(
+    baseColumns,
+    configuredList?.fields,
+    {
+      name: 'nom',
+      country: 'pays',
+      property_tax_payable_account: 'compte_du',
+      property_tax_receivable_account: 'compte_credit',
+      property_advance_tax_payment_account: 'compte_acompte',
+      preceding_subtotal: 'sous_total',
+    },
+  ), [baseColumns, configuredList]);
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => ({
+    name: 'nom',
+    country: 'pays',
+    property_tax_payable_account: 'compte_du',
+    property_tax_receivable_account: 'compte_credit',
+    property_advance_tax_payment_account: 'compte_acompte',
+    preceding_subtotal: 'sous_total',
+  }[field.name] || field.name)).filter((id) => baseColumns.some((column) => column.id === id)), [baseColumns, configuredList]);
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumns(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
 
   const filterChips = useMemo(() => filters.map((filter) => ({
     id: filter.id,

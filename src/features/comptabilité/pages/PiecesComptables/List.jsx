@@ -11,7 +11,10 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import { FiCalendar, FiCopy, FiPlus, FiRotateCcw, FiTrash2 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import MetadataFieldDisplay from '../../../../components/MetadataFieldDisplay';
 import { useEntity } from '../../../../context/EntityContext';
+import { useUi } from '../../../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import { piecesService } from '../../services';
 
 const PIECES_MEMORY_KEY = 'comptabilite:pieces:index:v1';
@@ -103,6 +106,52 @@ const DEFAULT_VISIBLE_COLUMN_IDS = [
   'etat',
   'paiement',
 ];
+const ACCOUNT_MOVE_MODEL = 'comptabilite.AccountMove';
+const ACCOUNT_MOVE_COLUMN_ALIASES = {
+  name: 'numero',
+  journal: 'journal_name',
+  partner: 'partenaire',
+  ref: 'reference',
+  amount_untaxed: 'montant_ht',
+  amount_tax: 'montant_taxes',
+  amount_total: 'montant_ttc',
+  state: 'etat',
+  payment_state: 'paiement',
+};
+const ACCOUNT_MOVE_FIELD_BY_COLUMN = {
+  date: 'date',
+  numero: 'name',
+  journal_name: 'journal',
+  reference: 'ref',
+  partenaire: 'partner',
+  montant_ht: 'amount_untaxed',
+  montant_taxes: 'amount_tax',
+  montant_ttc: 'amount_total',
+  etat: 'state',
+  paiement: 'payment_state',
+};
+
+const toDisplayField = (definition, viewField) => {
+  if (!definition && !viewField) return null;
+  const field = { ...(definition || {}), ...(viewField || {}) };
+  const name = viewField?.name || definition?.name;
+  return {
+    ...field,
+    name,
+    label: viewField?.label || definition?.label || definition?.field_description || name,
+    type: definition?.type || definition?.ttype || viewField?.type || viewField?.ttype || 'char',
+    widget: viewField?.widget ?? definition?.display_widget ?? '',
+    display_widget: definition?.display_widget || '',
+    widget_options: viewField?.widget_options || definition?.display_widget_options?.options || {},
+    widget_attributes: viewField?.widget_attributes || definition?.display_widget_options?.attributes || {},
+  };
+};
+
+const getColumnTextValue = (value) => {
+  if (Array.isArray(value)) return value.map((item) => getColumnTextValue(item)).filter(Boolean).join(', ');
+  if (value && typeof value === 'object') return value.name || value.nom || value.label || value.code || value.id || '';
+  return value ?? '';
+};
 
 const normalizeApiList = (response) => {
   if (Array.isArray(response)) return response;
@@ -520,6 +569,19 @@ const enrichPieces = (rawPieces, referentials = {}) => rawPieces.map((piece) => 
 export default function PiecesComptablesList() {
   const navigate = useNavigate();
   const { activeEntity } = useEntity();
+  const { configuration, loading: uiConfigurationLoading } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, ACCOUNT_MOVE_MODEL, 'list', {
+      preferredViewKey: 'somane_ui.accounting_accountmove_tree',
+    }),
+    [configuration],
+  );
+  const modelFieldDefinitions = useMemo(
+    () => configuration?.model_views?.[ACCOUNT_MOVE_MODEL]?.fields || [],
+    [configuration],
+  );
+  const visibleSelectionManaged = useRef(false);
+  const configuredDateField = configuredList?.fields?.find((field) => field.name === 'date');
   const entityId = activeEntity?.id;
   const loadRequestRef = useRef(0);
   const [initialCachedData] = useState(() => readPiecesDataCache(entityId));
@@ -786,7 +848,9 @@ export default function PiecesComptablesList() {
       minWidth: 112,
       value: (piece) => getPieceDateByMode(piece, dateDisplayMode),
       sortValue: (piece) => getPieceDateByMode(piece, dateDisplayMode),
-      render: (_, piece) => <span className="whitespace-nowrap text-xs">{formatListDate(getPieceDateByMode(piece, dateDisplayMode))}</span>,
+      render: (_, piece) => (configuredDateField?.display_widget || configuredDateField?.widget)
+        ? <MetadataFieldDisplay value={getPieceDateByMode(piece, dateDisplayMode)} field={configuredDateField} entity={activeEntity} />
+        : <span className="whitespace-nowrap text-xs">{formatListDate(getPieceDateByMode(piece, dateDisplayMode))}</span>,
     },
     {
       id: 'numero',
@@ -886,7 +950,87 @@ export default function PiecesComptablesList() {
       value: (piece) => piece.payment_state || '',
       render: (_, piece) => <PaymentBadge state={piece.payment_state} />,
     },
-  ], [dateDisplayMode, navigate]);
+  ], [activeEntity, configuredDateField, dateDisplayMode, navigate]);
+
+  const displayColumns = useMemo(() => {
+    const definitionsByName = new Map(modelFieldDefinitions.map((field) => [field.name, field]));
+    const viewFieldsByName = new Map((configuredList?.fields || []).map((field) => [field.name, field]));
+    const configuredColumns = applyConfiguredListColumns(
+      columns,
+      configuredList?.fields,
+      ACCOUNT_MOVE_COLUMN_ALIASES,
+    );
+    const configuredIds = new Set(configuredColumns.map((column) => column.id));
+    const orderedBaseColumns = [
+      ...configuredColumns,
+      ...columns.filter((column) => !configuredIds.has(column.id)),
+    ].map((column) => {
+      const fieldName = ACCOUNT_MOVE_FIELD_BY_COLUMN[column.id];
+      if (!fieldName) return column;
+      const metadataField = toDisplayField(
+        definitionsByName.get(fieldName),
+        viewFieldsByName.get(fieldName) || column.metadataField,
+      );
+      return metadataField ? { ...column, metadataField, searchLabel: metadataField.label } : column;
+    });
+    const alreadyRepresentedFields = new Set([
+      ...Object.keys(ACCOUNT_MOVE_COLUMN_ALIASES),
+      ...Object.values(ACCOUNT_MOVE_FIELD_BY_COLUMN),
+    ]);
+    const definitionsInViewOrder = (configuredList?.fields || [])
+      .map((field) => definitionsByName.get(field.name))
+      .filter((definition) => definition?.name && !alreadyRepresentedFields.has(definition.name));
+    const fieldsConfiguredInView = new Set(definitionsInViewOrder.map((definition) => definition.name));
+    const dynamicDefinitions = [
+      ...definitionsInViewOrder,
+      ...modelFieldDefinitions.filter((definition) => (
+        definition.name
+        && !alreadyRepresentedFields.has(definition.name)
+        && !fieldsConfiguredInView.has(definition.name)
+      )),
+    ];
+    const dynamicColumns = dynamicDefinitions
+      .map((definition) => {
+        const viewField = viewFieldsByName.get(definition.name);
+        const metadataField = toDisplayField(definition, viewField);
+        const type = metadataField.type;
+        const minWidth = ['text', 'html', 'json'].includes(type)
+          ? 190
+          : ['many2many', 'one2many'].includes(type) ? 170
+            : ['date', 'datetime'].includes(type) ? 130
+              : ['integer', 'float', 'decimal', 'monetary'].includes(type) ? 120 : 135;
+        return {
+          id: definition.name,
+          label: metadataField.label,
+          searchLabel: metadataField.label,
+          metadataField,
+          minWidth,
+          numeric: ['integer', 'float', 'decimal', 'monetary'].includes(type),
+          value: (piece) => piece?.[definition.name],
+          sortValue: (piece) => getColumnTextValue(piece?.[definition.name]),
+          render: (value, piece) => (
+            <MetadataFieldDisplay value={value} field={metadataField} entity={activeEntity} record={piece} />
+          ),
+        };
+      });
+
+    return [...orderedBaseColumns, ...dynamicColumns];
+  }, [activeEntity, columns, configuredList, modelFieldDefinitions]);
+
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => (
+    ACCOUNT_MOVE_COLUMN_ALIASES[field.name] || field.name
+  )).filter((id) => displayColumns.some((column) => column.id === id)), [configuredList, displayColumns]);
+
+  useEffect(() => {
+    if (!visibleSelectionManaged.current && configuredColumnIds?.length) {
+      setVisibleColumnIds(configuredColumnIds);
+    }
+  }, [configuredColumnIds, configuredList?.view?.id]);
+
+  const handleVisibleColumnsChange = useCallback((ids) => {
+    visibleSelectionManaged.current = true;
+    setVisibleColumnIds(ids);
+  }, []);
 
   const renderFilters = useCallback(({ close }) => (
     <div className="grid grid-cols-1 text-xs text-gray-700 md:grid-cols-[minmax(220px,0.8fr)_minmax(360px,1.4fr)]">
@@ -1050,6 +1194,7 @@ export default function PiecesComptablesList() {
     if (Array.isArray(customState?.activeFilters)) setActiveFilters(customState.activeFilters);
     if (customState?.dateDisplayMode) setDateDisplayMode(customState.dateDisplayMode);
     if (Array.isArray(savedState?.visibleColumnIds) && savedState.visibleColumnIds.length) {
+      visibleSelectionManaged.current = true;
       const restoredColumns = savedState.visibleColumnIds.flatMap((columnId) => (
         columnId === 'type_journal' ? ['journal_name', 'journal_prefix'] : [columnId]
       ));
@@ -1062,11 +1207,29 @@ export default function PiecesComptablesList() {
     navigate(`/comptabilite/pieces/${piece.id}`);
   }, [navigate]);
 
+  // Ne pas afficher les colonnes de secours avant l'arrivée de la vue IrUiView :
+  // elles seraient remplacées quelques secondes après par l'ordre/libellé configuré.
+  if (uiConfigurationLoading && !configuration) {
+    return (
+      <section role="status" aria-label="Chargement de la liste des pièces comptables" aria-busy="true" className="flex min-h-40 flex-col border-x border-b border-gray-300 bg-white">
+        <div className="flex min-h-10 items-center gap-3 border-b border-gray-200 px-4 py-1">
+          <div className="h-8 w-32 animate-pulse rounded bg-gray-200" />
+          <div className="h-8 min-w-40 flex-1 animate-pulse rounded bg-gray-100" />
+          <div className="h-8 w-24 animate-pulse rounded bg-gray-100" />
+        </div>
+        <div className="grid grid-cols-8 gap-px bg-gray-200 p-px">
+          {Array.from({ length: 8 }, (_, index) => <div key={index} className="h-10 animate-pulse bg-gray-100" />)}
+        </div>
+        <div className="flex flex-1 items-center justify-center text-sm text-gray-500">Chargement de la vue comptable…</div>
+      </section>
+    );
+  }
+
   return (
     <UnifiedIndexPage
       title="Pièces comptables"
       rows={filteredPieces}
-      columns={columns}
+      columns={displayColumns}
       rowKey="id"
       loading={loading}
       error={error}
@@ -1100,9 +1263,9 @@ export default function PiecesComptablesList() {
       pageSize={itemsPerPage}
       onPageSizeChange={setItemsPerPage}
       pageSizeOptions={[15, 25, 50, 100, 200]}
-      visibleColumnIds={visibleColumnIds}
-      defaultVisibleColumnIds={DEFAULT_VISIBLE_COLUMN_IDS}
-      onVisibleColumnsChange={setVisibleColumnIds}
+      visibleColumnIds={visibleColumnIds.filter((id) => displayColumns.some((column) => column.id === id))}
+      defaultVisibleColumnIds={configuredColumnIds?.length ? configuredColumnIds : DEFAULT_VISIBLE_COLUMN_IDS}
+      onVisibleColumnsChange={handleVisibleColumnsChange}
       defaultSortColumn="date"
       defaultSortDirection="desc"
       memoryKey={PIECES_MEMORY_KEY}

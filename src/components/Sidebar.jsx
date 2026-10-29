@@ -6,10 +6,8 @@ import {
   FiLogOut, 
   FiBriefcase, 
   FiUserPlus,
-  FiShield,
   FiList,
   FiGlobe,
-  FiDollarSign,
   FiBook,
   FiClock,
   FiInfo,
@@ -21,18 +19,20 @@ import {
   FiCreditCard,
   FiLink,
   FiTrendingUp,
-  FiGlobe as FiRegion,
   FiMenu,
   FiX,
   FiChevronLeft,
   FiChevronRight as FiChevronRightIcon,
-  FiShoppingCart,
   FiZap,
-  FiCode
+  FiActivity,
+  FiCode,
+  FiEye,
+  FiLayers
 } from "react-icons/fi";
 import { useState, useEffect, useRef } from "react";
 import { useUi } from "../context/UiContext";
 import { can } from "../services/securityAccess";
+import { useLanguage } from "../context/LanguageContext";
 
 // Composant pour texte avec tooltip automatique
 const TruncatedTextWithTooltip = ({ text, className = "", maxWidth = "none" }) => {
@@ -79,10 +79,92 @@ const TruncatedTextWithTooltip = ({ text, className = "", maxWidth = "none" }) =
   );
 };
 
+const MENU_ICON_RULES = [
+  [['home', 'dashboard', 'accueil'], FiHome],
+  [['zap', 'ai', 'intelligence'], FiZap],
+  [['briefcase', 'entity', 'entité', 'company', 'organisation'], FiBriefcase],
+  [['user', 'partner', 'partenaire'], FiUsers],
+  [['globe', 'langue', 'translation', 'traduction', 'pays'], FiGlobe],
+  [['flag'], FiFlag],
+  [['map'], FiMap],
+  [['credit-card', 'bank', 'banque'], FiCreditCard],
+  [['link'], FiLink],
+  [['trend', 'change'], FiTrendingUp],
+  [['setting', 'paramètre', 'system'], FiSettings],
+  [['book', 'journal'], FiBook],
+  [['clock', 'task'], FiClock],
+  [['info'], FiInfo],
+  [['activity'], FiActivity],
+  [['layer'], FiLayers],
+  [['code', 'qweb', 'field', 'champ'], FiCode],
+  [['eye', 'preview', 'aperçu'], FiEye],
+  [['list'], FiList],
+];
+
+function getMenuDestination(menu) {
+  if (menu?.path) return menu.path;
+  return menu?.action_id ? `/ui/action/${menu.action_id}` : '';
+}
+
+function menuContainsPath(menu, pathname) {
+  const destination = getMenuDestination(menu);
+  if (destination && matchesDestination(destination, pathname)) return true;
+  return (menu?.children || []).some((child) => menuContainsPath(child, pathname));
+}
+
+function matchesDestination(destination, pathname) {
+  const basePath = String(destination || '').split(/[?#]/, 1)[0].replace(/\/$/, '');
+  return Boolean(basePath) && (pathname === basePath || pathname.startsWith(`${basePath}/`));
+}
+
+function getMenuIcon(menu, depth = 0) {
+  const searchable = `${menu?.icon || ''} ${menu?.name || ''}`.toLocaleLowerCase('fr');
+  const rule = MENU_ICON_RULES.find(([keywords]) => keywords.some((keyword) => searchable.includes(keyword)));
+  const Icon = rule?.[1] || (depth === 0 ? FiGrid : FiList);
+  return <Icon />;
+}
+
+function DynamicMenuEntry({ menu, depth, location, isCollapsed, isMobile, openCategories, onToggle, onNavigate, t }) {
+  const children = Array.isArray(menu.children) ? menu.children : [];
+  const destination = getMenuDestination(menu);
+  const nodeKey = `dynamic-${menu.id}`;
+  const active = matchesDestination(destination, location.pathname);
+  const childActive = children.some((child) => menuContainsPath(child, location.pathname));
+  const expanded = Boolean(openCategories[nodeKey] || childActive);
+  const linkClass = `flex min-w-0 flex-1 items-center rounded-lg px-2.5 py-2 text-sm transition-colors ${active ? 'bg-violet-50 text-violet-700 font-medium' : 'text-gray-700 hover:bg-gray-50 hover:text-violet-600'} ${isCollapsed && !isMobile ? 'justify-center' : ''}`;
+  const label = (!isCollapsed || isMobile) && <TruncatedTextWithTooltip text={t(menu.name)} className="font-medium" maxWidth={depth === 0 ? '145px' : '125px'} />;
+  const icon = <span className={`shrink-0 text-violet-600 ${(!isCollapsed || isMobile) ? 'mr-2.5' : ''}`}>{getMenuIcon(menu, depth)}</span>;
+
+  if (!children.length && destination) {
+    return <Link to={destination} onClick={onNavigate} className={linkClass} title={t(menu.name)}>{icon}{label}</Link>;
+  }
+
+  return (
+    <div className="min-w-0">
+      <div className="flex min-w-0 items-center gap-0.5">
+        {destination ? (
+          <Link to={destination} onClick={onNavigate} className={linkClass} title={t(menu.name)}>{icon}{label}</Link>
+        ) : (
+          <button type="button" onClick={() => onToggle(nodeKey)} aria-expanded={expanded} className={`${linkClass} text-left`} title={t(menu.name)}>
+            {icon}{label}
+          </button>
+        )}
+        {children.length > 0 && (!isCollapsed || isMobile) && <button type="button" onClick={() => onToggle(nodeKey)} aria-label={`${expanded ? t('Réduire') : t('Développer')} ${t(menu.name)}`} aria-expanded={expanded} className="rounded p-2 text-violet-500 hover:bg-gray-100">{expanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}</button>}
+      </div>
+      {children.length > 0 && expanded && (!isCollapsed || isMobile) && (
+        <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-100 pl-2">
+          {children.map((child) => <DynamicMenuEntry key={child.id} menu={child} depth={depth + 1} location={location} isCollapsed={isCollapsed} isMobile={isMobile} openCategories={openCategories} onToggle={onToggle} onNavigate={onNavigate} t={t} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { configuration, security, loading: uiLoading } = useUi();
+  const { t } = useLanguage();
   
   const [openCategories, setOpenCategories] = useState({
     organisation: true,
@@ -181,30 +263,30 @@ export default function Sidebar() {
       icon: <FiSettings />,
       items: [
         { name: "Paramètres", path: "/settings", model: "core.ParametreGeneral", icon: <FiSettings /> },
+        { name: "Langues", path: "/Languages", model: "core.Langue", icon: <FiGlobe /> },
+        { name: "Traductions", path: "/translations", model: "core.IrTranslation", icon: <FiGlobe /> },
         { name: "Modules", path: "/modules", model: "core.Module", icon: <FiGrid /> },
         { name: "Journal", path: "/journal", model: "core.Journal", icon: <FiBook /> },
         { name: "Tâches Auto", path: "/tasks", model: "core.TacheAutomatique", icon: <FiClock /> },
         { name: "Infos Système", path: "/system", model: "core.InformationSysteme", icon: <FiInfo /> },
         { name: "Modèles", path: "/models", model: "core.IrModel", icon: <FiGrid /> },
+        { name: "Bilan de dynamisation", path: "/metadata-overview", model: "core.IrModelFields", icon: <FiActivity /> },
+        { name: "Rendus groupés", path: "/field-displays", model: "core.IrModelFields", icon: <FiLayers /> },
+        { name: "Vues QWeb", path: "/qweb-views", model: "core.IrUiView", icon: <FiCode /> },
         { name: "Champs des modèles", path: "/model-fields", model: "core.IrModelFields", icon: <FiCode /> },
+        { name: "Structure des champs", path: "/model-fields/schema", model: "core.IrModelFields", icon: <FiCode /> },
+        { name: "Aperçu des champs", path: "/field-preview", model: "core.IrModelFields", icon: <FiEye /> },
+        { name: "Menus d’interface", path: "/ui-menus", model: "core.IrUiMenu", icon: <FiGrid /> },
       ]
     }
   ];
 
-  const dynamicMenuCategories = (configuration?.menus || []).map((menu) => ({
-    id: `dynamic-${menu.id}`,
-    name: menu.name,
-    icon: <FiGrid />,
-    path: menu.action_id ? `/ui/action/${menu.action_id}` : undefined,
-    isSimpleLink: Boolean(menu.action_id) && !(menu.children || []).length,
-    items: (menu.children || [])
-      .filter((child) => child.action_id)
-      .map((child) => ({
-        name: child.name,
-        path: `/ui/action/${child.action_id}`,
-        icon: <FiList />,
-      })),
-  })).filter((menu) => menu.isSimpleLink || menu.items.length);
+  const dynamicMenuCategories = (configuration?.menus || []).flatMap((menu) => {
+    const visibleNodes = menu.application_root && (menu.children || []).length
+      ? menu.children
+      : [menu];
+    return visibleNodes.map((node) => ({ ...node, dynamic: true }));
+  });
 
   const visibleStaticMenuCategories = staticMenuCategories
     .map((category) => {
@@ -221,7 +303,24 @@ export default function Sidebar() {
     })
     .filter((category) => !category.items || category.items.length > 0);
 
-  const menuCategories = [...visibleStaticMenuCategories, ...dynamicMenuCategories];
+  const menuCategories = configuration ? dynamicMenuCategories : visibleStaticMenuCategories;
+
+  useEffect(() => {
+    if (!configuration?.menus) return;
+    const activeAncestors = {};
+    const visit = (menu) => {
+      let containsActive = false;
+      const destination = getMenuDestination(menu);
+      if (destination && matchesDestination(destination, location.pathname)) containsActive = true;
+      for (const child of menu.children || []) {
+        if (visit(child)) containsActive = true;
+      }
+      if (containsActive && (menu.children || []).length) activeAncestors[`dynamic-${menu.id}`] = true;
+      return containsActive;
+    };
+    configuration.menus.forEach(visit);
+    setOpenCategories((current) => ({ ...current, ...activeAncestors }));
+  }, [configuration?.menus, location.pathname]);
 
   const handleLogout = () => {
     localStorage.removeItem("authToken");
@@ -300,7 +399,19 @@ export default function Sidebar() {
         <nav className="flex-1 px-1.5 py-2 overflow-y-auto">
           {menuCategories.map((category) => (
             <div key={category.id} className="mb-0.5">
-              {category.isSimpleLink ? (
+              {category.dynamic ? (
+                <DynamicMenuEntry
+                  menu={category}
+                  depth={0}
+                  location={location}
+                  isCollapsed={isCollapsed}
+                  isMobile={isMobile}
+                  openCategories={openCategories}
+                  onToggle={toggleCategory}
+                  onNavigate={() => isMobile && setIsMobileOpen(false)}
+                  t={t}
+                />
+              ) : category.isSimpleLink ? (
                 /* Lien simple : Tableau de Bord */
                 <Link
                   to={category.path}
@@ -315,7 +426,7 @@ export default function Sidebar() {
                   </span>
                   {(!isCollapsed || isMobile) && (
                     <TruncatedTextWithTooltip 
-                      text={category.name}
+                      text={t(category.name)}
                       className="font-semibold text-sm"
                       maxWidth={isCollapsed ? "110px" : "150px"}
                     />
@@ -372,7 +483,7 @@ export default function Sidebar() {
                           </span>
                           {(!isCollapsed || isMobile) && (
                             <TruncatedTextWithTooltip 
-                              text={item.name}
+                              text={t(item.name)}
                               className="font-medium text-sm"
                               maxWidth={isCollapsed ? "110px" : "130px"}
                             />
@@ -396,7 +507,7 @@ export default function Sidebar() {
             <FiLogOut className="text-violet-600 text-base" />
             {(!isCollapsed || isMobile) && (
               <TruncatedTextWithTooltip 
-                text="Déconnexion"
+                text={t("Déconnexion")}
                 className="text-sm"
                 maxWidth="70px"
               />

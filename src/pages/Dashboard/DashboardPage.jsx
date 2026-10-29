@@ -160,19 +160,20 @@ const ICON_RULES = [
 
 
 /*
- * Recherche la première action disponible dans un menu
+ * Recherche la première destination disponible dans un menu
  * ou dans l'un de ses sous-menus.
  */
-function findFirstActionId(menu) {
+function findFirstDestination(menu) {
+  if (menu?.path) return { path: menu.path };
   if (menu?.action_id) {
-    return menu.action_id;
+    return { actionId: menu.action_id };
   }
 
   for (const child of menu?.children || []) {
-    const actionId = findFirstActionId(child);
+    const destination = findFirstDestination(child);
 
-    if (actionId) {
-      return actionId;
+    if (destination) {
+      return destination;
     }
   }
 
@@ -234,8 +235,8 @@ export default function DashboardPage() {
         .map((menu, index) => ({
           ...menu,
 
-          actionId:
-            findFirstActionId(menu),
+          destination:
+            findFirstDestination(menu),
 
           Icon:
             getMenuIcon(menu),
@@ -249,9 +250,7 @@ export default function DashboardPage() {
               COLOR_SCHEMES.length
             ],
         }))
-        .filter((application) =>
-          Boolean(application.actionId)
-        );
+        .filter((application) => Boolean(application.destination));
 
 
     /*
@@ -297,8 +296,8 @@ export default function DashboardPage() {
     /*
      * Application utilisant encore une route React.
      */
-    if (application.path) {
-      navigate(application.path);
+    if (application.destination?.path) {
+      navigate(application.destination.path);
       return;
     }
 
@@ -306,9 +305,9 @@ export default function DashboardPage() {
     /*
      * Application utilisant IrUiMenu et IrAction.
      */
-    if (application.actionId) {
+    if (application.destination?.actionId) {
       navigate(
-        `/ui/action/${application.actionId}`
+        `/ui/action/${application.destination.actionId}`
       );
     }
   };

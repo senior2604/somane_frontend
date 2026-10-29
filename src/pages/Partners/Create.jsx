@@ -16,6 +16,9 @@ import {
 import { apiClient } from '../../services/apiClient';
 import { useEntity } from '../../context/EntityContext';
 import { useUi } from '../../context/UiContext';
+import { useLanguage } from '../../context/LanguageContext';
+import UnifiedFormPage from '../../components/UnifiedFormPage';
+import { RecordTraceabilityContent } from '../../components/RecordTraceabilityPanel';
 import {
   INITIAL_FORM,
   PARTNER_TYPES,
@@ -84,6 +87,7 @@ export default function PartnerCreate() {
   const location = useLocation();
   const { activeEntity } = useEntity();
   const { configuration } = useUi();
+  const { t } = useLanguage();
   const requiredCustomFields = getRequiredPartnerCustomFields(configuration);
   const partnerFieldDefaults = getPartnerFieldDefaults(configuration);
 
@@ -98,6 +102,9 @@ export default function PartnerCreate() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState(location.state?.userId ? String(location.state.userId) : '');
+  const [showTraceabilityPanel, setShowTraceabilityPanel] = useState(() => (
+    typeof window !== 'undefined' && window.innerWidth >= 1160
+  ));
 
   const selectedUser = users.find((user) => String(user.id) === String(selectedUserId)) || null;
 
@@ -294,10 +301,43 @@ export default function PartnerCreate() {
 
   const typeLabel = PARTNER_TYPES.find(t => t.value === formData.type_partenaire)?.label || formData.type_partenaire;
 
+  const actionsMenu = (
+    <div className="relative" ref={actionsMenuRef}>
+      <button type="button" onClick={() => setShowActionsMenu((open) => !open)} className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 hover:bg-gray-50">
+        <FiSettings size={12} /><span>{t('Actions')}</span>
+      </button>
+      {showActionsMenu && <div className="absolute right-0 z-50 mt-1 w-48 border border-gray-300 bg-white shadow-lg">
+        <button type="button" onClick={handleDuplicate} className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"><FiCopy size={12} />{t('Dupliquer un partenaire')}</button>
+        <button type="button" onClick={handleReset} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-gray-50"><FiRotateCcw size={12} />{t('Réinitialiser')}</button>
+      </div>}
+    </div>
+  );
+
+  const process = (
+    <div className="flex min-h-12 items-center justify-between gap-3 px-4 py-2">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={`shrink-0 border px-3 py-2 text-xs font-medium ${isReady ? 'border-green-300 bg-green-50 text-green-700' : 'border-amber-300 bg-amber-50 text-amber-700'}`}>{t(isReady ? 'Prêt à enregistrer' : 'Incomplet')}</span>
+        {!isReady && <span className="flex min-w-0 items-center gap-1 text-xs text-amber-700"><FiInfo size={14} />{t('Complétez l’identité, le contact et la localisation')}</span>}
+      </div>
+      <div className="flex shrink-0 items-center gap-2 text-xs">
+        <span className={`border px-3 py-2 ${formData.statut ? 'border-green-300 bg-green-100 text-green-700' : 'border-gray-300 bg-gray-100 text-gray-500'}`}>{t('Actif')}</span>
+        <span className={`border px-3 py-2 ${!formData.statut ? 'border-red-300 bg-red-100 text-red-700' : 'border-gray-300 bg-gray-100 text-gray-500'}`}>{t('Inactif')}</span>
+      </div>
+    </div>
+  );
+
+  const traceabilityContent = (
+    <RecordTraceabilityContent
+      rows={[]}
+      entityLabel={t('ce partenaire')}
+      emptyDescription={t('Enregistrez ce partenaire pour commencer son historique.')}
+    />
+  );
+
   if (!activeEntity) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+      <div className="min-h-screen bg-gray-50 p-2 md:p-3">
+        <div className="mx-auto w-full bg-white border border-gray-300">
           <div className="border-b border-gray-300 px-4 py-3">
             <div className="text-lg font-bold text-gray-900">Créer un partenaire</div>
           </div>
@@ -320,24 +360,58 @@ export default function PartnerCreate() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+    <UnifiedFormPage
+      title={t('Partenaires')}
+      recordLabel={t('Nouveau partenaire')}
+      pageLabel={t('Création partenaire')}
+      mode="create"
+      fallbackPath="/partners"
+      pullToHeader={0}
+      primaryAction={{ label: t('Nouveau'), onClick: handleNewPartner }}
+      onTitleClick={({ requestExit }) => requestExit()}
+      actionsMenu={actionsMenu}
+      onSave={() => submit(false)}
+      saving={loading}
+      saveLabel={t('Enregistrer')}
+      hasUnsavedChanges={hasUnsavedChanges}
+      rememberForm={false}
+      process={process}
+      headerActions={[{
+        id: 'traceability',
+        label: t('Traçabilité'),
+        icon: <FiInfo size={13} />,
+        onClick: () => setShowTraceabilityPanel((open) => !open),
+        className: showTraceabilityPanel ? 'border-purple-300 bg-purple-50 text-purple-700' : '',
+      }]}
+      traceability={{
+        open: showTraceabilityPanel,
+        onOpen: () => setShowTraceabilityPanel(true),
+        onClose: () => setShowTraceabilityPanel(false),
+        title: t('Traçabilité'),
+        content: traceabilityContent,
+        headerToggle: true,
+      }}
+      feedback={error ? { type: 'error', message: t(error) } : success ? { type: 'success', message: t(success) } : null}
+      onDismissFeedback={() => { setError(null); setSuccess(null); }}
+    >
+    <div className="min-h-full bg-gray-50">
+      <div className="mx-auto w-full bg-white border border-gray-300">
 
         {/* En-tête ligne 1 */}
-        <div className="border-b border-gray-300 px-4 py-3">
-          <div className="flex items-start justify-between mb-2">
+        <div className="hidden border-b border-gray-300 px-4 py-1.5">
+          <div className="flex items-start justify-between mb-1">
             <div className="flex items-start gap-3">
               <Tooltip text="Réinitialiser le formulaire">
                 <button
                   onClick={handleNewPartner}
-                  className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
+                  className="h-9 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
                   style={{ minWidth: '100px' }}
                 >
                   <FiPlus size={16} className="mr-1" />
                   <span>Nouveau</span>
                 </button>
               </Tooltip>
-              <div className="flex flex-col h-12 justify-center">
+              <div className="flex flex-col h-9 justify-center">
                 <div
                   className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
                   onClick={handleGoToList}
@@ -352,7 +426,7 @@ export default function PartnerCreate() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="relative" ref={actionsMenuRef}>
+              <div className="relative">
                 <Tooltip text="Menu des actions">
                   <button
                     onClick={() => setShowActionsMenu(!showActionsMenu)}
@@ -394,7 +468,7 @@ export default function PartnerCreate() {
         </div>
 
         {/* En-tête ligne 2 */}
-        <div className="border-b border-gray-300 px-4 py-3">
+        <div className="hidden border-b border-gray-300 px-4 py-2">
           <div className="flex flex-col">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -461,10 +535,10 @@ export default function PartnerCreate() {
         {/* Entité */}
         <div className="px-4 py-3 border-b border-gray-300">
           <div className="flex items-center" style={{ height: '26px' }}>
-            <label className="text-xs text-gray-700 min-w-[140px] font-medium">Entité</label>
+          <label className="text-xs text-gray-700 min-w-[140px] font-medium">{t('Entité')}</label>
             <div className="flex-1 px-2 py-1 border border-gray-300 bg-gray-50 text-xs text-gray-900 ml-2 flex items-center gap-1" style={{ height: '26px' }}>
               <FiBriefcase className="text-purple-600" size={12} />
-              {activeEntity?.nom || activeEntity?.name || activeEntity?.raison_sociale || 'Entité sélectionnée'}
+              {activeEntity?.nom || activeEntity?.name || activeEntity?.raison_sociale || t('Entité sélectionnée')}
             </div>
           </div>
         </div>
@@ -472,7 +546,7 @@ export default function PartnerCreate() {
         {/* Utilisateur source facultatif */}
         <div className="px-4 py-3 border-b border-gray-300 bg-blue-50">
           <div className="flex items-center">
-            <label className="text-xs text-gray-700 min-w-[140px] font-medium">Utilisateur source</label>
+          <label className="text-xs text-gray-700 min-w-[140px] font-medium">{t('Utilisateur source')}</label>
             <select
               value={selectedUserId}
               onChange={(event) => {
@@ -482,7 +556,7 @@ export default function PartnerCreate() {
               }}
               className="flex-1 ml-2 h-8 border border-gray-300 bg-white px-2 text-xs"
             >
-              <option value="">Aucun — partenaire indépendant</option>
+              <option value="">{t('Aucun — partenaire indépendant')}</option>
               {users.map((user) => (
                 <option key={user.id} value={user.id}>
                   {[user.first_name, user.last_name].filter(Boolean).join(' ') || user.email} — {user.email}
@@ -498,7 +572,7 @@ export default function PartnerCreate() {
         {/* Onglets */}
         <div className="border-b border-gray-300">
           <div className="px-4 flex">
-            {[['fiche', 'Fiche partenaire'], ['notes', 'Notes']].map(([key, label]) => (
+            {[['fiche', t('Fiche partenaire')], ['notes', t('Notes')]].map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
@@ -557,7 +631,7 @@ export default function PartnerCreate() {
 
         {/* Messages */}
         {(error || success) && (
-          <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
+          <div className={`hidden px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
             error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
           }`}>
             <div className="flex items-center gap-2">
@@ -604,5 +678,6 @@ export default function PartnerCreate() {
         </div>
       )}
     </div>
+    </UnifiedFormPage>
   );
 }

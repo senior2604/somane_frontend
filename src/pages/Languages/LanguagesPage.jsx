@@ -1,7 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '../../services/apiClient';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
+import { useUi } from '../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
 
 export default function LanguesPage() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'core.Langue', 'list', {
+      preferredViewKey: 'somane_ui.core_langue_tree',
+    }),
+    [configuration],
+  );
+  const configuredForm = useMemo(
+    () => getConfiguredModelView(configuration, 'core.Langue', 'form', {
+      preferredViewKey: 'somane_ui.core_langue_form',
+    }),
+    [configuration],
+  );
   const [langues, setLangues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -43,28 +60,6 @@ export default function LanguesPage() {
       setLoading(false);
     }
   };
-
-  // Filtrage et recherche
-  const filteredLangues = langues.filter(langue => {
-    const matchesSearch = 
-      langue.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      langue.nom?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesSens = filterSens === '' || langue.sens_ecriture === filterSens;
-    
-    return matchesSearch && matchesSens;
-  });
-
-  // Calculs pour la pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentLangues = Array.isArray(filteredLangues) ? filteredLangues.slice(indexOfFirstItem, indexOfLastItem) : [];
-  const totalPages = Math.ceil((Array.isArray(filteredLangues) ? filteredLangues.length : 0) / itemsPerPage);
-
-  // Changement de page
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-  const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
-  const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
   // Gestion des actions
   const handleNewLangue = () => {
@@ -115,6 +110,63 @@ export default function LanguesPage() {
     };
     return badgeClasses[sens] || 'bg-gray-100 text-gray-800 border-gray-300';
   };
+
+  const baseColumns = useMemo(() => [
+    {
+      id: 'code',
+      label: 'Code',
+      value: (langue) => langue.code || '',
+      render: (langue) => (
+        <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
+          {langue.code || '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'nom',
+      label: 'Langue',
+      value: (langue) => langue.nom || '',
+      render: (langue) => <span className="font-medium text-gray-900">{langue.nom || '—'}</span>,
+    },
+    {
+      id: 'sens_ecriture',
+      label: 'Sens d’écriture',
+      value: (langue) => getSensEcritureLabel(langue.sens_ecriture),
+      render: (langue) => (
+        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${getSensEcritureBadge(langue.sens_ecriture)}`}>
+          {getSensEcritureLabel(langue.sens_ecriture)}
+        </span>
+      ),
+    },
+  ], []);
+  const columns = useMemo(
+    () => applyConfiguredListColumns(baseColumns, configuredList?.fields),
+    [baseColumns, configuredList],
+  );
+
+  // La recherche suit les colonnes de la vue active, y compris leur ordre et leurs libellés.
+  const filteredLangues = useMemo(() => {
+    const query = searchTerm.trim().toLocaleLowerCase('fr');
+    return langues.filter((langue) => {
+      const matchesSearch = !query || columns.some((column) => (
+        `${column.value?.(langue) ?? ''} ${langue[column.metadataField?.name || column.id] ?? ''}`
+          .toLocaleLowerCase('fr').includes(query)
+      ));
+      const matchesSens = filterSens === '' || langue.sens_ecriture === filterSens;
+      return matchesSearch && matchesSens;
+    });
+  }, [columns, filterSens, langues, searchTerm]);
+
+  // Calculs pour la pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentLangues = Array.isArray(filteredLangues) ? filteredLangues.slice(indexOfFirstItem, indexOfLastItem) : [];
+  const totalPages = Math.max(1, Math.ceil((Array.isArray(filteredLangues) ? filteredLangues.length : 0) / itemsPerPage));
+
+  // Changement de page
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+  const nextPage = () => currentPage < totalPages && setCurrentPage(currentPage + 1);
+  const prevPage = () => currentPage > 1 && setCurrentPage(currentPage - 1);
 
   if (loading) {
     return (
@@ -187,16 +239,22 @@ export default function LanguesPage() {
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Code, nom de la langue..."
+              placeholder="Code, langue ou sens d’écriture..."
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Sens d'écriture</label>
             <select
               value={filterSens}
-              onChange={(e) => setFilterSens(e.target.value)}
+              onChange={(e) => {
+                setFilterSens(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Tous les sens</option>
@@ -251,27 +309,18 @@ export default function LanguesPage() {
           <table className="min-w-full border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-300">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  ID
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Code
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Sens d'écriture
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                  Actions
-                </th>
+                {columns.map((column) => (
+                  <th key={column.id} className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                    {column.label}
+                  </th>
+                ))}
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
               {currentLangues.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                  <td colSpan={columns.length + 1} className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
                     {langues.length === 0 ? 'Aucune langue trouvée' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
@@ -283,22 +332,18 @@ export default function LanguesPage() {
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     } hover:bg-gray-100 transition-colors border-b border-gray-300`}
                   >
-                    <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {langue.id}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                        {langue.code}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {langue.nom}
-                    </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border ${getSensEcritureBadge(langue.sens_ecriture)}`}>
-                        {getSensEcritureLabel(langue.sens_ecriture)}
-                      </span>
-                    </td>
+                    {columns.map((column) => {
+                      const value = column.value?.(langue) ?? langue[column.id];
+                      const field = column.metadataField;
+                      const hasMetadataWidget = Boolean(field?.widget || field?.display_widget);
+                      return (
+                        <td key={column.id} className="px-6 py-4 text-sm text-gray-700 border-r border-gray-300">
+                          {hasMetadataWidget
+                            ? <MetadataFieldDisplay value={langue[field.name] ?? value} field={field} />
+                            : (column.render ? column.render(langue) : (value || '—'))}
+                        </td>
+                      );
+                    })}
                     <td className="px-6 py-4">
                       <div className="flex space-x-3">
                         <button 
@@ -418,6 +463,7 @@ export default function LanguesPage() {
       {showForm && (
         <LangueFormModal
           langue={editingLangue}
+          configuredView={configuredForm}
           onClose={() => {
             setShowForm(false);
             setEditingLangue(null);
@@ -430,12 +476,24 @@ export default function LanguesPage() {
 }
 
 // Composant Modal pour le formulaire des langues
-function LangueFormModal({ langue, onClose, onSuccess }) {
+function LangueFormModal({ langue, onClose, onSuccess, configuredView }) {
   const [formData, setFormData] = useState({
     code: langue?.code || '',
     nom: langue?.nom || '',
     sens_ecriture: langue?.sens_ecriture || 'LTR'
   });
+  const formGroups = configuredView?.groups?.map((group) => ({
+    ...group,
+    fields: group.fields.filter((field) => ['code', 'nom', 'sens_ecriture'].includes(field.name)),
+  })).filter((group) => group.fields.length) || [];
+  const resolvedFormGroups = formGroups.length ? formGroups : [{
+    title: 'Informations de la langue',
+    fields: [
+      { name: 'code', label: 'Code de la langue', type: 'char', required: true },
+      { name: 'nom', label: 'Nom de la langue', type: 'char', required: true },
+      { name: 'sens_ecriture', label: 'Sens d’écriture', type: 'char', required: true },
+    ],
+  }];
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -492,10 +550,11 @@ function LangueFormModal({ langue, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between gap-3 p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
             {langue ? 'Modifier la langue' : 'Créer une nouvelle langue'}
           </h2>
+          {langue && <RecordTraceabilityPanel model="langue" recordId={langue.id} />}
         </div>
         
         {error && (
@@ -510,86 +569,87 @@ function LangueFormModal({ langue, onClose, onSuccess }) {
         )}
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Code de la langue */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code de la langue *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.code}
-                onChange={(e) => handleChange('code', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="fr_FR, en_US, ar_SA..."
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Format: langue_RÉGION (ex: fr_FR, en_US, ar_SA)
-              </p>
-            </div>
-            
-            {/* Nom de la langue */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom de la langue *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.nom}
-                onChange={(e) => handleChange('nom', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Français, English, العربية..."
-              />
-            </div>
-            
-            {/* Sens d'écriture */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sens d'écriture
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${
-                  formData.sens_ecriture === 'LTR' 
-                    ? 'bg-blue-50 border-blue-300' 
-                    : 'bg-white border-gray-300 hover:bg-gray-50'
-                }`}>
-                  <input
-                    type="radio"
-                    name="sens_ecriture"
-                    value="LTR"
-                    checked={formData.sens_ecriture === 'LTR'}
-                    onChange={(e) => handleChange('sens_ecriture', e.target.value)}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <div className="ml-3">
-                    <span className="block text-sm font-medium text-gray-900">Gauche → Droite</span>
-                    <span className="block text-sm text-gray-500">Langues européennes, etc.</span>
-                  </div>
-                </label>
-                
-                <label className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${
-                  formData.sens_ecriture === 'RTL' 
-                    ? 'bg-orange-50 border-orange-300' 
-                    : 'bg-white border-gray-300 hover:bg-gray-50'
-                }`}>
-                  <input
-                    type="radio"
-                    name="sens_ecriture"
-                    value="RTL"
-                    checked={formData.sens_ecriture === 'RTL'}
-                    onChange={(e) => handleChange('sens_ecriture', e.target.value)}
-                    className="text-orange-600 focus:ring-orange-500"
-                  />
-                  <div className="ml-3">
-                    <span className="block text-sm font-medium text-gray-900">Droite → Gauche</span>
-                    <span className="block text-sm text-gray-500">Arabe, Hébreu, etc.</span>
-                  </div>
-                </label>
+          {resolvedFormGroups.map((group) => (
+            <section key={group.title} className="space-y-4">
+              {resolvedFormGroups.length > 1 && (
+                <h3 className="border-b border-gray-200 pb-2 text-sm font-semibold text-gray-700">{group.title}</h3>
+              )}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {group.fields.map((field) => {
+                  const label = field.label || field.field_description || field.name;
+                  const required = Boolean(field.required);
+                  const readOnly = Boolean(field.readonly);
+                  if (field.name === 'sens_ecriture') {
+                    const directionOptions = field.selection?.length
+                      ? field.selection.map((option) => ({
+                        value: option.value,
+                        label: option.label || option.name || option.value,
+                        hint: option.value === 'LTR'
+                          ? 'Langues européennes, etc.'
+                          : option.value === 'RTL' ? 'Arabe, Hébreu, etc.' : '',
+                      }))
+                      : [
+                        { value: 'LTR', label: 'Gauche → Droite', hint: 'Langues européennes, etc.' },
+                        { value: 'RTL', label: 'Droite → Gauche', hint: 'Arabe, Hébreu, etc.' },
+                      ];
+                    return (
+                      <div key={field.name} className="md:col-span-2">
+                        <label className="mb-2 block text-sm font-medium text-gray-700">
+                          {label}{required ? ' *' : ''}
+                        </label>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                          {directionOptions.map((option) => (
+                            <label key={option.value} className={`flex items-center rounded-lg border p-4 transition-colors ${readOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${
+                              formData.sens_ecriture === option.value
+                                ? (option.value === 'LTR' ? 'bg-blue-50 border-blue-300' : 'bg-orange-50 border-orange-300')
+                                : 'bg-white border-gray-300 hover:bg-gray-50'
+                            }`}>
+                              <input
+                                type="radio"
+                                name="sens_ecriture"
+                                value={option.value}
+                                required={required}
+                                disabled={readOnly}
+                                checked={formData.sens_ecriture === option.value}
+                                onChange={(event) => handleChange(field.name, event.target.value)}
+                                className={option.value === 'LTR' ? 'text-blue-600 focus:ring-blue-500' : 'text-orange-600 focus:ring-orange-500'}
+                              />
+                              <span className="ml-3">
+                                <span className="block text-sm font-medium text-gray-900">{option.label}</span>
+                                <span className="block text-sm text-gray-500">{option.hint}</span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        {field.help && <p className="mt-1 text-xs text-gray-500">{field.help}</p>}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={field.name}>
+                      <label htmlFor={`language-${field.name}`} className="mb-2 block text-sm font-medium text-gray-700">
+                        {label}{required ? ' *' : ''}
+                      </label>
+                      <input
+                        id={`language-${field.name}`}
+                        type="text"
+                        required={required}
+                        readOnly={readOnly}
+                        maxLength={field.name === 'code' ? 10 : 50}
+                        value={formData[field.name] || ''}
+                        onChange={(event) => handleChange(field.name, event.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 read-only:bg-gray-100"
+                        placeholder={field.name === 'code' ? 'fr_FR, en_US, ar_SA...' : 'Français, English, العربية...'}
+                      />
+                      {field.help
+                        ? <p className="mt-1 text-xs text-gray-500">{field.help}</p>
+                        : field.name === 'code' && <p className="mt-1 text-xs text-gray-500">Format : langue_RÉGION (ex. fr_FR, en_US, ar_SA)</p>}
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-          </div>
+            </section>
+          ))}
 
           {/* Aperçu */}
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">

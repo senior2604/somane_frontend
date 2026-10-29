@@ -18,8 +18,11 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import UnifiedFormPage from '../../components/UnifiedFormPage';
+import { RecordTraceabilityContent, useRecordTraceability } from '../../components/RecordTraceabilityPanel';
 import { useEntity } from '../../context/EntityContext';
 import { useUi } from '../../context/UiContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { can } from '../../services/securityAccess';
 import {
   PartnerForm,
@@ -89,6 +92,7 @@ export default function PartnerShow() {
   const location = useLocation();
   const { activeEntity } = useEntity();
   const { security, configuration } = useUi();
+  const { t } = useLanguage();
   const requiredCustomFields = getRequiredPartnerCustomFields(configuration);
   const canCreatePartner = can(security, 'core.Partenaire', 'create');
   const canWritePartner = can(security, 'core.Partenaire', 'write');
@@ -107,6 +111,9 @@ export default function PartnerShow() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showTraceabilityPanel, setShowTraceabilityPanel] = useState(() => (
+    typeof window !== 'undefined' && window.innerWidth >= 1160
+  ));
 
   const [groups, setGroups] = useState([]);
   const [userForm, setUserForm] = useState({
@@ -119,6 +126,7 @@ export default function PartnerShow() {
   });
 
   const actionsMenuRef = useRef(null);
+  const traceability = useRecordTraceability('partenaire', partner?.id, showTraceabilityPanel);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -207,6 +215,7 @@ export default function PartnerShow() {
       setFormData(partnerToForm(savedPartner));
       setHasUnsavedChanges(false);
       if (!silent) setSuccess('Partenaire enregistré.');
+      if (showTraceabilityPanel) await traceability.reload();
       return savedPartner;
     } catch (err) {
       const customErrors = err?.data?.custom_fields;
@@ -235,6 +244,7 @@ export default function PartnerShow() {
       setFormData(partnerToForm(data));
       setHasUnsavedChanges(false);
       setSuccess(newStatut ? 'Partenaire activé avec succès !' : 'Partenaire désactivé avec succès !');
+      if (showTraceabilityPanel) await traceability.reload();
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Échec du changement de statut.');
     } finally {
@@ -346,6 +356,7 @@ export default function PartnerShow() {
       });
       setSuccess('Compte utilisateur créé.');
       await loadPartner();
+      if (showTraceabilityPanel) await traceability.reload();
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Création utilisateur impossible.');
     } finally {
@@ -355,8 +366,8 @@ export default function PartnerShow() {
 
   if (loading || !formData) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-7xl mx-auto bg-white border border-gray-300 p-8 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 p-2 md:p-3">
+        <div className="mx-auto w-full bg-white border border-gray-300 p-8 flex items-center justify-center">
           <div className="text-center">
             <div className="w-8 h-8 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
             <p className="mt-4 text-gray-600 text-sm">Chargement...</p>
@@ -368,25 +379,87 @@ export default function PartnerShow() {
 
   const isActive = !!formData.statut;
 
+  const actionsMenu = (
+    <div className="relative" ref={actionsMenuRef}>
+      <button type="button" onClick={() => setShowActionsMenu((open) => !open)} className="flex h-8 items-center gap-1 border border-gray-300 px-3 text-xs text-gray-700 hover:bg-gray-50">
+        <FiSettings size={12} /><span>{t('Actions')}</span>
+      </button>
+      {showActionsMenu && <div className="absolute right-0 z-50 mt-1 w-48 border border-gray-300 bg-white shadow-lg">
+        {canCreatePartner && <button type="button" onClick={handleDuplicate} className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"><FiCopy size={12} />{t('Dupliquer')}</button>}
+        <button type="button" onClick={() => { setShowActionsMenu(false); void loadPartner(); }} className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"><FiRefreshCw size={12} />{t('Actualiser')}</button>
+        {hasUnsavedChanges && canWritePartner && <button type="button" onClick={handleDiscardChanges} className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-xs hover:bg-gray-50"><FiX size={12} />{t('Annuler les modifications')}</button>}
+        {canDeletePartner && <button type="button" onClick={remove} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-700 hover:bg-red-50"><FiTrash2 size={12} />{t('Supprimer')}</button>}
+      </div>}
+    </div>
+  );
+
+  const process = (
+    <div className="flex min-h-12 items-center justify-between gap-3 px-4 py-2">
+      <div className="flex min-w-0 items-center gap-3">
+        {canWritePartner && <button type="button" onClick={handleToggleStatus} disabled={saving} className={`flex h-8 shrink-0 items-center gap-1 border px-3 text-xs font-medium disabled:opacity-50 ${isActive ? 'border-red-300 bg-white text-red-700 hover:bg-red-50' : 'border-purple-600 bg-purple-600 text-white hover:bg-purple-700'}`}>
+          <FiToggleRight size={13} />{isActive ? t('Désactiver') : t('Activer')}
+        </button>}
+        {!isReady && <span className="flex min-w-0 items-center gap-1 text-xs text-amber-700"><FiInfo size={14} />{t('Certains champs obligatoires sont incomplets')}</span>}
+      </div>
+      <div className="flex shrink-0 items-center gap-2 text-xs">
+        <span className={`border px-3 py-2 ${isActive ? 'border-green-300 bg-green-100 text-green-700' : 'border-gray-300 bg-gray-100 text-gray-500'}`}>{t('Actif')}</span>
+        <span className={`border px-3 py-2 ${!isActive ? 'border-red-300 bg-red-100 text-red-700' : 'border-gray-300 bg-gray-100 text-gray-500'}`}>{t('Inactif')}</span>
+      </div>
+    </div>
+  );
+
+  const traceabilityContent = (
+    <RecordTraceabilityContent rows={traceability.rows} loading={traceability.loading} error={traceability.error} entityLabel={t('ce partenaire')} />
+  );
+  const feedback = error ? { type: 'error', message: error } : success ? { type: 'success', message: success } : null;
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto bg-white border border-gray-300">
+    <UnifiedFormPage
+      title={t('Partenaires')}
+      recordLabel={getPartnerName(partner)}
+      pageLabel={t('Fiche partenaire')}
+      mode="show"
+      fallbackPath="/partners"
+      pullToHeader={0}
+      primaryAction={canCreatePartner ? { label: t('Nouveau'), onClick: handleNewPartner } : null}
+      onTitleClick={({ requestExit }) => requestExit()}
+      actionsMenu={actionsMenu}
+      onSave={canWritePartner ? () => save() : undefined}
+      saving={saving}
+      saveDisabled={!canWritePartner}
+      saveLabel={t('Enregistrer')}
+      hasUnsavedChanges={hasUnsavedChanges}
+      rememberForm={false}
+      process={process}
+      feedback={feedback ? { ...feedback, message: t(feedback.message) } : null}
+      onDismissFeedback={() => { setError(null); setSuccess(null); }}
+      headerActions={[{
+        id: 'traceability',
+        label: t('Traçabilité'),
+        icon: <FiInfo size={13} />,
+        onClick: () => setShowTraceabilityPanel((open) => !open),
+        className: showTraceabilityPanel ? 'border-purple-300 bg-purple-50 text-purple-700' : '',
+      }]}
+      traceability={{ open: showTraceabilityPanel, onOpen: () => setShowTraceabilityPanel(true), onClose: () => setShowTraceabilityPanel(false), title: t('Traçabilité'), content: traceabilityContent, headerToggle: true }}
+    >
+    <div className="min-h-full bg-gray-50">
+      <div className="mx-auto w-full bg-white border border-gray-300">
 
         {/* En-tête ligne 1 */}
-        <div className="border-b border-gray-300 px-4 py-3">
-          <div className="flex items-start justify-between mb-2">
+        <div className="hidden border-b border-gray-300 px-4 py-1.5">
+          <div className="flex items-start justify-between mb-1">
             <div className="flex items-start gap-3">
               {canCreatePartner && <Tooltip text="Créer un nouveau partenaire">
                 <button
                   onClick={handleNewPartner}
-                  className="h-12 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
+                  className="h-9 px-4 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 hover:shadow-md active:scale-95 transition-all duration-200 flex items-center justify-center font-medium border-0"
                   style={{ minWidth: '100px' }}
                 >
                   <FiPlus size={16} className="mr-1" />
                   <span>Nouveau</span>
                 </button>
               </Tooltip>}
-              <div className="flex flex-col h-12 justify-center">
+              <div className="flex flex-col h-9 justify-center">
                 <div
                   className="text-lg font-bold text-gray-900 cursor-pointer hover:text-purple-600 hover:scale-105 transition-all duration-200"
                   onClick={handleGoToList}
@@ -401,7 +474,7 @@ export default function PartnerShow() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="relative" ref={actionsMenuRef}>
+              <div className="relative">
                 <Tooltip text="Menu des actions">
                   <button
                     onClick={() => setShowActionsMenu(!showActionsMenu)}
@@ -448,7 +521,7 @@ export default function PartnerShow() {
         </div>
 
         {/* En-tête ligne 2 */}
-        <div className="border-b border-gray-300 px-4 py-3">
+        <div className="hidden border-b border-gray-300 px-4 py-2">
           <div className="flex flex-col">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -541,9 +614,9 @@ export default function PartnerShow() {
         <div className="border-b border-gray-300">
           <div className="px-4 flex">
             {[
-              ['fiche', 'Fiche partenaire'],
-              ['utilisateur', 'Utilisateur'],
-              ['notes', 'Notes'],
+              ['fiche', t('Fiche partenaire')],
+              ['utilisateur', t('Utilisateur')],
+              ['notes', t('Notes')],
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -575,26 +648,26 @@ export default function PartnerShow() {
 
           {activeTab === 'utilisateur' && (
             <div className="border border-gray-300">
-              <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">Compte utilisateur</div>
+              <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">{t('Compte utilisateur')}</div>
               {partner.user ? (
                 <div className="p-4 text-sm">
                   <div className="flex items-center gap-2">
                     <FiUser size={16} className="text-green-600" />
                     <div>
                       <div className="font-medium text-gray-900">{partner.user.email || formData.email}</div>
-                      <div className="text-xs text-gray-500">Statut : {partner.user.is_active ? 'Actif' : 'Inactif'}</div>
+                      <div className="text-xs text-gray-500">{t('Statut')} : {t(partner.user.is_active ? 'Actif' : 'Inactif')}</div>
                     </div>
                   </div>
                 </div>
               ) : !canCreateUser ? (
                 <div className="p-4 text-sm text-gray-600">
-                  Vous ne disposez pas du droit de création d'un compte utilisateur.
+                  {t('Vous ne disposez pas du droit de création d’un compte utilisateur.')}
                 </div>
               ) : (
                 <form onSubmit={createUser} className="p-4 space-y-3">
                   <div className="bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
-                    Email utilisé : <span className="font-bold">{formData.email || 'Email manquant'}</span>
-                    {hasUnsavedChanges && <div className="mt-1">La fiche partenaire sera sauvegardée avant la création du compte.</div>}
+                    {t('Email utilisé')} : <span className="font-bold">{formData.email || t('Email manquant')}</span>
+                    {hasUnsavedChanges && <div className="mt-1">{t('La fiche partenaire sera sauvegardée avant la création du compte.')}</div>}
                   </div>
                   <div className="grid grid-cols-4 border border-gray-300">
                     <div className="border-r border-gray-300">
@@ -624,7 +697,7 @@ export default function PartnerShow() {
                     <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">Groupes</div>
                     <div className="p-2 grid grid-cols-3 gap-2">
                       {groups.length === 0 ? (
-                        <div className="text-xs text-gray-500">Aucun groupe disponible</div>
+                    <div className="text-xs text-gray-500">{t('Aucun groupe disponible')}</div>
                       ) : groups.map(group => (
                         <label key={group.id} className="text-xs flex items-center gap-2">
                           <input type="checkbox" checked={userForm.groups.includes(group.id)} onChange={() => toggleGroup(group.id)} />
@@ -640,7 +713,7 @@ export default function PartnerShow() {
                       checked={userForm.send_activation_email}
                       onChange={(e) => setUserForm(prev => ({ ...prev, send_activation_email: e.target.checked }))}
                     />
-                    Envoyer email d'activation
+                    {t('Envoyer email d’activation')}
                   </label>
 
                   <Tooltip text="Créer le compte utilisateur lié à ce partenaire">
@@ -671,7 +744,7 @@ export default function PartnerShow() {
 
         {/* Messages */}
         {(error || success) && (
-          <div className={`px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
+          <div className={`hidden px-4 py-3 text-sm border-t border-gray-300 transition-all duration-300 ${
             error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
           }`}>
             <div className="flex items-center gap-2">
@@ -686,9 +759,9 @@ export default function PartnerShow() {
       {showConfirmDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-sm shadow-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-3">Modifications non sauvegardées</h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-3">{t('Modifications non sauvegardées')}</h3>
             <p className="text-sm text-gray-600 mb-6">
-              Voulez-vous enregistrer les modifications avant de quitter ?
+                  {t('Voulez-vous enregistrer les modifications avant de quitter ?')}
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -699,24 +772,25 @@ export default function PartnerShow() {
                 }}
                 className="px-4 py-2 bg-purple-600 text-white text-sm hover:bg-purple-700 hover:scale-105 active:scale-95 transition-all duration-200"
               >
-                Enregistrer
+                {t('Enregistrer')}
               </button>
               <button
                 onClick={confirmDiscardChanges}
                 className="px-4 py-2 bg-red-600 text-white text-sm hover:bg-red-700 hover:scale-105 active:scale-95 transition-all duration-200"
               >
-                Ne pas enregistrer
+                {t('Ne pas enregistrer')}
               </button>
               <button
                 onClick={() => setShowConfirmDialog(false)}
                 className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 hover:scale-105 active:scale-95 transition-all duration-200"
               >
-                Annuler
+                {t('Annuler')}
               </button>
             </div>
           </div>
         </div>
       )}
     </div>
+    </UnifiedFormPage>
   );
 }

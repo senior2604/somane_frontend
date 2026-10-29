@@ -3,6 +3,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FiAlertCircle, FiCheck, FiChevronDown, FiChevronUp, FiGlobe, FiMap, FiMapPin, FiSearch } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
 import { useUi } from '../../context/UiContext';
+import { useEntity } from '../../context/EntityContext';
+import { useLanguage } from '../../context/LanguageContext';
+import MetadataFieldInput from '../../components/MetadataFieldInput';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
 
 // ==========================================
 // COMPOSANT TOOLTIP
@@ -101,10 +105,16 @@ function getPartnerFormSchema(configuration) {
         const name = node.getAttribute('name');
         const definition = definitions.get(name);
         if (!name || !definition) return null;
+        const rawLabel = node.getAttribute('string') || definition.label || name;
+        const fallbackLabel = PARTNER_FIELD_LABELS[name];
         return {
           name,
-          label: node.getAttribute('string') || definition.label || name,
+          label: fallbackLabel || (!rawLabel || rawLabel.trim().toLowerCase() === name.toLowerCase()
+            ? name
+            : rawLabel),
           type: definition.type || 'char',
+          widget: node.hasAttribute('widget') ? node.getAttribute('widget') : (definition.display_widget || ''),
+          display_widget: definition.display_widget || '',
           state: definition.state || 'base',
           relation: definition.relation || '',
           size: definition.size || null,
@@ -392,27 +402,63 @@ const PARTNER_FIELD_HELP = {
   registre_commerce: 'Numéro d’inscription de l’entreprise au registre du commerce.',
 };
 
+const PARTNER_FIELD_LABELS = {
+  nom: 'Nom / Raison sociale',
+  type_partenaire: 'Type de partenaire',
+  is_company: 'Société ou personne',
+  statut: 'Statut',
+  email: 'Email',
+  telephone: 'Téléphone',
+  mobile: 'Téléphone mobile',
+  site_web: 'Site web',
+  pays: 'Pays',
+  region: 'Région / province',
+  ville: 'Ville',
+  adresse: 'Adresse',
+  complement_adresse: 'Complément d’adresse',
+  code_postal: 'Code postal',
+  numero_fiscal: 'Numéro fiscal',
+  vat: 'NIF / TVA',
+  registre_commerce: 'Registre du commerce',
+  securite_sociale: 'Sécurité sociale',
+};
+
+const PARTNER_FORM_LAYOUT_CSS = `
+  .partner-form-fields { container: partner-form / inline-size; }
+  .partner-form-fields .partner-field-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem 1rem;
+  }
+  @container partner-form (min-width: 720px) {
+    .partner-form-fields .partner-field-layout {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+`;
+
 function FormField({ label, required, error, help, children }) {
+  const { t } = useLanguage();
   return (
     <div>
       <div className="flex items-center" style={{ minHeight: '26px' }}>
-        <div className="text-xs text-gray-700 min-w-[140px] flex-shrink-0 font-medium flex items-center gap-1">
-          <span>{label} {required && <span className="text-red-500">*</span>}</span>
+        <div className="w-[40%] min-w-[112px] max-w-[180px] shrink font-medium text-xs text-gray-700 flex items-center gap-1">
+          <span>{t(label)} {required && <span className="text-red-500">*</span>}</span>
           {help && (
             <details className="group relative flex-shrink-0">
               <summary
-                aria-label={`Aide pour ${label}`}
+                aria-label={`${t('Aide pour')} ${t(label)}`}
                 className="list-none cursor-pointer select-none w-4 h-4 rounded-full border border-gray-400 text-gray-500 hover:border-purple-500 hover:text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400 flex items-center justify-center text-[10px] leading-none"
               >
                 ?
               </summary>
               <span role="tooltip" className="absolute z-50 left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-open:block w-64 rounded-md bg-gray-900 px-3 py-2 text-xs leading-relaxed font-normal text-white shadow-lg">
-                {help}
+                {t(help)}
               </span>
             </details>
           )}
         </div>
-        <div className="flex-1 ml-2">
+        <div className="min-w-0 flex-1 ml-2">
           {children}
         </div>
       </div>
@@ -422,7 +468,9 @@ function FormField({ label, required, error, help, children }) {
 }
 
 export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors, mode = 'all', readOnly = false }) {
+  const { t } = useLanguage();
   const { configuration } = useUi();
+  const { activeEntity } = useEntity();
   const [searchPays, setSearchPays] = useState('');
   const [searchRegion, setSearchRegion] = useState('');
   const [searchVille, setSearchVille] = useState('');
@@ -451,52 +499,75 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
       };
       let control;
 
-      if (name === 'pays') {
-        control = <SearchableDropdown value={formData.pays || null} onChange={(value) => setFormData((previous) => ({ ...previous, pays: value, region: '', ville: '' }))} options={paysList} searchValue={searchPays} onSearchChange={setSearchPays} placeholder={label} disabled={disabled} icon={FiGlobe} getOptionLabel={(country) => `${country.emoji || ''} ${country.nom_fr || country.nom || ''} (${country.code_iso || ''})`} getOptionValue={(country) => country.id} errorClass={fieldErrors?.[name] ? 'border-red-500' : ''} />;
+      if (disabled && !['pays', 'region', 'ville'].includes(name)) {
+        control = <MetadataFieldDisplay
+          value={formData[name]}
+          field={field}
+          entity={activeEntity}
+          record={formData}
+          className="text-sm text-gray-800"
+        />;
+      } else if (name === 'pays') {
+        control = <SearchableDropdown value={formData.pays || null} onChange={(value) => setFormData((previous) => ({ ...previous, pays: value, region: '', ville: '' }))} options={paysList} searchValue={searchPays} onSearchChange={setSearchPays} placeholder={t(label)} disabled={disabled} icon={FiGlobe} getOptionLabel={(country) => `${country.emoji || ''} ${country.nom_fr || country.nom || ''} (${country.code_iso || ''})`} getOptionValue={(country) => country.id} errorClass={fieldErrors?.[name] ? 'border-red-500' : ''} />;
       } else if (name === 'region') {
-        control = <SearchableDropdown value={formData.region || null} onChange={(value) => setFormData((previous) => ({ ...previous, region: value, ville: '' }))} options={regionsList} searchValue={searchRegion} onSearchChange={setSearchRegion} placeholder={label} disabled={disabled || !formData.pays} icon={FiMap} getOptionLabel={(region) => `${region.nom || ''} (${region.type_subdivision || ''})`} getOptionValue={(region) => region.id} errorClass={fieldErrors?.[name] ? 'border-red-500' : ''} />;
+        control = <SearchableDropdown value={formData.region || null} onChange={(value) => setFormData((previous) => ({ ...previous, region: value, ville: '' }))} options={regionsList} searchValue={searchRegion} onSearchChange={setSearchRegion} placeholder={t(label)} disabled={disabled || !formData.pays} icon={FiMap} getOptionLabel={(region) => `${region.nom || ''} (${region.type_subdivision || ''})`} getOptionValue={(region) => region.id} errorClass={fieldErrors?.[name] ? 'border-red-500' : ''} />;
       } else if (name === 'ville') {
-        control = <SearchableDropdown value={formData.ville || null} onChange={(value) => setField(name, value)} options={villesList} searchValue={searchVille} onSearchChange={setSearchVille} placeholder={label} disabled={disabled || !formData.region} icon={FiMapPin} getOptionLabel={(city) => `${city.nom || ''}${city.subdivision_nom ? ` (${city.subdivision_nom})` : ''}`} getOptionValue={(city) => city.id} errorClass={fieldErrors?.[name] ? 'border-red-500' : ''} />;
+        control = <SearchableDropdown value={formData.ville || null} onChange={(value) => setField(name, value)} options={villesList} searchValue={searchVille} onSearchChange={setSearchVille} placeholder={t(label)} disabled={disabled || !formData.region} icon={FiMapPin} getOptionLabel={(city) => `${city.nom || ''}${city.subdivision_nom ? ` (${city.subdivision_nom})` : ''}`} getOptionValue={(city) => city.id} errorClass={fieldErrors?.[name] ? 'border-red-500' : ''} />;
+      } else if (type === 'selection' && ['radio', 'statusbar', 'priority'].includes(field.widget || field.display_widget)) {
+        control = <MetadataFieldInput field={field} value={formData[name] ?? ''} onChange={(event) => setField(name, event.target.value)} className={inputClass(name)} disabled={disabled} record={formData} />;
+      } else if (type === 'boolean' && ['boolean_toggle', 'boolean_favorite', 'boolean_checkbox'].includes(field.widget || field.display_widget)) {
+        control = <MetadataFieldInput field={field} value={formData[name]} onChange={(event) => setField(name, event.target.value)} disabled={disabled} record={formData} />;
       } else if (name === 'type_partenaire') {
         const options = field.selection.length
           ? field.selection.map((option) => ({ value: option.value, label: option.label || option.name || option.value }))
           : PARTNER_TYPES;
         control = <select value={formData[name] || ''} onChange={(event) => setField(name, event.target.value)} className={inputClass(name)} disabled={disabled}>
-          {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          {options.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
         </select>;
       } else if (name === 'statut' || name === 'is_company') {
-        const trueLabel = name === 'statut' ? 'Actif' : 'Société';
-        const falseLabel = name === 'statut' ? 'Inactif' : 'Personne';
+        const trueLabel = t(name === 'statut' ? 'Actif' : 'Société');
+        const falseLabel = t(name === 'statut' ? 'Inactif' : 'Personne');
         control = <select value={formData[name] ? 'true' : 'false'} onChange={(event) => setField(name, event.target.value === 'true')} className={inputClass(name)} disabled={disabled}>
           <option value="true">{trueLabel}</option><option value="false">{falseLabel}</option>
         </select>;
       } else if (type === 'selection') {
         control = <select value={formData[name] ?? ''} onChange={(event) => setField(name, event.target.value)} className={inputClass(name)} disabled={disabled}>
-          <option value="">— Sélectionner —</option>
-          {field.selection.map((option) => <option key={option.value} value={option.value}>{option.label || option.name || option.value}</option>)}
+          <option value="">— {t('Sélectionner')} —</option>
+          {field.selection.map((option) => <option key={option.value} value={option.value}>{t(option.label || option.name || option.value)}</option>)}
         </select>;
       } else if (type === 'boolean') {
         const booleanValue = formData[name] === true ? 'true' : formData[name] === false ? 'false' : '';
         control = <select value={booleanValue} onChange={(event) => setField(name, event.target.value === '' ? '' : event.target.value === 'true')} className={inputClass(name)} disabled={disabled}>
-          <option value="">— Sélectionner —</option><option value="true">Oui</option><option value="false">Non</option>
+          <option value="">— {t('Sélectionner')} —</option><option value="true">{t('Oui')}</option><option value="false">{t('Non')}</option>
         </select>;
       } else if (type === 'text' || type === 'html') {
         control = <textarea {...commonProps} value={formData[name] ?? ''} rows={3} readOnly={disabled} />;
+      } else if (['date', 'datetime', 'monetary'].includes(type)) {
+        control = <MetadataFieldInput
+          field={field}
+          value={formData[name] ?? ''}
+          onChange={(event) => setField(name, event.target.value)}
+          className={inputClass(name)}
+          disabled={disabled}
+          currencyEntity={activeEntity}
+          record={formData}
+        />;
       } else {
-        const inputType = name === 'email' ? 'email' : name === 'site_web' ? 'url' : name === 'telephone' || name === 'mobile' ? 'tel' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : ['integer', 'float', 'decimal', 'monetary'].includes(type) ? 'number' : 'text';
-        const step = type === 'integer' ? '1' : ['float', 'decimal', 'monetary'].includes(type) ? 'any' : undefined;
+        const inputType = name === 'email' ? 'email' : name === 'site_web' ? 'url' : name === 'telephone' || name === 'mobile' ? 'tel' : ['integer', 'float', 'decimal'].includes(type) ? 'number' : 'text';
+        const step = type === 'integer' ? '1' : ['float', 'decimal'].includes(type) ? 'any' : undefined;
         control = <input {...commonProps} type={inputType} step={step} maxLength={type === 'char' && field.size ? field.size : undefined} value={formData[name] ?? ''} readOnly={disabled} style={{ height: 26 }} />;
       }
 
-      return <FormField key={name} label={label} required={required} error={fieldErrors?.[name]} help={help}>{control}</FormField>;
+      return <FormField key={name} label={label} required={required} error={fieldErrors?.[name] ? t(fieldErrors[name]) : null} help={help}>{control}</FormField>;
     };
 
     return (
-      <fieldset disabled={readOnly} className={`w-full min-w-0 border-0 p-0 m-0 space-y-4 ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
+      <fieldset disabled={readOnly} className={`partner-form-fields w-full min-w-0 border-0 p-0 m-0 space-y-4 ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
+        <style>{PARTNER_FORM_LAYOUT_CSS}</style>
         {viewSections.map((section) => (
           <section key={section.title} className="border border-gray-300 p-3">
-            <h3 className="-m-3 mb-3 border-b border-gray-300 bg-gray-100 px-3 py-1.5 text-xs font-medium">{section.title}</h3>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-2 md:grid-cols-2">{section.fields.map(renderField)}</div>
+            <h3 className="-m-3 mb-3 border-b border-gray-300 bg-gray-100 px-3 py-1.5 text-xs font-medium">{t(section.title)}</h3>
+            <div className="partner-field-layout">{section.fields.map(renderField)}</div>
           </section>
         ))}
       </fieldset>
@@ -504,32 +575,33 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
   }
 
   return (
-    <fieldset disabled={readOnly} className={`w-full min-w-0 border-0 p-0 m-0 space-y-4 ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
+    <fieldset disabled={readOnly} className={`partner-form-fields w-full min-w-0 border-0 p-0 m-0 space-y-4 ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
+      <style>{PARTNER_FORM_LAYOUT_CSS}</style>
       {(mode === 'all' || mode === 'main' || mode === 'identity') && (
         <div className="border border-gray-300 p-3">
-          <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Identité</div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">{t('Identité')}</div>
+          <div className="partner-field-layout">
             <div className="space-y-2">
               <FormField label="Nom / Raison sociale" required error={fieldErrors?.nom} help={PARTNER_FIELD_HELP.nom}>
                 <input value={formData.nom} onChange={(e) => setField('nom', e.target.value)} className={inputClass('nom')} style={{ height: 26 }} />
               </FormField>
               <FormField label="Nature" help={PARTNER_FIELD_HELP.is_company}>
                 <select value={formData.is_company ? 'company' : 'person'} onChange={(e) => setField('is_company', e.target.value === 'company')} className={inputClass('is_company')} style={{ height: 26 }}>
-                  <option value="company">Société</option>
-                  <option value="person">Personne</option>
+                  <option value="company">{t('Société')}</option>
+                  <option value="person">{t('Personne')}</option>
                 </select>
               </FormField>
             </div>
             <div className="space-y-2">
               <FormField label="Type" required error={fieldErrors?.type_partenaire} help={PARTNER_FIELD_HELP.type_partenaire}>
                 <select value={formData.type_partenaire} onChange={(e) => setField('type_partenaire', e.target.value)} className={inputClass('type_partenaire')} style={{ height: 26 }}>
-                  {PARTNER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {PARTNER_TYPES.map((type) => <option key={type.value} value={type.value}>{t(type.label)}</option>)}
                 </select>
               </FormField>
               <FormField label="Statut" help={PARTNER_FIELD_HELP.statut}>
                 <select value={formData.statut ? 'actif' : 'inactif'} onChange={(e) => setField('statut', e.target.value === 'actif')} className={inputClass('statut')} style={{ height: 26 }}>
-                  <option value="actif">Actif</option>
-                  <option value="inactif">Inactif</option>
+                  <option value="actif">{t('Actif')}</option>
+                  <option value="inactif">{t('Inactif')}</option>
                 </select>
               </FormField>
             </div>
@@ -539,8 +611,8 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
 
       {(mode === 'all' || mode === 'main' || mode === 'identity') && (
         <div className="border border-gray-300 p-3">
-          <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Contact</div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">{t('Contact')}</div>
+          <div className="partner-field-layout">
             <div className="space-y-2">
               <FormField label="Email" required error={fieldErrors?.email} help={PARTNER_FIELD_HELP.email}>
                 <input type="email" value={formData.email} onChange={(e) => setField('email', e.target.value)} className={inputClass('email')} style={{ height: 26 }} />
@@ -560,8 +632,8 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
 
       {(mode === 'all' || mode === 'main' || mode === 'location') && (
         <div className="border border-gray-300 p-3">
-          <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Localisation</div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">{t('Localisation')}</div>
+          <div className="partner-field-layout">
             <div className="space-y-2">
               <FormField label="Pays" required error={fieldErrors?.pays} help={PARTNER_FIELD_HELP.pays}>
                 <SearchableDropdown
@@ -570,7 +642,7 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
                   options={paysList}
                   searchValue={searchPays}
                   onSearchChange={setSearchPays}
-                  placeholder="Pays"
+          placeholder={t('Pays')}
                   icon={FiGlobe}
                   getOptionLabel={(p) => `${p.emoji || ''} ${p.nom_fr || p.nom || ''} (${p.code_iso || ''})`}
                   getOptionValue={(p) => p.id}
@@ -584,7 +656,7 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
                   options={regionsList}
                   searchValue={searchRegion}
                   onSearchChange={setSearchRegion}
-                  placeholder="Région"
+          placeholder={t('Région')}
                   disabled={!formData.pays}
                   icon={FiMap}
                   getOptionLabel={(r) => `${r.nom || ''} (${r.type_subdivision || ''})`}
@@ -599,7 +671,7 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
                   options={villesList}
                   searchValue={searchVille}
                   onSearchChange={setSearchVille}
-                  placeholder="Ville"
+          placeholder={t('Ville')}
                   disabled={!formData.region}
                   icon={FiMapPin}
                   getOptionLabel={(v) => `${v.nom || ''}${v.subdivision_nom ? ` (${v.subdivision_nom})` : ''}`}
@@ -625,8 +697,8 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
 
       {(mode === 'all' || mode === 'main' || mode === 'fiscal') && (
         <div className="border border-gray-300 p-3">
-          <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">Informations fiscales</div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-100 -m-3 mb-3 px-3 py-1.5 text-xs font-medium border-b border-gray-300">{t('Informations fiscales')}</div>
+          <div className="partner-field-layout">
             <div className="space-y-2">
               <FormField label="Numéro fiscal" help={PARTNER_FIELD_HELP.numero_fiscal}>
                 <input value={formData.numero_fiscal} onChange={(e) => setField('numero_fiscal', e.target.value)} className={inputClass('numero_fiscal')} style={{ height: 26 }} />
@@ -646,7 +718,7 @@ export function PartnerForm({ formData, setFormData, fieldErrors, setFieldErrors
 
       {(mode === 'all' || mode === 'notes') && (
         <div className="border border-gray-300">
-          <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">Notes</div>
+          <div className="bg-gray-100 border-b border-gray-300 px-2 py-1.5 text-xs font-medium">{t('Notes')}</div>
           <textarea value={formData.notes} onChange={(e) => setField('notes', e.target.value)} className="w-full border-0 px-2 py-2 text-xs focus:ring-1 focus:ring-purple-500" rows={4} />
         </div>
       )}

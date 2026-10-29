@@ -20,6 +20,7 @@ import ExchangeRatesPage from "../pages/ExchangeRates/ExchangeRatesPages";
 import GroupesPage from "../pages/Groupes/GroupesPage";
 import JournalPage from "../pages/Journal/JournalPage";
 import LanguagesPage from "../pages/Languages/LanguagesPage";
+import TranslationsPage from "../pages/Languages/TranslationsPage";
 import LoginPage from "../pages/Login/LoginPage";
 import ModulesPage from "../pages/Modules/ModulesPage";
 import PartnerBanksPage from "../pages/PartnerBanks/PartnerBanksPage";
@@ -33,7 +34,13 @@ import AccountingSettingsPage from "../features/comptabilité/pages/AccountingSe
 import StatesPage from "../pages/States/StatesPage";
 import SystemPage from "../pages/System/SystemPage";
 import ModelsPage from "../pages/System/ModelsPage";
+import DynamizationOverviewPage from "../pages/System/DynamizationOverviewPage";
+import FieldDisplayBatchPage from "../pages/System/FieldDisplayBatchPage";
+import QWebViewsPage from "../pages/System/QWebViewsPage";
 import ModelFieldsPage from "../pages/System/ModelFieldsPage";
+import ModelFieldsSchemaPage from "../pages/System/ModelFieldsSchemaPage";
+import FieldPreviewPage from "../pages/System/FieldPreviewPage";
+import MenusPage from "../pages/System/MenusPage";
 import TasksPage from "../pages/Tasks/TasksPage";
 import UserEntitiesPage from "../pages/UserEntities/UserEntitiesPage";
 // import UsersPage from "../pages/Users/UsersPage";
@@ -326,11 +333,18 @@ export default function AppRouter() {
           <Route path="/somane-ai" element={<SomaneAIPage />} />
           <Route path="/ExchangeRates" element={<ExchangeRatesPage />} />
           <Route path="/Languages" element={<LanguagesPage />} />
+          <Route path="/translations" element={<PermissionGate model="core.IrTranslation"><TranslationsPage /></PermissionGate>} />
           <Route path="/States" element={<StatesPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/system" element={<SystemPage />} />
           <Route path="/models" element={<PermissionGate model="core.IrModel"><ModelsPage /></PermissionGate>} />
+          <Route path="/metadata-overview" element={<PermissionGate model="core.IrModelFields"><DynamizationOverviewPage /></PermissionGate>} />
+          <Route path="/field-displays" element={<PermissionGate model="core.IrModelFields"><FieldDisplayBatchPage /></PermissionGate>} />
+          <Route path="/qweb-views" element={<PermissionGate model="core.IrUiView"><QWebViewsPage /></PermissionGate>} />
           <Route path="/model-fields" element={<PermissionGate model="core.IrModelFields"><ModelFieldsPage /></PermissionGate>} />
+          <Route path="/model-fields/schema" element={<PermissionGate model="core.IrModelFields"><ModelFieldsSchemaPage /></PermissionGate>} />
+          <Route path="/field-preview" element={<PermissionGate model="core.IrModelFields"><FieldPreviewPage /></PermissionGate>} />
+          <Route path="/ui-menus" element={<PermissionGate model="core.IrUiMenu"><MenusPage /></PermissionGate>} />
         </Route>
 
         {/* COMPTABILITE */}

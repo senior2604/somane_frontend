@@ -6,6 +6,9 @@ import {
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
 import { useUi } from '../../context/UiContext';
+import { useEntity } from '../../context/EntityContext';
+import { formatMetadataValue } from '../../services/fieldDisplay';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
 
 const MODEL_ENDPOINTS = {
   "core.Entite": "entites/",
@@ -51,33 +54,28 @@ function readListFields(architecture, definitions = []) {
   return Array.from(xml.querySelectorAll('tree > field, list > field')).map((node) => {
     const name = node.getAttribute('name');
     const definition = definitionsByName.get(name);
+    const globalWidgetConfig = definition?.display_widget_options || {};
+    const globalOptions = globalWidgetConfig.options && typeof globalWidgetConfig.options === 'object' ? globalWidgetConfig.options : {};
+    const viewOptions = parseJson(node.getAttribute('options'), {});
+    const globalAttributes = globalWidgetConfig.attributes && typeof globalWidgetConfig.attributes === 'object' ? globalWidgetConfig.attributes : {};
+    const viewAttributes = {};
+    Array.from(node.attributes).forEach((attribute) => {
+      if (!['name', 'widget', 'options', 'string', 'help', 'required', 'readonly', 'invisible'].includes(attribute.name)) {
+        viewAttributes[attribute.name] = attribute.value;
+      }
+    });
     return {
       name,
       label: node.getAttribute('string') || definition?.label || FALLBACK_LABELS[name] || name,
       type: definition?.type || '',
       relation: definition?.relation || '',
+      widget: node.hasAttribute('widget') ? node.getAttribute('widget') : (definition?.display_widget || ''),
+      display_widget: definition?.display_widget || '',
+      widget_options: { ...globalOptions, ...(viewOptions && typeof viewOptions === 'object' ? viewOptions : {}) },
+      widget_attributes: { ...globalAttributes, ...viewAttributes },
+      selection: definition?.selection || [],
     };
   }).filter((field) => field.name);
-}
-
-function formatValue(value, field = {}) {
-  if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
-  if (value === null || value === undefined || value === '') return '—';
-  if (field.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-    const [, year, month, day] = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    return `${day}/${month}/${year}`;
-  }
-  if (field.type === 'datetime') {
-    const date = new Date(value);
-    if (!Number.isNaN(date.getTime())) return date.toLocaleString('fr-FR');
-  }
-  if (field.type === 'monetary' || field.type === 'decimal' || field.type === 'float') {
-    const number = Number(value);
-    if (Number.isFinite(number)) return number.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-  }
-  if (Array.isArray(value)) return value.join(', ');
-  if (typeof value === 'object') return value.name || value.nom || value.label || value.id || '—';
-  return String(value);
 }
 
 function compareValues(a, b) {
@@ -91,6 +89,7 @@ export default function DynamicActionPage() {
   const { actionId } = useParams();
   const navigate = useNavigate();
   const { configuration, loading: uiLoading, error: uiError } = useUi();
+  const { activeEntity } = useEntity();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -99,6 +98,7 @@ export default function DynamicActionPage() {
   const [sort, setSort] = useState({ field: null, direction: 'asc' });
   const [page, setPage] = useState(1);
   const [displayMode, setDisplayMode] = useState('list');
+  const [draggedRowId, setDraggedRowId] = useState(null);
 
   const action = configuration?.actions?.[String(actionId)];
   const listReference = action?.views?.find((item) => item.mode === 'list');
@@ -109,6 +109,7 @@ export default function DynamicActionPage() {
     () => readListFields(view?.architecture, action?.fields || []),
     [action?.fields, view?.architecture],
   );
+  const handleField = fields.find((field) => field.widget === 'handle');
   const routes = MODEL_ROUTES[action?.model];
   const canCreate = Boolean(action?.access?.create);
 
@@ -150,22 +151,28 @@ export default function DynamicActionPage() {
     const normalized = query.trim().toLocaleLowerCase('fr');
     const result = normalized
       ? rows.filter((row) => fields.some(({ name }) =>
-          formatValue(row[name], fields.find((field) => field.name === name)).toLocaleLowerCase('fr').includes(normalized)))
+          formatMetadataValue(row[name], fields.find((field) => field.name === name), activeEntity).toLocaleLowerCase('fr').includes(normalized)))
       : [...rows];
     if (sort.field) {
       result.sort((a, b) => {
         const compared = compareValues(a[sort.field], b[sort.field]);
         return sort.direction === 'asc' ? compared : -compared;
       });
+    } else if (!normalized && handleField) {
+      result.sort((a, b) => Number(a[handleField.name] || 0) - Number(b[handleField.name] || 0));
     }
     return result;
-  }, [rows, fields, query, sort]);
+  }, [rows, fields, query, sort, activeEntity, handleField]);
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const visibleRows = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   const visibleIds = visibleRows.map((row) => row.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.includes(id));
+  const canReorder = Boolean(
+    handleField && MODEL_ENDPOINTS[action?.model] && !query.trim()
+      && !sort.field && safePage === 1 && pageCount === 1 && rows.length > 1,
+  );
 
   const toggleSort = (field) => setSort((current) => ({
     field,
@@ -178,6 +185,28 @@ export default function DynamicActionPage() {
 
   const openRecord = (row) => {
     if (routes?.detail) navigate(`${routes.detail}/${row.id}`);
+  };
+
+  const finishReorder = async (targetRowId) => {
+    if (!canReorder || draggedRowId === null || draggedRowId === targetRowId) return;
+    const previousRows = rows;
+    const reordered = [...filteredRows];
+    const from = reordered.findIndex((row) => String(row.id) === String(draggedRowId));
+    const to = reordered.findIndex((row) => String(row.id) === String(targetRowId));
+    if (from < 0 || to < 0) return;
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    setRows(reordered);
+    setDraggedRowId(null);
+    try {
+      const endpoint = MODEL_ENDPOINTS[action.model];
+      for (const [index, row] of reordered.entries()) {
+        await apiClient.patch(`${endpoint}${row.id}/`, { [handleField.name]: (index + 1) * 10 });
+      }
+    } catch (exception) {
+      setRows(previousRows);
+      setError(exception?.message || 'Impossible d’enregistrer le nouvel ordre.');
+    }
   };
 
   if (uiLoading) return <div className="p-6 text-sm text-slate-500">Chargement de l’interface…</div>;
@@ -251,11 +280,11 @@ export default function DynamicActionPage() {
                   {loading ? <tr><td colSpan={fields.length + 1} className="p-10 text-center text-slate-500">Chargement…</td></tr>
                     : visibleRows.length === 0 ? <tr><td colSpan={fields.length + 1} className="p-10 text-center text-slate-500">Aucun résultat</td></tr>
                     : visibleRows.map((row) => (
-                      <tr key={row.id} onDoubleClick={() => openRecord(row)} className="cursor-pointer hover:bg-violet-50/40">
+                      <tr key={row.id} onDoubleClick={() => openRecord(row)} onDragOver={(event) => { if (canReorder) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); finishReorder(row.id); }} className={`cursor-pointer hover:bg-violet-50/40 ${canReorder && draggedRowId === row.id ? 'bg-violet-50' : ''}`}>
                         <td className="px-3 py-2.5" onClick={(event) => event.stopPropagation()}>
                           <input type="checkbox" checked={selected.includes(row.id)} onChange={() => setSelected((current) => current.includes(row.id) ? current.filter((id) => id !== row.id) : [...current, row.id])} />
                         </td>
-                        {fields.map((field, index) => <td key={field.name} onClick={() => openRecord(row)} className={`px-3 py-2.5 ${index === 0 ? 'font-medium text-violet-700' : 'text-slate-700'}`}>{formatValue(row[field.name], field)}</td>)}
+                        {fields.map((field, index) => <td key={field.name} onClick={() => { if (field.widget !== 'handle') openRecord(row); }} className={`px-3 py-2.5 ${index === 0 ? 'font-medium text-violet-700' : 'text-slate-700'}`}><MetadataFieldDisplay value={row[field.name]} field={field} entity={activeEntity} record={row} handleDisabled={!canReorder} onHandleDragStart={(event) => { if (!canReorder) { event.preventDefault(); return; } event.stopPropagation(); setDraggedRowId(row.id); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(row.id)); }} onHandleDrop={(event) => { event.stopPropagation(); finishReorder(row.id); }} /></td>)}
                       </tr>
                     ))}
                 </tbody>
@@ -266,8 +295,8 @@ export default function DynamicActionPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visibleRows.map((row) => (
               <button key={row.id} onClick={() => openRecord(row)} className="rounded border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-violet-300 hover:shadow">
-                <div className="mb-3 font-semibold text-violet-700">{formatValue(row[fields[0]?.name], fields[0])}</div>
-                <dl className="space-y-2 text-sm">{fields.slice(1, 5).map((field) => <div key={field.name} className="flex justify-between gap-4"><dt className="text-slate-400">{field.label}</dt><dd className="text-right text-slate-700">{formatValue(row[field.name], field)}</dd></div>)}</dl>
+                <div className="mb-3 font-semibold text-violet-700">{formatMetadataValue(row[fields[0]?.name], fields[0], activeEntity)}</div>
+                <dl className="space-y-2 text-sm">{fields.slice(1, 5).map((field) => <div key={field.name} className="flex justify-between gap-4"><dt className="text-slate-400">{field.label}</dt><dd className="text-right text-slate-700"><MetadataFieldDisplay value={row[field.name]} field={field} entity={activeEntity} record={row} /></dd></div>)}</dl>
               </button>
             ))}
           </div>

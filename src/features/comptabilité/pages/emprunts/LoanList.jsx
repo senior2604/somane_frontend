@@ -5,6 +5,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
 import axiosInstance from '../../../../config/axiosInstance';
+import { useUi } from '../../../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import {
   getActionErrorMessage,
   getActiveEntityId,
@@ -96,6 +98,11 @@ const StateBadge = ({ state }) => {
 };
 
 export default function LoanList() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(() => getConfiguredModelView(configuration, 'comptabilite.AccountLoan', 'list', {
+    preferredViewKey: 'somane_ui.accounting_accountloan_tree',
+  }), [configuration]);
+
   const navigate = useNavigate();
   const location = useLocation();
   const entityId = getActiveEntityId();
@@ -313,7 +320,7 @@ export default function LoanList() {
     });
   }, [actionLoading, executeDeleteSelected, selectedRows]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'name', label: 'N° / Emprunt', minWidth: 170,
       value: (row) => row.name || `Emprunt ${row.id}`,
@@ -340,6 +347,7 @@ export default function LoanList() {
       value: (row) => Number(row.outstanding_balance ?? row.loan_amount ?? 0),
       render: (_, row) => formatMoney(row.outstanding_balance ?? row.loan_amount, row.currency_code),
     },
+    { id: 'interest_rate', label: "Taux d'intérêt", width: 125, numeric: true, value: (row) => Number(row.interest_rate || 0), render: (value) => Number(value || 0).toLocaleString('fr-FR') + ' %' },
     { id: 'periodicity', label: 'Périodicité', width: 125, value: (row) => PERIODICITIES[row.periodicity] || row.periodicity || '-' },
     {
       id: 'duration', label: 'Durée', width: 90, numeric: true,
@@ -356,6 +364,8 @@ export default function LoanList() {
     { id: 'journal', label: 'Journal', minWidth: 135, value: (row) => row.journal_name || '-' },
     { id: 'state', label: 'État', width: 105, value: (row) => loanStateLabel(row.state), render: (_, row) => <StateBadge state={row.state} /> },
   ], []);
+
+  const columns = useMemo(() => applyConfiguredListColumns(baseColumns, configuredList?.fields, { 'loan_amount': 'amount', 'payment_freq': 'periodicity', 'duration': 'duration', 'journal': 'journal' }), [baseColumns, configuredList]);
 
   const filterChips = useMemo(() => {
     const chips = [];

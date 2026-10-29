@@ -3,6 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiEdit2, FiEye, FiPlus, FiTrash2 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import MetadataFieldDisplay from '../../../../components/MetadataFieldDisplay';
+import { useUi } from '../../../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 import useTypeStore from '../../../../stores/comptabilite/typeStore';
 
@@ -26,6 +29,13 @@ const errorMessage = (error, fallback) => error?.response?.data?.detail || error
 
 export default function TypeList() {
   const navigate = useNavigate();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.AccountAccountType', 'list', {
+      preferredViewKey: 'somane_ui.accounting_accountaccounttype_tree',
+    }),
+    [configuration],
+  );
   const { types = [], loading, error: storeError, fetchTypes, deleteType } = useTypeStore();
   const { frameworks = [], fetchFrameworks } = useFrameworkStore();
 
@@ -110,7 +120,7 @@ export default function TypeList() {
     }
   }, [deleteType, selectedRows]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'code', label: 'Code', width: 100, value: (row) => row.code || '',
       render: (_, row) => <span className="font-mono font-semibold text-purple-700">{row.code || '-'}</span>,
@@ -145,6 +155,27 @@ export default function TypeList() {
       render: (_, row) => <Badge color={row.active ? 'green' : 'slate'}>{row.active ? 'Actif' : 'Inactif'}</Badge>,
     },
   ], []);
+
+  const columns = useMemo(() => applyConfiguredListColumns(
+    baseColumns,
+    configuredList?.fields,
+    {
+      default_balance_type: 'balance',
+      allow_reconciliation: 'reconciliation',
+      closing_behavior: 'closing',
+      active: 'status',
+    },
+  ), [baseColumns, configuredList]);
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => ({
+    default_balance_type: 'balance',
+    allow_reconciliation: 'reconciliation',
+    closing_behavior: 'closing',
+    active: 'status',
+  }[field.name] || field.name)).filter((id) => baseColumns.some((column) => column.id === id)), [baseColumns, configuredList]);
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumns(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
 
   const filterChips = useMemo(() => {
     const chips = [];
@@ -210,7 +241,10 @@ export default function TypeList() {
         </td>
         {context.columns.map((column) => {
           const value = column.value ? column.value(row) : row[column.id];
-          return <td key={`${row.id}-${column.id}`} title={String(value ?? '')} className="max-w-0 border-r border-gray-100 px-2 py-1.5 text-xs text-gray-700"><div className="truncate">{column.render ? column.render(value, row, rowIndex) : (value ?? '-')}</div></td>;
+          const content = column.metadataField?.widget
+            ? <MetadataFieldDisplay value={value} field={column.metadataField} />
+            : column.render ? column.render(value, row, rowIndex) : (value ?? '-');
+          return <td key={`${row.id}-${column.id}`} title={String(value ?? '')} className="max-w-0 border-r border-gray-100 px-2 py-1.5 text-xs text-gray-700"><div className="truncate">{content}</div></td>;
         })}
         <td className="w-6 border-r border-gray-100 px-0.5 py-1.5" />
       </tr>

@@ -16,21 +16,23 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import { normalizeLanguage, useLanguage } from '../../context/LanguageContext';
 
 const initialForm = {
   first_name: '',
   last_name: '',
   email: '',
   telephone: '',
-  lang: 'fr',
+  lang: 'fr_FR',
   tz: 'Africa/Lome',
   photo: null,
   photo_url: null,
 };
 
 const LANGUAGES = [
-  { value: 'fr', label: 'Français' },
-  { value: 'en', label: 'Anglais' },
+  { value: 'fr_FR', label: 'Français', direction: 'LTR' },
+  { value: 'en_US', label: 'English', direction: 'LTR' },
+  { value: 'zh_CN', label: '简体中文', direction: 'LTR' },
 ];
 
 const TIMEZONES = [
@@ -97,8 +99,10 @@ function resolveMediaUrl(value) {
 }
 
 export default function ProfilePage() {
+  const { setLanguage, t } = useLanguage();
   const [form, setForm] = useState(initialForm);
   const [original, setOriginal] = useState(initialForm);
+  const [languageOptions, setLanguageOptions] = useState(LANGUAGES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -164,7 +168,7 @@ export default function ProfilePage() {
     last_name: data?.last_name || '',
     email: data?.email || '',
     telephone: data?.telephone || '',
-    lang: data?.lang || 'fr',
+    lang: normalizeLanguage(data?.lang || 'fr_FR'),
     tz: data?.tz || 'Africa/Lome',
     photo: null,
     photo_url: data?.photo || data?.photo_url || data?.avatar || null,
@@ -179,8 +183,35 @@ export default function ProfilePage() {
       const response = await apiClient.get('/profile/me/');
       const profile = normalizeProfile(response?.data ?? response);
 
+      let installedLanguages = [];
+      try {
+        const languageResponse = await apiClient.get('/langues/installed/');
+        const languagePayload = languageResponse?.data ?? languageResponse;
+        const languageRows = Array.isArray(languagePayload)
+          ? languagePayload
+          : Array.isArray(languagePayload?.results) ? languagePayload.results : [];
+        installedLanguages = languageRows
+          .filter((item) => item.pack_installe)
+          .map((item) => ({
+            value: normalizeLanguage(item.code),
+            label: `${item.nom} (${item.code})`,
+            direction: item.sens_ecriture || 'LTR',
+          }));
+      } catch {
+        // Les langues intégrées restent disponibles si le registre de langues n'est pas accessible.
+      }
+      const availableLanguages = [...LANGUAGES];
+      installedLanguages.forEach((item) => {
+        if (!availableLanguages.some((available) => available.value === item.value)) availableLanguages.push(item);
+      });
+      if (!availableLanguages.some((item) => item.value === profile.lang)) {
+        availableLanguages.push({ value: profile.lang, label: profile.lang, direction: 'LTR' });
+      }
+      setLanguageOptions(availableLanguages);
+
       setForm(profile);
       setOriginal(profile);
+      setLanguage(profile.lang, availableLanguages.find((item) => item.value === profile.lang)?.direction);
       localStorage.setItem('user_data', JSON.stringify(profile));
     } catch (err) {
       showToast('error', err?.response?.data?.detail || err?.message || 'Chargement du profil impossible.');
@@ -247,7 +278,9 @@ export default function ProfilePage() {
       setForm(profile);
       setOriginal(profile);
       localStorage.setItem('user_data', JSON.stringify(profile));
-      showToast('success', 'Profil enregistré avec succès.');
+      setLanguage(profile.lang, languageOptions.find((item) => item.value === profile.lang)?.direction);
+      window.dispatchEvent(new Event('somane:language-changed'));
+      showToast('success', t('Profil enregistré avec succès.'));
     } catch (err) {
       showToast('error', err?.response?.data?.detail || err?.message || 'Enregistrement impossible.');
     } finally {
@@ -329,12 +362,12 @@ export default function ProfilePage() {
               {hasChanges ? (
                 <span className="inline-flex items-center gap-1.5 text-amber-600">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  Modifications non enregistrées
+                  {t('Modifications non enregistrées')}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-slate-400">
                   <FiCheck size={13} />
-                  À jour
+                  {t('À jour')}
                 </span>
               )}
             </div>
@@ -346,7 +379,7 @@ export default function ProfilePage() {
                   disabled={saving}
                   className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Annuler
+                  {t('Annuler')}
                 </button>
               )}
               <button
@@ -356,7 +389,7 @@ export default function ProfilePage() {
                 className="flex h-9 items-center gap-2 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <FiSave size={15} />
-                {saving ? 'Enregistrement...' : 'Enregistrer'}
+                {saving ? t('Enregistrement...') : t('Enregistrer')}
               </button>
             </div>
           </div>
@@ -365,7 +398,7 @@ export default function ProfilePage() {
         {/* Contenu */}
         <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_320px]">
           <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <SectionHeader icon={<FiUser size={15} />} title="Informations personnelles" />
+            <SectionHeader icon={<FiUser size={15} />} title={t('Informations personnelles')} />
             <div className="space-y-4 p-5">
               <div className="flex items-center justify-between gap-4 rounded-xl border border-dashed border-violet-200 bg-violet-50/60 p-4">
                 <div className="min-w-0">
@@ -434,21 +467,21 @@ export default function ProfilePage() {
 
           <aside className="space-y-4">
             <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <SectionHeader icon={<FiGlobe size={15} />} title="Préférences" />
+              <SectionHeader icon={<FiGlobe size={15} />} title={t('Préférences')} />
               <div className="space-y-4 p-5">
-                <Field label="Langue" stacked>
+                <Field label={t('Langue')} stacked>
                   <select
                     value={form.lang}
                     onChange={(e) => setField('lang', e.target.value)}
                     className={inputClass()}
                   >
-                    {LANGUAGES.map((item) => (
+                    {languageOptions.map((item) => (
                       <option key={item.value} value={item.value}>{item.label}</option>
                     ))}
                   </select>
                 </Field>
 
-                <Field label="Fuseau horaire" stacked>
+                <Field label={t('Fuseau horaire')} stacked>
                   <select
                     value={form.tz}
                     onChange={(e) => setField('tz', e.target.value)}
@@ -463,7 +496,7 @@ export default function ProfilePage() {
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <SectionHeader icon={<FiLock size={15} />} title="Sécurité" />
+              <SectionHeader icon={<FiLock size={15} />} title={t('Sécurité')} />
               <div className="p-5">
                 <p className="mb-3 text-xs text-slate-500">
                   Choisissez un mot de passe unique, que vous n'utilisez sur aucun autre service.

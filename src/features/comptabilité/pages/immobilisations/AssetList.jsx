@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
 import axiosInstance from '../../../../config/axiosInstance';
+import { useUi } from '../../../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import {
   API,
   ASSET_STATES,
@@ -40,6 +42,11 @@ const categoryName = (asset) => asset.category_name || asset.category_id_label |
 const currencyCode = (asset) => asset.currency_code || asset.currency_id_label || asset.currency?.code || 'XOF';
 
 export default function AssetList() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(() => getConfiguredModelView(configuration, 'comptabilite.AccountAsset', 'list', {
+    preferredViewKey: 'somane_ui.accounting_accountasset_tree',
+  }), [configuration]);
+
   const navigate = useNavigate();
   const location = useLocation();
   const entityId = getActiveEntityId();
@@ -161,7 +168,7 @@ export default function AssetList() {
     }
   }, [actionLoading, selectedRows]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     { id: 'code', label: "N° d'inventaire", minWidth: 145, value: (row) => row.code || '-', render: (value) => <span className="font-semibold text-teal-700">{value}</span> },
     { id: 'name', label: 'Immobilisation', minWidth: 220, value: (row) => row.name || '-' },
     { id: 'category', label: 'Catégorie', minWidth: 190, value: categoryName },
@@ -174,6 +181,8 @@ export default function AssetList() {
     { id: 'method', label: 'Méthode', minWidth: 160, value: (row) => METHODS.find((item) => item.id === row.depreciate_method)?.label || row.depreciate_method || '-' },
     { id: 'state', label: 'État', width: 130, value: (row) => ASSET_STATES[row.state] || row.state, render: (_, row) => <StateBadge state={row.state} /> },
   ], []);
+
+  const columns = useMemo(() => applyConfiguredListColumns(baseColumns, configuredList?.fields, { 'category_id': 'category', 'asset_type': 'nature', 'depreciate_method': 'method' }), [baseColumns, configuredList]);
 
   const filterChips = useMemo(() => {
     const chips = [];

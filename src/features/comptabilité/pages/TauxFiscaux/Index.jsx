@@ -11,7 +11,9 @@ import {
 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
 import { useEntity } from '../../../../context/EntityContext';
+import { useUi } from '../../../../context/UiContext';
 import { apiClient } from '../../../../services/apiClient';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 
 const TAXES_MEMORY_KEY = 'comptabilite:taux-fiscaux:index';
 const TAXES_CACHE_PREFIX = 'comptabilite:taux-fiscaux:cache:';
@@ -146,6 +148,13 @@ function TypeBadge({ type }) {
 export default function TauxFiscauxIndex() {
   const navigate = useNavigate();
   const { activeEntity } = useEntity();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.AccountTax', 'list', {
+      preferredViewKey: 'somane_ui.accounting_accounttax_tree',
+    }),
+    [configuration],
+  );
   const companyId = activeEntity?.id;
   const requestVersionRef = useRef(0);
 
@@ -350,7 +359,7 @@ export default function TauxFiscauxIndex() {
     }
   }, [companyId, loadTaxes, selectedIds, taxes]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'nom',
       label: 'Nom',
@@ -435,6 +444,37 @@ export default function TauxFiscauxIndex() {
       render: (_, tax) => <StatusBadge active={tax.active} />,
     },
   ], [getCompanyLabel, getCountryLabel, navigate]);
+
+  const columns = useMemo(() => applyConfiguredListColumns(
+    baseColumns,
+    configuredList?.fields,
+    {
+      name: 'nom',
+      amount: 'montant',
+      type_tax_use: 'type',
+      amount_type: 'calcul',
+      tax_scope: 'portee',
+      tax_group: 'groupe',
+      company: 'entreprise',
+      country: 'pays',
+      active: 'statut',
+    },
+  ), [baseColumns, configuredList]);
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => ({
+    name: 'nom',
+    amount: 'montant',
+    type_tax_use: 'type',
+    amount_type: 'calcul',
+    tax_scope: 'portee',
+    tax_group: 'groupe',
+    company: 'entreprise',
+    country: 'pays',
+    active: 'statut',
+  }[field.name] || field.name)).filter((id) => baseColumns.some((column) => column.id === id)), [baseColumns, configuredList]);
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumnIds(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
 
   const filterChips = useMemo(() => activeFilters.map((filter) => ({
     id: filter.id,

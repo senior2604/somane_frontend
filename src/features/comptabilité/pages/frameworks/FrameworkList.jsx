@@ -3,6 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiEdit2, FiEye, FiPlus, FiTrash2 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import MetadataFieldDisplay from '../../../../components/MetadataFieldDisplay';
+import { useUi } from '../../../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 
 const MEMORY_KEY = 'comptabilite:frameworks:index:v2';
@@ -41,6 +44,13 @@ const errorMessage = (error, fallback) => (
 
 function FrameworkList() {
   const navigate = useNavigate();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.FinanceAccountFramework', 'list', {
+      preferredViewKey: 'somane_ui.accounting_financeaccountframework_tree',
+    }),
+    [configuration],
+  );
   const {
     frameworks = [],
     loading,
@@ -114,7 +124,7 @@ function FrameworkList() {
     }
   }, [deleteFramework, selectedRows]);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'code', label: 'Code', width: 120, value: (row) => row.code || '',
       render: (_, row) => <span className="font-mono font-semibold text-purple-700">{row.code || '-'}</span>,
@@ -130,6 +140,7 @@ function FrameworkList() {
     },
     { id: 'version', label: 'Version', width: 100, value: (row) => row.version || '-' },
     { id: 'country', label: 'Pays', minWidth: 130, value: countryLabel },
+    { id: 'country_group', label: 'Zone', minWidth: 130, value: (row) => row.country_group || '-' },
     {
       id: 'scope', label: 'Portée', minWidth: 130,
       value: (row) => companyCount(row),
@@ -147,6 +158,18 @@ function FrameworkList() {
       render: (_, row) => <Badge active={Boolean(row.active)}>{row.active ? 'Actif' : 'Inactif'}</Badge>,
     },
   ], []);
+  const columns = useMemo(() => applyConfiguredListColumns(
+    baseColumns,
+    configuredList?.fields,
+    { account_code_length: 'length', company: 'scope', active: 'status' },
+  ), [baseColumns, configuredList]);
+  const configuredColumnIds = useMemo(() => configuredList?.fields?.map((field) => ({
+    account_code_length: 'length', company: 'scope', active: 'status',
+  }[field.name] || field.name)).filter((id) => baseColumns.some((column) => column.id === id)), [baseColumns, configuredList]);
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumns(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
 
   const filterChips = useMemo(() => (
     status === 'all' ? [] : [{ id: 'status', label: status === 'active' ? 'Actifs' : 'Inactifs' }]
@@ -207,9 +230,12 @@ function FrameworkList() {
         </td>
         {context.columns.map((column) => {
           const value = column.value ? column.value(row) : row[column.id];
+          const content = column.metadataField?.widget
+            ? <MetadataFieldDisplay value={value} field={column.metadataField} />
+            : column.render ? column.render(value, row, rowIndex) : (value ?? '-');
           return (
             <td key={`${row.id}-${column.id}`} title={String(value ?? '')} className="max-w-0 border-r border-gray-100 px-2 py-1.5 text-xs text-gray-700">
-              <div className="truncate">{column.render ? column.render(value, row, rowIndex) : (value ?? '-')}</div>
+              <div className="truncate">{content}</div>
             </td>
           );
         })}

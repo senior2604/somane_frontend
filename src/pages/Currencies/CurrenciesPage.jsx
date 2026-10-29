@@ -1,7 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '../../services/apiClient';
+import MetadataFieldDisplay from '../../components/MetadataFieldDisplay';
+import MetadataFieldInput from '../../components/MetadataFieldInput';
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
+import { useUi } from '../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../services/metadataViews';
 
 export default function DevisesPage() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'core.Devise', 'list', {
+      preferredViewKey: 'somane_ui.core_devise_tree',
+    }),
+    [configuration],
+  );
+  const configuredForm = useMemo(
+    () => getConfiguredModelView(configuration, 'core.Devise', 'form', {
+      preferredViewKey: 'somane_ui.core_devise_form',
+    }),
+    [configuration],
+  );
   const [devises, setDevises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -185,6 +203,20 @@ export default function DevisesPage() {
     }
   };
 
+  const columns = applyConfiguredListColumns([
+    { id: 'code', label: 'Code', value: (row) => row.code, render: (row) => <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">{row.code}</span> },
+    { id: 'nom', label: 'Nom', value: (row) => row.nom },
+    { id: 'symbole', label: 'Symbole', value: (row) => row.symbole, render: (row) => <span className="font-semibold">{row.symbole || '—'}</span> },
+    { id: 'actif', label: 'Active', value: (row) => row.actif, render: (row) => (
+      <button
+        onClick={() => handleToggleActif(row)}
+        className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${row.actif ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200' : 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200'}`}
+      >
+        {row.actif ? 'Active' : 'Inactive'}
+      </button>
+    ) },
+  ], configuredList?.fields);
+
   const handleFormSuccess = () => {
     setShowForm(false);
     setEditingDevise(null);
@@ -193,15 +225,6 @@ export default function DevisesPage() {
 
   const handleRetry = () => {
     fetchDevises();
-  };
-
-  // Formater l'arrondi pour l'affichage
-  const formatArrondi = (arrondi) => {
-    if (!arrondi) return '1';
-    return new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 6
-    }).format(arrondi);
   };
 
   if (loading) {
@@ -333,24 +356,11 @@ export default function DevisesPage() {
           <table className="min-w-full border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-300">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  ID
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Code
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Nom
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Symbole
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Arrondi
-                </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
-                  Statut
-                </th>
+                {columns.map((column) => (
+                  <th key={column.id} className="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-r border-gray-300">
+                    {column.label}
+                  </th>
+                ))}
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                   Actions
                 </th>
@@ -359,7 +369,7 @@ export default function DevisesPage() {
             <tbody>
               {currentDevises.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
+                  <td colSpan={columns.length + 1} className="px-6 py-8 text-center text-gray-500 border-b border-gray-300">
                     {devises.length === 0 ? 'Aucune devise trouvée' : 'Aucun résultat pour votre recherche'}
                   </td>
                 </tr>
@@ -371,35 +381,16 @@ export default function DevisesPage() {
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     } hover:bg-gray-100 transition-colors border-b border-gray-300`}
                   >
-                    <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-300 font-mono">
-                      {devise.id}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-300">
-                      <span className="font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                        {devise.code}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      {devise.nom}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
-                      <span className="font-semibold">{devise.symbole}</span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300 font-mono">
-                      {formatArrondi(devise.arrondi)}
-                    </td>
-                    <td className="px-6 py-4 border-r border-gray-300">
-                      <button
-                        onClick={() => handleToggleActif(devise)}
-                        className={`inline-flex px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                          devise.actif
-                            ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200' 
-                            : 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200'
-                        }`}
-                      >
-                        {devise.actif ? 'Active' : 'Inactive'}
-                      </button>
-                    </td>
+                    {columns.map((column) => {
+                      const value = column.value(devise);
+                      return (
+                        <td key={`${devise.id}-${column.id}`} className="px-6 py-4 text-sm text-gray-600 border-r border-gray-300">
+                          {column.metadataField?.widget
+                            ? <MetadataFieldDisplay value={value} field={column.metadataField} record={devise} />
+                            : column.render ? column.render(devise) : value}
+                        </td>
+                      );
+                    })}
                     <td className="px-6 py-4">
                       <div className="flex space-x-3">
                         <button 
@@ -520,6 +511,7 @@ export default function DevisesPage() {
         <DeviseFormModal
           devise={editingDevise}
           devisesCourantes={devisesCourantes}
+          configuredView={configuredForm}
           onClose={() => {
             setShowForm(false);
             setEditingDevise(null);
@@ -532,7 +524,7 @@ export default function DevisesPage() {
 }
 
 // Composant Modal pour le formulaire des devises
-function DeviseFormModal({ devise, devisesCourantes, onClose, onSuccess }) {
+function DeviseFormModal({ devise, devisesCourantes, configuredView, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     code: devise?.code || '',
     nom: devise?.nom || '',
@@ -544,6 +536,75 @@ function DeviseFormModal({ devise, devisesCourantes, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [modeSelection, setModeSelection] = useState('liste'); // 'liste' ou 'manuel'
+
+  const defaultFields = [
+    { name: 'code', label: 'Code devise', type: 'char', required: true },
+    { name: 'nom', label: 'Nom complet', type: 'char', required: true },
+    { name: 'symbole', label: 'Symbole', type: 'char', required: false },
+    { name: 'actif', label: 'Devise active', type: 'boolean', required: false },
+  ];
+  const configuredGroups = configuredView?.groups?.map((group) => ({
+    title: group.title,
+    fields: group.fields.filter((field) => !field.invisible),
+  })).filter((group) => group.fields.length) || [];
+  const formGroups = configuredView?.groups?.length ? configuredGroups : [{ title: 'Devise', fields: defaultFields }];
+  const formFields = formGroups.flatMap((group) => group.fields);
+  const configuredFieldNames = new Set(formFields.map((field) => field.name));
+
+  const handleChange = (field, value) => {
+    const normalizedValue = field === 'code' && typeof value === 'string' ? value.toUpperCase() : value;
+    setFormData((previous) => ({ ...previous, [field]: normalizedValue }));
+  };
+
+  const renderField = (field) => {
+    const name = field.name;
+    const label = field.label || field.field_description || name;
+    const required = Boolean(field.required);
+    const disabled = Boolean(field.readonly);
+    const fieldType = field.type || field.ttype || 'char';
+    const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500';
+    let control;
+
+    if (name === 'code' && modeSelection === 'liste' && !devise) {
+      control = <select id={`currency-${name}`} required={required} disabled={disabled} value={formData.code} onChange={(event) => handleChange(name, event.target.value)} className={`${inputClass} font-mono uppercase`}>
+        <option value="">Sélectionnez un code</option>
+        {devisesCourantes.map((currency) => <option key={currency.code} value={currency.code}>{currency.code} - {currency.nom}</option>)}
+      </select>;
+    } else if (name === 'nom' && modeSelection === 'liste' && !devise) {
+      control = <select id={`currency-${name}`} required={required} disabled={disabled} value={formData.nom} onChange={(event) => handleChange(name, event.target.value)} className={inputClass}>
+        <option value="">Sélectionnez un nom</option>
+        {devisesCourantes.map((currency) => <option key={`${currency.code}-name`} value={currency.nom}>{currency.nom}</option>)}
+      </select>;
+    } else if (name === 'symbole' && modeSelection === 'liste' && !devise) {
+      control = <select id={`currency-${name}`} required={required} disabled={disabled} value={formData.symbole} onChange={(event) => handleChange(name, event.target.value)} className={inputClass}>
+        <option value="">Sélectionnez un symbole</option>
+        {devisesCourantes.map((currency) => <option key={`${currency.code}-symbol`} value={currency.symbole}>{currency.symbole} ({currency.nom})</option>)}
+      </select>;
+    } else if (name === 'actif' && fieldType === 'boolean' && !field.widget && !field.display_widget) {
+      control = <label className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
+        <input type="checkbox" checked={Boolean(formData[name])} disabled={disabled} onChange={(event) => handleChange(name, event.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+        <span className="text-sm text-gray-700">{label}{required && <span className="ml-1 text-red-600">*</span>}</span>
+      </label>;
+    } else {
+      control = <MetadataFieldInput
+        field={{ ...field, type: fieldType }}
+        value={formData[name] ?? ''}
+        onChange={(event) => handleChange(name, event.target.value)}
+        disabled={disabled}
+        className={inputClass}
+      />;
+    }
+
+    return <div key={name}>
+      {!(name === 'actif' && fieldType === 'boolean' && !field.widget && !field.display_widget) && <label className="mb-2 block text-sm font-medium text-gray-700" htmlFor={`currency-${name}`}>
+        {label}{required && <span className="ml-1 text-red-600">*</span>}
+      </label>}
+      {control}
+      {field.help && <p className="mt-1 text-xs text-gray-500">{field.help}</p>}
+      {name === 'code' && <p className="mt-1 text-xs text-gray-500">3 lettres majuscules (ex. EUR, USD, XOF)</p>}
+      {name === 'symbole' && <p className="mt-1 text-xs text-gray-500">Symbole monétaire (10 caractères maximum)</p>}
+    </div>;
+  };
 
   // Quand le code change, mettre à jour automatiquement le nom et le symbole si la devise existe dans la liste
   useEffect(() => {
@@ -564,21 +625,18 @@ function DeviseFormModal({ devise, devisesCourantes, onClose, onSuccess }) {
     setLoading(true);
     setError(null);
 
-    // Validation
-    if (formData.code.length !== 3) {
+    // Les champs obligatoires suivent la configuration IrUiView/IrModelFields.
+    const missingField = formFields.find((field) => (
+      field.required && !String(formData[field.name] ?? '').trim()
+    ));
+    if (missingField) {
+      setError(`Le champ « ${missingField.label || missingField.field_description || missingField.name} » est obligatoire`);
+      setLoading(false);
+      return;
+    }
+
+    if (formData.code && formData.code.length !== 3) {
       setError('Le code devise doit contenir exactement 3 caractères');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.nom) {
-      setError('Le nom complet est obligatoire');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.symbole) {
-      setError('Le symbole est obligatoire');
       setLoading(false);
       return;
     }
@@ -607,13 +665,6 @@ function DeviseFormModal({ devise, devisesCourantes, onClose, onSuccess }) {
     }
   };
 
-  const handleChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
   const handleSelectionModeChange = (mode) => {
     setModeSelection(mode);
     if (mode === 'liste') {
@@ -630,10 +681,11 @@ function DeviseFormModal({ devise, devisesCourantes, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between gap-3 p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
             {devise ? 'Modifier la devise' : 'Créer une nouvelle devise'}
           </h2>
+          {devise && <RecordTraceabilityPanel model="devise" recordId={devise.id} />}
         </div>
         
         {error && (
@@ -679,140 +731,18 @@ function DeviseFormModal({ devise, devisesCourantes, onClose, onSuccess }) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Code devise */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code devise *
-              </label>
-              {modeSelection === 'liste' && !devise ? (
-                <select
-                  required
-                  value={formData.code}
-                  onChange={(e) => handleChange('code', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono uppercase"
-                >
-                  <option value="">Sélectionnez un code</option>
-                  {devisesCourantes.map(devise => (
-                    <option key={devise.code} value={devise.code}>
-                      {devise.code} - {devise.nom}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  required
-                  maxLength={3}
-                  value={formData.code}
-                  onChange={(e) => handleChange('code', e.target.value.toUpperCase())}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono uppercase"
-                  placeholder="EUR"
-                />
-              )}
-              <p className="text-xs text-gray-500 mt-1">
-                3 lettres majuscules (ex: EUR, USD, XOF)
-              </p>
-            </div>
-            
-            {/* Nom complet */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom complet *
-              </label>
-              {modeSelection === 'liste' && !devise ? (
-                <select
-                  required
-                  value={formData.nom}
-                  onChange={(e) => handleChange('nom', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Sélectionnez un nom</option>
-                  {devisesCourantes.map(devise => (
-                    <option key={devise.nom} value={devise.nom}>
-                      {devise.nom}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  required
-                  value={formData.nom}
-                  onChange={(e) => handleChange('nom', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Euro, Dollar US, Franc CFA..."
-                />
-              )}
-            </div>
-            
-            {/* Symbole */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Symbole *
-              </label>
-              {modeSelection === 'liste' && !devise ? (
-                <select
-                  required
-                  value={formData.symbole}
-                  onChange={(e) => handleChange('symbole', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Sélectionnez un symbole</option>
-                  {devisesCourantes.map(devise => (
-                    <option key={devise.symbole} value={devise.symbole}>
-                      {devise.symbole} ({devise.nom})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  required
-                  maxLength={10}
-                  value={formData.symbole}
-                  onChange={(e) => handleChange('symbole', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="€, $, CFA..."
-                />
-              )}
-              <p className="text-xs text-gray-500 mt-1">
-                Symbole monétaire (max 10 caractères)
-              </p>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Valeur d'arrondi
-              </label>
-              <input
-                type="number"
-                step="0.000001"
-                min="0.000001"
-                value={formData.arrondi}
-                onChange={(e) => handleChange('arrondi', parseFloat(e.target.value) || 1)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="1"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Multiple d'arrondi (ex: 1, 0.5, 0.01, 0.0001)
-              </p>
-            </div>
-            
-            <div className="md:col-span-2">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.actif}
-                  onChange={(e) => handleChange('actif', e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">Devise active</span>
-              </label>
-              <p className="text-xs text-gray-500 mt-1">
-                Les devises inactives ne seront pas disponibles dans les sélections
-              </p>
-            </div>
+          <div className="space-y-5">
+            {formGroups.map((group, index) => <fieldset key={`${group.title}-${index}`} className="rounded-lg border border-gray-200 p-4">
+              <legend className="px-2 text-sm font-medium text-gray-700">{group.title}</legend>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                {group.fields.map(renderField)}
+              </div>
+            </fieldset>)}
+            {!configuredFieldNames.has('arrondi') && <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700" htmlFor="currency-arrondi">Valeur d’arrondi</label>
+              <input id="currency-arrondi" type="number" step="0.000001" min="0.000001" value={formData.arrondi} onChange={(event) => handleChange('arrondi', parseFloat(event.target.value) || 1)} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="1" />
+              <p className="mt-1 text-xs text-gray-500">Multiple d’arrondi (ex. 1, 0.5, 0.01, 0.0001)</p>
+            </div>}
           </div>
 
           {/* Aperçu */}

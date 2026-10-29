@@ -3,12 +3,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FiChevronDown, FiChevronRight, FiEdit2, FiEye, FiFolder, FiPlus, FiTrash2 } from 'react-icons/fi';
 import UnifiedIndexPage from '../../../../components/UnifiedIndexPage';
+import MetadataFieldDisplay from '../../../../components/MetadataFieldDisplay';
+import { useUi } from '../../../../context/UiContext';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import useFrameworkStore from '../../../../stores/comptabilite/frameworkStore';
 import useGroupStore from '../../../../stores/comptabilite/groupStore';
 
 const FRAMEWORK_SESSION_KEY = 'group_list_selected_framework';
 const MEMORY_KEY = 'comptabilite:groups:index:v2';
-const DEFAULT_COLUMNS = ['code', 'name', 'range', 'parent', 'children', 'sequence'];
+const DEFAULT_COLUMNS = ['code', 'name', 'code_prefix_start', 'code_prefix_end', 'parent', 'sequence'];
 
 const relationId = (value) => {
   if (!value) return null;
@@ -23,12 +26,6 @@ const groupFrameworkId = (group) => (
 );
 
 const frameworkLabel = (framework) => [framework?.code, framework?.name].filter(Boolean).join(' - ');
-
-const rangeLabel = (group) => (
-  group?.code_prefix_start && group?.code_prefix_end
-    ? `${group.code_prefix_start} à ${group.code_prefix_end}`
-    : '-'
-);
 
 const collectGroups = (items, parentId = null, map = new Map()) => {
   (items || []).forEach((item) => {
@@ -68,6 +65,13 @@ const errorMessage = (error, fallback) => error?.response?.data?.detail || error
 function GroupList() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'comptabilite.AccountGroup', 'list', {
+      preferredViewKey: 'somane_ui.accounting_accountgroup_tree',
+    }),
+    [configuration],
+  );
   const { groups = [], loading, error: storeError, fetchGroups, deleteGroup } = useGroupStore();
   const { frameworks = [], fetchFrameworks } = useFrameworkStore();
 
@@ -197,7 +201,7 @@ function GroupList() {
     });
   }, []);
 
-  const columns = useMemo(() => [
+  const baseColumns = useMemo(() => [
     {
       id: 'code', label: 'Code', minWidth: 140, value: (row) => row.code || '',
       render: (_, row) => (
@@ -230,11 +234,25 @@ function GroupList() {
         </div>
       ),
     },
-    { id: 'range', label: 'Plage de comptes', minWidth: 150, value: rangeLabel },
+    { id: 'code_prefix_start', label: 'Début de plage', minWidth: 120, value: (row) => row.code_prefix_start || '-' },
+    { id: 'code_prefix_end', label: 'Fin de plage', minWidth: 120, value: (row) => row.code_prefix_end || '-' },
     { id: 'parent', label: 'Parent', minWidth: 170, value: parentLabel },
     { id: 'children', label: 'Sous-classes', width: 100, align: 'right', value: (row) => row._treeChildren?.length || row.children_count || 0 },
     { id: 'sequence', label: 'Séq.', width: 75, align: 'right', value: (row) => row.sequence ?? 0 },
   ], [effectiveExpanded, parentLabel, toggleExpanded]);
+  const columns = useMemo(() => applyConfiguredListColumns(
+    baseColumns,
+    configuredList?.fields,
+  ), [baseColumns, configuredList]);
+  const configuredColumnIds = useMemo(
+    () => configuredList?.fields?.map((field) => field.name)
+      .filter((id) => baseColumns.some((column) => column.id === id)),
+    [baseColumns, configuredList],
+  );
+
+  useEffect(() => {
+    if (configuredColumnIds?.length) setVisibleColumns(configuredColumnIds);
+  }, [configuredColumnIds, configuredList?.view?.id]);
 
   const filterChips = useMemo(() => {
     const framework = frameworks.find((item) => String(item.id) === String(frameworkId));
@@ -270,7 +288,10 @@ function GroupList() {
         <td className="border-r border-gray-100 px-2 py-1.5 text-center"><input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={() => context.toggleRow(row.id)} className="h-3.5 w-3.5 accent-teal-700" aria-label="Sélectionner cette classe" /></td>
         {context.columns.map((column) => {
           const value = column.value ? column.value(row) : row[column.id];
-          return <td key={`${row.id}-${column.id}`} title={String(value ?? '')} className="max-w-0 border-r border-gray-100 px-2 py-1.5 text-xs text-gray-700"><div className="truncate">{column.render ? column.render(value, row, rowIndex) : (value ?? '-')}</div></td>;
+          const content = column.metadataField?.widget
+            ? <MetadataFieldDisplay value={value} field={column.metadataField} />
+            : column.render ? column.render(value, row, rowIndex) : (value ?? '-');
+          return <td key={`${row.id}-${column.id}`} title={String(value ?? '')} className="max-w-0 border-r border-gray-100 px-2 py-1.5 text-xs text-gray-700"><div className="truncate">{content}</div></td>;
         })}
         <td className="w-6 border-r border-gray-100 px-0.5 py-1.5" />
       </tr>

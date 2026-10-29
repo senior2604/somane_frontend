@@ -1,6 +1,9 @@
 // features/achats/pages/PrixFournisseursPage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { apiClient } from '../../../services/apiClient';
+import { useUi } from '../../../context/UiContext';
+import MetadataFieldDisplay from '../../../components/MetadataFieldDisplay';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../services/metadataViews';
 import {
   FiPlus,
   FiEdit2,
@@ -19,6 +22,10 @@ import {
 } from "react-icons/fi";
 
 export default function PrixFournisseursPage() {
+  const { configuration } = useUi();
+  const configuredList = useMemo(() => getConfiguredModelView(configuration, 'achats.SupplierPrice', 'list', {
+    preferredViewKey: 'somane_ui.achats_supplier_price_tree',
+  }), [configuration]);
   const [prix, setPrix] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [produits, setProduits] = useState([]);
@@ -75,6 +82,23 @@ export default function PrixFournisseursPage() {
       style: 'currency',
       currency: 'XOF'
     }).format(amount || 0);
+  };
+
+  const baseColumns = [
+    { id: 'partner', label: 'Fournisseur', value: (row) => row.partner || row.partner_id, render: (row) => <div className="flex items-center"><FiUser className="mr-2 text-gray-400" size={16} /><span className="font-medium">{row.partner?.name || getReferenceName(fournisseurs, row.partner_id)}</span></div> },
+    { id: 'product', label: 'Produit', value: (row) => row.product || row.product_id, render: (row) => <div className="flex items-center"><FiPackage className="mr-2 text-gray-400" size={16} /><span>{row.product?.name || getReferenceName(produits, row.product_id)}</span></div> },
+    { id: 'price', label: 'Prix', value: (row) => row.price, render: (row) => <div className="flex items-center"><FiDollarSign className="mr-2 text-green-400" size={16} /><span className="text-lg font-bold">{formatCurrency(row.price)}</span></div> },
+    { id: 'currency', label: 'Devise', value: (row) => row.currency || row.currency_id, render: (row) => <div className="flex items-center"><FiGlobe className="mr-2 text-blue-400" size={16} /><span>{row.currency?.name || row.currency?.code || getReferenceName(devises, row.currency_id)}</span></div> },
+    { id: 'min_qty', label: 'Quantité minimale', value: (row) => row.min_qty, render: (row) => row.min_qty ?? '—' },
+    { id: 'date_start', label: 'Début de validité', value: (row) => row.date_start, render: (row) => row.date_start ? new Date(row.date_start).toLocaleDateString('fr-FR') : '—' },
+    { id: 'date_end', label: 'Fin de validité', value: (row) => row.date_end, render: (row) => row.date_end ? new Date(row.date_end).toLocaleDateString('fr-FR') : '—' },
+  ];
+  const columns = applyConfiguredListColumns(baseColumns, configuredList?.fields);
+  const renderConfiguredCell = (column, row) => {
+    const value = column.value ? column.value(row) : row[column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} record={row} />
+      : column.render ? column.render(row) : (value ?? '—');
   };
 
   // Filtrage et pagination
@@ -225,21 +249,7 @@ export default function PrixFournisseursPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fournisseur
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Produit
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Prix
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Devise
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Dernière mise à jour
-                </th>
+                {columns.map((column) => <th key={column.id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{column.label}</th>)}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -248,33 +258,7 @@ export default function PrixFournisseursPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {currentItems.map((prixItem) => (
                 <tr key={prixItem.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiUser className="text-gray-400 mr-2" size={16} />
-                      <span className="font-medium">{getReferenceName(fournisseurs, prixItem.partner_id)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiPackage className="text-gray-400 mr-2" size={16} />
-                      <span>{getReferenceName(produits, prixItem.product_id)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiDollarSign className="text-green-400 mr-2" size={16} />
-                      <span className="font-bold text-lg">{formatCurrency(prixItem.price)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <FiGlobe className="text-blue-400 mr-2" size={16} />
-                      <span>{getReferenceName(devises, prixItem.currency_id)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(prixItem.write_date || prixItem.create_date).toLocaleDateString('fr-FR')}
-                  </td>
+                  {columns.map((column) => <td key={column.id} className="px-6 py-4 whitespace-nowrap">{renderConfiguredCell(column, prixItem)}</td>)}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <button

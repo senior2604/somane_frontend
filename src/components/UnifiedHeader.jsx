@@ -19,6 +19,7 @@ import { useOptionalUi } from '../context/UiContext';
 import { apiClient } from '../services/apiClient';
 import { can } from '../services/securityAccess';
 import { getHeaderNavigation } from './headerNavigation';
+import { useLanguage } from '../context/LanguageContext';
 import { readDeveloperMode, subscribeDeveloperMode, writeDeveloperMode } from '../services/developerMode';
 
 // ===== CONFIGURATION CENTRALISEE DES MODULES =====
@@ -412,6 +413,7 @@ const getCurrentUserName = () => {
 };
 
 export default function UnifiedHeader() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [showModules, setShowModules] = useState(false);
@@ -502,8 +504,8 @@ export default function UnifiedHeader() {
 
   const { color } = currentModule;
   const navigation = useMemo(
-    () => getHeaderNavigation(ui?.configuration, currentModule),
-    [ui?.configuration, currentModule],
+    () => getHeaderNavigation(ui?.configuration, currentModule, t),
+    [ui?.configuration, currentModule, t],
   );
   const visibleNavigation = useMemo(() => navigation
     .map((category) => ({
@@ -595,7 +597,7 @@ export default function UnifiedHeader() {
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
-      <div className="px-6 py-3">
+      <div className="px-4 py-2">
         <div className="flex items-center justify-between">
           {/* GAUCHE - SIMPLIFIEE : Seulement icone menu */}
           <div className="flex items-center">
@@ -603,7 +605,7 @@ export default function UnifiedHeader() {
             <div className="relative">
               <button
                 onClick={() => !isOnEntitySelectionPage && setShowModules(!showModules)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors ${
                   isOnEntitySelectionPage
                     ? "text-gray-400 opacity-50 cursor-not-allowed"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
@@ -612,7 +614,7 @@ export default function UnifiedHeader() {
                 disabled={isOnEntitySelectionPage}
               >
                 <FiGrid size={18} />
-                <span className="text-sm font-medium">{currentModule.name}</span>
+                <span className="text-sm font-medium">{t(currentModule.name)}</span>
                 <FiChevronDown size={14} className={`transition-transform ${showModules ? "rotate-180" : ""}`} />
               </button>
 
@@ -635,7 +637,7 @@ export default function UnifiedHeader() {
                             module.id === currentModule.id ? `${getColorClasses(module.color, "text")} font-medium` : "text-gray-700"
                           }`}
                         >
-                          {module.name}
+                          {t(module.name)}
                         </button>
                       ))}
                     </div>
@@ -647,7 +649,7 @@ export default function UnifiedHeader() {
 
           {/* CENTRE : Navigation specifique au module - UNIQUEMENT SI ELLE EXISTE */}
           {!isOnEntitySelectionPage && navigation.length > 0 && (
-            <nav className="flex items-center gap-6">
+            <nav className="flex items-center gap-4">
               {visibleNavigation.map((item) => {
                 const hasItems = item.items?.length > 0;
                 const hasActiveItem = isActive(item.path) || item.items?.some((sub) => isActive(sub.path)) || false;
@@ -659,7 +661,7 @@ export default function UnifiedHeader() {
                     onMouseEnter={() => hasItems && setHoveredCategory(item.name)}
                     onMouseLeave={() => setHoveredCategory(null)}
                   >
-                    <div className="py-2 px-1 -mx-1">
+                    <div className="py-1.5 px-1 -mx-1">
                       <button
                         onClick={() => {
                           if (item.path) navigate(item.path);
@@ -668,7 +670,7 @@ export default function UnifiedHeader() {
                           hasActiveItem ? textClass : "text-gray-700 hover:text-gray-900"
                         }`}
                       >
-                        {item.name}
+                        {t(item.name)}
                         {hasItems && (
                           <FiChevronDown
                             className={`w-3 h-3 transition-transform ${hoveredCategory === item.name ? "rotate-180" : ""}`}
@@ -694,7 +696,7 @@ export default function UnifiedHeader() {
                             }`}
                           >
                             <div className={`w-1 h-4 mr-3 ${location.pathname === subItem.path ? dotClass : "bg-gray-300"}`} />
-                            {subItem.label}
+                            {t(subItem.label)}
                           </button>
                         ))}
                       </div>
@@ -807,7 +809,7 @@ export default function UnifiedHeader() {
                         title="Lien vers notre site web"
                       >
                         <FiHelpCircle size={14} />
-                        Aide
+                        {t('Aide')}
                       </button>
                       <button
                         onClick={() => {
@@ -818,7 +820,7 @@ export default function UnifiedHeader() {
                         title="Langue, fuseau horaire, etc"
                       >
                         <FiSettings size={14} />
-                        Mes préférences
+                        {t('Mes préférences')}
                       </button>
                       {isSystemAdministrator && (
                         <button
@@ -828,15 +830,15 @@ export default function UnifiedHeader() {
                           title="Afficher ou masquer les réglages techniques avancés"
                         >
                           <FiCode size={14} />
-                          <span>Mode développeur</span>
+                          <span>{t('Mode développeur')}</span>
                           <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] ${developerMode ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {developerMode ? 'Activé' : 'Désactivé'}
+                            {developerMode ? t('Activé') : t('Désactivé')}
                           </span>
                         </button>
                       )}
                       <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700" title="En ligne, Absent, Ne pas déranger">
                         <FiWifi size={14} />
-                        État de connexion
+                        {t('État de connexion')}
                       </div>
                       <button
                         onClick={() => {
@@ -846,7 +848,7 @@ export default function UnifiedHeader() {
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50"
                       >
                         <FiPower size={14} />
-                        Se déconnecter
+                        {t('Se déconnecter')}
                       </button>
                     </div>
                   </div>

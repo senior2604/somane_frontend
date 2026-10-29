@@ -1,5 +1,5 @@
 // src/features/vente/pages/CommandesClient/List.jsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FiPlus, FiFilter, FiX, FiChevronLeft, FiChevronRight,
@@ -7,6 +7,9 @@ import {
   FiAlertCircle, FiSettings, FiCopy, FiTrash2, FiMoreHorizontal
 } from 'react-icons/fi';
 import { useEntity } from '../../../../context/EntityContext';
+import { useUi } from '../../../../context/UiContext';
+import MetadataFieldDisplay from '../../../../components/MetadataFieldDisplay';
+import { applyConfiguredListColumns, getConfiguredModelView } from '../../../../services/metadataViews';
 import { commandesService, referentielsService, formatAmount } from '../../services';
 
 // ==========================================
@@ -55,6 +58,13 @@ const SortIcon = ({ column, sortColumn, sortDirection }) => {
 export default function CommandesClientList() {
   const navigate = useNavigate();
   const { activeEntity } = useEntity();
+  const { configuration } = useUi();
+  const configuredList = useMemo(
+    () => getConfiguredModelView(configuration, 'ventes.SalesOrder', 'list', {
+      preferredViewKey: 'somane_ui.sales_order_tree',
+    }),
+    [configuration],
+  );
   
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
@@ -419,19 +429,24 @@ export default function CommandesClientList() {
     );
   };
 
-  // Colonnes (alignées sur Excel)
-  const columns = [
-    { id: 'date_order', label: 'Date', width: '85px' },
-    { id: 'name', label: 'N° Commande', width: '130px' },
-    { id: 'client', label: 'Client', width: '140px' },
-    { id: 'client_order_ref', label: 'Réf. Client', width: '90px' },
-    { id: 'team', label: 'Équipe', width: '100px' },
-    { id: 'amount_untaxed', label: 'HT', width: '90px', align: 'right' },
-    { id: 'amount_total', label: 'TTC', width: '90px', align: 'right' },
-    { id: 'state', label: 'État', width: '85px' },
-    { id: 'invoice_status', label: 'Facturation', width: '90px' },
-    { id: 'delivery_status', label: 'Livraison', width: '80px' }
+  // La vue IrUiView contrôle l’ordre, les libellés et les widgets de la liste.
+  const baseColumns = [
+    { id: 'date_order', fieldName: 'date_order', label: 'Date', width: '85px', value: (order) => order.date_order, render: (order) => formatDate(order.date_order) },
+    { id: 'name', fieldName: 'name', label: 'N° Commande', width: '130px', value: (order) => order.name, render: (order) => order.name || '—' },
+    { id: 'client', fieldName: 'partner_id', label: 'Client', width: '140px', value: (order) => order.partner_detail || order.partner_id, render: (order) => <ClientDisplay partner={order.partner_detail} /> },
+    { id: 'client_order_ref', fieldName: 'client_order_ref', label: 'Réf. Client', width: '90px', value: (order) => order.client_order_ref, render: (order) => order.client_order_ref || '—' },
+    { id: 'team', fieldName: 'team_id', label: 'Équipe', width: '100px', value: (order) => order.team_detail || order.team_id, render: (order) => order.team_detail?.name || order.team_name || '—' },
+    { id: 'amount_untaxed', fieldName: 'amount_untaxed', label: 'HT', width: '90px', align: 'right', value: (order) => order.amount_untaxed, render: (order) => <>{formatAmount(order.amount_untaxed)} <span className="ml-1 text-[10px] text-gray-400">{getCurrencyCode(order)}</span></> },
+    { id: 'amount_total', fieldName: 'amount_total', label: 'TTC', width: '90px', align: 'right', value: (order) => order.amount_total, render: (order) => <>{formatAmount(order.amount_total)} <span className="ml-1 text-[10px] text-gray-400">{getCurrencyCode(order)}</span></> },
+    { id: 'state', fieldName: 'state', label: 'État', width: '85px', value: (order) => order.state, render: (order) => <StateBadge state={order.state} /> },
+    { id: 'invoice_status', fieldName: 'invoice_status', label: 'Facturation', width: '90px', value: (order) => order.invoice_status, render: (order) => <InvoiceStatusBadge status={order.invoice_status} /> },
+    { id: 'delivery_status', fieldName: 'delivery_status', label: 'Livraison', width: '80px', value: (order) => order.delivery_status, render: (order) => <DeliveryStatusBadge status={order.delivery_status} /> },
   ];
+  const columns = applyConfiguredListColumns(baseColumns, configuredList?.fields, {
+    partner_id: 'client',
+    team_id: 'team',
+  });
+  const displayedColumns = columns.filter((column) => visibleColumns[column.id] !== false);
 
   const getCurrencyCode = (order) => {
     if (order.currency_detail?.code) return order.currency_detail.code;
@@ -442,6 +457,13 @@ export default function CommandesClientList() {
   const formatDate = (dateString) => {
     if (!dateString) return '—';
     return new Date(dateString).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const renderOrderCell = (column, order) => {
+    const value = column.value ? column.value(order) : order[column.fieldName || column.id];
+    return column.metadataField?.widget
+      ? <MetadataFieldDisplay value={value} field={column.metadataField} entity={activeEntity} record={order} />
+      : column.render ? column.render(order) : (value ?? '—');
   };
 
   // Rendu : Message si pas d'entité (mais sans bloquer)
@@ -684,56 +706,11 @@ export default function CommandesClientList() {
                     className="w-3.5 h-3.5 cursor-pointer"
                   />
                 </th>
-                {visibleColumns.date_order && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[85px]" onClick={() => handleSort('date_order')}>
-                    <div className="flex items-center gap-1"><span>Date</span><SortIcon column="date_order" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
+                {displayedColumns.map((column) => (
+                  <th key={column.id} style={{ minWidth: column.width || '85px' }} className={`border-r border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 ${column.align === 'right' ? 'text-right' : 'text-left'}`} onClick={() => handleSort(column.sortField || column.id)}>
+                    <div className={`flex items-center gap-1 ${column.align === 'right' ? 'justify-end' : ''}`}><span>{column.label}</span><SortIcon column={column.sortField || column.id} sortColumn={sortColumn} sortDirection={sortDirection} /></div>
                   </th>
-                )}
-                {visibleColumns.name && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[130px]" onClick={() => handleSort('name')}>
-                    <div className="flex items-center gap-1"><span>N° Commande</span><SortIcon column="name" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
-                  </th>
-                )}
-                {visibleColumns.client && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[140px]" onClick={() => handleSort('client')}>
-                    <div className="flex items-center gap-1"><span>Client</span><SortIcon column="client" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
-                  </th>
-                )}
-                {visibleColumns.client_order_ref && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[90px]" onClick={() => handleSort('client_order_ref')}>
-                    <div className="flex items-center gap-1"><span>Réf. Client</span><SortIcon column="client_order_ref" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
-                  </th>
-                )}
-                {visibleColumns.team && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[100px]" onClick={() => handleSort('team')}>
-                    <div className="flex items-center gap-1"><span>Équipe</span><SortIcon column="team" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
-                  </th>
-                )}
-                {visibleColumns.amount_untaxed && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-right text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[90px]" onClick={() => handleSort('amount_untaxed')}>
-                    <div className="flex items-center justify-end gap-1"><span>HT</span><SortIcon column="amount_untaxed" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
-                  </th>
-                )}
-                {visibleColumns.amount_total && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-right text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[90px]" onClick={() => handleSort('amount_total')}>
-                    <div className="flex items-center justify-end gap-1"><span>TTC</span><SortIcon column="amount_total" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
-                  </th>
-                )}
-                {visibleColumns.state && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[85px]" onClick={() => handleSort('state')}>
-                    <div className="flex items-center gap-1"><span>État</span><SortIcon column="state" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
-                  </th>
-                )}
-                {visibleColumns.invoice_status && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[90px]" onClick={() => handleSort('invoice_status')}>
-                    <div className="flex items-center gap-1"><span>Facturation</span><SortIcon column="invoice_status" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
-                  </th>
-                )}
-                {visibleColumns.delivery_status && (
-                  <th className="border-r border-gray-300 px-2 py-1.5 text-left text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200 min-w-[80px]" onClick={() => handleSort('delivery_status')}>
-                    <div className="flex items-center gap-1"><span>Livraison</span><SortIcon column="delivery_status" sortColumn={sortColumn} sortDirection={sortDirection} /></div>
-                  </th>
-                )}
+                ))}
                 {/* Menu colonnes */}
                 <th className="border-l border-gray-300 px-2 py-1.5 w-10 text-center">
                   <Tooltip text="Choisir les colonnes à afficher">
@@ -776,42 +753,11 @@ export default function CommandesClientList() {
                         className="w-3.5 h-3.5 cursor-pointer"
                       />
                     </td>
-                    {visibleColumns.date_order && (
-                      <td className="border border-gray-300 px-2 py-1.5 text-xs text-gray-700">{formatDate(order.date_order)}</td>
-                    )}
-                    {visibleColumns.name && (
-                      <td className="border border-gray-300 px-2 py-1.5">
-                        <div className="text-xs"><div className="font-medium truncate max-w-[100px]">{order.name || '—'}</div></div>
+                    {displayedColumns.map((column) => (
+                      <td key={column.id} className={`border border-gray-300 px-2 py-1.5 text-xs ${column.align === 'right' ? 'text-right' : 'text-gray-700'} ${column.id === 'amount_total' ? 'font-medium text-violet-600' : ''}`}>
+                        {renderOrderCell(column, order)}
                       </td>
-                    )}
-                    {visibleColumns.client && (
-                      <td className="border border-gray-300 px-2 py-1.5"><ClientDisplay partner={order.partner_detail} /></td>
-                    )}
-                    {visibleColumns.client_order_ref && (
-                      <td className="border border-gray-300 px-2 py-1.5 text-xs text-gray-700 truncate max-w-[80px]" title={order.client_order_ref}>
-                        {order.client_order_ref || '—'}
-                      </td>
-                    )}
-                    {visibleColumns.team && (
-                      <td className="border border-gray-300 px-2 py-1.5 text-xs text-gray-700 truncate max-w-[90px]">
-                        {order.team_detail?.name || order.team_name || '—'}
-                      </td>
-                    )}
-                    {visibleColumns.amount_untaxed && (
-                      <td className="border border-gray-300 px-2 py-1.5 text-right text-xs">
-                        {formatAmount(order.amount_untaxed)}
-                        <span className="text-gray-400 text-[10px] ml-1">{getCurrencyCode(order)}</span>
-                      </td>
-                    )}
-                    {visibleColumns.amount_total && (
-                      <td className="border border-gray-300 px-2 py-1.5 text-right text-xs text-violet-600 font-medium">
-                        {formatAmount(order.amount_total)}
-                        <span className="text-gray-400 text-[10px] ml-1">{getCurrencyCode(order)}</span>
-                      </td>
-                    )}
-                    {visibleColumns.state && (<td className="border border-gray-300 px-2 py-1.5"><StateBadge state={order.state} /></td>)}
-                    {visibleColumns.invoice_status && (<td className="border border-gray-300 px-2 py-1.5"><InvoiceStatusBadge status={order.invoice_status} /></td>)}
-                    {visibleColumns.delivery_status && (<td className="border border-gray-300 px-2 py-1.5"><DeliveryStatusBadge status={order.delivery_status} /></td>)}
+                    ))}
                     <td className="border border-gray-300 px-2 py-1.5"></td>
                   </tr>
                 ))

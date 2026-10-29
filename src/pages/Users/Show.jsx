@@ -20,6 +20,7 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { apiClient } from '../../services/apiClient';
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
 import { useUi } from '../../context/UiContext';
 import { can } from '../../services/securityAccess';
 import {
@@ -445,7 +446,15 @@ function UserSecuriteSection({ formData, setField, errors, onChangePassword, onS
 // ==========================================
 // Onglet "Préférence" : langue, fuseau horaire, localisation
 // ==========================================
-function UserPreferenceSection({ formData, setField, errors }) {
+function UserPreferenceSection({ formData, setField, errors, languages = [] }) {
+  const languageOptions = [
+    { value: 'fr_FR', label: 'Français' },
+    { value: 'en_US', label: 'English' },
+    ...languages.map((item) => ({ value: item.code, label: `${item.nom} (${item.code})` })),
+  ].filter((item, index, rows) => rows.findIndex((candidate) => candidate.value === item.value) === index);
+  if (formData.lang && !languageOptions.some((item) => item.value === formData.lang)) {
+    languageOptions.push({ value: formData.lang, label: `${formData.lang} — pack désactivé` });
+  }
   return (
     <div className="space-y-4">
       <Section title="Préférences générales">
@@ -457,8 +466,7 @@ function UserPreferenceSection({ formData, setField, errors }) {
               className={inputClass()}
               style={{ height: 26 }}
             >
-              <option value="fr_FR">Français</option>
-              <option value="en_US">English</option>
+              {languageOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </FormField>
 
@@ -964,6 +972,10 @@ const handleSendResetPassword = async () => {
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
+              <RecordTraceabilityPanel
+                model={type === 'users' ? 'utilisateur' : type === 'groups' ? 'groupe' : 'permission'}
+                recordId={item?.id}
+              />
               {canWrite && <Tooltip text="Enregistrer les modifications">
                 <button
                   onClick={() => save(false)}
@@ -1228,6 +1240,7 @@ const handleSendResetPassword = async () => {
                 formData={formData}
                 setField={setField}
                 errors={fieldErrors}
+                languages={data.languages}
               />
             </fieldset>
           )}

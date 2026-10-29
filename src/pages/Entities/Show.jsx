@@ -13,12 +13,14 @@ import {
 } from 'react-icons/fi';
 import { TbBuildingSkyscraper } from 'react-icons/tb';
 import { apiClient } from '../../services/apiClient';
+import RecordTraceabilityPanel from '../../components/RecordTraceabilityPanel';
 import { useUi } from '../../context/UiContext';
 import { can } from '../../services/securityAccess';
 import {
   EntityForm,
   INITIAL_ENTITY_FORM,
-  buildEntityPayload,
+  buildEntityRequestPayload,
+  entityApiErrorMessage,
   entityToForm,
   getEntityName,
   parseResponse,
@@ -110,7 +112,7 @@ export default function EntityShow() {
     const errors = validateEntityForm(formData);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
-      setError('Champs obligatoires manquants : raison sociale, activite, email et telephone sont requis.');
+      setError('Champs obligatoires manquants : raison sociale, activité, email, téléphone, adresse et pays sont requis.');
       return;
     }
 
@@ -118,14 +120,14 @@ export default function EntityShow() {
     setError(null);
     setSuccess(null);
     try {
-      const updated = await apiClient.put(`/entites/${id}/`, buildEntityPayload(formData));
+      const updated = await apiClient.put(`/entites/${id}/`, buildEntityRequestPayload(formData));
       setEntity(updated);
       setFormData(entityToForm(updated));
       setIsEditing(false);
       setHasUnsavedChanges(false);
       setSuccess('Entite mise a jour avec succes.');
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || "Erreur lors de l'enregistrement.");
+      setError(entityApiErrorMessage(err, "Erreur lors de l'enregistrement."));
     } finally {
       setSaving(false);
     }
@@ -202,7 +204,7 @@ export default function EntityShow() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gray-50 p-2 md:p-3">
       <input
         ref={logoInputRef}
         type="file"
@@ -213,13 +215,13 @@ export default function EntityShow() {
           event.target.value = '';
         }}
       />
-      <div className="max-w-7xl mx-auto bg-white border border-gray-300">
-        <div className="border-b border-gray-300 px-5 py-4 flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
+      <div className="mx-auto w-full bg-white border border-gray-300">
+        <div className="border-b border-gray-300 px-4 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             {canCreate && (
               <button
                 onClick={() => navigate('/entities/create')}
-                className="h-12 px-5 bg-purple-600 text-white font-semibold flex items-center gap-2 hover:bg-purple-700"
+                className="h-9 px-4 bg-purple-600 text-sm text-white font-semibold flex items-center gap-2 hover:bg-purple-700"
               >
                 <FiBriefcase size={18} />
                 Nouveau
@@ -229,7 +231,7 @@ export default function EntityShow() {
               <button
                 type="button"
                 onClick={() => isEditing && logoInputRef.current?.click()}
-                className={`w-14 h-14 border border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden ${
+                className={`w-10 h-10 border border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden ${
                   isEditing ? 'hover:border-purple-400 cursor-pointer' : 'cursor-default'
                 }`}
                 title={isEditing ? 'Importer logo' : 'Logo'}
@@ -241,7 +243,7 @@ export default function EntityShow() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <TbBuildingSkyscraper size={26} className="text-purple-700" />
+                  <TbBuildingSkyscraper size={21} className="text-purple-700" />
                 )}
               </button>
               <div>
@@ -261,9 +263,10 @@ export default function EntityShow() {
           </div>
 
           <div className="flex items-center gap-2">
+            <RecordTraceabilityPanel model="entite" recordId={entity?.id} />
             <button
               onClick={leavePage}
-              className="h-10 px-4 border border-gray-300 bg-white text-sm hover:bg-gray-50 flex items-center gap-2"
+              className="h-8 px-3 border border-gray-300 bg-white text-xs hover:bg-gray-50 flex items-center gap-2"
             >
               <FiX size={16} />
               Retour
@@ -272,7 +275,7 @@ export default function EntityShow() {
               <div className="relative" ref={actionsMenuRef}>
                 <button
                   onClick={() => setShowActionsMenu((current) => !current)}
-                  className="h-10 px-4 border border-gray-300 bg-white text-sm hover:bg-gray-50 flex items-center gap-2"
+                  className="h-8 px-3 border border-gray-300 bg-white text-xs hover:bg-gray-50 flex items-center gap-2"
                 >
                   <FiSettings size={16} />
                   Actions
@@ -317,14 +320,14 @@ export default function EntityShow() {
               <>
                 <button
                   onClick={cancelEdit}
-                  className="h-10 px-4 border border-gray-300 bg-white text-sm hover:bg-gray-50"
+                  className="h-8 px-3 border border-gray-300 bg-white text-xs hover:bg-gray-50"
                 >
                   Annuler
                 </button>
                 <button
                   onClick={save}
                   disabled={saving}
-                  className="h-10 px-5 bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 disabled:opacity-60 flex items-center gap-2"
+                  className="h-8 px-4 bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700 disabled:opacity-60 flex items-center gap-2"
                 >
                   <FiCheck size={16} />
                   {saving ? 'Enregistrement...' : 'Enregistrer'}
@@ -334,7 +337,7 @@ export default function EntityShow() {
               canWrite && (
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="h-10 px-5 bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 flex items-center gap-2"
+                  className="h-8 px-4 bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700 flex items-center gap-2"
                 >
                   <FiEdit2 size={16} />
                   Modifier
@@ -351,7 +354,7 @@ export default function EntityShow() {
           <HeaderCell label="Statut" value={formData.statut ? 'Actif' : 'Inactif'} badge={formData.statut} />
         </div>
 
-        <div className="px-5 py-3 border-b border-gray-300 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-4 py-2 border-b border-gray-300 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm">
             <span className={`inline-flex items-center gap-1 px-2 py-1 border ${ready ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>
               {ready ? <FiCheck size={14} /> : <FiAlertCircle size={14} />}
@@ -372,13 +375,13 @@ export default function EntityShow() {
           </div>
         )}
 
-        <div className="border-b border-gray-300 px-5">
+        <div className="border-b border-gray-300 px-4">
           <div className="flex gap-1">
             {TABS.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-5 py-3 text-sm border-b-2 ${
+                className={`px-4 py-2 text-sm border-b-2 ${
                   activeTab === tab.key
                     ? 'border-purple-600 text-purple-700 font-semibold'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
